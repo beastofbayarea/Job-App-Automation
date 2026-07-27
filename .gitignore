@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Generated artifacts
+output/*
+!output/.gitkeep
+
+# Candidate job-tracker data and source resume text (keep the resume PDF)
+data/*
+!data/shivam_singh_ai_product_manager_resume.pdf
+
+# OAuth credentials and tokens
+config/credentials.json
+config/token.json
+config/client_secret*.json
+config/vertex_service_account.json
+
+# Candidate PII configs (see *.example.json for templates)
+config/candidate_profile_config.json
+config/candidate_email_pool.json
+config/nooks_retry_email.json
+
+# Local environment and logs
+.env
+*.log
