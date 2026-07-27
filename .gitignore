@@ -8,9 +8,10 @@ venv/
 output/*
 !output/.gitkeep
 
-# Candidate job-tracker data and source resume text (keep the resume PDF)
+# Candidate job-tracker data and source resume text (keep the resume PDFs)
 data/*
 !data/shivam_singh_ai_product_manager_resume.pdf
+!data/shivam_singh_growth_marketing_resume.pdf
 
 # OAuth credentials and tokens
 config/credentials.json
