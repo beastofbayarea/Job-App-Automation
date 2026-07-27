@@ -185,9 +185,10 @@ def load_config(path: Path) -> dict[str, Any]:
         raise ValueError("candidate.start_date_offset_days must be an integer") from exc
     if offset_days < 0:
         raise ValueError("candidate.start_date_offset_days cannot be negative")
-    candidate["available_start_date"] = _start_date_from_offset(
-        offset_days=offset_days
-    )
+    if not candidate.get("available_start_date"):
+        candidate["available_start_date"] = _start_date_from_offset(
+            offset_days=offset_days
+        )
     return cfg
 
 
@@ -1221,7 +1222,7 @@ def fill_personal_and_files(
             fill(page, pref_loc, preferred_name)
             flags["preferred_name"] = verify_value(pref_loc, preferred_name, "Preferred Name")
 
-    name_loc = page.locator('input[id="_systemfield_name"], input[name="_systemfield_name"], input[aria-label*="Name" i]').first
+    name_loc = page.locator('input[id="_systemfield_name"], input[name="_systemfield_name"]').first
     if not name_loc.count():
         for inp in page.locator('input:visible').all():
             lbl = inp.evaluate("el => (el.closest('div')||el.parentElement||el).innerText||''").lower()

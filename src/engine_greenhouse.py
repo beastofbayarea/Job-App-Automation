@@ -42,7 +42,12 @@ from engine_shared import (
     valid_email,
 )
 from paths import CONFIG_DIR, DATA_DIR, OUTPUT_DIR, resolve_project_dir
-from email_gmail_client import fetch_messages, get_gmail_service
+from email_gmail_client import (
+    get_gmail_service,
+    load_used_verification_message_ids,
+    poll_for_verification_code,
+    record_used_verification_message,
+)
 
 ATS_NAME = "greenhouse"
 DEFAULT_CANDIDATE_EVIDENCE = DATA_DIR / "base_resume.txt"
@@ -714,7 +719,7 @@ def _required_empty_fields(page: Page) -> list[str]:
     return sorted(set(missing))
 
 
-def _fill_security_code_from_gmail(page: Page) -> bool:
+def _fill_security_code_from_gmail(page: Page, application_email: str) -> bool:
     """Read the five newest matching emails and fill Greenhouse's 8-box code."""
     code_inputs = page.locator('input[id^="security-input"]')
     if code_inputs.count() < 8:
@@ -727,27 +732,28 @@ def _fill_security_code_from_gmail(page: Page) -> bool:
             CONFIG_DIR / "credentials.json",
             CONFIG_DIR / "token.json",
         )
-        records = fetch_messages(
+        history_path = OUTPUT_DIR / "used_verification_messages.json"
+        match = poll_for_verification_code(
             service,
-            query='from:no-reply@us.greenhouse-mail.io subject:"Security code for your application" newer_than:1d',
-            max_results=5,
-            include_body=True,
+            f'from:no-reply@us.greenhouse-mail.io deliveredto:{application_email} subject:"Security code for your application" newer_than:1d',
+            r"security code field on your application:\s*([A-Za-z0-9]{8})",
+            timeout_seconds=30,
+            sender_domains=("us.greenhouse-mail.io",),
+            expected_recipient=application_email,
+            excluded_message_ids=load_used_verification_message_ids(history_path),
         )
-        code = ""
-        for record in records:
-            match = re.search(
-                r"security code field on your application:\s*([A-Za-z0-9]{8})",
-                f"{record.snippet}\n{record.body}",
-                re.I,
-            )
-            if match:
-                code = match.group(1)
-                break
-        if not code:
-            logger.info("No Greenhouse security code found in the five newest matching emails")
+        if not match:
+            logger.info("No unused Greenhouse security code found before timeout")
             return False
-        for index, character in enumerate(code):
+        for index, character in enumerate(match.code):
             code_inputs.nth(index).fill(character)
+        if any(
+            code_inputs.nth(index).input_value() != character
+            for index, character in enumerate(match.code)
+        ):
+            logger.warning("Greenhouse security code was not filled completely")
+            return False
+        record_used_verification_message(history_path, match)
         logger.info("Filled Greenhouse security code from the newest matching Gmail message")
         return True
     except Exception as exc:
@@ -797,7 +803,9 @@ def run(
                 page.url.rstrip("/") == url.rstrip("/")
                 and page.locator('input[id^="security-input"]').count() >= 8
             ):
-                if _fill_security_code_from_gmail(page):
+                if not live_submit:
+                    return {"success": True, "status": "PREFILLED_ONLY", "ats": ATS_NAME, "submitted": False, "confirmed": False, "test_mode": True, "filled_fields": {}, "custom_questions": {}, "eeo_fields": {}, "consent_fields": [], "missing_required": [], "screenshot": ""}
+                if _fill_security_code_from_gmail(page, email):
                     submit = _first_visible(
                         page.get_by_role(
                             "button",
@@ -901,7 +909,8 @@ def run(
             )
             consent = _fill_consent(page)
             consent.extend(_fill_explicit_required_consents(page))
-            _fill_security_code_from_gmail(page)
+            if live_submit:
+                _fill_security_code_from_gmail(page, email)
             missing = validate_required_fields(page, _required_empty_fields)
             prefill_screenshot = _screenshot(
                 page, screenshot_dir, company or "Greenhouse", "prefilled"

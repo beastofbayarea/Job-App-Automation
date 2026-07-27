@@ -97,8 +97,10 @@ import json
 import os
 import re
 import sys
+import time
 from dataclasses import asdict, dataclass
 from email.message import EmailMessage
+from email.utils import parseaddr
 from pathlib import Path
 from typing import Any
 
@@ -107,6 +109,7 @@ from paths import CONFIG_DIR
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.send",
+    "https://www.googleapis.com/auth/gmail.compose",
 ]
 
 DEFAULT_CREDENTIALS_FILE = str(CONFIG_DIR / "credentials.json")
@@ -118,11 +121,34 @@ class EmailRecord:
     message_id: str
     thread_id: str
     sender: str
+    recipient: str
     subject: str
     date: str
     labels: list[str]
     snippet: str
     body: str = ""
+
+
+@dataclass(frozen=True)
+class VerificationCodeMatch:
+    message_id: str
+    thread_id: str
+    sender: str
+    code: str
+
+
+def classify_application_email(record: EmailRecord) -> str:
+    """Classify common application-mail outcomes without sending or modifying mail."""
+    text = f"{record.subject}\n{record.snippet}\n{record.body}".lower()
+    if re.search(r"security code|verification code|one[- ]time code|\botp\b", text):
+        return "verification_code"
+    if re.search(r"application (?:has been )?(?:received|submitted)|thank you for applying", text):
+        return "application_confirmation"
+    if re.search(r"interview|schedule time|speak with", text):
+        return "interview_or_recruiter"
+    if re.search(r"not moving forward|regret to inform|unfortunately", text):
+        return "rejection"
+    return "unknown"
 
 
 def parse_args() -> argparse.Namespace:
@@ -135,12 +161,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--all-mail", action="store_true")
     parser.add_argument("--unread", action="store_true")
     parser.add_argument("--include-body", action="store_true")
+    parser.add_argument("--classify", action="store_true")
+    parser.add_argument("--redact", action="store_true", help="Redact sender, body, and IDs in exports.")
     parser.add_argument("--csv", dest="csv_path")
     parser.add_argument("--json", dest="json_path")
 
     parser.add_argument("--send-to")
     parser.add_argument("--subject")
     parser.add_argument("--body")
+    parser.add_argument("--html-body")
+    parser.add_argument("--draft", action="store_true", help="Create a Gmail draft instead of sending.")
     parser.add_argument(
         "--yes",
         action="store_true",
@@ -155,9 +185,9 @@ def parse_args() -> argparse.Namespace:
     if args.max_results < 1:
         parser.error("--max-results must be at least 1")
 
-    sending = any([args.send_to, args.subject, args.body])
-    if sending and not all([args.send_to, args.subject, args.body]):
-        parser.error("--send-to, --subject, and --body must be supplied together")
+    sending = any([args.send_to, args.subject, args.body, args.html_body, args.draft])
+    if sending and not all([args.send_to, args.subject]) or (sending and not (args.body or args.html_body)):
+        parser.error("--send-to, --subject, and --body or --html-body must be supplied together")
 
     return args
 
@@ -308,7 +338,7 @@ def fetch_messages(
                     format="full" if include_body else "metadata",
                     metadataHeaders=None
                     if include_body
-                    else ["From", "Subject", "Date"],
+                    else ["From", "To", "Delivered-To", "Subject", "Date"],
                 )
                 .execute()
             )
@@ -319,6 +349,7 @@ def fetch_messages(
                     message_id=message.get("id", ""),
                     thread_id=message.get("threadId", ""),
                     sender=headers.get("from", ""),
+                    recipient=headers.get("delivered-to", "") or headers.get("to", ""),
                     subject=headers.get("subject", ""),
                     date=headers.get("date", ""),
                     labels=list(message.get("labelIds", [])),
@@ -339,43 +370,131 @@ def fetch_messages(
     return records
 
 
+def poll_for_verification_code(
+    service: Any,
+    query: str,
+    pattern: str,
+    *,
+    timeout_seconds: int = 60,
+    poll_interval_seconds: float = 3,
+    sender_domains: tuple[str, ...] = (),
+    expected_recipient: str = "",
+    excluded_message_ids: set[str] | None = None,
+) -> VerificationCodeMatch | None:
+    """Wait for a fresh verification email and return its first matching code."""
+    deadline = time.monotonic() + timeout_seconds
+    compiled = re.compile(pattern, re.I)
+    excluded_message_ids = excluded_message_ids or set()
+    expected_recipient = parseaddr(expected_recipient)[1].lower()
+    while time.monotonic() < deadline:
+        records = fetch_messages(service, query, max_results=10, include_body=True)
+        for record in records:
+            if record.message_id in excluded_message_ids:
+                continue
+            sender = record.sender.lower()
+            sender_address = parseaddr(record.sender)[1].lower()
+            if sender_domains and not any(sender_address.endswith(f"@{domain.lower()}") for domain in sender_domains):
+                continue
+            if expected_recipient and parseaddr(record.recipient)[1].lower() != expected_recipient:
+                continue
+            match = compiled.search(f"{record.subject}\n{record.body}")
+            if match:
+                return VerificationCodeMatch(
+                    message_id=record.message_id,
+                    thread_id=record.thread_id,
+                    sender=record.sender,
+                    code=match.group(1) if match.groups() else match.group(0),
+                )
+        time.sleep(poll_interval_seconds)
+    return None
+
+
+def load_used_verification_message_ids(path: Path) -> set[str]:
+    """Load locally recorded OTP message IDs; malformed history is treated as empty."""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        return {
+            str(entry["message_id"])
+            for entry in payload.get("used_messages", [])
+            if isinstance(entry, dict) and entry.get("message_id")
+        }
+    except (OSError, json.JSONDecodeError):
+        return set()
+
+
+def record_used_verification_message(path: Path, match: VerificationCodeMatch) -> None:
+    """Persist a consumed OTP message ID without storing the OTP itself."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        payload = {"used_messages": []}
+    entries = payload.get("used_messages", [])
+    if any(isinstance(entry, dict) and entry.get("message_id") == match.message_id for entry in entries):
+        return
+    entries.append({
+        "message_id": match.message_id,
+        "thread_id": match.thread_id,
+        "sender": match.sender,
+        "recorded_at": int(time.time()),
+    })
+    payload["used_messages"] = entries
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    temporary.replace(path)
+
+
 def send_email(
     service: Any,
     recipient: str,
     subject: str,
     body: str,
+    html_body: str = "",
+    draft: bool = False,
 ) -> dict[str, Any]:
     message = EmailMessage()
     message["To"] = recipient
     message["Subject"] = subject
     message.set_content(body)
+    if html_body:
+        message.add_alternative(html_body, subtype="html")
 
     encoded = base64.urlsafe_b64encode(message.as_bytes()).decode("ascii")
 
-    return (
-        service.users()
-        .messages()
-        .send(userId="me", body={"raw": encoded})
-        .execute()
-    )
+    resource = service.users().drafts() if draft else service.users().messages()
+    action = resource.create(userId="me", body={"message": {"raw": encoded}}) if draft else resource.send(userId="me", body={"raw": encoded})
+    return action.execute()
 
 
-def confirm_send(recipient: str, subject: str, body: str) -> bool:
+def confirm_send(recipient: str, subject: str, body: str, html_body: str = "", draft: bool = False) -> bool:
     print("\nAbout to send:")
     print(f"To: {recipient}")
     print(f"Subject: {subject}")
     print("Body:")
     print(body)
-    answer = input("\nSend this email? [y/N]: ").strip().lower()
+    if html_body:
+        print("HTML body supplied.")
+    answer = input(f"\n{'Create draft' if draft else 'Send'} this email? [y/N]: ").strip().lower()
     return answer in {"y", "yes"}
 
 
-def write_csv(path: Path, records: list[EmailRecord]) -> None:
+def _export_rows(records: list[EmailRecord], redact: bool) -> list[dict[str, Any]]:
     rows = [asdict(record) for record in records]
+    for row in rows:
+        record = EmailRecord(**{key: row[key] for key in EmailRecord.__dataclass_fields__})
+        row["classification"] = classify_application_email(record)
+        if redact:
+            for key in ("message_id", "thread_id", "sender", "body"):
+                row[key] = "[redacted]"
+    return rows
+
+
+def write_csv(path: Path, records: list[EmailRecord], redact: bool = False) -> None:
+    rows = _export_rows(records, redact)
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()) if rows else [
-            "message_id", "thread_id", "sender", "subject", "date",
-            "labels", "snippet", "body"
+            "message_id", "thread_id", "sender", "recipient", "subject", "date",
+            "labels", "snippet", "body", "classification"
         ])
         writer.writeheader()
         for row in rows:
@@ -383,9 +502,9 @@ def write_csv(path: Path, records: list[EmailRecord]) -> None:
             writer.writerow(row)
 
 
-def write_json(path: Path, records: list[EmailRecord]) -> None:
+def write_json(path: Path, records: list[EmailRecord], redact: bool = False) -> None:
     path.write_text(
-        json.dumps([asdict(record) for record in records], indent=2),
+        json.dumps(_export_rows(records, redact), indent=2),
         encoding="utf-8",
     )
 
@@ -409,7 +528,9 @@ def main() -> int:
             if not args.yes and not confirm_send(
                 args.send_to,
                 args.subject,
-                args.body,
+                args.body or "",
+                args.html_body or "",
+                args.draft,
             ):
                 print("Send cancelled.")
                 return 0
@@ -418,9 +539,11 @@ def main() -> int:
                 service,
                 args.send_to,
                 args.subject,
-                args.body,
+                args.body or "",
+                args.html_body or "",
+                args.draft,
             )
-            print("Email sent successfully.")
+            print("Draft created successfully." if args.draft else "Email sent successfully.")
             print(f"Message ID: {result.get('id', '')}")
             print(f"Thread ID: {result.get('threadId', '')}")
             return 0
@@ -446,13 +569,15 @@ def main() -> int:
             if record.body:
                 print("Body:")
                 print(record.body)
+            if args.classify:
+                print(f"Classification: {classify_application_email(record)}")
 
         if args.csv_path:
-            write_csv(Path(args.csv_path), records)
+            write_csv(Path(args.csv_path), records, args.redact)
             print(f"\nCSV written to {args.csv_path}")
 
         if args.json_path:
-            write_json(Path(args.json_path), records)
+            write_json(Path(args.json_path), records, args.redact)
             print(f"\nJSON written to {args.json_path}")
 
         return 0

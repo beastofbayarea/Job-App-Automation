@@ -9,6 +9,7 @@ import re
 from datetime import date
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
+from urllib.parse import urlparse
 
 from playwright.sync_api import Locator, Page
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
@@ -450,9 +451,11 @@ def run(
     with sync_playwright() as playwright:
         # Lever job postings and their application forms are separate pages;
         # the form only lives at the "/apply" path off the posting URL.
-        apply_url = url.rstrip("/")
-        if not apply_url.endswith("/apply"):
-            apply_url += "/apply"
+        parsed_url = urlparse(url)
+        apply_path = parsed_url.path.rstrip("/")
+        if not apply_path.endswith("/apply"):
+            apply_path += "/apply"
+        apply_url = parsed_url._replace(path=apply_path).geturl()
         session = open_chrome_session(
             playwright,
             profile_name="lever-cdp-profile",
@@ -530,11 +533,12 @@ def run(
                 )
 
             confirmed = status == "SUBMITTED & CONFIRMED"
+            submitted = status in {"SUBMITTED & CONFIRMED", "SUBMISSION_UNCONFIRMED"}
             return {
                 "success": success,
                 "status": status,
                 "ats": ATS_NAME,
-                "submitted": confirmed,
+                "submitted": submitted,
                 "confirmed": confirmed,
                 "test_mode": not live_submit,
                 "filled_fields": fields,

@@ -600,13 +600,19 @@ def run_orchestrator(
             )
             continue
 
-        generated = generate_personalized_resume(
+        try:
+            email = email_from_resume(resume_path, fallback_email)
+            generated = generate_personalized_resume(
             job["company"],
             job["role"],
             job["url"],
             resume_timeout_seconds,
-            email_from_resume(resume_path, fallback_email),
-        )
+            email,
+            )
+        except Exception as exc:
+            logger.error("Resume identity extraction failed for row %s: %s", job["row_number"], exc)
+            _append_and_persist(results, {**base_result, "status": "RESUME_IDENTITY_EXTRACTION_FAILED", "success": False}, results_path)
+            continue
         if not generated:
             logger.error(
                 "Mandatory personalized resume generation failed for %s; "
@@ -629,8 +635,13 @@ def run_orchestrator(
             )
             continue
         target_resume = generated
-        email = email_from_resume(target_resume, fallback_email)
-        current_title = current_title_from_resume(target_resume)
+        try:
+            email = email_from_resume(target_resume, fallback_email)
+            current_title = current_title_from_resume(target_resume)
+        except Exception as exc:
+            logger.error("Generated resume identity extraction failed for row %s: %s", job["row_number"], exc)
+            _append_and_persist(results, {**base_result, "engine": engine_path.name, "resume": target_resume.name, "email": _mask_email(email), "status": "GENERATED_RESUME_IDENTITY_INVALID", "success": False}, results_path)
+            continue
         logger.info(
             "[%d/%d] row=%s ats=%s company=%s role=%s email=%s",
             index, len(jobs), job["row_number"], ats, job["company"], job["role"], _mask_email(email),

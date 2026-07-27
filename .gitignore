@@ -27,3 +27,6 @@ config/nooks_retry_email.json
 # Local environment and logs
 .env
 *.log
+
+# Local editor workspace settings
+.vscode/

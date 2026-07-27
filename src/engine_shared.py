@@ -11,12 +11,12 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional, Sequence
 from urllib.parse import parse_qs, urlparse
 
 from playwright.sync_api import Browser, Locator, Page, Playwright
-from pypdf import PdfReader
 from paths import DATA_DIR
 from pypdf import PdfReader
 
@@ -101,6 +101,14 @@ def normalize_profile_config(config: Mapping[str, Any]) -> dict[str, Any]:
     resume_title = os.environ.get(ORCHESTRATOR_CURRENT_TITLE_ENV, "").strip()
     if resume_title:
         normalized_candidate["current_job_title"] = resume_title
+    if not normalized_candidate.get("available_start_date"):
+        try:
+            offset_days = int(normalized_candidate.get("start_date_offset_days", 14))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("candidate.start_date_offset_days must be an integer") from exc
+        if offset_days < 0:
+            raise ValueError("candidate.start_date_offset_days cannot be negative")
+        normalized_candidate["available_start_date"] = (date.today() + timedelta(days=offset_days)).isoformat()
     policies = config.get("policies")
     if not isinstance(policies, Mapping):
         return normalized
@@ -184,12 +192,12 @@ def current_title_from_resume(resume_path: Path) -> str:
     except Exception as exc:
         raise ValueError(f"Could not read current title from {resume_path}: {exc}") from exc
     for index, line in enumerate(lines):
-        if re.fullmatch(r"(?:professional\s+)?experience", line, re.I):
-            for title in lines[index + 2 :]:
-                if title:
-                    return title
+        if re.search(r"(?:experience|work history)\s*$", line, re.I):
+            for title in lines[index + 1 :]:
+                if re.search(r"\b(?:product manager|manager|director|engineer|designer|analyst|consultant|lead|head|vp|vice president)\b", title, re.I) and not re.search(r"\b\d{4}\b.*(?:present|\d{4})", title, re.I):
+                    return title.replace("�", "-").strip()
             break
-    raise ValueError("No current title was found under Professional Experience.")
+    raise ValueError("No current title was found under an experience heading.")
 
 
 def resolve_candidate_email(profile: Mapping[str, Any], override: str = "") -> str:
@@ -590,8 +598,10 @@ def fill_required_consent(page: Page) -> list[str]:
             # explicit self-attestation ("I confirm...") rather than a disclosure question.
             if SENSITIVE_FIELD_PATTERN.search(context) and not explicit_confirm:
                 continue
-            required = explicit_confirm or bool(
-                re.search(r"\b(?:agree|acknowledge|consent|privacy)\b", context, re.I)
+            required = (
+                explicit_confirm
+                or box.get_attribute("required") is not None
+                or box.get_attribute("aria-required") == "true"
             )
             if required:
                 box.check(force=True)

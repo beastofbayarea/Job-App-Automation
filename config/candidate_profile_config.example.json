@@ -1,4 +1,5 @@
 {
+  "schema_version": 2,
   "download_root": "output",
   "candidate_evidence_file": "base_resume.txt",
   "headless": true,
@@ -30,7 +31,6 @@
     "last_name": "LastName",
     "preferred_name": "Preferred",
     "current_company": "Current Company",
-    "current_job_title": "Current Title",
     "fallback_email": "you@example.com",
     "phone": "5555555555",
     "portfolio": "https://example.com/portfolio",
@@ -104,7 +104,8 @@
       "targeted compensation range (base comp only)": "$0-$0"
     }
   },
-  "rules": {
+  "policies": {
+  "answers": {
     "visa_sponsorship": "No",
     "bachelors_degree": "Yes",
     "salary_expectation": "Negotiable",
@@ -136,7 +137,7 @@
     "eight_plus_product_years": "Yes",
     "target_office": ""
   },
-  "eeo_defaults": {
+  "eeo": {
     "gender": "Prefer not to disclose",
     "hispanic_latino": "Prefer not to disclose",
     "race": "Prefer not to disclose",
@@ -145,7 +146,7 @@
     "lgbtq_status": "Prefer not to disclose",
     "transgender_status": "Prefer not to disclose"
   },
-  "field_matchers": {
+  "matchers": {
     "first_name": ["first name", "given name"],
     "last_name": ["last name", "family name", "surname"],
     "preferred_name": ["preferred name", "nickname", "alias"],
@@ -339,7 +340,7 @@
     "transgender": ["transgender"],
     "orientation": ["sexual orientation"]
   },
-  "answer_variants": {
+  "option_variants": {
     "Man": ["Male"],
     "No": [
       "No, I have not",
@@ -353,6 +354,7 @@
       "I agree",
       "I acknowledge and give my consent"
     ]
+  }
   },
   "company_overrides": {}
 }
