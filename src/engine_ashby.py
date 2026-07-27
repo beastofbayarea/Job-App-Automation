@@ -38,13 +38,16 @@ from engine_shared import (
     configured_answer as common_configured_answer,
     deep_merge as _deep_merge,
     emit_engine_result,
+    orchestrated_config_path,
     engine_result,
     require_orchestrated_invocation,
     fill_required_consent,
     mask_email as _mask_email,
     open_chrome_session,
     navigate_reusing_tab,
+    normalize_profile_config,
     requested_live_mode,
+    resolve_candidate_email,
     safe_filename,
     text_confirms_submission,
     validate_ats_url,
@@ -153,29 +156,19 @@ def retry(
     assert last_error is not None
     raise last_error
 
-def load_config(path: Path | None = None) -> dict[str, Any]:
-    if path is not None:
-        path = path.expanduser().resolve()
-        if not path.is_file():
-            raise FileNotFoundError(f"Configuration file not found: {path}")
-    else:
-        default_profile = CONFIG_DIR / "candidate_profile_config.json"
-        if default_profile.is_file():
-            path = default_profile
-
-    if path is not None:
-        with path.open(encoding="utf-8") as config_file:
-            loaded = json.load(config_file)
-        if not isinstance(loaded, dict):
-            raise ValueError("Configuration root must be a JSON object.")
-        candidate = loaded.get("candidate", {})
-        if not isinstance(candidate, dict):
-            raise ValueError("Configuration field 'candidate' must be a JSON object.")
-        cfg = _deep_merge(DEFAULT_CONFIG, loaded)
-        logger.info("Loaded profile configuration: %s", path)
-    else:
-        cfg = copy.deepcopy(DEFAULT_CONFIG)
-        logger.info("Using embedded configuration")
+def load_config(path: Path) -> dict[str, Any]:
+    path = path.expanduser().resolve()
+    if not path.is_file():
+        raise FileNotFoundError(f"Configuration file not found: {path}")
+    with path.open(encoding="utf-8") as config_file:
+        loaded = json.load(config_file)
+    if not isinstance(loaded, dict):
+        raise ValueError("Configuration root must be a JSON object.")
+    candidate = loaded.get("candidate", {})
+    if not isinstance(candidate, dict):
+        raise ValueError("Configuration field 'candidate' must be a JSON object.")
+    cfg = normalize_profile_config(_deep_merge(DEFAULT_CONFIG, loaded))
+    logger.info("Loaded profile configuration: %s", path)
 
     required = ("first_name", "last_name")
     missing = [key for key in required if not cfg.get("candidate", {}).get(key)]
@@ -570,11 +563,10 @@ def _merge_repository_rules(
             "future sponsorship",
             "visa sponsorship",
         ),
-        "relocation_bay_area": (
+        "relocation": (
             "willing to relocate",
             "and/or willing to relocate",
-            "located in san francisco",
-            "located in sf",
+            "open to relocating",
         ),
         "are_you_comfortable_with": (
             "willing to work on-site",
@@ -2331,18 +2323,7 @@ def run_job(
     if resume.stat().st_size == 0:
         raise ValueError(f"Resume file is empty: {resume}")
 
-    email = str(
-        profile.get("email_override")
-        or profile.get("email")
-        or profile.get("fallback_email")
-        or profile.get("email_fallback")
-        or ""
-    ).strip()
-    if not _valid_email(email):
-        raise ValueError(
-            "Config must provide a valid candidate email "
-            "(email, fallback_email, or email_override)."
-        )
+    email = resolve_candidate_email(profile)
 
     logger.info("=" * 66)
     logger.info("JOB URL: %s", url)
@@ -2537,7 +2518,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         require_orchestrated_invocation(args.url)
-        config = load_config(args.config)
+        config = load_config(orchestrated_config_path())
         if args.email:
             config["candidate"]["email_override"] = args.email
 

@@ -28,7 +28,12 @@ import openpyxl
 from engine_shared import (
     ATS_HOST_MARKERS as ATS_HOSTS,
     ORCHESTRATOR_INVOCATION_ENV,
+    ORCHESTRATOR_CONFIG_ENV,
+    ORCHESTRATOR_CURRENT_TITLE_ENV,
     RESULT_PREFIX as ENGINE_RESULT_PREFIX,
+    email_from_resume,
+    current_title_from_resume,
+    load_json_config,
     mask_email as _mask_email,
     validate_ats_url,
 )
@@ -45,7 +50,6 @@ SCRIPT_DIR = SRC_DIR
 
 DEFAULT_TRACKER_FILE = DATA_DIR / "ai_product_manager_job_tracker.xlsx"
 DEFAULT_RESUME_FILE = DATA_DIR / "shivam_singh_ai_product_manager_resume.pdf"
-DEFAULT_EMAIL_FILE = CONFIG_DIR / "candidate_email_pool.json"
 DEFAULT_CONFIG_FILE = CONFIG_DIR / "candidate_profile_config.json"
 DEFAULT_RESULTS_FILE = OUTPUT_DIR / "orchestration_results.json"
 SCREENSHOT_EXTENSIONS = {".jpeg", ".jpg", ".png"}
@@ -57,19 +61,6 @@ DEFAULT_ENGINE_FILES: Mapping[str, Path] = {
     "greenhouse": SCRIPT_DIR / "engine_greenhouse.py",
     "lever": SCRIPT_DIR / "engine_lever.py",
 }
-try:
-    from email_pool_select import get_random_email
-except ImportError:
-    def get_random_email(file_path: Path, count: int = 1) -> str | list[str]:
-        with file_path.open("r", encoding="utf-8") as stream:
-            emails = json.load(stream)
-        if not isinstance(emails, list) or not emails:
-            raise ValueError("Email pool must contain a non-empty JSON list")
-        if count == 1:
-            return random.choice(emails)
-        return random.sample(emails, min(count, len(emails)))
-
-
 class JobRecord(TypedDict):
     row_number: int
     company: str
@@ -205,7 +196,6 @@ def build_engine_command(
     role: str,
     email: str,
     live_submit: bool,
-    config_path: Optional[Path],
     headed: bool = False,
     fill_only: bool = False,
     dry_run: bool = False,
@@ -230,8 +220,6 @@ def build_engine_command(
 
     if headed:
         cmd.append("--headed")
-    if config_path:
-        cmd.extend(["--config", str(config_path)])
     return cmd
 
 
@@ -470,14 +458,12 @@ def _validate_orchestrator_inputs(
     tracker_path: Optional[Path],
     require_tracker: bool,
     resume_path: Path,
-    email_json_path: Path,
     config_path: Optional[Path],
     timeout_seconds: int,
     resume_timeout_seconds: int,
 ) -> None:
     required_files = [
         ("Resume", resume_path),
-        ("Email pool", email_json_path),
     ]
     if require_tracker:
         if tracker_path is None:
@@ -542,7 +528,6 @@ def run_orchestrator(
     engine_paths: Mapping[str, Path],
     tracker_path: Optional[Path],
     resume_path: Path,
-    email_json_path: Path,
     config_path: Optional[Path],
     results_path: Path,
     limit: Optional[int] = None,
@@ -568,11 +553,15 @@ def run_orchestrator(
         tracker_path=tracker_path,
         require_tracker=not bool(direct_url),
         resume_path=resume_path,
-        email_json_path=email_json_path,
         config_path=config_path,
         timeout_seconds=timeout_seconds,
         resume_timeout_seconds=resume_timeout_seconds,
     )
+    if config_path is None:
+        raise ValueError("A profile configuration is required.")
+    profile_config = load_json_config(config_path)
+    fallback_email = str(profile_config["candidate"].get("fallback_email", "")).strip()
+
     source_jobs = (
         [
             job_from_url(
@@ -611,36 +600,12 @@ def run_orchestrator(
             )
             continue
 
-        try:
-            email = get_random_email(email_json_path)
-            if not isinstance(email, str) or "@" not in email:
-                raise ValueError("Email picker returned an invalid address")
-        except Exception as exc:
-            logger.error("Email selection failed for row %s: %s", job["row_number"], exc)
-            _append_and_persist(
-                results,
-                {**base_result, "status": "EMAIL_SELECTION_FAILED", "success": False},
-                results_path,
-            )
-            continue
-
-        logger.info(
-            "[%d/%d] row=%s ats=%s company=%s role=%s email=%s",
-            index,
-            len(jobs),
-            job["row_number"],
-            ats,
-            job["company"],
-            job["role"],
-            _mask_email(email),
-        )
-
         generated = generate_personalized_resume(
             job["company"],
             job["role"],
             job["url"],
             resume_timeout_seconds,
-            email,
+            email_from_resume(resume_path, fallback_email),
         )
         if not generated:
             logger.error(
@@ -664,6 +629,12 @@ def run_orchestrator(
             )
             continue
         target_resume = generated
+        email = email_from_resume(target_resume, fallback_email)
+        current_title = current_title_from_resume(target_resume)
+        logger.info(
+            "[%d/%d] row=%s ats=%s company=%s role=%s email=%s",
+            index, len(jobs), job["row_number"], ats, job["company"], job["role"], _mask_email(email),
+        )
 
         command = build_engine_command(
             engine_path,
@@ -673,7 +644,6 @@ def run_orchestrator(
             job["role"],
             email,
             live_submit,
-            config_path,
             headed=headed,
             fill_only=fill_only,
             dry_run=dry_run,
@@ -685,6 +655,10 @@ def run_orchestrator(
             # (engine_shared.py) lets the run through; engines
             # refuse to process a job URL unless launched via this orchestrator.
             engine_env[ORCHESTRATOR_INVOCATION_ENV] = "1"
+            if config_path is None:
+                raise RuntimeError("A profile configuration is required for engine execution.")
+            engine_env[ORCHESTRATOR_CONFIG_ENV] = str(config_path)
+            engine_env[ORCHESTRATOR_CURRENT_TITLE_ENV] = current_title
             process_result = run_command(
                 command,
                 timeout_seconds,
@@ -739,7 +713,6 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--role", default="", help="Role metadata for --url mode")
     parser.add_argument("--tracker", default=str(DEFAULT_TRACKER_FILE))
     parser.add_argument("--resume", default=str(DEFAULT_RESUME_FILE))
-    parser.add_argument("--email-pool", default=str(DEFAULT_EMAIL_FILE))
     parser.add_argument("--config", default=str(DEFAULT_CONFIG_FILE))
     parser.add_argument("--results-file", default=str(DEFAULT_RESULTS_FILE))
     parser.add_argument("--limit", type=int, default=None)
@@ -786,7 +759,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             engine_paths=_resolve_engine_paths(args),
             tracker_path=Path(args.tracker).resolve() if args.tracker else None,
             resume_path=Path(args.resume).resolve(),
-            email_json_path=Path(args.email_pool).resolve(),
             config_path=Path(args.config).resolve() if args.config else None,
             results_path=results_path,
             limit=args.limit,

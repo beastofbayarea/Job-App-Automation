@@ -30,6 +30,9 @@ from engine_shared import (
     is_essay_question as _is_essay_question,
     label_for as _label_for,
     load_json_config,
+    load_candidate_evidence as _shared_candidate_evidence,
+    orchestrated_config_path,
+    resolve_candidate_email,
     open_chrome_session,
     navigate_reusing_tab,
     requested_live_mode,
@@ -42,7 +45,6 @@ from paths import CONFIG_DIR, DATA_DIR, OUTPUT_DIR, resolve_project_dir
 from email_gmail_client import fetch_messages, get_gmail_service
 
 ATS_NAME = "greenhouse"
-DEFAULT_CONFIG = CONFIG_DIR / "candidate_profile_config.json"
 DEFAULT_CANDIDATE_EVIDENCE = DATA_DIR / "base_resume.txt"
 
 logging.basicConfig(
@@ -52,8 +54,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def _load_config(path: Optional[Path]) -> dict[str, Any]:
-    return load_json_config(path or DEFAULT_CONFIG)
+def _load_config() -> dict[str, Any]:
+    return load_json_config(orchestrated_config_path())
 
 
 def _valid_greenhouse_url(url: str) -> bool:
@@ -320,19 +322,7 @@ def _fill_radio_or_checkbox_group(
 
 
 def _load_candidate_evidence(config: Mapping[str, Any]) -> str:
-    configured = Path(
-        str(config.get("candidate_evidence_file", DEFAULT_CANDIDATE_EVIDENCE))
-    ).expanduser()
-    if not configured.is_absolute():
-        configured = DATA_DIR / configured
-    try:
-        evidence = configured.read_text(encoding="utf-8").strip()
-    except OSError as exc:
-        logger.warning("Candidate evidence could not be read from %s: %s", configured, exc)
-        return ""
-    if not evidence:
-        logger.warning("Candidate evidence file is empty: %s", configured)
-    return evidence
+    return _shared_candidate_evidence(config)
 
 
 def _fill_custom_questions(
@@ -370,32 +360,23 @@ def _fill_custom_questions(
             if not label:
                 continue
             desired = _configured_answer(label, profile, rules, eeo, field_matchers)
-            # These blanket policy answers are intentionally hardcoded rather than
-            # config-driven: the candidate always answers "Yes" to experience,
-            # relocation, and plain language-spoken questions regardless of profile.
-            if re.search(r"\b8\+\s*years?\b", label, re.I):
-                desired = "Yes"
-            if re.search(r"\bwilling to relocate\b|\brelocat(?:e|ion)\b", label, re.I):
-                desired = "Yes"
+            # Language proficiency is a configured selection policy. Other
+            # experience and relocation answers are resolved by field_matchers.
             language_question = bool(
-                re.search(r"\b(language|fluen|proficien|speak\s+\w+)\b", label, re.I)
+                re.search(r"\b(language|fluen|speak\s+\w+)\b", label, re.I)
             )
-            proficiency_question = bool(
-                re.search(r"\b(proficien|language\s+level|fluency\s+level)\b", label, re.I)
+            language_proficiency_question = bool(
+                language_question
+                and re.search(r"\b(proficien|language\s+level|fluency\s+level)\b", label, re.I)
             )
-            language_preferences = ("Native", "C2", "C1")
-            if language_question and not proficiency_question:
+            if language_question and not language_proficiency_question:
                 desired = "Yes"
             success = False
             role_name = control.get_attribute("role") or ""
             tag = control.evaluate("el => el.tagName.toLowerCase()")
 
             if role_name == "combobox":
-                if proficiency_question:
-                    success = _select_greenhouse_combobox(
-                        page, control, language_preferences
-                    )
-                elif desired:
+                if desired:
                     success = _select_greenhouse_combobox(
                         page, control, _answer_variants(label, desired, option_variants)
                     )
@@ -422,11 +403,7 @@ def _fill_custom_questions(
                             exc,
                         )
             elif tag == "select":
-                if proficiency_question:
-                    success = _select_native(
-                        page, re.escape(label), language_preferences
-                    )
-                elif desired:
+                if desired:
                     success = _select_native(
                         page, re.escape(label), _answer_variants(label, desired, option_variants)
                     )
@@ -795,13 +772,7 @@ def run(
 
     profile = dict(config["candidate"])
     candidate_evidence = _load_candidate_evidence(config)
-    email = (
-        email_override.strip()
-        or str(profile.get("email_override", "")).strip()
-        or str(profile.get("fallback_email", "")).strip()
-    )
-    if not valid_email(email):
-        raise ValueError("a valid candidate email is required")
+    email = resolve_candidate_email(profile, email_override)
 
     timeout = int(config.get("navigation_timeout_ms", 30_000))
     screenshot_dir = resolve_project_dir(
@@ -1069,7 +1040,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             url=args.url,
             resume=Path(args.resume).expanduser().resolve(),
             email_override=args.email,
-            config=_load_config(args.config),
+            config=_load_config(),
             company=args.company,
             role=args.role,
             headed=args.headed,

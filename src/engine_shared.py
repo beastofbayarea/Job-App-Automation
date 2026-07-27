@@ -16,11 +16,16 @@ from typing import Any, Callable, Mapping, Optional, Sequence
 from urllib.parse import parse_qs, urlparse
 
 from playwright.sync_api import Browser, Locator, Page, Playwright
+from pypdf import PdfReader
+from paths import DATA_DIR
+from pypdf import PdfReader
 
 logger = logging.getLogger("ATSEngineCommon")
 
 RESULT_PREFIX = "ENGINE_RESULT_JSON:"
 ORCHESTRATOR_INVOCATION_ENV = "JOB_APP_ORCHESTRATOR_INVOCATION"
+ORCHESTRATOR_CONFIG_ENV = "JOB_APP_ORCHESTRATOR_CONFIG"
+ORCHESTRATOR_CURRENT_TITLE_ENV = "JOB_APP_RESUME_CURRENT_TITLE"
 SUCCESSFUL_STATUSES = frozenset({"PREFILLED_ONLY", "SUBMITTED & CONFIRMED"})
 DEFAULT_CONFIRMATION_PHRASES = (
     "application submitted",
@@ -70,6 +75,54 @@ def deep_merge(base: Mapping[str, Any], override: Mapping[str, Any]) -> dict[str
     return merged
 
 
+def normalize_profile_config(config: Mapping[str, Any]) -> dict[str, Any]:
+    """Expose the grouped policy schema through the engine's runtime keys."""
+    if config.get("schema_version") != 2:
+        raise ValueError("config schema_version must be 2")
+    normalized = dict(config)
+    candidate = config.get("candidate")
+    if not isinstance(candidate, Mapping):
+        raise ValueError("config must contain a candidate object")
+    normalized_candidate = dict(candidate)
+    for group_name in (
+        "identity", "contact", "address", "employment", "availability", "demographics"
+    ):
+        group = candidate.get(group_name)
+        if isinstance(group, Mapping):
+            normalized_candidate.update(group)
+    education = candidate.get("education")
+    if education is not None:
+        if not isinstance(education, Sequence) or isinstance(education, (str, bytes)):
+            raise ValueError("config candidate.education must be an array")
+        if education and not isinstance(education[0], Mapping):
+            raise ValueError("config candidate.education entries must be objects")
+        normalized_candidate["education_history"] = dict(education[0]) if education else {}
+    normalized["candidate"] = normalized_candidate
+    resume_title = os.environ.get(ORCHESTRATOR_CURRENT_TITLE_ENV, "").strip()
+    if resume_title:
+        normalized_candidate["current_job_title"] = resume_title
+    policies = config.get("policies")
+    if not isinstance(policies, Mapping):
+        return normalized
+    sections = {
+        "rules": "answers",
+        "eeo_defaults": "eeo",
+        "field_matchers": "matchers",
+        "answer_variants": "option_variants",
+    }
+    for runtime_key, policy_key in sections.items():
+        section = policies.get(policy_key)
+        if not isinstance(section, Mapping):
+            raise ValueError(f"config policies.{policy_key} must be an object")
+        normalized[runtime_key] = dict(section)
+    explicit_answers = policies.get("explicit_answers")
+    if explicit_answers is not None:
+        if not isinstance(explicit_answers, Mapping):
+            raise ValueError("config policies.explicit_answers must be an object")
+        normalized_candidate["screening_answers"] = dict(explicit_answers)
+    return normalized
+
+
 def load_json_config(
     path: Path,
     *,
@@ -81,7 +134,7 @@ def load_json_config(
         document = json.load(stream)
     if not isinstance(document, dict):
         raise ValueError("config root must be a JSON object")
-    config = deep_merge(defaults or {}, document)
+    config = normalize_profile_config(deep_merge(defaults or {}, document))
     candidate = config.get("candidate")
     if not isinstance(candidate, dict):
         raise ValueError("config must contain a candidate object")
@@ -89,6 +142,80 @@ def load_json_config(
     if missing:
         raise ValueError(f"config candidate is missing: {', '.join(missing)}")
     return config
+
+
+def orchestrated_config_path() -> Path:
+    """Return the profile path supplied by the orchestrator process."""
+    raw_path = os.environ.get(ORCHESTRATOR_CONFIG_ENV, "").strip()
+    if not raw_path:
+        raise RuntimeError("Application engines must receive config from orchestrator.py.")
+    path = Path(raw_path).expanduser().resolve()
+    if not path.is_file():
+        raise FileNotFoundError(f"Configuration file not found: {path}")
+    return path
+
+
+def email_from_resume(resume_path: Path, fallback_email: str) -> str:
+    """Extract the first valid email address from the rendered resume."""
+    try:
+        reader = PdfReader(str(resume_path))
+        text = "\n".join(page.extract_text() or "" for page in reader.pages)
+    except Exception as exc:
+        logger.warning("Could not extract email from resume %s: %s", resume_path, exc)
+        text = ""
+    matches = re.findall(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", text, re.I)
+    for address in matches:
+        if valid_email(address):
+            return address
+    if valid_email(fallback_email):
+        return fallback_email
+    raise ValueError("Resume has no valid email and candidate.fallback_email is invalid.")
+
+
+def current_title_from_resume(resume_path: Path) -> str:
+    """Extract the first title listed beneath the resume's experience heading."""
+    try:
+        reader = PdfReader(str(resume_path))
+        lines = [
+            line.strip()
+            for page in reader.pages
+            for line in (page.extract_text() or "").splitlines()
+        ]
+    except Exception as exc:
+        raise ValueError(f"Could not read current title from {resume_path}: {exc}") from exc
+    for index, line in enumerate(lines):
+        if re.fullmatch(r"(?:professional\s+)?experience", line, re.I):
+            for title in lines[index + 2 :]:
+                if title:
+                    return title
+            break
+    raise ValueError("No current title was found under Professional Experience.")
+
+
+def resolve_candidate_email(profile: Mapping[str, Any], override: str = "") -> str:
+    """Resolve the orchestrator email, with fallback only for extraction failure."""
+    candidates = (
+        override,
+        profile.get("email_override", ""),
+        profile.get("fallback_email", ""),
+        profile.get("email_fallback", ""),
+    )
+    for candidate in candidates:
+        value = str(candidate or "").strip()
+        if valid_email(value):
+            return value
+    raise ValueError("A valid candidate email is required.")
+
+
+def load_candidate_evidence(config: Mapping[str, Any]) -> str:
+    """Read configured resume evidence for shared essay generation."""
+    configured = Path(str(config.get("candidate_evidence_file", "base_resume.txt"))).expanduser()
+    path = configured if configured.is_absolute() else DATA_DIR / configured
+    try:
+        return path.read_text(encoding="utf-8").strip() if path.is_file() else ""
+    except OSError as exc:
+        logger.warning("Could not read candidate evidence %s: %s", path, exc)
+        return ""
 
 
 def validate_ats_url(url: str, ats: str) -> bool:
@@ -214,6 +341,27 @@ def answer_variants(
     return tuple(dict.fromkeys(variants))
 
 
+def _matcher_alias_matches(label: str, alias: str) -> bool:
+    """Match configured aliases across common punctuation and spelling variants."""
+    normalized_label = re.sub(r"[’']", "'", label.lower())
+    normalized_alias = re.sub(r"[’']", "'", alias.strip().lower())
+    variants = {
+        normalized_alias,
+        normalized_alias.replace("-", " "),
+        normalized_alias.replace(" ", "-"),
+        normalized_alias.replace("authorised", "authorized"),
+        normalized_alias.replace("authorized", "authorised"),
+        normalized_alias.replace("organisation", "organization"),
+        normalized_alias.replace("organization", "organisation"),
+    }
+    for value in tuple(variants):
+        if value.endswith("s"):
+            variants.add(value[:-1])
+        elif value:
+            variants.add(f"{value}s")
+    return any(value and value in normalized_label for value in variants)
+
+
 def configured_answer(
     label: str,
     profile: Mapping[str, Any],
@@ -230,10 +378,14 @@ def configured_answer(
         return "Yes"
     semantic_values: Mapping[str, Any] = {
         "preferred_name": profile.get("preferred_name"),
+        "phonetic_name": profile.get("phonetic_name"),
+        "middle_name": profile.get("middle_name"),
         "legal_name": " ".join(
             part for part in (profile.get("first_name"), profile.get("last_name")) if part
         ),
         "age_over_18": "Yes",
+        "background_check_consent": rules.get("background_check_consent"),
+        "sms_consent": rules.get("sms_consent"),
         "sanctions_residency": "No",
         "api_product_experience": "Yes",
         "intended_work_location": profile.get("location"),
@@ -246,9 +398,15 @@ def configured_answer(
         "public_username": str(profile.get("twitter", "")).rsplit("/", 1)[-1],
         "location": profile.get("location"),
         "country": profile.get("country"),
+        "citizenship": profile.get("citizenship") or profile.get("nationality"),
+        "available_start_date": profile.get("available_start_date"),
         "degree": profile.get("highest_degree"),
         "bachelors_degree": rules.get("bachelors_degree"),
         "salary_expectation": rules.get("salary_expectation"),
+        "previous_application": rules.get("previous_application"),
+        "right_to_work_status": rules.get("right_to_work_status"),
+        "requires_accommodation": rules.get("requires_accommodation"),
+        "can_perform_essential_functions": rules.get("can_perform_essential_functions"),
         "current_salary": rules.get("current_salary"),
         "notice_period": rules.get("notice_period"),
         "hyderabad_flexibility": rules.get("hyderabad_flexibility"),
@@ -256,7 +414,9 @@ def configured_answer(
         "language_fluency": rules.get("language_fluency"),
         "current_employee": rules.get("current_employee"),
         "privacy_consent": rules.get("privacy_consent"),
-        "eight_plus_product_years": rules.get("eight_plus_product_years"),
+        "experience_requirement": rules.get("experience_requirement"),
+        "tool_proficiency": rules.get("tool_proficiency"),
+        "language_proficiency": rules.get("language_proficiency"),
         "target_office": rules.get("target_office"),
         "application_certification": rules.get("application_certification"),
         "target_country_work_auth": rules.get("target_country_work_authorization"),
@@ -269,7 +429,7 @@ def configured_answer(
         "sponsorship": rules.get("visa_sponsorship"),
         "work_auth": rules.get("work_authorization"),
         "comfortable": rules.get("are_you_comfortable_with"),
-        "relocation": rules.get("relocation_bay_area"),
+        "relocation": rules.get("relocation"),
         "employment_restrictions": rules.get("employment_restrictions"),
         "previous_employment": rules.get("previous_employment"),
         "source": rules.get("source_channel"),
@@ -287,7 +447,15 @@ def configured_answer(
         # "intended_work_location"); this order lets the more specific keys
         # win before the generic ones are even tried.
         priority = (
+            "right_to_work_status",
+            "background_check_consent",
+            "sms_consent",
+            "requires_accommodation",
+            "can_perform_essential_functions",
             "sponsorship",
+            "language_proficiency",
+            "tool_proficiency",
+            "experience_requirement",
             "work_auth",
             "bachelors_degree",
             "degree",
@@ -305,6 +473,7 @@ def configured_answer(
             "intended_work_location",
             "employment_restrictions",
             "previous_employment",
+            "previous_application",
             "comfortable",
             "relocation",
             "transgender",
@@ -325,6 +494,10 @@ def configured_answer(
             "portfolio",
             "public_username",
             "preferred_name",
+            "phonetic_name",
+            "middle_name",
+            "citizenship",
+            "available_start_date",
             "country",
             "location",
             "source",
@@ -335,7 +508,9 @@ def configured_answer(
         for key in ordered_keys:
             aliases = field_matchers.get(key, ())
             answer = semantic_values.get(key)
-            if answer not in (None, "") and any(str(alias).lower() in text for alias in aliases):
+            if answer not in (None, "") and any(
+                _matcher_alias_matches(text, str(alias)) for alias in aliases
+            ):
                 return str(answer)
     return None
 
@@ -601,7 +776,6 @@ def build_engine_parser(description: str) -> argparse.ArgumentParser:
     parser.add_argument("--role", default="")
     parser.add_argument("--essay", default="")
     parser.add_argument("--email", default="")
-    parser.add_argument("--config", type=Path)
     parser.add_argument("--live-submit", action="store_true")
     parser.add_argument("--fill-only", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
@@ -675,7 +849,6 @@ def _build_parser(ats: str) -> argparse.ArgumentParser:
     parser.add_argument("--company", default="")
     parser.add_argument("--role", default="")
     parser.add_argument("--email", default="")
-    parser.add_argument("--config")
     parser.add_argument("--live-submit", action="store_true")
     parser.add_argument("--fill-only", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
@@ -705,10 +878,6 @@ def _validate(args: argparse.Namespace, ats: str) -> str:
     host = _parse_and_validate_host(args.url, ats)
     _validate_nonempty_file(args.resume, "resume")
 
-    if args.config:
-        config = Path(args.config).expanduser()
-        if not config.is_file():
-            raise ValueError(f"config file does not exist: {config}")
     return host
 
 

@@ -29,6 +29,9 @@ from engine_shared import (
     generate_essay_answer as _generate_essay,
     is_essay_question,
     load_json_config,
+    load_candidate_evidence,
+    orchestrated_config_path,
+    resolve_candidate_email,
     open_chrome_session,
     navigate_reusing_tab,
     requested_live_mode,
@@ -41,8 +44,6 @@ from paths import CONFIG_DIR, DATA_DIR, OUTPUT_DIR, resolve_project_dir
 
 
 ATS_NAME = "lever"
-DEFAULT_CONFIG = CONFIG_DIR / "candidate_profile_config.json"
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -50,8 +51,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def _load_config(path: Optional[Path]) -> dict[str, Any]:
-    return load_json_config(path or DEFAULT_CONFIG)
+def _load_config() -> dict[str, Any]:
+    return load_json_config(orchestrated_config_path())
 
 
 def _context(control: Locator) -> str:
@@ -438,27 +439,14 @@ def run(
         raise ValueError("URL must be an absolute Lever HTTPS URL")
     resume = validate_nonempty_file(resume, "resume")
     profile = dict(config["candidate"])
-    email = (
-        email_override.strip()
-        or str(profile.get("email_override", "")).strip()
-        or str(profile.get("fallback_email", "")).strip()
-    )
-    if not valid_email(email):
-        raise ValueError("a valid candidate email is required")
+    email = resolve_candidate_email(profile, email_override)
 
     timeout = int(config.get("navigation_timeout_ms", 30_000))
     screenshot_dir = resolve_project_dir(
         config.get("download_root", OUTPUT_DIR),
         OUTPUT_DIR,
     )
-    evidence_path = Path(str(config.get("candidate_evidence_file", ""))).expanduser()
-    if not evidence_path.is_absolute():
-        evidence_path = DATA_DIR / evidence_path
-    candidate_evidence = (
-        evidence_path.read_text(encoding="utf-8")
-        if evidence_path.is_file()
-        else ""
-    )
+    candidate_evidence = load_candidate_evidence(config)
     with sync_playwright() as playwright:
         # Lever job postings and their application forms are separate pages;
         # the form only lives at the "/apply" path off the posting URL.
@@ -575,7 +563,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             url=args.url,
             resume=Path(args.resume),
             email_override=args.email,
-            config=_load_config(args.config),
+            config=_load_config(),
             company=args.company,
             role=args.role,
             live_submit=live_submit,
