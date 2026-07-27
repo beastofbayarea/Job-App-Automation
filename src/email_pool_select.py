@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import Literal, Optional, Sequence, overload
 
-from project_paths import CONFIG_DIR
+from paths import CONFIG_DIR
 
 
 def _resolve_email_pool(json_file_path: Path) -> Path:

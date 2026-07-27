@@ -5,7 +5,7 @@ A Playwright CDP automation engine for applying to Ashby job postings.
 Connects to active Google Chrome debugging session (port 9222).
 
 Usage:
-  python ashby_application_engine.py --url "https://jobs.ashbyhq.com/company/job-id" --resume "/path/to/CV.pdf"
+  python engine_ashby.py --url "https://jobs.ashbyhq.com/company/job-id" --resume "/path/to/CV.pdf"
 """
 
 import base64
@@ -32,7 +32,7 @@ from playwright.sync_api import (
     sync_playwright,
 )
 
-from ats_application_engine_common import (
+from engine_shared import (
     answer_variants,
     build_engine_parser,
     configured_answer as common_configured_answer,
@@ -51,7 +51,7 @@ from ats_application_engine_common import (
     validate_required_fields,
     valid_email as _valid_email,
 )
-from project_paths import CONFIG_DIR, DATA_DIR, OUTPUT_DIR, SRC_DIR
+from paths import CONFIG_DIR, DATA_DIR, OUTPUT_DIR, SRC_DIR
 
 # ==============================================================================
 # DEFAULT CONFIGURATION
@@ -235,6 +235,10 @@ def extract_lowest_salary(comp_str: str, location_str: str = "") -> str:
         clean_num = num_str.replace(",", "")
         try:
             val = float(clean_num)
+            # Compensation strings often shorten thousands ("120k" or bare "120");
+            # treat any bare number under 1000 as thousands too. The 30000 floor
+            # then screens out unrelated numbers (e.g. years, hours) that survive
+            # that scaling.
             if k_flag.lower() == 'k' or val < 1000:
                 val *= 1000
             if val >= 30000:
@@ -247,6 +251,7 @@ def extract_lowest_salary(comp_str: str, location_str: str = "") -> str:
     return compensation
 
 def ss(page: Page, directory: Path, company: str, tag: str) -> str:
+    """Capture a debug screenshot, preferring a raw CDP capture around submit/error states."""
     ts = datetime.now().strftime("%H%M%S")
     directory.mkdir(parents=True, exist_ok=True)
     is_post_submit = "submitted" in tag or "5sec" in tag or "FATAL" in tag
@@ -258,6 +263,9 @@ def ss(page: Page, directory: Path, company: str, tag: str) -> str:
             return "N/A"
 
         if is_post_submit:
+            # page.screenshot() can hang or fail while the page is mid-navigation
+            # right after a submit/error, so capture via the CDP session directly
+            # instead of Playwright's higher-level (and more fragile) API.
             cdp_path = directory / f"{company_part}_{tag_part}_{ts}_cdp.png"
             try:
                 cdp = page.context.new_cdp_session(page)
@@ -353,6 +361,11 @@ def select_ashby_combobox(
     value: str,
     fallback_value: str | None = None,
 ) -> bool:
+    """Type into an Ashby autocomplete combobox and pick a matching option.
+
+    Falls through Playwright locators, then raw DOM text matching, then a
+    keyboard-driven acceptance of Ashby's highlighted suggestion.
+    """
     target = str(value or fallback_value or "").strip()
     if not target:
         return False
@@ -468,7 +481,7 @@ def verify_value(loc: Any, expected_substr: str, name: str) -> bool:
 def generate_essay_safely(question: str, jd_text: str, company: str, role: str) -> str:
     """Load the optional essay generator only when an unanswered essay is encountered."""
     try:
-        from resume_ai_utilities import call_essay_llm, strip_markdown_formatting
+        from resume_ai_client import call_essay_llm, strip_markdown_formatting
     except Exception as exc:
         logger.warning("Essay generator is unavailable; leaving the field for review: %s", exc)
         return ""
@@ -690,6 +703,8 @@ def _fill_radio_groups(page: Page, profile: Mapping[str, Any]) -> None:
             }''')
             q_lower = container_text.lower()
 
+            # Self-rating scales (e.g. "rate your proficiency 1-5") have no fixed
+            # configured answer, so default to the most favorable (highest) option.
             if re.search(r"\b(?:rate|rating)\b", q_lower):
                 numbered: list[tuple[float, Any]] = []
                 for radio in radios:
@@ -892,6 +907,9 @@ def _fill_configured_checkbox_groups(
                 else question.splitlines()[0].strip()
             )
 
+            # "Why are you interested" checkbox groups are multi-select with no
+            # single configured answer; checking every option is the safest way
+            # to avoid understating interest instead of guessing which apply.
             if "why" in normalized_question and "interested" in normalized_question:
                 for index in range(checkboxes.count()):
                     checkbox = checkboxes.nth(index)
@@ -1006,6 +1024,7 @@ def _select_highest_numeric_combobox(page: Page, inp: Any) -> bool:
         logger.debug("Highest-rating combobox selection failed: %s", exc)
         return False
 def fill_eeo(page: Page, profile: Mapping[str, Any]) -> None:
+    """Fill the EEO/self-identification section, if present, without overwriting existing selections."""
     eeo_section = page.locator(
         "h1, h2, h3, h4, legend, [class*='heading' i], [class*='title' i]"
     ).filter(
@@ -1107,6 +1126,7 @@ def fill_personal_and_files(
     email: str,
     resume: Path,
 ) -> dict[str, bool]:
+    """Fill resume, name, email, phone, location, and LinkedIn fields; return per-field success flags used to gate submission."""
     flags = {"name": False, "email": False, "phone": False, "resume": False}
 
     resume_loc = page.locator(
@@ -1404,6 +1424,7 @@ def fill_secondary(
     company: str = "",
     role: str = "",
 ) -> None:
+    """Fill remaining non-identity fields: dates, comboboxes, essay questions, and other free-text/number screening inputs."""
     if page.is_closed():
         return
 
@@ -1713,6 +1734,10 @@ def fill_secondary(
     _fill_radio_groups(page, profile)
     _fill_configured_checkbox_groups(page, profile)
 
+    # The passes above only handle groups backed by native radio/checkbox
+    # inputs. Some Ashby questions render as plain buttons/[role="radio"]
+    # elements with no underlying input, so re-scan and handle those here,
+    # skipping anything already covered (filtered out below).
     processed_texts = set()
     for field in page.locator("fieldset, [role='group'], div[class*='field'], div[class*='Field'], div[class*='Question'], div[class*='_yesno']").all():
         try:
@@ -1976,6 +2001,7 @@ def _fill_current_form(
     email: str,
     resume: Path,
 ) -> dict[str, bool]:
+    """Run every fill helper once against the currently visible Ashby form step."""
     critical = fill_personal_and_files(page, profile, email, resume)
     fill_secondary(page, profile, defaults, essay, company, role)
     fill_education_history(page, profile)
@@ -2239,6 +2265,7 @@ def run_job(
     live: bool = False,
     cfg: Mapping[str, Any] | None = None,
 ) -> str:
+    """Open the job, fill every form step, validate required fields, and submit if `live`; return the run's outcome status string."""
     if cfg is None:
         resolved_config = copy.deepcopy(DEFAULT_CONFIG)
     else:
@@ -2266,6 +2293,8 @@ def run_job(
     if not isinstance(overrides, Mapping):
         raise ValueError(f"Company override for {company!r} must be an object.")
 
+    # Restrict company overrides to keys that already exist on the candidate
+    # profile so a typo'd override key can't silently introduce a new field.
     profile.update({k: v for k, v in overrides.items() if k in profile})
     profile["_rules"] = resolved_config.get("rules", {})
     profile["_eeo_defaults"] = resolved_config.get("eeo_defaults", {})

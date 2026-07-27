@@ -38,6 +38,8 @@ DEFAULT_FAILURE_PHRASES = (
     "couldn't submit",
     "submission failed",
 )
+# Matches EEO/demographic field labels so consent auto-fill logic can leave them
+# untouched instead of guessing an answer to a legally sensitive question.
 SENSITIVE_FIELD_PATTERN = re.compile(
     r"eeo|gender|race|racial|ethnic|hispanic|latino|veteran|disability|"
     r"sexual|\bsex\b|orientation|transgender|demographic|identity|pronoun",
@@ -98,6 +100,9 @@ def validate_ats_url(url: str, ats: str) -> bool:
         return False
     host = (parsed.hostname or "").lower().rstrip(".")
     greenhouse_job_id = parse_qs(parsed.query).get("gh_jid", [])
+    # Some companies embed the Greenhouse form on their own career site (not
+    # *.greenhouse.io); a numeric gh_jid query param is the only reliable signal
+    # that such a custom-domain URL is still a genuine Greenhouse posting.
     custom_greenhouse_url = (
         ats == "greenhouse"
         and len(greenhouse_job_id) == 1
@@ -278,6 +283,9 @@ def configured_answer(
         "orientation": profile.get("orientation"),
     }
     if field_matchers:
+        # Field labels can match multiple alias sets (e.g. "location" vs
+        # "intended_work_location"); this order lets the more specific keys
+        # win before the generic ones are even tried.
         priority = (
             "sponsorship",
             "work_auth",
@@ -333,6 +341,9 @@ def configured_answer(
 
 
 def is_essay_question(label: str) -> bool:
+    """Return whether a field is a free-text essay prompt worth generating an answer for."""
+    # Demographic/accommodation fields look like questions but must never get an
+    # LLM-generated essay answer, even if they also contain essay-like wording.
     if re.search(
         r"accommodation|adjustment|disability|demographic|gender|race|veteran|"
         r"sexual|transgender|if you answered yes",
@@ -359,7 +370,7 @@ def generate_essay_answer(
 ) -> str:
     """Generate an application-ready essay answer via the LLM, or "" on failure."""
     try:
-        from resume_ai_utilities import call_essay_llm, strip_markdown_formatting
+        from resume_ai_client import call_essay_llm, strip_markdown_formatting
 
         if not candidate_evidence.strip():
             logger.warning("Essay generation skipped because candidate evidence is empty.")
@@ -400,6 +411,8 @@ def fill_required_consent(page: Page) -> list[str]:
             )
             if not box.is_visible() and not explicit_confirm:
                 continue
+            # Skip EEO/demographic checkboxes unless the surrounding text is an
+            # explicit self-attestation ("I confirm...") rather than a disclosure question.
             if SENSITIVE_FIELD_PATTERN.search(context) and not explicit_confirm:
                 continue
             required = explicit_confirm or bool(
@@ -535,6 +548,9 @@ def open_chrome_session(
     profile_name: str = "ats-cdp-profile",
     target_url: str = "",
 ) -> BrowserSession:
+    # Prefer attaching to a Chrome the candidate is already logged into (via CDP) so
+    # site sessions/cookies carry over; only launch a fresh, unauthenticated browser
+    # when explicitly requested or when no debuggable Chrome can be found or started.
     force_fresh = os.environ.get("JOB_APP_FRESH_BROWSER") == "1"
     if not force_fresh:
         try:
@@ -598,8 +614,8 @@ def require_orchestrated_invocation(url: str) -> None:
     if os.environ.get(ORCHESTRATOR_INVOCATION_ENV) == "1":
         return
     raise RuntimeError(
-        "Job application URLs must be run through job_application_orchestrator.py. "
-        f'Use: python src/job_application_orchestrator.py --url "{url}"'
+        "Job application URLs must be run through orchestrator.py. "
+        f'Use: python src/orchestrator.py --url "{url}"'
     )
 
 

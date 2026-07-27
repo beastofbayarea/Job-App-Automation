@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
 import fitz  # PyMuPDF for quality scoring
-from project_paths import DATA_DIR, OUTPUT_DIR as PROJECT_OUTPUT_DIR
+from paths import DATA_DIR, OUTPUT_DIR as PROJECT_OUTPUT_DIR
 
 # ---- Config ----
 logger = logging.getLogger("ResumeGenerator")
@@ -88,6 +88,8 @@ def _parse_tagged_source(text: str) -> Tuple[List[Dict[str, Any]], List[Dict[str
             current_experience = None
             continue
 
+        # Tag lines look like "[COMPANY] Acme" or "[CLAIM CL1] Grew revenue...";
+        # the optional group 2 only appears on tags (e.g. CLAIM) that carry an id.
         match = re.match(r"^\[([A-Z_]+)(?:\s+([A-Z0-9-]+))?\]\s*(.*)$", line)
         if not match:
             continue
@@ -257,6 +259,7 @@ def _save_disk_cache() -> None:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         with _cache_lock:
             data = dict(_llm_cache)
+        # Write-then-rename so a crash mid-write never leaves a truncated cache file.
         temp_cf = cf.with_suffix(".tmp")
         with open(temp_cf, "w", encoding="utf-8") as cache_file:
             json.dump(data, cache_file)
@@ -268,7 +271,7 @@ def _save_disk_cache() -> None:
 _load_disk_cache()
 
 
-from resume_ai_utilities import call_resume_llm, generate_fallback_resume_data, scrape_ashby_job
+from resume_ai_client import call_resume_llm, generate_fallback_resume_data, scrape_ashby_job
 
 
 def _generate_fallback_resume_data(job: JobInfo) -> Dict[str, Any]:
@@ -448,7 +451,8 @@ def _ensure_min_bullets(resume_data: Dict[str, Any]) -> Dict[str, Any]:
                     for orig_b in orig['bullets']:
                         if len(bullets) >= 4:
                             break
-                        # Check basic overlap
+                        # Skip fallback bullets that overlap an LLM bullet already covering
+                        # the same claim, so top-ups add coverage instead of duplicating it.
                         orig_words = [w for w in orig_b.lower().split() if len(w) > 4][:3]
                         if orig_words and ' '.join(orig_words) in current_text:
                             continue
@@ -550,6 +554,8 @@ def _bold_keywords_in_text(
     text = xml_escape(str(text))
     text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
 
+    # Split out already-bolded spans so keyword/metric patterns below only scan
+    # plain text and never re-match (or nest tags) inside an existing <b>...</b>.
     tokens = re.split(r'(<b>.*?</b>)', text, flags=re.IGNORECASE | re.DOTALL)
     processed_tokens: List[str] = []
 
@@ -964,6 +970,9 @@ def _generate_with_retries(
         resume_data = _repair_education(resume_data)
         resume_data = _ensure_min_bullets(resume_data)
 
+        # Only a missing structural key aborts before rendering; content-quality
+        # issues (thin skills, missing companies, low bullet count) are left for
+        # _score_pdf below, which judges the actual rendered layout instead.
         data_issues = _validate_llm_data(resume_data)
         critical = [i for i in data_issues if 'Missing required key' in i]
         if critical:

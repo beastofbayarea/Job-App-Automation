@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from project_paths import OUTPUT_DIR, PROJECT_ROOT, SRC_DIR
+from paths import OUTPUT_DIR, PROJECT_ROOT, SRC_DIR
 
 
 def _slug(url: str) -> str:
@@ -22,6 +22,7 @@ def _slug(url: str) -> str:
 
 
 def _write_progress(path: Path, payload: dict[str, object]) -> None:
+    # Write-then-rename so a reader never observes a partially written file.
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     temporary.replace(path)
@@ -44,7 +45,7 @@ def main() -> int:
         if line.strip()
     ]
     progress_path = OUTPUT_DIR / "job_url_queue_progress.json"
-    orchestrator = SRC_DIR / "job_application_orchestrator.py"
+    orchestrator = SRC_DIR / "orchestrator.py"
 
     for index, url in enumerate(urls[args.start_index :], start=args.start_index):
         slug = _slug(url)

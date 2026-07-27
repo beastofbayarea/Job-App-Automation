@@ -14,7 +14,7 @@ from playwright.sync_api import Locator, Page
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
-from ats_application_engine_common import (
+from engine_shared import (
     SENSITIVE_FIELD_PATTERN,
     answer_variants,
     build_engine_parser,
@@ -37,7 +37,7 @@ from ats_application_engine_common import (
     validate_required_fields,
     valid_email,
 )
-from project_paths import CONFIG_DIR, DATA_DIR, OUTPUT_DIR, resolve_project_dir
+from paths import CONFIG_DIR, DATA_DIR, OUTPUT_DIR, resolve_project_dir
 
 
 ATS_NAME = "lever"
@@ -56,6 +56,10 @@ def _load_config(path: Optional[Path]) -> dict[str, Any]:
 
 def _context(control: Locator) -> str:
     try:
+        # Lever renders some questions with the label as a preceding sibling
+        # (.application-label) rather than nested inside the field, so that
+        # case has to be checked explicitly before falling back to the
+        # nearest ancestor container.
         text = control.evaluate(
             """el => {
                 const field = el.closest('.application-field');
@@ -69,6 +73,7 @@ def _context(control: Locator) -> str:
                 return root?.innerText || '';
             }"""
         )
+        # "✱" is Lever's visual required-field marker, not part of the label text.
         return " ".join(str(text).split()).replace("✱", "").strip()
     except Exception:
         return ""
@@ -92,6 +97,10 @@ def _fill_location(page: Page, value: str) -> bool:
     if location is None:
         return False
     try:
+        # Lever's location field is a React-controlled input; setting .value
+        # directly (as Locator.fill would) doesn't register with React's
+        # internal tracker, so the change goes through the native property
+        # setter and synthetic input/change events are dispatched by hand.
         location.evaluate(
             """(el, value) => {
                 const setter = Object.getOwnPropertyDescriptor(
@@ -103,6 +112,7 @@ def _fill_location(page: Page, value: str) -> bool:
             }""",
             value,
         )
+        # Give the debounced autocomplete dropdown time to render before probing it.
         page.wait_for_timeout(500)
         suggestions = page.locator(
             '.dropdown-results > *, .location-dropdown li, [role="option"], .pac-item'
@@ -224,6 +234,9 @@ def _fill_custom_questions(
 ) -> dict[str, bool]:
     results: dict[str, bool] = {}
     handled: set[str] = set()
+    # Fields already covered by _fill_standard_fields/fill_required_consent,
+    # or hidden Lever plumbing (accountId, origin, referer, etc.) that must
+    # not be touched.
     standard_names = {
         "resume", "name", "email", "phone", "location", "selectedLocation",
         "org", "urls[LinkedIn]", "accountId", "origin", "referer",
@@ -233,6 +246,7 @@ def _fill_custom_questions(
         "select, textarea, input:not([type='hidden']):not([type='file']):"
         "not([type='submit']):not([type='button'])"
     )
+    # Truncated to keep the essay-generation prompt within a reasonable size.
     job_text = page.locator("body").inner_text()[:30_000]
     for index in range(controls.count()):
         control = controls.nth(index)
@@ -250,6 +264,10 @@ def _fill_custom_questions(
             if not label:
                 continue
             normalized_label = label.lower()
+            # Lever's "which location are you applying for" dropdown lists the
+            # office options already named in the posting header, so it is
+            # answered from that context (_select_posting_location) instead of
+            # the candidate's configured home location.
             posting_location_question = bool(
                 re.search(r"\bwhich location\b.*\bapplying\b", normalized_label)
             )
@@ -299,6 +317,9 @@ def _fill_custom_questions(
                     control, label, desired, configured_variants
                 )
                 if not success and desired.lower() == "yes":
+                    # Fallback for closed <select> elements where inner_text()
+                    # can read back empty/stale option text; Playwright's own
+                    # label lookup resolves the option correctly regardless.
                     try:
                         success = bool(control.select_option(label="Yes"))
                     except Exception:
@@ -368,6 +389,9 @@ def _required_issues(page: Page) -> list[str]:
             if not control.is_visible() or (control.get_attribute("type") or "") == "hidden":
                 continue
             context = _context(control)
+            # Lever marks many custom questions as required only visually,
+            # with a "✱" glyph in the surrounding text rather than the HTML
+            # required attribute, so both signals have to be checked.
             explicitly_required = (
                 control.get_attribute("required") is not None
                 or "✱" in control.evaluate(
@@ -436,6 +460,8 @@ def run(
         else ""
     )
     with sync_playwright() as playwright:
+        # Lever job postings and their application forms are separate pages;
+        # the form only lives at the "/apply" path off the posting URL.
         apply_url = url.rstrip("/")
         if not apply_url.endswith("/apply"):
             apply_url += "/apply"

@@ -25,14 +25,14 @@ from urllib.parse import unquote, urlparse
 
 import openpyxl
 
-from ats_application_engine_common import (
+from engine_shared import (
     ATS_HOST_MARKERS as ATS_HOSTS,
     ORCHESTRATOR_INVOCATION_ENV,
     RESULT_PREFIX as ENGINE_RESULT_PREFIX,
     mask_email as _mask_email,
     validate_ats_url,
 )
-from project_paths import CONFIG_DIR, DATA_DIR, OUTPUT_DIR, SRC_DIR, resolve_existing
+from paths import CONFIG_DIR, DATA_DIR, OUTPUT_DIR, SRC_DIR, resolve_existing
 
 logging.basicConfig(
     level=logging.INFO,
@@ -53,12 +53,12 @@ SCREENSHOT_EXTENSIONS = {".jpeg", ".jpg", ".png"}
 SUPPORTED_ATS = tuple(ATS_HOSTS)
 
 DEFAULT_ENGINE_FILES: Mapping[str, Path] = {
-    "ashby": SCRIPT_DIR / "ashby_application_engine.py",
-    "greenhouse": SCRIPT_DIR / "greenhouse_application_engine.py",
-    "lever": SCRIPT_DIR / "lever_application_engine.py",
+    "ashby": SCRIPT_DIR / "engine_ashby.py",
+    "greenhouse": SCRIPT_DIR / "engine_greenhouse.py",
+    "lever": SCRIPT_DIR / "engine_lever.py",
 }
 try:
-    from candidate_email_selector import get_random_email
+    from email_pool_select import get_random_email
 except ImportError:
     def get_random_email(file_path: Path, count: int = 1) -> str | list[str]:
         with file_path.open("r", encoding="utf-8") as stream:
@@ -240,6 +240,9 @@ def _terminate_process_tree(process: subprocess.Popen[str]) -> None:
         return
     try:
         if os.name == "nt":
+            # /T kills the whole descendant tree: the engine subprocess itself
+            # spawns a Chrome/Playwright browser process that would otherwise
+            # survive a plain process.kill() of just the Python child.
             subprocess.run(
                 ["taskkill", "/PID", str(process.pid), "/T", "/F"],
                 capture_output=True,
@@ -283,6 +286,9 @@ def run_command(
     if not cmd:
         raise ValueError("cmd must contain at least one argument")
 
+    # CREATE_NEW_PROCESS_GROUP lets _terminate_process_tree() target the whole
+    # tree via taskkill /T; on POSIX, start_new_session is the equivalent so
+    # killpg() below can reach descendants instead of only the direct child.
     creationflags = (
         subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
         if os.name == "nt"
@@ -337,6 +343,10 @@ def parse_engine_result(result: ProcessResult, live_submit: bool) -> dict[str, A
             payload.setdefault("status", "UNKNOWN")
             return payload
 
+    # No ENGINE_RESULT_JSON: marker (see emit_engine_result in
+    # engine_shared.py) was found in the child's output, so
+    # fall back to scraping the human-readable "Final Outcome ->" log line
+    # that older/ad-hoc engine invocations may still print.
     final_outcome = ""
     for line in combined.splitlines():
         if "Final Outcome ->" in line:
@@ -344,6 +354,8 @@ def parse_engine_result(result: ProcessResult, live_submit: bool) -> dict[str, A
 
     successful_statuses = {"PREFILLED_ONLY", "SUBMITTED & CONFIRMED"}
     success = result.returncode == 0 and final_outcome in successful_statuses
+    # In live mode, only an actually confirmed submission counts as success;
+    # a merely prefilled form must not be reported as a completed application.
     if live_submit and final_outcome != "SUBMITTED & CONFIRMED":
         success = False
     return {
@@ -385,6 +397,9 @@ def cleanup_post_run_artifacts(results_path: Path) -> None:
 def _personalized_resume_path(company: str, role: str, url: str) -> Path:
     safe_company = "".join(character if character.isalnum() else "_" for character in company).strip("_")
     safe_role = "".join(character if character.isalnum() else "_" for character in role).strip("_")
+    # Deterministic hash of the URL keeps the filename stable across retries
+    # of the same posting, which is what lets generate_personalized_resume()
+    # detect and reuse an already-generated resume instead of regenerating it.
     posting_hash = hashlib.sha256(url.encode("utf-8")).hexdigest()[:12]
     return OUTPUT_DIR / f"{safe_company}_{safe_role}_{posting_hash}_Resume.pdf"
 
@@ -396,13 +411,15 @@ def generate_personalized_resume(
     timeout_seconds: int,
     email: str = "",
 ) -> Optional[Path]:
-    generator = SCRIPT_DIR / "personalized_resume_generator.py"
+    generator = SCRIPT_DIR / "resume_generate.py"
     if not generator.exists():
         logger.warning("Resume generator not found: %s", generator)
         return None
 
     output_path = _personalized_resume_path(company, role, url)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    # The 5000-byte floor is a cheap sanity check that the existing file is a
+    # real rendered PDF rather than a truncated or failed prior write.
     if (
         os.environ.get("JOB_APP_FORCE_RESUME_REGENERATION") != "1"
         and output_path.exists()
@@ -423,6 +440,9 @@ def generate_personalized_resume(
     ]
     if email:
         command.extend(["--email", email])
+    # Track mtime rather than trusting returncode alone: the generator could
+    # exit 0 without actually rewriting output_path, which would silently
+    # leave a stale or undersized file behind and must be treated as failure.
     before_mtime = output_path.stat().st_mtime_ns if output_path.exists() else None
     try:
         result = run_command(command, timeout_seconds)
@@ -661,6 +681,9 @@ def run_orchestrator(
 
         try:
             engine_env = dict(os.environ)
+            # Required so the engine's require_orchestrated_invocation() guard
+            # (engine_shared.py) lets the run through; engines
+            # refuse to process a job URL unless launched via this orchestrator.
             engine_env[ORCHESTRATOR_INVOCATION_ENV] = "1"
             process_result = run_command(
                 command,
@@ -770,6 +793,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             start_index=args.start_index,
             live_submit=args.live_submit,
             fill_only=args.fill_only,
+            # Defaults to dry-run whenever --live-submit was not explicitly
+            # requested, even if --dry-run itself was omitted, so a bare
+            # invocation can never submit an application by accident.
             dry_run=args.dry_run or not args.live_submit,
             shuffle=not args.no_shuffle,
             headed=args.headed,
@@ -785,6 +811,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 2
     finally:
         cleanup_post_run_artifacts(results_path)
+    # Exit codes: 0 = every job succeeded, 1 = ran but at least one job
+    # failed, 2 = orchestration could not even start (see except above).
     return 0 if all(result.get("success") for result in results) else 1
 
 

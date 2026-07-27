@@ -13,7 +13,7 @@ from playwright.sync_api import Locator, Page
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
-from ats_application_engine_common import (
+from engine_shared import (
     SENSITIVE_FIELD_PATTERN as SENSITIVE_EEO,
     answer_variants as _answer_variants,
     build_engine_parser,
@@ -38,8 +38,8 @@ from ats_application_engine_common import (
     validate_required_fields,
     valid_email,
 )
-from project_paths import CONFIG_DIR, DATA_DIR, OUTPUT_DIR, resolve_project_dir
-from gmail_reader_sender import fetch_messages, get_gmail_service
+from paths import CONFIG_DIR, DATA_DIR, OUTPUT_DIR, resolve_project_dir
+from email_gmail_client import fetch_messages, get_gmail_service
 
 ATS_NAME = "greenhouse"
 DEFAULT_CONFIG = CONFIG_DIR / "candidate_profile_config.json"
@@ -146,6 +146,10 @@ def _open_application_form(
     board = re.sub(r"[^a-z0-9]+", "", company.lower())
     if not board:
         return
+    # Some custom career sites embed the Greenhouse widget via JS that can fail
+    # to render (or the CTA above only linked out without loading the form).
+    # The gh_jid query param plus the company's board slug is enough to build
+    # the underlying Greenhouse embed URL directly and bypass the broken widget.
     embed_url = "https://job-boards.greenhouse.io/embed/job_app?" + urlencode(
         {"for": board, "token": job_ids[0]}
     )
@@ -229,6 +233,11 @@ def _select_greenhouse_combobox(
                         option.click()
                         return True
                 matches = options.filter(has_text=re.compile(re.escape(desired), re.I))
+                # Fuzzy substring matching picks the wrong option for these values:
+                # "Asian" also matches "Asian (Non-Hispanic)"-style compound race
+                # options, and "San Francisco" matches multiple Bay Area location
+                # entries. Require an exact match instead of falling through to
+                # the fuzzy match below.
                 exact_only = desired.lower() == "asian" or desired.lower().startswith(
                     "san francisco"
                 )
@@ -361,6 +370,9 @@ def _fill_custom_questions(
             if not label:
                 continue
             desired = _configured_answer(label, profile, rules, eeo, field_matchers)
+            # These blanket policy answers are intentionally hardcoded rather than
+            # config-driven: the candidate always answers "Yes" to experience,
+            # relocation, and plain language-spoken questions regardless of profile.
             if re.search(r"\b8\+\s*years?\b", label, re.I):
                 desired = "Yes"
             if re.search(r"\bwilling to relocate\b|\brelocat(?:e|ion)\b", label, re.I):
@@ -665,6 +677,7 @@ def _fill_export_control_questions(page: Page) -> dict[str, bool]:
 
 
 def _fill_source_checkbox(page: Page) -> dict[str, bool]:
+    """Answer Twilio's recurring "how did you hear about us" checkbox with LinkedIn."""
     body = page.locator("body").inner_text()
     if not re.search(r"how did you hear about (?:us|twilio)", body, re.I):
         return {}
@@ -805,6 +818,10 @@ def run(
         browser, page = session.browser, session.page
         page.set_default_timeout(int(config.get("action_timeout_ms", 14_000)))
         try:
+            # If the reused tab is already on the target URL and showing the
+            # 8-box code challenge, a prior run already filled the form and is
+            # only waiting on email verification. Handle the code and submit
+            # directly instead of re-filling (and re-triggering) the whole form.
             if (
                 page.url.rstrip("/") == url.rstrip("/")
                 and page.locator('input[id^="security-input"]').count() >= 8

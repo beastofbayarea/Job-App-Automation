@@ -38,7 +38,7 @@ send permission.
 
 FIRST RUN
 ---------
-    python src/gmail_reader_sender.py --max-results 10
+    python src/email_gmail_client.py --max-results 10
 
 A browser window will open for OAuth authorization. After approval, token.json
 will be saved locally.
@@ -47,33 +47,33 @@ READ EXAMPLES
 -------------
 Read the 10 newest inbox messages:
 
-    python src/gmail_reader_sender.py --max-results 10
+    python src/email_gmail_client.py --max-results 10
 
 Read unread messages:
 
-    python src/gmail_reader_sender.py --unread --max-results 20
+    python src/email_gmail_client.py --unread --max-results 20
 
 Search all mail:
 
-    python src/gmail_reader_sender.py --all-mail --query "from:example.com newer_than:30d"
+    python src/email_gmail_client.py --all-mail --query "from:example.com newer_than:30d"
 
 Export:
 
-    python src/gmail_reader_sender.py --max-results 100 --csv output/messages.csv
-    python src/gmail_reader_sender.py --max-results 100 --json output/messages.json
+    python src/email_gmail_client.py --max-results 100 --csv output/messages.csv
+    python src/email_gmail_client.py --max-results 100 --json output/messages.json
 
 SEND EXAMPLES
 -------------
 Interactive confirmation:
 
-    python gmail_reader_sender.py \
+    python email_gmail_client.py \
         --send-to recipient@example.com \
         --subject "Test email" \
         --body "Hello from my local Python script."
 
 Skip confirmation deliberately:
 
-    python gmail_reader_sender.py \
+    python email_gmail_client.py \
         --send-to recipient@example.com \
         --subject "Test email" \
         --body "Hello from my local Python script." \
@@ -102,7 +102,7 @@ from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
 
-from project_paths import CONFIG_DIR
+from paths import CONFIG_DIR
 
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
@@ -180,6 +180,7 @@ def import_google_dependencies() -> tuple[Any, Any, Any, Any, Any]:
 
 
 def get_gmail_service(credentials_path: Path, token_path: Path) -> Any:
+    """Return an authorized Gmail client, refreshing or re-running OAuth as needed."""
     Request, Credentials, InstalledAppFlow, build, _ = import_google_dependencies()
     credentials = None
 
@@ -237,6 +238,7 @@ def html_to_text(value: str) -> str:
 
 
 def extract_body(payload: dict[str, Any]) -> str:
+    """Recursively collect a message's text parts, preferring plain text over HTML."""
     plain_parts: list[str] = []
     html_parts: list[str] = []
 

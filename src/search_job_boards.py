@@ -36,7 +36,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from project_paths import OUTPUT_DIR
+from paths import OUTPUT_DIR
 
 try:
     from ddgs import DDGS
@@ -48,7 +48,7 @@ except ImportError:
         DDGS = None  # type: ignore[assignment,misc]
 
 
-LOGGER = logging.getLogger("ats_job_search")
+LOGGER = logging.getLogger("search_job_boards")
 UTC = timezone.utc
 
 DEFAULT_SEARCH_PHRASES = (
@@ -257,6 +257,7 @@ def get_json(
 
 
 def parse_datetime(value: Any) -> datetime | None:
+    """Parse an epoch number, ISO 8601, or RFC 2822 timestamp into a UTC datetime."""
     if value is None or value == "":
         return None
 
@@ -333,6 +334,9 @@ def split_terms(raw: str | None, defaults: Sequence[str]) -> list[str]:
 def term_pattern(term: str) -> re.Pattern[str]:
     escaped = re.escape(term.strip())
     if re.fullmatch(r"[A-Za-z0-9]+", term.strip()):
+        # Single alphanumeric terms (e.g. "AI", "ML") need boundaries so they don't
+        # match inside unrelated words like "said" or "main"; multi-word/symbol
+        # terms (e.g. "generative AI") are matched as a plain substring instead.
         return re.compile(rf"(?<![A-Za-z0-9]){escaped}(?![A-Za-z0-9])", re.IGNORECASE)
     return re.compile(escaped, re.IGNORECASE)
 
@@ -351,6 +355,8 @@ def job_match_reason(
     exclude_terms: Sequence[str],
     location_terms: Sequence[str],
 ) -> str | None:
+    """Return a formatted match reason if the job passes the role/AI/exclude/location
+    filters, otherwise None."""
     title_text = clean_whitespace(title)
     full_text = clean_whitespace(f"{title_text} {description}")
 
@@ -388,6 +394,8 @@ def unwrap_search_url(url: str) -> str:
 
 def canonical_url(url: str) -> str:
     parsed = urlparse(url)
+    # Strip a trailing /apply so a job page and its application-form page
+    # canonicalize to the same key for deduplication.
     path = re.sub(r"/apply/?$", "", parsed.path, flags=re.IGNORECASE)
     path = path.rstrip("/") or "/"
     # Preserve query only for Greenhouse embed URLs where it can identify the job.
@@ -396,6 +404,7 @@ def canonical_url(url: str) -> str:
 
 
 def board_from_url(raw_url: str) -> Board | None:
+    """Identify the ATS platform, board token, and region encoded in a URL, if any."""
     url = unwrap_search_url(raw_url)
     parsed = urlparse(url)
     host = parsed.netloc.lower().split(":", 1)[0]
@@ -422,6 +431,7 @@ def board_from_url(raw_url: str) -> Board | None:
         if parts and parts[0].lower() != "embed":
             region = "eu" if ".eu." in host else "global"
             return Board("greenhouse", parts[0], region)
+        # Embed widget URLs carry the board token as a query param instead of a path segment.
         for key in ("for", "board", "board_token"):
             values = query.get(key)
             if values and values[0]:
@@ -431,6 +441,7 @@ def board_from_url(raw_url: str) -> Board | None:
 
 
 def looks_like_job_url(url: str) -> bool:
+    """Heuristically detect whether a URL points at a specific job posting rather than a board root."""
     parsed = urlparse(url)
     host = parsed.netloc.lower().split(":", 1)[0]
     parts = [part for part in parsed.path.split("/") if part]
@@ -439,6 +450,7 @@ def looks_like_job_url(url: str) -> bool:
     if host == "jobs.ashbyhq.com":
         return len(parts) >= 2
     if host in {"jobs.lever.co", "jobs.eu.lever.co"}:
+        # /apply is the application form for a job, not the job posting itself.
         return len(parts) >= 2 and parts[-1].lower() != "apply"
     if host in {
         "boards.greenhouse.io",
@@ -523,6 +535,8 @@ def discover_boards(
     timeout: float,
     delay: float,
 ) -> tuple[set[Board], dict[str, list[SearchCandidate]]]:
+    """Search for ATS boards and also collect individual job-page URLs seen along the
+    way, which are used later as a fallback if a board's own feed fails."""
     boards: set[Board] = set()
     candidates_by_board: dict[str, list[SearchCandidate]] = {}
     seen_urls: set[str] = set()
@@ -824,6 +838,8 @@ def fetch_greenhouse_jobs(
         date_source = "updated_at_fallback"
         job_id = item.get("id")
         if job_id is not None:
+            # The list endpoint doesn't expose first_published; fetch each job's
+            # detail record to get an accurate posting date when possible.
             try:
                 detail_payload = get_json(session, f"{base}/jobs/{job_id}", timeout=timeout)
                 if isinstance(detail_payload, dict):
@@ -1168,6 +1184,8 @@ def fetch_board_jobs(
     board: Board,
     **kwargs: Any,
 ) -> list[Job]:
+    # kwargs carries the union of every fetch_*_jobs parameter (see main's
+    # common_kwargs); drop the ones the target platform's fetcher doesn't accept.
     platform_kwargs = dict(kwargs)
     if board.platform == "greenhouse":
         platform_kwargs.pop("max_pages", None)
@@ -1428,6 +1446,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
 
     if not args.skip_search:
+        # DDGS only supports coarse day/month/year timelimits, so approximate
+        # --days to the nearest bucket (falling back to no limit beyond a year).
         if args.days <= 1:
             timelimit = "d"
         elif args.days <= 31:

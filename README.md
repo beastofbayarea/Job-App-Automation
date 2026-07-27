@@ -47,24 +47,25 @@ OAuth files are deliberately excluded from Git.
 Preview the orchestrator without submitting applications:
 
 ```powershell
-python src/job_application_orchestrator.py --dry-run --limit 1
+python src/orchestrator.py --dry-run --limit 1
 ```
 
 Run the complete workflow for one job URL:
 
 ```powershell
-python src/job_application_orchestrator.py `
+python src/orchestrator.py `
   --url "https://jobs.ashbyhq.com/example/job-id" `
   --dry-run
 ```
 
-Job URLs must enter through `job_application_orchestrator.py`; the ATS engine
-scripts are internal child processes and reject direct URL invocations.
+Job URLs must enter through `orchestrator.py`; the ATS engine scripts
+(`engine_ashby.py`, `engine_greenhouse.py`, `engine_lever.py`) are internal
+child processes and reject direct URL invocations.
 
 Generate a personalized resume:
 
 ```powershell
-python src/personalized_resume_generator.py `
+python src/resume_generate.py `
   --company "Example" `
   --role "Product Manager" `
   --url "https://jobs.example.com/role"
@@ -73,13 +74,13 @@ python src/personalized_resume_generator.py `
 Search supported ATS boards:
 
 ```powershell
-python src/ats_job_search.py --help
+python src/search_job_boards.py --help
 ```
 
 Read recent Gmail messages:
 
 ```powershell
-python src/gmail_reader_sender.py --max-results 10
+python src/email_gmail_client.py --max-results 10
 ```
 
 Generated resumes, caches, screenshots, and run results are written to

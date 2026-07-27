@@ -23,8 +23,8 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 import pypdf
 from playwright.sync_api import sync_playwright
 
-from project_paths import CONFIG_DIR
-from ats_application_engine_common import validate_ats_url
+from paths import CONFIG_DIR
+from engine_shared import validate_ats_url
 
 try:
     from google import genai
@@ -44,6 +44,8 @@ LOCATION = "global"
 MODEL = "gemini-flash-latest"
 SERVICE_ACCOUNT_FILE = CONFIG_DIR / "vertex_service_account.json"
 
+# Serializes LLM calls; the orchestrator can run multiple ATS engines concurrently
+# but Vertex AI quota and the shared client are not safe for parallel requests.
 _ai_lock = threading.Lock()
 _client_lock = threading.Lock()
 _client = None
@@ -212,6 +214,8 @@ def scrape_ashby_job(url: str) -> Dict[str, Any]:
             questions: List[str] = []
             for text_area in page.locator("textarea:visible").all():
                 try:
+                    # Ashby doesn't reliably associate <label> with essay textareas, so
+                    # walk up to 5 ancestors looking for nearby short, non-upload text.
                     label = text_area.evaluate("""el => {
                         let curr = el;
                         for (let i = 0; i < 5 && curr; i++) {
