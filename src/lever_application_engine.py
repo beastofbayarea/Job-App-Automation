@@ -26,6 +26,7 @@ from ats_application_engine_common import (
     fill_first,
     fill_required_consent,
     first_visible,
+    generate_essay_answer as _generate_essay,
     is_essay_question,
     load_json_config,
     open_chrome_session,
@@ -154,34 +155,6 @@ def _question_label(control: Locator) -> str:
     for option in option_text:
         label = label.replace(option, "")
     return re.sub(r"[\s?*✱]+$", "", " ".join(label.split())).strip()
-
-
-def _generate_essay(
-    question: str,
-    job_text: str,
-    company: str,
-    role: str,
-    candidate_evidence: str,
-) -> str:
-    try:
-        from resume_ai_utilities import call_essay_llm, strip_markdown_formatting
-
-        answer = str(
-            call_essay_llm(
-                question,
-                job_text,
-                company,
-                role,
-                candidate_evidence=candidate_evidence,
-            )
-            or ""
-        ).strip()
-        if "MISSING EVIDENCE" in answer.upper():
-            return ""
-        return strip_markdown_formatting(answer)
-    except Exception as exc:
-        logger.warning("Essay generation failed for %r: %s", question, exc)
-        return ""
 
 
 def _fill_choice_group(page: Page, control: Locator, desired: str) -> bool:

@@ -41,6 +41,7 @@ from ats_application_engine_common import (
     engine_result,
     require_orchestrated_invocation,
     fill_required_consent,
+    mask_email as _mask_email,
     open_chrome_session,
     navigate_reusing_tab,
     requested_live_mode,
@@ -209,14 +210,6 @@ def _start_date_from_offset(
 def is_ashby_url(url: str) -> bool:
     """Return whether *url* is a supported HTTPS Ashby job URL."""
     return validate_ats_url(url, ATS_NAME)
-
-
-def _mask_email(email: str) -> str:
-    local, separator, domain = email.partition("@")
-    if not separator:
-        return "<invalid>"
-    visible = local[:2]
-    return f"{visible}{'*' * max(1, len(local) - len(visible))}@{domain}"
 
 
 def _safe_filename_part(value: str, fallback: str = "Company") -> str:

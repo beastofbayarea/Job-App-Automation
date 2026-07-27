@@ -29,6 +29,7 @@ from ats_application_engine_common import (
     ATS_HOST_MARKERS as ATS_HOSTS,
     ORCHESTRATOR_INVOCATION_ENV,
     RESULT_PREFIX as ENGINE_RESULT_PREFIX,
+    mask_email as _mask_email,
     validate_ats_url,
 )
 from project_paths import CONFIG_DIR, DATA_DIR, OUTPUT_DIR, SRC_DIR, resolve_existing
@@ -350,14 +351,6 @@ def parse_engine_result(result: ProcessResult, live_submit: bool) -> dict[str, A
         "status": final_outcome or f"EXIT_{result.returncode}_NO_STRUCTURED_RESULT",
         "legacy_result": True,
     }
-
-
-def _mask_email(email: str) -> str:
-    local, separator, domain = email.partition("@")
-    if not separator:
-        return "[invalid-email]"
-    visible = local[:2] if len(local) > 2 else local[:1]
-    return f"{visible}***@{domain}"
 
 
 def _write_results(

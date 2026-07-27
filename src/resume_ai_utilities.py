@@ -19,12 +19,12 @@ import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence
-from urllib.parse import urlparse
 
 import pypdf
 from playwright.sync_api import sync_playwright
 
 from project_paths import CONFIG_DIR
+from ats_application_engine_common import validate_ats_url
 
 try:
     from google import genai
@@ -49,7 +49,6 @@ _client_lock = threading.Lock()
 _client = None
 LLM_MAX_ATTEMPTS = 3
 LLM_RETRY_DELAY_SECONDS = 2.0
-ASHBY_HOST = "ashbyhq.com"
 CDP_ENDPOINT = "http://localhost:9222"
 JOB_TEXT_LIMIT = 6_000
 JOB_NAVIGATION_TIMEOUT_MS = 30_000
@@ -115,19 +114,6 @@ def get_client() -> Any:
             if _client is None:
                 _client = build_client()
     return _client
-
-
-def _is_ashby_url(url: str) -> bool:
-    """Return whether *url* is an absolute HTTPS Ashby URL."""
-    try:
-        parsed = urlparse(url)
-    except ValueError:
-        return False
-    host = (parsed.hostname or "").lower().rstrip(".")
-    return (
-        parsed.scheme.lower() == "https"
-        and (host == ASHBY_HOST or host.endswith(f".{ASHBY_HOST}"))
-    )
 
 
 def _strip_json_fence(content: str) -> str:
@@ -199,7 +185,7 @@ def extract_resume_text(resume_path: Path) -> str:
 
 def scrape_ashby_job(url: str) -> Dict[str, Any]:
     """Extracts JD text and essay prompts directly from an Ashby application URL."""
-    if not _is_ashby_url(url):
+    if not validate_ats_url(url, "ashby"):
         raise ValueError("scrape_ashby_job accepts HTTPS Ashby URLs only.")
 
     with sync_playwright() as p:

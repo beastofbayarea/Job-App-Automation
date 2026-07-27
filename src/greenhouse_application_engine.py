@@ -26,6 +26,7 @@ from ats_application_engine_common import (
     fill_labeled as _fill_labeled,
     fill_required_consent as _fill_consent,
     first_visible as _first_visible,
+    generate_essay_answer as _generate_essay,
     is_essay_question as _is_essay_question,
     label_for as _label_for,
     load_json_config,
@@ -323,38 +324,6 @@ def _load_candidate_evidence(config: Mapping[str, Any]) -> str:
     if not evidence:
         logger.warning("Candidate evidence file is empty: %s", configured)
     return evidence
-
-
-def _generate_essay(
-    question: str,
-    job_text: str,
-    company: str,
-    role: str,
-    candidate_evidence: str,
-) -> str:
-    try:
-        from resume_ai_utilities import call_essay_llm, strip_markdown_formatting
-
-        if not candidate_evidence.strip():
-            logger.warning("Essay generation skipped because candidate evidence is empty.")
-            return ""
-        answer = str(
-            call_essay_llm(
-                question,
-                job_text,
-                company,
-                role,
-                candidate_evidence=candidate_evidence,
-            )
-            or ""
-        ).strip()
-        if re.search(r"\bMISSING EVIDENCE\b", answer, re.IGNORECASE):
-            logger.warning("Rejected essay containing missing-evidence meta text: %r", question)
-            return ""
-        return strip_markdown_formatting(answer)
-    except Exception as exc:
-        logger.warning("Essay generation failed for %r: %s", question, exc)
-        return ""
 
 
 def _fill_custom_questions(

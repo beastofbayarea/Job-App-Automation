@@ -17,6 +17,7 @@ from urllib.parse import parse_qs, urlparse
 
 from playwright.sync_api import Browser, Locator, Page, Playwright
 
+logger = logging.getLogger("ATSEngineCommon")
 
 RESULT_PREFIX = "ENGINE_RESULT_JSON:"
 ORCHESTRATOR_INVOCATION_ENV = "JOB_APP_ORCHESTRATOR_INVOCATION"
@@ -127,6 +128,15 @@ def validate_nonempty_file(path: Path, label: str) -> Path:
 def safe_filename(value: str, fallback: str = "ats") -> str:
     cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", str(value).strip()).strip("_")
     return cleaned or fallback
+
+
+def mask_email(email: str) -> str:
+    """Mask the local part of an email address for safe logging."""
+    local, separator, domain = str(email).partition("@")
+    if not separator:
+        return "<invalid>"
+    visible = local[:2]
+    return f"{visible}{'*' * max(1, len(local) - len(visible))}@{domain}"
 
 
 def first_visible(locator: Locator) -> Optional[Locator]:
@@ -338,6 +348,39 @@ def is_essay_question(label: str) -> bool:
             re.I,
         )
     )
+
+
+def generate_essay_answer(
+    question: str,
+    job_text: str,
+    company: str,
+    role: str,
+    candidate_evidence: str,
+) -> str:
+    """Generate an application-ready essay answer via the LLM, or "" on failure."""
+    try:
+        from resume_ai_utilities import call_essay_llm, strip_markdown_formatting
+
+        if not candidate_evidence.strip():
+            logger.warning("Essay generation skipped because candidate evidence is empty.")
+            return ""
+        answer = str(
+            call_essay_llm(
+                question,
+                job_text,
+                company,
+                role,
+                candidate_evidence=candidate_evidence,
+            )
+            or ""
+        ).strip()
+        if re.search(r"\bMISSING EVIDENCE\b", answer, re.IGNORECASE):
+            logger.warning("Rejected essay containing missing-evidence meta text: %r", question)
+            return ""
+        return strip_markdown_formatting(answer)
+    except Exception as exc:
+        logger.warning("Essay generation failed for %r: %s", question, exc)
+        return ""
 
 
 def fill_required_consent(page: Page) -> list[str]:
