@@ -14,6 +14,13 @@ from urllib.parse import unquote, urlparse
 from .artifacts import read_json, write_json
 from .contracts import EngineResult
 from .paths import CLI_ENTRYPOINT, OUTPUT_DIR, PROJECT_ROOT
+from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
+
+
+DEFAULT_QUEUE_TIMEOUT_SECONDS = int(RUNTIME_CONFIG.application["queue_timeout_seconds"])
+DEFAULT_QUEUE_PROGRESS_FILE = resolve_runtime_path(
+    RUNTIME_CONFIG.application["queue_progress_file"]
+)
 
 
 def _slug(url: str) -> str:
@@ -53,13 +60,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--queue", type=Path, required=True)
     parser.add_argument("--start-index", type=int, default=0)
-    parser.add_argument("--timeout", type=int, default=300)
+    parser.add_argument("--timeout", type=int, default=DEFAULT_QUEUE_TIMEOUT_SECONDS)
     args = parser.parse_args(argv)
 
     urls = [
         line.strip() for line in args.queue.read_text(encoding="utf-8").splitlines() if line.strip()
     ]
-    progress_path = OUTPUT_DIR / "job_url_queue_progress.json"
+    progress_path = DEFAULT_QUEUE_PROGRESS_FILE
     orchestrator = CLI_ENTRYPOINT
 
     for index, url in enumerate(urls[args.start_index :], start=args.start_index):

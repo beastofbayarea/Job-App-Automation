@@ -10,14 +10,14 @@ from types import SimpleNamespace
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from job_application_automation import resume_generate  # noqa: E402
-from job_application_automation.resume_cache import ResumeCache, cache_key  # noqa: E402
-from job_application_automation.resume_rendering import ResumeRenderRequest  # noqa: E402
-from job_application_automation.resume_scoring import (  # noqa: E402
+from job_application_automation.resume import generate as resume_generate  # noqa: E402
+from job_application_automation.resume.cache import ResumeCache, cache_key  # noqa: E402
+from job_application_automation.resume.rendering import ResumeRenderRequest  # noqa: E402
+from job_application_automation.resume.scoring import (  # noqa: E402
     ResumeScorePolicy,
     score_pdf,
 )
-from job_application_automation.resume_validation import (  # noqa: E402
+from job_application_automation.resume.validation import (  # noqa: E402
     enforce_candidate_identity,
     enforce_source_invariants,
     ensure_minimum_bullets,

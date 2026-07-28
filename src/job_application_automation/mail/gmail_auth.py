@@ -12,7 +12,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
-from .artifacts import atomic_write_text
+from ..core.artifacts import atomic_write_text
 
 
 GMAIL_SCOPES = (

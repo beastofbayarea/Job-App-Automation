@@ -24,9 +24,9 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 import pypdf
 from playwright.sync_api import sync_playwright
 
-from .paths import CONFIG_DIR
-from .adapters import LLMClient, LLMSettings
-from .engine_shared import validate_ats_url
+from ..core.adapters import LLMClient, LLMSettings
+from ..core.engine_shared import validate_ats_url
+from ..core.runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 
 try:
     from google import genai
@@ -36,7 +36,7 @@ except ImportError:
     types = None
 
 # =============================================================================
-# LOGGING & HARDCODED CONFIGURATION
+# LOGGING & RUNTIME CONFIGURATION
 # =============================================================================
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("ResumeAIUtilities")
@@ -46,10 +46,10 @@ logger = logging.getLogger("ResumeAIUtilities")
 class VertexSettings:
     """Explicit Vertex configuration for a locally credentialed LLM gateway."""
 
-    project_id: str = "cent-capital-472820"
-    location: str = "global"
-    model: str = "gemini-flash-latest"
-    service_account_file: Path = CONFIG_DIR / "vertex_service_account.json"
+    project_id: str = str(RUNTIME_CONFIG.vertex["project_id"])
+    location: str = str(RUNTIME_CONFIG.vertex["location"])
+    model: str = str(RUNTIME_CONFIG.vertex["model"])
+    service_account_file: Path = resolve_runtime_path(RUNTIME_CONFIG.vertex["service_account_file"])
 
     def __post_init__(self) -> None:
         for name, value in (
@@ -83,11 +83,12 @@ _ai_lock = threading.Lock()
 _client_lock = threading.Lock()
 _client = None
 _client_settings: VertexSettings | None = None
-LLM_MAX_ATTEMPTS = 3
-LLM_RETRY_DELAY_SECONDS = 2.0
-CDP_ENDPOINT = "http://localhost:9222"
-JOB_TEXT_LIMIT = 6_000
-JOB_NAVIGATION_TIMEOUT_MS = 30_000
+LLM_MAX_ATTEMPTS = int(RUNTIME_CONFIG.vertex["max_attempts"])
+LLM_RETRY_DELAY_SECONDS = float(RUNTIME_CONFIG.vertex["retry_delay_seconds"])
+CDP_ENDPOINT = str(RUNTIME_CONFIG.browser["cdp_endpoint"])
+JOB_TEXT_LIMIT = int(RUNTIME_CONFIG.vertex["job_text_limit"])
+JOB_NAVIGATION_TIMEOUT_MS = int(RUNTIME_CONFIG.vertex["job_navigation_timeout_ms"])
+PROJECT_ID_FROM_SERVICE_ACCOUNT = "from-service-account"
 
 
 def strip_markdown_formatting(value: Any) -> str:
@@ -141,6 +142,27 @@ def credential_file_for(
     return settings.service_account_file
 
 
+def project_id_for(settings: VertexSettings, credentials_path: Path) -> str:
+    """Resolve the configured project, optionally deriving it from service-account JSON."""
+    if settings.project_id != PROJECT_ID_FROM_SERVICE_ACCOUNT:
+        return settings.project_id
+    try:
+        with credentials_path.open("r", encoding="utf-8") as stream:
+            payload = json.load(stream)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(
+            "Vertex project_id is configured as 'from-service-account', but the service-account "
+            f"file could not be read: {credentials_path}"
+        ) from exc
+    project_id = payload.get("project_id") if isinstance(payload, dict) else None
+    if not isinstance(project_id, str) or not project_id.strip():
+        raise RuntimeError(
+            "Vertex service-account JSON must contain project_id when runtime_config.json uses "
+            "'from-service-account'."
+        )
+    return project_id.strip()
+
+
 def build_client(settings: VertexSettings = VERTEX_SETTINGS) -> Any:
     """Initialize Vertex client with explicit credentials and no env mutation."""
     if genai is None:
@@ -157,14 +179,15 @@ def build_client(settings: VertexSettings = VERTEX_SETTINGS) -> Any:
         from google.oauth2 import service_account
 
         credentials = service_account.Credentials.from_service_account_file(str(credentials_path))
+        project_id = project_id_for(settings, credentials_path)
         logger.info(
             "Auth: Vertex service account | project=%s | location=%s",
-            settings.project_id,
+            project_id,
             settings.location,
         )
         return genai.Client(
             vertexai=True,
-            project=settings.project_id,
+            project=project_id,
             location=settings.location,
             credentials=credentials,
         )

@@ -40,7 +40,7 @@ from .ashby_sections import (
     plan_option_selection,
     required_field_flag,
 )
-from .engine_shared import (
+from ..core.engine_shared import (
     answer_variants,
     build_engine_parser,
     configured_answer as common_configured_answer,
@@ -61,35 +61,22 @@ from .engine_shared import (
     validate_ats_url,
     validate_required_fields,
 )
-from .paths import DATA_DIR, OUTPUT_DIR, SRC_DIR
+from ..core.paths import SRC_DIR
+from ..core.runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 
 # ==============================================================================
 # DEFAULT CONFIGURATION
 # ==============================================================================
 SCRIPT_DIR = SRC_DIR
 ATS_NAME = "ashby"
-CDP_URL = "http://localhost:9222"
-DEFAULT_TIMEOUT_MS = 11_000
-NAVIGATION_TIMEOUT_MS = 40_000
-NETWORK_IDLE_TIMEOUT_MS = 14_000
-MAX_FORM_STEPS = 5
-MAX_SUBMIT_ATTEMPTS = 3
-SUBMISSION_CONFIRMATION_PHRASES = (
-    "application submitted",
-    "application has been submitted",
-    "thank you for applying",
-    "thank you for your submission",
-    "thank you for submitting your application",
-    "thank you so much for your interest",
-    "thanks for applying",
-    "received your application",
-    "package received",
-    "application received",
-    "application has been received",
-    "successfully submitted",
-    "thanks for your interest in joining our team",
-)
-SUBMISSION_FAILURE_PHRASES = ("flagged as possible spam", "couldn't submit")
+CDP_URL = str(RUNTIME_CONFIG.browser["cdp_endpoint"])
+DEFAULT_TIMEOUT_MS = int(RUNTIME_CONFIG.ashby["default_timeout_ms"])
+NAVIGATION_TIMEOUT_MS = int(RUNTIME_CONFIG.ashby["navigation_timeout_ms"])
+NETWORK_IDLE_TIMEOUT_MS = int(RUNTIME_CONFIG.ashby["network_idle_timeout_ms"])
+MAX_FORM_STEPS = int(RUNTIME_CONFIG.ashby["max_form_steps"])
+MAX_SUBMIT_ATTEMPTS = int(RUNTIME_CONFIG.ashby["max_submit_attempts"])
+SUBMISSION_CONFIRMATION_PHRASES = tuple(RUNTIME_CONFIG.ashby["submission_confirmation_phrases"])
+SUBMISSION_FAILURE_PHRASES = tuple(RUNTIME_CONFIG.ashby["submission_failure_phrases"])
 
 # Candidate data belongs in candidate_profile_config.json, not in source code. Empty defaults
 # make missing data visible rather than silently submitting someone else's details.
@@ -127,7 +114,10 @@ DEFAULT_CONFIG = {
         "screening_answers": {},
     },
     "defaults": {"source": "", "salary": "", "product_area_essay": "", "essay": ""},
-    "paths": {"ashby_dir": str(OUTPUT_DIR)},
+    "paths": {"ashby_dir": str(resolve_runtime_path(RUNTIME_CONFIG.ashby["screenshot_dir"]))},
+    "action_timeout_ms": DEFAULT_TIMEOUT_MS,
+    "navigation_timeout_ms": NAVIGATION_TIMEOUT_MS,
+    "network_idle_timeout_ms": NETWORK_IDLE_TIMEOUT_MS,
     "company_overrides": {},
 }
 
@@ -513,13 +503,13 @@ def verify_value(loc: Any, expected_substr: str, name: str) -> bool:
 def generate_essay_safely(question: str, jd_text: str, company: str, role: str) -> str:
     """Load the optional essay generator only when an unanswered essay is encountered."""
     try:
-        from .resume_ai_client import call_essay_llm, strip_markdown_formatting
+        from ..resume.ai_client import call_essay_llm, strip_markdown_formatting
     except Exception as exc:
         logger.warning("Essay generator is unavailable; leaving the field for review: %s", exc)
         return ""
 
     try:
-        evidence_path = DATA_DIR / "base_resume.txt"
+        evidence_path = resolve_runtime_path(RUNTIME_CONFIG.application["resume_source_file"])
         candidate_evidence = (
             evidence_path.read_text(encoding="utf-8") if evidence_path.is_file() else ""
         )
@@ -2429,6 +2419,13 @@ def _submit_application(
 # ==============================================================================
 # MAIN EXECUTION RUNNER
 # ==============================================================================
+def _positive_config_int(config: Mapping[str, Any], key: str) -> int:
+    value = config.get(key)
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ValueError(f"Configuration field {key!r} must be a positive integer.")
+    return value
+
+
 def run_job(
     url: str,
     resume_path: str,
@@ -2462,6 +2459,9 @@ def run_job(
     defaults = dict(defaults_config)
     if not isinstance(company_overrides, Mapping):
         raise ValueError("Configuration field 'company_overrides' must be an object.")
+    action_timeout_ms = _positive_config_int(resolved_config, "action_timeout_ms")
+    navigation_timeout_ms = _positive_config_int(resolved_config, "navigation_timeout_ms")
+    network_idle_timeout_ms = _positive_config_int(resolved_config, "network_idle_timeout_ms")
     overrides = company_overrides.get(company, {})
     if not isinstance(overrides, Mapping):
         raise ValueError(f"Company override for {company!r} must be an object.")
@@ -2486,7 +2486,7 @@ def run_job(
         raise ValueError("Config missing required candidate fields: " + ", ".join(missing_identity))
     essay = str(overrides.get("essay", essay or defaults.get("essay", "")) or "")
 
-    ashby_dir = expand(str(paths.get("ashby_dir", "/tmp/ashby_screenshots")))
+    ashby_dir = expand(str(paths.get("ashby_dir", RUNTIME_CONFIG.ashby["screenshot_dir"])))
     ashby_dir.mkdir(parents=True, exist_ok=True)
 
     resume = Path(resume_path).expanduser().resolve()
@@ -2513,7 +2513,7 @@ def run_job(
         session = _open_browser_session(p, url)
         browser = session.browser
         page = session.page
-        page.set_default_timeout(DEFAULT_TIMEOUT_MS)
+        page.set_default_timeout(action_timeout_ms)
         critical: dict[str, bool] = {}
 
         try:
@@ -2526,11 +2526,11 @@ def run_job(
                     page,
                     url,
                     wait_until="domcontentloaded",
-                    timeout=NAVIGATION_TIMEOUT_MS,
+                    timeout=navigation_timeout_ms,
                 )
                 page.wait_for_load_state(
                     "networkidle",
-                    timeout=NETWORK_IDLE_TIMEOUT_MS,
+                    timeout=network_idle_timeout_ms,
                 )
 
             retry(_nav, label="Navigation")

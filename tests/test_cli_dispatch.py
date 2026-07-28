@@ -32,7 +32,7 @@ class UnifiedCliDispatchTests(unittest.TestCase):
 
         self.assertEqual(7, exit_code)
         self.assertEqual(
-            [("job_application_automation.search_job_boards", ["--role-type", "Product Manager"])],
+            [("job_application_automation.search.job_boards", ["--role-type", "Product Manager"])],
             calls,
         )
 
@@ -56,9 +56,9 @@ class UnifiedCliDispatchTests(unittest.TestCase):
         )
         self.assertEqual(
             [
-                ("job_application_automation.orchestrator", ["--dry-run"]),
+                ("job_application_automation.core.orchestrator", ["--dry-run"]),
                 (
-                    "job_application_automation.engine_greenhouse",
+                    "job_application_automation.engines.greenhouse",
                     ["--url", "https://boards.greenhouse.io/acme/jobs/1"],
                 ),
             ],

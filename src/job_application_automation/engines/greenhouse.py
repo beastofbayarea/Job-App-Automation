@@ -13,7 +13,7 @@ from playwright.sync_api import Locator, Page
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
-from .engine_shared import (
+from ..core.engine_shared import (
     SENSITIVE_FIELD_PATTERN as SENSITIVE_EEO,
     answer_variants as _answer_variants,
     build_engine_parser,
@@ -40,8 +40,9 @@ from .engine_shared import (
     validate_nonempty_file,
     validate_required_fields,
 )
-from .paths import CONFIG_DIR, DATA_DIR, OUTPUT_DIR, resolve_project_dir
-from .email_gmail_client import (
+from ..core.paths import OUTPUT_DIR, resolve_project_dir
+from ..core.runtime_config import RUNTIME_CONFIG, resolve_runtime_path
+from ..mail.gmail_client import (
     get_gmail_service,
     load_used_verification_message_ids,
     poll_for_verification_code,
@@ -49,7 +50,6 @@ from .email_gmail_client import (
 )
 
 ATS_NAME = "greenhouse"
-DEFAULT_CANDIDATE_EVIDENCE = DATA_DIR / "base_resume.txt"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -708,17 +708,17 @@ def _fill_security_code_from_gmail(page: Page, application_email: str) -> bool:
     try:
         # Gmail can briefly lag the form's code-generation request. Waiting here
         # prevents reusing the previous application's otherwise newest code.
-        page.wait_for_timeout(12_000)
+        page.wait_for_timeout(int(RUNTIME_CONFIG.gmail["greenhouse_security_code_wait_ms"]))
         service = get_gmail_service(
-            CONFIG_DIR / "credentials.json",
-            CONFIG_DIR / "token.json",
+            resolve_runtime_path(RUNTIME_CONFIG.gmail["credentials_file"]),
+            resolve_runtime_path(RUNTIME_CONFIG.gmail["token_file"]),
         )
-        history_path = OUTPUT_DIR / "used_verification_messages.json"
+        history_path = resolve_runtime_path(RUNTIME_CONFIG.gmail["verification_history_file"])
         match = poll_for_verification_code(
             service,
             f'from:no-reply@us.greenhouse-mail.io deliveredto:{application_email} subject:"Security code for your application" newer_than:1d',
             r"security code field on your application:\s*([A-Za-z0-9]{8})",
-            timeout_seconds=30,
+            timeout_seconds=int(RUNTIME_CONFIG.gmail["verification_poll_timeout_seconds"]),
             sender_domains=("us.greenhouse-mail.io",),
             expected_recipient=application_email,
             excluded_message_ids=load_used_verification_message_ids(history_path),

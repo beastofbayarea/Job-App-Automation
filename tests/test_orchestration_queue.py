@@ -14,9 +14,9 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from job_application_automation import orchestrator  # noqa: E402
-from job_application_automation import queue_runner  # noqa: E402
-from job_application_automation.contracts import EngineResult, EngineStatus  # noqa: E402
+from job_application_automation.core import orchestrator  # noqa: E402
+from job_application_automation.core import queue_runner  # noqa: E402
+from job_application_automation.core.contracts import EngineResult, EngineStatus  # noqa: E402
 
 
 class EngineCommandContractTests(unittest.TestCase):
@@ -147,6 +147,9 @@ class ChildProcessRoutingTests(unittest.TestCase):
             queue_path.write_text("https://jobs.ashbyhq.com/acme/123\n", encoding="utf-8")
             with (
                 patch.object(queue_runner, "OUTPUT_DIR", root),
+                patch.object(
+                    queue_runner, "DEFAULT_QUEUE_PROGRESS_FILE", root / "queue_progress.json"
+                ),
                 patch.object(queue_runner.subprocess, "run", return_value=completed) as run,
                 patch.object(queue_runner, "read_json", return_value=[confirmed]),
             ):

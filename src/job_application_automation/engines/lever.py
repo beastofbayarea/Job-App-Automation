@@ -14,7 +14,7 @@ from playwright.sync_api import Locator, Page
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
-from .engine_shared import (
+from ..core.engine_shared import (
     answer_variants,
     build_engine_parser,
     capture_screenshot,
@@ -38,7 +38,7 @@ from .engine_shared import (
     validate_nonempty_file,
     validate_required_fields,
 )
-from .paths import OUTPUT_DIR, resolve_project_dir
+from ..core.paths import OUTPUT_DIR, resolve_project_dir
 
 
 ATS_NAME = "lever"

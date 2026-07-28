@@ -73,14 +73,21 @@ browser, or LLM operation.
 ## Configuration
 
 - Candidate details: `config/candidate_profile_config.json`
+- Shared runtime defaults: `config/runtime_config.json`
 - Candidate email pool: `config/candidate_email_pool.json`
 - Gmail desktop OAuth client: `config/credentials.json`
 - Gmail OAuth token: `config/token.json`
-- Job tracker: `data/ai_product_manager_job_tracker.xlsx`
-- Resume source text: `data/base_resume.txt`
-- Base resume PDF: `data/shivam_singh_ai_product_manager_resume.pdf`
+- Vertex service account: `config/vertex_service_account.json`
 
-OAuth files are deliberately excluded from Git.
+`runtime_config.json` holds non-secret operational settings: input and output
+paths, Chrome's CDP endpoint, Vertex model and retry controls, resume-generation
+quality thresholds, Ashby timings/confirmation phrases, and Gmail verification
+paths. Its default Vertex `project_id` value, `from-service-account`, uses the
+`project_id` in the local service-account JSON; replace it with an explicit
+project ID only when required by your deployment.
+
+OAuth files, service accounts, and candidate PII configuration are deliberately
+excluded from Git.
 
 ## Common commands
 

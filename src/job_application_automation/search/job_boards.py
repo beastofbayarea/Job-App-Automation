@@ -37,15 +37,15 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from . import search_cache as _search_cache
-from . import search_discovery as _search_discovery
-from . import search_jsonld as _search_jsonld
-from . import search_liveness as _search_liveness
-from . import search_models as _search_models
-from . import search_serialization as _search_serialization
-from . import search_terms as _search_terms
-from .artifacts import atomic_write_text, write_json as atomic_write_json
-from .paths import OUTPUT_DIR
+from . import cache as _search_cache
+from . import discovery as _search_discovery
+from . import jsonld as _search_jsonld
+from . import liveness as _search_liveness
+from . import models as _search_models
+from . import serialization as _search_serialization
+from . import terms as _search_terms
+from ..core.artifacts import atomic_write_text, write_json as atomic_write_json
+from ..core.paths import OUTPUT_DIR
 
 try:
     from ddgs import DDGS

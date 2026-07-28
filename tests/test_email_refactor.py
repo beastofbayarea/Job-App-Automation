@@ -14,9 +14,9 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from job_application_automation import email_gmail_client as gmail  # noqa: E402
-from job_application_automation import email_pool_select as email_pool_cli  # noqa: E402
-from job_application_automation import gmail_auth, gmail_messages, gmail_persistence  # noqa: E402
+from job_application_automation.mail import gmail_client as gmail  # noqa: E402
+from job_application_automation.mail import pool_select as email_pool_cli  # noqa: E402
+from job_application_automation.mail import gmail_auth, gmail_messages, gmail_persistence  # noqa: E402
 
 
 def encode_body(value: str) -> str:

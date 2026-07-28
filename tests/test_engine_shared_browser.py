@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from job_application_automation.engine_shared import navigate_reusing_tab  # noqa: E402
+from job_application_automation.core.engine_shared import navigate_reusing_tab  # noqa: E402
 
 
 class FakeLocator:

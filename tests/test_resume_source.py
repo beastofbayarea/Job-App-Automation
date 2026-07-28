@@ -9,8 +9,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from job_application_automation import resume_generate  # noqa: E402
-from job_application_automation.resume_source import (  # noqa: E402
+from job_application_automation.resume import generate as resume_generate  # noqa: E402
+from job_application_automation.resume.source import (  # noqa: E402
     load_resume_source,
     parse_tagged_candidate,
 )
