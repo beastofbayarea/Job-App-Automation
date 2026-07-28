@@ -243,5 +243,71 @@ class CoverLetterRenderingTests(unittest.TestCase):
         self.assertEqual(renderer.request.output_path, Path("letter.pdf"))
 
 
+from job_application_automation.core.adapters import LLMSettings  # noqa: E402
+from job_application_automation.resume.career_narrative import CareerNarrative  # noqa: E402
+from job_application_automation.resume.cover_letter_ai import (  # noqa: E402
+    call_cover_letter_llm,
+)
+
+
+class _FakeCoverLetterGateway:
+    def __init__(self, response: str) -> None:
+        self._response = response
+        self.calls: list[tuple[str, str, LLMSettings, bool]] = []
+
+    def generate(
+        self,
+        prompt: str,
+        *,
+        system: str,
+        settings: LLMSettings,
+        json_mode: bool = False,
+    ) -> str:
+        self.calls.append((prompt, system, settings, json_mode))
+        return self._response
+
+
+class CoverLetterAiTests(unittest.TestCase):
+    def test_call_cover_letter_llm_parses_the_structured_json_payload(self) -> None:
+        gateway = _FakeCoverLetterGateway(
+            '{"salutation": "Dear Team,", "paragraphs": ["One.", "Two."], '
+            '"closing": "Sincerely,", "signature": "Shivam Singh", '
+            '"evidence_claim_ids": ["AWS-1"]}'
+        )
+
+        payload = call_cover_letter_llm(
+            CoverLetterJob(company="Example Co", role="Product Manager", jd_text="Build things."),
+            CareerNarrative(),
+            source_text="[COMPANY] Example Co ... [CLAIM AWS-1] Shipped a thing.",
+            gateway=gateway,
+        )
+
+        self.assertEqual(payload["evidence_claim_ids"], ["AWS-1"])
+        self.assertTrue(gateway.calls[0][3])  # json_mode
+
+    def test_call_cover_letter_llm_strips_a_markdown_json_fence(self) -> None:
+        gateway = _FakeCoverLetterGateway('```json\n{"salutation": "Dear Team,"}\n```')
+
+        payload = call_cover_letter_llm(
+            CoverLetterJob(company="Example Co", role="Product Manager", jd_text="Build things."),
+            CareerNarrative(),
+            source_text="source",
+            gateway=gateway,
+        )
+
+        self.assertEqual(payload["salutation"], "Dear Team,")
+
+    def test_call_cover_letter_llm_rejects_a_non_object_json_root(self) -> None:
+        gateway = _FakeCoverLetterGateway("[1, 2, 3]")
+
+        with self.assertRaisesRegex(ValueError, "JSON object"):
+            call_cover_letter_llm(
+                CoverLetterJob(company="Example Co", role="PM", jd_text="Build things."),
+                CareerNarrative(),
+                source_text="source",
+                gateway=gateway,
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
