@@ -8,6 +8,14 @@ All notable user-facing changes are documented here. This project currently uses
 
 - Operational, configuration, CLI, data-format, security, architecture, ATS-support, and troubleshooting documentation.
 - Contributor guidance for safe local development and test boundaries.
+- VPS search-sync freshness reporting, dry-run generated-PDF pruning, an
+  on-demand search trigger, and repository-aware logrotate installation.
+
+### Changed
+
+- Hardened VPS synchronization with commit-coherent output pulls, cron/manual
+  mutual exclusion, shell-safe remote paths, temporary Plink password files,
+  and offline regression coverage.
 
 ## [0.1.0]
 

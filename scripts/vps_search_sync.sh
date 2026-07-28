@@ -16,7 +16,7 @@
 #   3. Add a cron entry, e.g.: 0 3 * * * REPO_DIR/scripts/vps_search_sync.sh >> REPO_DIR/output/vps_sync.log 2>&1
 #   4. Install log rotation for the cron output so vps_sync.log doesn't grow
 #      unbounded:
-#        sudo cp scripts/vps-sync.logrotate /etc/logrotate.d/vps-sync
+#        bash scripts/install_vps_logrotate.sh
 
 set -euo pipefail
 
@@ -31,12 +31,25 @@ SYNC_FILES=(
   "output/ats_boards_cache.json"
 )
 
+# Cron and an on-demand trigger must never update the search artifacts or sync
+# worktree concurrently. Keep the file descriptor open for the entire run.
+cd "$REPO_DIR"
+if ! command -v flock >/dev/null 2>&1; then
+  echo "flock is required to serialize VPS search runs." >&2
+  exit 69
+fi
+LOCK_FILE="$(git rev-parse --git-path vps-search-sync.lock)"
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+  echo "Another VPS search sync is already running; no work was started." >&2
+  exit 75
+fi
+
 # Push goes over SSH with the repo-scoped deploy key; clone/fetch stays on the
 # origin remote's existing HTTPS URL since the repo is public and needs no
 # credentials to read.
 export GIT_SSH_COMMAND="ssh -i $DEPLOY_KEY -o IdentitiesOnly=yes"
 
-cd "$REPO_DIR"
 source .venv/bin/activate
 
 python src/job_automation.py search \
@@ -46,6 +59,18 @@ python src/job_automation.py search \
   --ats-platform ashby \
   --verify-live
 
+MISSING_SYNC_FILES=()
+for f in "${SYNC_FILES[@]}"; do
+  if [ ! -f "$REPO_DIR/$f" ]; then
+    MISSING_SYNC_FILES+=("$f")
+  fi
+done
+if ((${#MISSING_SYNC_FILES[@]} > 0)); then
+  printf 'Search completed without required sync artifact: %s\n' \
+    "${MISSING_SYNC_FILES[@]}" >&2
+  exit 66
+fi
+
 if [ ! -d "$SYNC_DIR" ]; then
   git fetch origin "$BRANCH"
   git worktree add "$SYNC_DIR" "$BRANCH"
@@ -53,9 +78,7 @@ fi
 
 for f in "${SYNC_FILES[@]}"; do
   mkdir -p "$SYNC_DIR/$(dirname "$f")"
-  if [ -f "$REPO_DIR/$f" ]; then
-    cp "$REPO_DIR/$f" "$SYNC_DIR/$f"
-  fi
+  cp "$REPO_DIR/$f" "$SYNC_DIR/$f"
 done
 
 cd "$SYNC_DIR"

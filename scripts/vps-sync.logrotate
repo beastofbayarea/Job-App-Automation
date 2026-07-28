@@ -1,5 +1,5 @@
-# Install on the VPS with: sudo cp scripts/vps-sync.logrotate /etc/logrotate.d/vps-sync
-/root/Job-App-Automation/output/vps_sync.log {
+# Template installed with: bash scripts/install_vps_logrotate.sh
+@VPS_SYNC_LOG_PATH@ {
     weekly
     rotate 4
     compress

@@ -7,8 +7,16 @@ param(
     [string]$ConfigPath = "config/vps_config.json"
 )
 
+. "$PSScriptRoot\vps_script_helpers.ps1"
+
 if (-not (Test-Path $ConfigPath)) {
     Write-Error "VPS config not found at $ConfigPath"
+    exit 1
+}
+
+$RemoteRepoPath = $RemoteRepoPath.TrimEnd("/")
+if (-not $RemoteRepoPath.StartsWith("/")) {
+    Write-Error "RemoteRepoPath must be an absolute POSIX path."
     exit 1
 }
 
@@ -18,7 +26,13 @@ if (-not $PlinkCmd) {
     exit 1
 }
 
-$Config = Get-Content $ConfigPath -Raw | ConvertFrom-Json
+try {
+    $Config = Get-Content $ConfigPath -Raw | ConvertFrom-Json
+} catch {
+    Write-Error "VPS config at $ConfigPath is not valid JSON."
+    exit 1
+}
+
 $VpsHost = $Config.vps.host
 $SshUser = $Config.vps.ssh_user
 $SshPassword = $Config.vps.ssh_password.value
@@ -28,11 +42,24 @@ if (-not $VpsHost -or -not $SshUser -or -not $SshPassword) {
     exit 1
 }
 
-$RemoteCommand = "bash $RemoteRepoPath/scripts/vps_search_sync.sh"
+$RemoteScriptPath = "$RemoteRepoPath/scripts/vps_search_sync.sh"
+$RemoteCommand = "exec bash -- $(ConvertTo-PosixShellLiteral $RemoteScriptPath)"
 Write-Host "Running remote search on $VpsHost..."
 
-& plink -ssh -batch -pw $SshPassword "$SshUser@$VpsHost" $RemoteCommand
-$RemoteExitCode = $LASTEXITCODE
+$PasswordFile = Join-Path ([System.IO.Path]::GetTempPath()) "job-app-plink-$([guid]::NewGuid().ToString('N')).txt"
+try {
+    [System.IO.File]::WriteAllText(
+        $PasswordFile,
+        [string]$SshPassword,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+    & $PlinkCmd.Source -ssh -batch -pwfile $PasswordFile "$SshUser@$VpsHost" $RemoteCommand
+    $RemoteExitCode = $LASTEXITCODE
+} finally {
+    if (Test-Path -LiteralPath $PasswordFile) {
+        Remove-Item -LiteralPath $PasswordFile -Force
+    }
+}
 
 if ($RemoteExitCode -ne 0) {
     Write-Error "Remote search failed (exit code $RemoteExitCode). Not pulling output."

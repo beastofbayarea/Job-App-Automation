@@ -1,5 +1,15 @@
 # VPS Sync Maintenance Scripts Implementation Plan
 
+> **Historical plan; safety details superseded.** Post-implementation review
+> hardened the delivered scripts beyond the original snippets below. The
+> current implementation and design spec are authoritative: pulls require all
+> three files from one commit and do not touch the index; remote paths are
+> POSIX-shell quoted; Plink uses a temporary `-pwfile`; cron and manual runs
+> share a nonblocking `flock`; freshness compares unrounded age and rejects
+> future timestamps; pruning rejects negative ages and literalizes its output
+> directory; and `install_vps_logrotate.sh` renders the actual repository path.
+> See `tests/test_vps_maintenance_scripts.py` for offline regression coverage.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add four maintenance scripts around the existing VPS search-sync pipeline: an on-demand search trigger, a sync-freshness check, output pruning, and VPS log rotation.

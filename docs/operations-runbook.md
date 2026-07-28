@@ -51,3 +51,46 @@ If submission status is uncertain, verify it with the employer account or confir
 - `output/ai_jobs.csv` and `output/job_search_coverage.json`: search results and coverage evidence.
 
 All persisted artifacts use an atomic replace, so a completed write is not partially visible.
+
+## VPS search synchronization
+
+The `vps-search-output` branch is a dedicated generated-data branch with
+unrelated history. Keep it separate from `main`; use the synchronization
+scripts instead of merging it.
+
+On the VPS, install the repository-path-aware logrotate policy once:
+
+```bash
+bash scripts/install_vps_logrotate.sh
+```
+
+The cron entry and an on-demand trigger both run
+`scripts/vps_search_sync.sh`. That script uses a nonblocking lock and exits
+without starting when another sync is active. It also refuses to publish unless
+the search produced coverage, jobs, and board-cache artifacts for that run.
+
+From Windows, trigger a reviewed out-of-cycle run with the confirmed absolute
+POSIX clone path:
+
+```powershell
+pwsh scripts\trigger_vps_search.ps1 -RemoteRepoPath /absolute/path/to/Job-App-Automation
+```
+
+The trigger pulls output only after a successful remote run. A standalone pull
+requires coverage, jobs, and board-cache files from the same remote commit and
+updates the worktree without staging generated files:
+
+```powershell
+pwsh scripts\pull_search_output.ps1
+pwsh scripts\check_sync_freshness.ps1
+```
+
+Generated resume and cover-letter cleanup is dry-run by default:
+
+```powershell
+pwsh scripts\prune_old_outputs.ps1
+```
+
+Add `-Delete` only after reviewing the listed files. Keep
+`config/vps_config.json` restricted and out of Git; the current password-based
+SSH design remains a separately tracked hardening item.
