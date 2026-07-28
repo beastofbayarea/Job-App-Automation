@@ -599,6 +599,9 @@ exit 91
             git(repository, "init")
             environment = os.environ.copy()
             environment["PATH"] = str(fake_bin) + os.pathsep + environment["PATH"]
+            # Not testing the Xvfb wrapper here; keep it out of the way so this
+            # passes the same whether or not the host has xvfb-run on PATH.
+            environment["DISPLAY"] = ":0"
 
             first = subprocess.Popen(
                 [BASH, str(repository / "scripts" / "vps_search_sync.sh")],
@@ -649,6 +652,9 @@ printf 'title\\n' > output/ai_jobs.csv
             git(repository, "init")
             environment = os.environ.copy()
             environment["PATH"] = str(fake_bin) + os.pathsep + environment["PATH"]
+            # Not testing the Xvfb wrapper here; keep it out of the way so this
+            # passes the same whether or not the host has xvfb-run on PATH.
+            environment["DISPLAY"] = ":0"
 
             result = run(
                 [BASH, str(repository / "scripts" / "vps_search_sync.sh")],
