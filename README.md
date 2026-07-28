@@ -74,8 +74,59 @@ python src/resume_generate.py `
 Search supported ATS boards:
 
 ```powershell
-python src/search_job_boards.py --help
+python src/search_job_boards.py `
+  --role-type "Product Manager" `
+  --ats-platform greenhouse `
+  --ats-platform lever `
+  --location "New York" `
+  --verify-live `
+  --require-live
 ```
+
+`--role-type`, `--ats-platform`, and `--location` are required. Repeat
+`--role-type`, `--ats-platform`, or `--location` to search multiple role
+families, platforms, or locations. Expanded role matching has built-in support
+for Growth Marketing (`Growth Mkt`), Performance Marketing (`Performance Mkt`),
+Paid Media, Marketing Operations (`Marketing Ops`), Management Consulting,
+Corporate Development (`Corp Dev`), and Venture Capital. For example:
+
+```powershell
+python src/search_job_boards.py `
+  --role-type "Growth Mkt" `
+  --role-type "Paid Media" `
+  --role-type "Corp Dev" `
+  --ats-platform greenhouse `
+  --ats-platform lever `
+  --location "New York"
+```
+
+The `web` platform adds JSON-LD job-page discovery for common public ATSs that
+do not have a stable board-feed adapter. The final match uses all configured
+title variants, while discovery uses one canonical phrase per requested family
+so a query budget cannot be consumed by abbreviations or input typos.
+
+Use `--posted-on 2026-07-28` for one calendar day, or combine
+`--posted-since` and `--posted-until` for a date range. Explicit posted-date
+filters take precedence over the default unbounded `--days 0` window.
+
+Searches run in exhaustive discovery mode by default: they use broad role,
+AI, location, and career queries to find boards, then apply the requested
+filters only after reading the live board feed or job page. Results include a
+coverage report at `output/job_search_coverage.json`. Use `--days 7` for a
+recent-only run, `--career-page https://example.com/careers` to scan a custom
+career page for ATS links, and `--boards-file boards.txt` to reuse a maintained
+list of known boards. The default 400-request discovery budget prioritizes an
+early query wave across requested role families; use
+`--max-discovery-queries 0` when you explicitly want every planned query to
+run.
+
+Unverified feed results are marked `listed`. `--verify-live` records a
+`live`, `closed`, or `unknown` outcome when it has decisive evidence.
+`--require-live` keeps only roles confirmed live; transient access failures
+remain `unknown` rather than being treated as closed. A provider-confirmed role
+can remain `listed` when its page blocks verification or has ambiguous evidence;
+`--require-live` excludes it. Generic JSON-LD roles are page-verified because
+their identifiers are not assumed to be provider API IDs.
 
 Read recent Gmail messages:
 
