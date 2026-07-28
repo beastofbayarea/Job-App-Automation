@@ -93,6 +93,32 @@ class UnifiedCliDispatchTests(unittest.TestCase):
         self.assertEqual(2, cli.dispatch(["engine", "workday"], stderr=errors))
         self.assertIn("unknown engine", errors.getvalue())
 
+    def test_cover_letter_command_dispatches_to_its_module(self) -> None:
+        calls: list[tuple[str, list[str]]] = []
+
+        def resolve_main(module_name: str):
+            def handler(arguments: list[str] | None) -> int:
+                calls.append((module_name, list(arguments or [])))
+                return 0
+
+            return handler
+
+        exit_code = cli.dispatch(
+            ["cover-letter", "--company", "Example Co", "--role", "PM"],
+            resolve_main=resolve_main,
+        )
+
+        self.assertEqual(0, exit_code)
+        self.assertEqual(
+            [
+                (
+                    "job_application_automation.resume.cover_letter",
+                    ["--company", "Example Co", "--role", "PM"],
+                )
+            ],
+            calls,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

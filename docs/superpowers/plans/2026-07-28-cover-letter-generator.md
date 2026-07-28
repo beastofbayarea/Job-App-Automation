@@ -1138,21 +1138,14 @@ so this module never talks to a real LLM SDK in tests.
 from __future__ import annotations
 
 import json
-import re
 from typing import Any
 
 from ..core.adapters import LLMClient
-from .ai_client import ask_gemini
+from .ai_client import _strip_json_fence, ask_gemini
 from .career_narrative import CareerNarrative
 from .cover_letter_models import CoverLetterJob
 
 PROMPT_TEMPLATE_VERSION = "cover-letter-v1"
-
-
-def _strip_json_fence(content: str) -> str:
-    text = str(content or "").strip()
-    fenced = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", text, flags=re.IGNORECASE | re.DOTALL)
-    return fenced.group(1).strip() if fenced else text
 
 
 def build_cover_letter_system_prompt(narrative: CareerNarrative, feedback: str = "") -> str:

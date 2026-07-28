@@ -19,6 +19,7 @@ COMMAND_MODULES = {
     "apply": "job_application_automation.core.orchestrator",
     "queue": "job_application_automation.core.queue_runner",
     "resume": "job_application_automation.resume.generate",
+    "cover-letter": "job_application_automation.resume.cover_letter",
     "search": "job_application_automation.search.job_boards",
     "gmail": "job_application_automation.mail.gmail_client",
     "email-pool": "job_application_automation.mail.pool_select",
@@ -41,6 +42,7 @@ def _print_usage(stream: TextIO) -> None:
         "  apply       Run the ATS-aware application workflow\n"
         "  queue       Run a sequential application queue\n"
         "  resume      Generate a personalised resume\n"
+        "  cover-letter  Generate a one-page personalised cover letter\n"
         "  search      Search supported ATS job boards\n"
         "  gmail       Read, export, draft, or send Gmail messages\n"
         "  email-pool  Select configured candidate email addresses\n\n"

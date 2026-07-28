@@ -34,6 +34,12 @@
     "original_page_height": 792.0,
     "persistent_cache_enabled": false
   },
+  "cover_letter": {
+    "cache_file": "output/cover_letter_cache.json",
+    "max_retries": 3,
+    "minimum_words": 120,
+    "maximum_words": 380
+  },
   "ashby": {
     "default_timeout_ms": 11000,
     "navigation_timeout_ms": 40000,
