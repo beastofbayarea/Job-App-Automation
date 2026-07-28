@@ -29,6 +29,15 @@ python -m pip install -r requirements.txt
 python -m playwright install chromium
 ```
 
+To install the reusable package and the `job-automation` command, use:
+
+```powershell
+python -m pip install .
+job-automation --help
+# Equivalent module entry point:
+python -m job_application_automation --help
+```
+
 For contributor checks, install the development dependencies as well:
 
 ```powershell

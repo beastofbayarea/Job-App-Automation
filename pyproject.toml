@@ -4,6 +4,29 @@ version = "0.1.0"
 description = "Compatibility-first tools for job discovery and application workflows."
 readme = "README.md"
 requires-python = ">=3.10"
+dependencies = [
+    "ddgs",
+    "google-api-python-client",
+    "google-auth-httplib2",
+    "google-auth-oauthlib",
+    "google-genai",
+    "openpyxl",
+    "playwright",
+    "PyMuPDF",
+    "pypdf",
+    "reportlab",
+    "requests",
+]
+
+[project.scripts]
+job-automation = "job_application_automation.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
