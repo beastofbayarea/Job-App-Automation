@@ -175,6 +175,20 @@ class GmailOAuthTests(unittest.TestCase):
             with patch.object(gmail, "import_google_dependencies", return_value=dependencies):
                 self.assertIsNotNone(gmail.get_gmail_service(root / "credentials.json", token_path))
 
+    def test_read_service_requests_only_the_readonly_scope(self) -> None:
+        with patch.object(gmail, "_get_gmail_service", return_value=object()) as get_service:
+            with patch.object(gmail, "import_google_dependencies", return_value=("deps",)):
+                service = gmail.get_gmail_read_service(
+                    Path("credentials.json"),
+                    Path("token.json"),
+                )
+
+        self.assertIsNotNone(service)
+        self.assertEqual(
+            get_service.call_args.kwargs["scopes"],
+            ["https://www.googleapis.com/auth/gmail.readonly"],
+        )
+
 
 class EmailPoolTests(unittest.TestCase):
     def test_pool_normalizes_addresses_and_uses_legacy_parent_fallback(self) -> None:

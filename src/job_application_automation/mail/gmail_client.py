@@ -125,6 +125,7 @@ from .gmail_auth import (
 
 # Keep the mutable list export expected by existing callers and CLI extensions.
 SCOPES = list(GMAIL_SCOPES)
+READONLY_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
 DEFAULT_CREDENTIALS_FILE = str(resolve_runtime_path(RUNTIME_CONFIG.gmail["credentials_file"]))
 DEFAULT_TOKEN_FILE = str(resolve_runtime_path(RUNTIME_CONFIG.gmail["token_file"]))
@@ -193,6 +194,16 @@ def get_gmail_service(credentials_path: Path, token_path: Path) -> Any:
         credentials_path,
         token_path,
         scopes=SCOPES,
+        dependencies=import_google_dependencies(),
+    )
+
+
+def get_gmail_read_service(credentials_path: Path, token_path: Path) -> Any:
+    """Return a Gmail client that requires only the read scope."""
+    return _get_gmail_service(
+        credentials_path,
+        token_path,
+        scopes=READONLY_SCOPES,
         dependencies=import_google_dependencies(),
     )
 

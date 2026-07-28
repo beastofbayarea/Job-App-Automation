@@ -43,7 +43,7 @@ from ..core.engine_shared import (
 from ..core.paths import OUTPUT_DIR, resolve_project_dir
 from ..core.runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from ..mail.gmail_client import (
-    get_gmail_service,
+    get_gmail_read_service,
     load_used_verification_message_ids,
     poll_for_verification_code,
     record_used_verification_message,
@@ -717,7 +717,7 @@ def _fill_security_code_from_gmail(page: Page, application_email: str) -> bool:
         # Gmail can briefly lag the form's code-generation request. Waiting here
         # prevents reusing the previous application's otherwise newest code.
         page.wait_for_timeout(int(RUNTIME_CONFIG.gmail["greenhouse_security_code_wait_ms"]))
-        service = get_gmail_service(
+        service = get_gmail_read_service(
             resolve_runtime_path(RUNTIME_CONFIG.gmail["credentials_file"]),
             resolve_runtime_path(RUNTIME_CONFIG.gmail["token_file"]),
         )
