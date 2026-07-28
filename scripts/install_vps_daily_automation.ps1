@@ -77,6 +77,7 @@ $Cron = ConvertTo-PosixShellLiteral $CronCommand
 $RemoteCommand = @"
 set -eu
 test -x $Repo/scripts/vps_search_sync.sh
+git -C $Repo pull --ff-only origin main
 install -d -m 0700 $Archive
 install -d -m 0700 $Repo/config $Repo/data
 if ! command -v plink >/dev/null 2>&1 || ! command -v pscp >/dev/null 2>&1; then
