@@ -1,0 +1,96 @@
+---
+id: 4ada505a-13e1-49eb-bb3f-839b104ab891
+---
+flowchart TD
+    Entry["src/job_automation.py<br/>(unified launcher)"] --> CLI["cli.py<br/>dispatch()"]
+
+    CLI -->|apply / orchestrate| Orchestrator["orchestrator.py"]
+    CLI -->|queue| Queue["queue_runner.py"]
+    CLI -->|resume| Resume["resume_generate.py"]
+    CLI -->|search| Search["search_job_boards.py"]
+    CLI -->|gmail / email| Gmail["email_gmail_client.py"]
+    CLI -->|email-pool| EmailPool["email_pool_select.py"]
+    CLI -->|engine ashby/greenhouse/lever| Engines
+
+    subgraph Engines["ATS Engines (internal, invoked by orchestrator)"]
+        direction LR
+        EngAshby["engine_ashby.py"]
+        EngGreenhouse["engine_greenhouse.py"]
+        EngLever["engine_lever.py"]
+        EngShared["engine_shared.py"]
+        EngAshby --> EngShared
+        EngGreenhouse --> EngShared
+        EngLever --> EngShared
+    end
+
+    Orchestrator --> EngShared
+    Orchestrator --> Adapters["adapters.py<br/>(ProcessRunner)"]
+    Orchestrator --> Contracts["contracts.py<br/>(EngineRequest/Result)"]
+    Orchestrator --> Artifacts["artifacts.py<br/>(write_json)"]
+    Orchestrator --> Paths["paths.py"]
+    Orchestrator -.spawns subprocess.-> Engines
+
+    Queue --> Artifacts
+    Queue --> Contracts
+    Queue --> Paths
+    Queue -.drives.-> Orchestrator
+
+    subgraph ResumePipeline["Resume generation"]
+        direction LR
+        ResumeAI["resume_ai_client.py<br/>(Vertex AI / fallback)"]
+        ResumeCache["resume_cache.py"]
+        ResumeRender["resume_rendering.py"]
+        ResumeScore["resume_scoring.py"]
+        ResumeSrc["resume_source.py"]
+        ResumeValid["resume_validation.py"]
+    end
+    Resume --> ResumeAI
+    Resume --> ResumeCache
+    Resume --> ResumeRender
+    Resume --> ResumeScore
+    Resume --> ResumeSrc
+    Resume --> ResumeValid
+    Resume --> Paths
+
+    subgraph SearchPipeline["ATS board search"]
+        direction LR
+        SearchCache["search_cache.py"]
+        SearchDiscovery["search_discovery.py"]
+        SearchJsonld["search_jsonld.py"]
+        SearchLiveness["search_liveness.py"]
+        SearchModels["search_models.py"]
+        SearchSerial["search_serialization.py"]
+        SearchTerms["search_terms.py"]
+    end
+    Search --> SearchCache
+    Search --> SearchDiscovery
+    Search --> SearchJsonld
+    Search --> SearchLiveness
+    Search --> SearchModels
+    Search --> SearchSerial
+    Search --> SearchTerms
+    Search --> Artifacts
+    Search --> Paths
+
+    subgraph GmailPipeline["Gmail integration"]
+        direction LR
+        GmailAuth["gmail_auth.py"]
+        GmailMsgs["gmail_messages.py"]
+        GmailPersist["gmail_persistence.py"]
+    end
+    Gmail --> GmailAuth
+    Gmail --> GmailMsgs
+    Gmail --> GmailPersist
+    Gmail --> Paths
+
+    EmailPool --> EmailPoolLib["email_pool.py"]
+    EmailPool --> Paths
+
+    ResumeAI -.scrapes ATS job page.-> Engines
+
+    classDef entry fill:#4c6ef5,color:#fff,stroke:#364fc7;
+    classDef shared fill:#868e96,color:#fff,stroke:#495057;
+    classDef pipeline fill:#12b886,color:#fff,stroke:#0b7285;
+    class Entry,CLI entry;
+    class Adapters,Contracts,Artifacts,Paths,EngShared shared;
+    class Orchestrator,Queue,Resume,Search,Gmail,EmailPool pipeline;

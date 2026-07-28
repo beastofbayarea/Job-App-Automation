@@ -24,8 +24,8 @@ config/candidate_profile_config.json
 config/candidate_email_pool.json
 config/nooks_retry_email.json
 
-# Unrelated-project deployment secrets (VPS password, API keys, service account key)
-config/vps_api_env_config.json
+# Cent Capital project secrets, kept for potential reuse (VPS password, API keys, service account key)
+config/cent_capital_config.json
 
 # Local environment and logs
 .env
