@@ -309,5 +309,243 @@ class CoverLetterAiTests(unittest.TestCase):
             )
 
 
+import json as json_module  # noqa: E402
+from datetime import datetime, timezone  # noqa: E402
+
+from job_application_automation.resume import cover_letter  # noqa: E402
+from job_application_automation.resume.cover_letter_cache import CoverLetterCache  # noqa: E402
+from job_application_automation.resume.source import ResumeSource  # noqa: E402
+
+
+def _fake_source() -> ResumeSource:
+    return ResumeSource(
+        text="[COMPANY] Example Co\n[CLAIM AWS-1] Shipped a measurable product.",
+        experience=(
+            {
+                "company": "Example Co",
+                "location": "Remote",
+                "title": "PM",
+                "dates": "2020 - Present",
+                "tags": [],
+                "claims": [{"id": "AWS-1", "text": "Shipped a measurable product."}],
+                "bullets": ["Shipped a measurable product."],
+            },
+        ),
+        education=({"school": "State U", "degree": "BA", "dates": "2016-2020", "details": ""},),
+        candidate={
+            "name": "Shivam Singh",
+            "location": "SF",
+            "email": "shiv@example.test",
+            "phone": "555",
+            "linkedin": "https://example.test/in/shiv",
+        },
+    )
+
+
+class _RecordingGateway:
+    def __init__(self, response: str) -> None:
+        self._response = response
+        self.call_count = 0
+
+    def generate(self, prompt, *, system, settings, json_mode=False):
+        self.call_count += 1
+        return self._response
+
+
+class _RecordingRenderer:
+    def __init__(self, page_texts: list[str]) -> None:
+        self._page_texts = page_texts
+        self.render_count = 0
+
+    def render(self, request) -> bool:
+        self.render_count += 1
+        request.output_path.parent.mkdir(parents=True, exist_ok=True)
+        request.output_path.write_text("stub-pdf", encoding="utf-8")
+        return True
+
+
+class _FakeGenPage:
+    def __init__(self, text: str) -> None:
+        self._text = text
+
+    def get_text(self, mode: str) -> str:
+        return self._text
+
+
+class _FakeGenDocument:
+    def __init__(self, pages: list[str]) -> None:
+        self._pages = [_FakeGenPage(text) for text in pages]
+
+    def __len__(self) -> int:
+        return len(self._pages)
+
+    def __getitem__(self, index: int):
+        return self._pages[index]
+
+    def close(self) -> None:
+        pass
+
+
+class _FakeGenFitz:
+    def __init__(self, pages_by_call: list[list[str]]) -> None:
+        self._pages_by_call = list(pages_by_call)
+
+    def open(self, path: str) -> _FakeGenDocument:
+        return _FakeGenDocument(self._pages_by_call.pop(0))
+
+
+_VALID_RESPONSE = json_module.dumps(
+    {
+        "salutation": "Dear Hiring Team,",
+        "paragraphs": [
+            "I bring proven product ownership to this role.",
+            "At Example Co I shipped measurable outcomes for customers.",
+            "I would welcome the chance to bring that same rigor to your team.",
+        ],
+        "closing": "Sincerely,",
+        "signature": "Shivam Singh",
+        "evidence_claim_ids": ["AWS-1"],
+    }
+)
+
+
+class GenerateCoverLetterTests(unittest.TestCase):
+    def test_generates_writes_pdf_and_audit_sidecar_on_a_valid_attempt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            output_path = Path(directory) / "Example_Co_PM_Cover_Letter.pdf"
+            renderer = _RecordingRenderer([])
+            fitz_module = _FakeGenFitz([[" ".join(["word"] * 30) + " Shivam Singh"]])
+
+            result = cover_letter.generate_cover_letter(
+                CoverLetterJob(company="Example Co", role="PM", jd_text="Build things."),
+                CareerNarrative(),
+                _fake_source(),
+                output_path,
+                gateway=_RecordingGateway(_VALID_RESPONSE),
+                renderer=renderer,
+                fitz_module=fitz_module,
+                cache=CoverLetterCache(),
+                clock=lambda: datetime(2026, 7, 28, tzinfo=timezone.utc),
+                max_retries=1,
+                minimum_words=5,
+                maximum_words=100,
+            )
+
+            self.assertEqual(result, output_path)
+            self.assertTrue(output_path.exists())
+            audit_path = output_path.with_name(output_path.stem + ".audit.json")
+            audit = json_module.loads(audit_path.read_text(encoding="utf-8"))
+            self.assertEqual(audit["evidence_claim_ids"], ["AWS-1"])
+            self.assertEqual(audit["prompt_template_version"], "cover-letter-v1")
+            self.assertEqual(audit["generated_at"], "2026-07-28T00:00:00+00:00")
+
+    def test_an_unmatched_claim_id_is_rejected_and_never_rendered(self) -> None:
+        bad_response = json_module.dumps(
+            {
+                "salutation": "Dear Team,",
+                "paragraphs": ["A paragraph.", "Another paragraph."],
+                "closing": "Sincerely,",
+                "signature": "Shivam Singh",
+                "evidence_claim_ids": ["MADE-UP-9"],
+            }
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            output_path = Path(directory) / "letter.pdf"
+            renderer = _RecordingRenderer([])
+
+            result = cover_letter.generate_cover_letter(
+                CoverLetterJob(company="Example Co", role="PM", jd_text="Build things."),
+                CareerNarrative(),
+                _fake_source(),
+                output_path,
+                gateway=_RecordingGateway(bad_response),
+                renderer=renderer,
+                fitz_module=_FakeGenFitz([]),
+                cache=CoverLetterCache(),
+                max_retries=1,
+                minimum_words=5,
+                maximum_words=100,
+            )
+
+            self.assertIsNone(result)
+            self.assertFalse(output_path.exists())
+            self.assertEqual(renderer.render_count, 0)
+
+    def test_a_two_page_render_is_never_promoted_to_the_output_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            output_path = Path(directory) / "letter.pdf"
+            renderer = _RecordingRenderer([])
+            fitz_module = _FakeGenFitz([["Page one Shivam Singh", "Page two overflow"]])
+
+            result = cover_letter.generate_cover_letter(
+                CoverLetterJob(company="Example Co", role="PM", jd_text="Build things."),
+                CareerNarrative(),
+                _fake_source(),
+                output_path,
+                gateway=_RecordingGateway(_VALID_RESPONSE),
+                renderer=renderer,
+                fitz_module=fitz_module,
+                cache=CoverLetterCache(),
+                max_retries=1,
+                minimum_words=5,
+                maximum_words=100,
+            )
+
+            self.assertIsNone(result)
+            self.assertFalse(output_path.exists())
+
+    def test_missing_jd_text_raises_jd_context_unavailable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            output_path = Path(directory) / "letter.pdf"
+            with self.assertRaises(cover_letter.JDContextUnavailable):
+                cover_letter.generate_cover_letter(
+                    CoverLetterJob(company="Example Co", role="PM", jd_text="   "),
+                    CareerNarrative(),
+                    _fake_source(),
+                    output_path,
+                    gateway=_RecordingGateway(_VALID_RESPONSE),
+                    renderer=_RecordingRenderer([]),
+                    fitz_module=_FakeGenFitz([]),
+                )
+
+    def test_a_cache_hit_skips_the_llm_call(self) -> None:
+        cache = CoverLetterCache()
+        job = CoverLetterJob(company="Example Co", role="PM", jd_text="Build things.")
+        source = _fake_source()
+        cache_key = cover_letter.cache_key_for(job, CareerNarrative(), source)
+        cache.set(
+            cache_key,
+            {
+                "salutation": "Dear Team,",
+                "paragraphs": ["A paragraph.", "Another paragraph."],
+                "closing": "Sincerely,",
+                "signature": "Shivam Singh",
+                "evidence_claim_ids": ["AWS-1"],
+            },
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            output_path = Path(directory) / "letter.pdf"
+            gateway = _RecordingGateway(_VALID_RESPONSE)
+            fitz_module = _FakeGenFitz([[" ".join(["word"] * 30) + " Shivam Singh"]])
+
+            result = cover_letter.generate_cover_letter(
+                job,
+                CareerNarrative(),
+                source,
+                output_path,
+                gateway=gateway,
+                renderer=_RecordingRenderer([]),
+                fitz_module=fitz_module,
+                cache=cache,
+                max_retries=1,
+                minimum_words=5,
+                maximum_words=100,
+            )
+
+            self.assertEqual(result, output_path)
+            self.assertEqual(gateway.call_count, 0)
+
+
 if __name__ == "__main__":
     unittest.main()
