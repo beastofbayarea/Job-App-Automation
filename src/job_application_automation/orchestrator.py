@@ -40,6 +40,7 @@ from .adapters import CommandResult, ProcessRunner, ProcessSettings
 from .artifacts import write_json as write_json_artifact
 from .contracts import EngineMode, EngineRequest, EngineResult
 from .paths import CLI_ENTRYPOINT, CONFIG_DIR, DATA_DIR, OUTPUT_DIR, SRC_DIR, resolve_existing
+from .submission_log import SubmissionLog, SubmissionRecord
 
 logging.basicConfig(
     level=logging.INFO,
@@ -52,6 +53,7 @@ DEFAULT_TRACKER_FILE = DATA_DIR / "ai_product_manager_job_tracker.xlsx"
 DEFAULT_RESUME_FILE = DATA_DIR / "shivam_singh_ai_product_manager_resume.pdf"
 DEFAULT_CONFIG_FILE = CONFIG_DIR / "candidate_profile_config.json"
 DEFAULT_RESULTS_FILE = OUTPUT_DIR / "orchestration_results.json"
+DEFAULT_SUBMISSION_LOG_FILE = OUTPUT_DIR / "submission_log.json"
 SCREENSHOT_EXTENSIONS = {".jpeg", ".jpg", ".png"}
 
 SUPPORTED_ATS = tuple(ATS_HOSTS)
@@ -395,6 +397,44 @@ def _write_results(
     write_json_artifact(results_path, list(results), indent=2, ensure_ascii=False)
 
 
+def _load_submission_log(path: Path) -> SubmissionLog:
+    """Load an existing submission log, tolerating a missing or corrupt file."""
+    log = SubmissionLog()
+    if path.exists():
+        try:
+            log.load(path)
+        except (OSError, ValueError) as exc:
+            logger.warning("Could not load existing submission log %s: %s", path, exc)
+    return log
+
+
+def _record_submission(
+    submission_log: SubmissionLog,
+    submission_log_path: Path,
+    *,
+    job: JobRecord,
+    email: str,
+    resume_path: Path,
+    status: str,
+) -> None:
+    """Best-effort append to the submission log; never fails the orchestration run."""
+    try:
+        submission_log.record(
+            SubmissionRecord(
+                company=job["company"],
+                role=job["role"],
+                job_url=job["url"],
+                ats=job["ats"],
+                status=status,
+                email_used=email,
+                resume_filename=resume_path.name,
+            )
+        )
+        submission_log.save(submission_log_path)
+    except ValueError as exc:
+        logger.warning("Could not record submission log entry for %s: %s", job["url"], exc)
+
+
 def cleanup_post_run_artifacts(results_path: Path) -> None:
     """Preserve results, screenshots, and submission proof for auditability."""
     logger.info(
@@ -572,6 +612,7 @@ def run_orchestrator(
     resume_path: Path,
     config_path: Optional[Path],
     results_path: Path,
+    submission_log_path: Path = DEFAULT_SUBMISSION_LOG_FILE,
     limit: Optional[int] = None,
     start_index: int = 0,
     live_submit: bool = False,
@@ -628,6 +669,7 @@ def run_orchestrator(
         shuffle,
     )
 
+    submission_log = _load_submission_log(submission_log_path)
     results: list[dict[str, Any]] = []
     for index, job in enumerate(jobs, start=1):
         ats = job["ats"]
@@ -764,6 +806,14 @@ def run_orchestrator(
             logger.error("Engine execution failed: %s", exc)
             outcome = {"success": False, "status": "ENGINE_EXECUTION_ERROR", "detail": str(exc)}
 
+        _record_submission(
+            submission_log,
+            submission_log_path,
+            job=job,
+            email=email,
+            resume_path=target_resume,
+            status=str(outcome.get("status", "")),
+        )
         _append_and_persist(
             results,
             {
@@ -799,6 +849,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--resume", default=str(DEFAULT_RESUME_FILE))
     parser.add_argument("--config", default=str(DEFAULT_CONFIG_FILE))
     parser.add_argument("--results-file", default=str(DEFAULT_RESULTS_FILE))
+    parser.add_argument("--submission-log-file", default=str(DEFAULT_SUBMISSION_LOG_FILE))
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--start-index", type=int, default=0)
     parser.add_argument("--timeout", type=int, default=180)
@@ -846,6 +897,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             resume_path=Path(args.resume).resolve(),
             config_path=Path(args.config).resolve() if args.config else None,
             results_path=results_path,
+            submission_log_path=Path(args.submission_log_file).resolve(),
             limit=args.limit,
             start_index=args.start_index,
             live_submit=args.live_submit,
