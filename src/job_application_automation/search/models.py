@@ -153,6 +153,7 @@ class Job:
     board_token: str
     date_source: str
     match_reason: str
+    description: str = field(repr=False, default="")
     platform_job_id: str = ""
     board_region: str = "global"
     # JSON-LD identifiers are useful for a source page, but are not guaranteed
@@ -174,3 +175,10 @@ class Job:
         raw = asdict(self)
         raw.pop("unique_id", None)
         return {field_name: raw.get(field_name, "") for field_name in CSV_FIELDS}
+
+    def to_private_dict(self) -> dict[str, Any]:
+        """Return generation inputs that must stay outside the sync branch."""
+        return {
+            **self.to_csv_row(),
+            "description": self.description,
+        }

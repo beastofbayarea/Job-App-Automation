@@ -1423,6 +1423,7 @@ def fetch_greenhouse_jobs(
                 board_token=board.token,
                 date_source=date_source,
                 match_reason=reason,
+                description=description,
                 platform_job_id=clean_whitespace(job_id),
                 board_region=board.region,
                 provider_id_trusted=True,
@@ -1581,6 +1582,7 @@ def fetch_lever_jobs(
                 board_token=board.token,
                 date_source=date_source,
                 match_reason=reason,
+                description=description,
                 platform_job_id=job_id,
                 board_region=board.region,
                 provider_id_trusted=True,
@@ -1680,6 +1682,7 @@ def fetch_ashby_jobs(
                 board_token=board.token,
                 date_source="publishedAt",
                 match_reason=reason,
+                description=description,
                 platform_job_id=item_id,
                 board_region=board.region,
                 provider_id_trusted=True,
@@ -2335,6 +2338,11 @@ def write_json(path: Path, jobs: Sequence[Job]) -> None:
     write_json_file(path, _search_serialization.job_rows(jobs))
 
 
+def write_private_generation_json(path: Path, jobs: Sequence[Job]) -> None:
+    """Write full job descriptions for local document generation only."""
+    write_json_file(path, [job.to_private_dict() for job in jobs])
+
+
 def write_coverage_report(path: Path, report: dict[str, Any]) -> None:
     write_json_file(path, report)
 
@@ -2656,6 +2664,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--json-output",
         type=Path,
         help="Optional JSON output path.",
+    )
+    parser.add_argument(
+        "--private-generation-output",
+        type=Path,
+        help=(
+            "Optional private JSON containing full descriptions for document generation; "
+            "never publish this file through the VPS sync branch."
+        ),
     )
     parser.add_argument(
         "--coverage-report",
@@ -2988,6 +3004,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if not boards:
         write_csv(args.output, [])
+        if args.private_generation_output:
+            write_private_generation_json(args.private_generation_output, [])
         if not args.no_coverage_report:
             write_coverage_report(
                 args.coverage_report,
@@ -3149,6 +3167,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     write_csv(args.output, jobs)
     if args.json_output:
         write_json(args.json_output, jobs)
+    if args.private_generation_output:
+        write_private_generation_json(args.private_generation_output, jobs)
     print_summary(jobs, args.output, max(0, args.show))
 
     if failed_boards:

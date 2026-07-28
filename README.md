@@ -272,6 +272,13 @@ The installer pins the configured SSH host key, replaces only its own marked
 cron entry, installs log rotation, and creates the private archive directory
 with mode `0700`.
 
+Each successful scheduled search also generates a tailored CV and cover letter
+for every verified-live result and uploads the pair to the private VPS archive.
+An ignored state file records completed URLs, so later daily runs skip documents
+that were already archived and retry only failures. Full job descriptions and
+document-generation state remain private on the VPS and are never copied to
+`vps-search-output`.
+
 ### Outputs and exit status
 
 | Path | Contents |

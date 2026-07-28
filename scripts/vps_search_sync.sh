@@ -30,6 +30,8 @@ SYNC_FILES=(
   "output/ai_jobs.csv"
   "output/ats_boards_cache.json"
 )
+PRIVATE_GENERATION_OUTPUT="$REPO_DIR/output/vps_generation_jobs.json"
+DOCUMENT_STATE="$REPO_DIR/output/vps_document_archive_state.json"
 
 # Cron and an on-demand trigger must never update the search artifacts or sync
 # worktree concurrently. Keep the file descriptor open for the entire run.
@@ -57,7 +59,17 @@ python src/job_automation.py search \
   --ats-platform greenhouse \
   --ats-platform lever \
   --ats-platform ashby \
-  --verify-live
+  --verify-live \
+  --private-generation-output "$PRIVATE_GENERATION_OUTPUT"
+
+DOCUMENT_EXIT=0
+PYTHONPATH="$REPO_DIR/src${PYTHONPATH:+:$PYTHONPATH}" \
+  python -m job_application_automation.core.search_documents \
+  --input "$PRIVATE_GENERATION_OUTPUT" \
+  --profile "$REPO_DIR/config/candidate_profile_config.json" \
+  --vps-config "$REPO_DIR/config/vps_config.json" \
+  --state "$DOCUMENT_STATE" \
+  --launcher "$REPO_DIR/src/job_automation.py" || DOCUMENT_EXIT=$?
 
 MISSING_SYNC_FILES=()
 for f in "${SYNC_FILES[@]}"; do
@@ -88,4 +100,9 @@ if ! git diff --cached --quiet; then
   git push "$PUSH_URL" "HEAD:refs/heads/$BRANCH"
 else
   echo "No changes to sync."
+fi
+
+if ((DOCUMENT_EXIT != 0)); then
+  echo "One or more document pairs could not be generated or archived; failed jobs will retry on the next daily run." >&2
+  exit "$DOCUMENT_EXIT"
 fi

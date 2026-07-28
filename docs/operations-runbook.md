@@ -114,6 +114,13 @@ The default schedule is 03:00 UTC daily; use `-HourUtc` to select another UTC
 hour. The operation is idempotent and replaces only the cron line marked
 `job-app-automation-daily-search`.
 
+After search and liveness verification, the scheduled workflow generates and
+archives one CV/cover-letter pair for every verified-live job. It processes
+jobs sequentially, skips URLs already marked archived, and retries failed URLs
+on the next run. Search results are still published as one coherent snapshot
+when individual document generation fails; the cron run reports failure so the
+problem remains visible in `output/vps_sync.log`.
+
 The cron entry and an on-demand trigger both run
 `scripts/vps_search_sync.sh`. That script uses a nonblocking lock and exits
 without starting when another sync is active. It also refuses to publish unless

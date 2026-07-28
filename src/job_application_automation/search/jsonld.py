@@ -293,6 +293,7 @@ def scrape_jsonld_jobs(
                 board_token=job_board.token if job_board else "",
                 date_source="jsonld.datePosted",
                 match_reason=reason,
+                description=description,
                 platform_job_id=unique,
                 board_region=job_board.region if job_board else "global",
                 provider_id_trusted=False,

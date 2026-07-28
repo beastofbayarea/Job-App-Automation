@@ -51,9 +51,22 @@ if (-not $ArchiveRoot.StartsWith("/")) {
 }
 
 $PlinkCmd = Get-Command plink -ErrorAction SilentlyContinue
-if (-not $PlinkCmd) {
-    Write-Error "plink.exe not found on PATH. Install PuTTY or add it to PATH."
+$PscpCmd = Get-Command pscp -ErrorAction SilentlyContinue
+if (-not $PlinkCmd -or -not $PscpCmd) {
+    Write-Error "plink.exe and pscp.exe must be available on PATH."
     exit 1
+}
+$PrivateInputs = @(
+    @{ Local = "config/candidate_profile_config.json"; Remote = "config/candidate_profile_config.json" },
+    @{ Local = "config/vps_config.json"; Remote = "config/vps_config.json" },
+    @{ Local = "data/base_resume.txt"; Remote = "data/base_resume.txt" },
+    @{ Local = "config/vertex_service_account.json"; Remote = "config/vertex_service_account.json" }
+)
+foreach ($InputFile in $PrivateInputs) {
+    if (-not (Test-Path -LiteralPath $InputFile.Local)) {
+        Write-Error "Required private automation input is missing: $($InputFile.Local)"
+        exit 1
+    }
 }
 
 $Repo = ConvertTo-PosixShellLiteral $RemoteRepoPath
@@ -65,6 +78,11 @@ $RemoteCommand = @"
 set -eu
 test -x $Repo/scripts/vps_search_sync.sh
 install -d -m 0700 $Archive
+install -d -m 0700 $Repo/config $Repo/data
+if ! command -v plink >/dev/null 2>&1 || ! command -v pscp >/dev/null 2>&1; then
+  apt-get update -qq
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq putty-tools
+fi
 current=`$(crontab -l 2>/dev/null || true)
 filtered=`$(printf '%s\n' "`$current" | grep -v '# $Marker' || true)
 { printf '%s\n' "`$filtered"; printf '%s\n' $Cron; } | sed '/^$/d' | crontab -
@@ -82,6 +100,23 @@ try {
     & $PlinkCmd.Source -ssh -batch -P $SshPort -hostkey $SshHostKey -pwfile $PasswordFile `
         "$SshUser@$VpsHost" $RemoteCommand
     $RemoteExitCode = $LASTEXITCODE
+    if ($RemoteExitCode -eq 0) {
+        foreach ($InputFile in $PrivateInputs) {
+            $Destination = "$SshUser@${VpsHost}:$RemoteRepoPath/$($InputFile.Remote)"
+            & $PscpCmd.Source -batch -P $SshPort -hostkey $SshHostKey -pwfile $PasswordFile `
+                $InputFile.Local $Destination
+            if ($LASTEXITCODE -ne 0) {
+                $RemoteExitCode = $LASTEXITCODE
+                break
+            }
+        }
+    }
+    if ($RemoteExitCode -eq 0) {
+        $ProtectCommand = "chmod 0600 $Repo/config/candidate_profile_config.json $Repo/config/vps_config.json $Repo/config/vertex_service_account.json $Repo/data/base_resume.txt"
+        & $PlinkCmd.Source -ssh -batch -P $SshPort -hostkey $SshHostKey -pwfile $PasswordFile `
+            "$SshUser@$VpsHost" $ProtectCommand
+        $RemoteExitCode = $LASTEXITCODE
+    }
 } finally {
     if (Test-Path -LiteralPath $PasswordFile) {
         Remove-Item -LiteralPath $PasswordFile -Force
