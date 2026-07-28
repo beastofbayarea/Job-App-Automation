@@ -27,8 +27,10 @@ from ..core.engine_shared import (
     first_visible,
     generate_essay_answer as _generate_essay,
     is_essay_question,
+    is_location_question,
     load_json_config,
     load_candidate_evidence,
+    location_answer_candidates,
     orchestrated_config_path,
     resolve_candidate_email,
     open_chrome_session,
@@ -282,10 +284,12 @@ def _fill_custom_questions(
             desired = configured_answer(label, profile, rules, eeo, field_matchers)
             if posting_location_question:
                 desired = None
-            if not desired and re.search(
-                r"\b(where.*(?:located|based)|current location)\b",
-                normalized_label,
-            ):
+            location_question = (
+                not desired
+                and not posting_location_question
+                and is_location_question(normalized_label)
+            )
+            if location_question:
                 desired = str(profile.get("location", ""))
             if "are you flexible" in normalized_label:
                 desired = "Yes"
@@ -312,6 +316,13 @@ def _fill_custom_questions(
                 success = _select_posting_location(page, control)
             if tag == "select" and desired:
                 success = _select_option(control, label, desired, configured_variants)
+                if not success and location_question:
+                    # Country-scoped dropdowns cannot match the full
+                    # "City, State, Country" string; widen progressively.
+                    for fallback in location_answer_candidates(profile):
+                        if _select_option(control, label, fallback, configured_variants):
+                            success = True
+                            break
                 if not success and desired.lower() == "yes":
                     # Fallback for closed <select> elements where inner_text()
                     # can read back empty/stale option text; Playwright's own

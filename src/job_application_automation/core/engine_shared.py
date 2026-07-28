@@ -398,6 +398,57 @@ def _matcher_alias_matches(label: str, alias: str) -> bool:
     return any(value and value in normalized_label for value in variants)
 
 
+_LOCATION_QUESTION_PATTERNS = (
+    # Where the candidate currently is.
+    r"\blocation\b",
+    r"\bcity\b",
+    r"where are you (?:located|based)",
+    r"where do you (?:currently )?(?:reside|live)",
+    r"currently reside",
+    # Where the candidate intends to work from.  Ashby and Lever both ask this
+    # separately from residence, often qualified by payroll or tax wording.
+    r"where (?:do|will) you (?:plan (?:on|to) )?(?:be )?work(?:ing)?",
+    r"where would you (?:be )?work(?:ing)?",
+    r"work(?:ing)? (?:from|location|out of)",
+    r"office location",
+)
+
+
+def is_location_question(question_text: Any) -> bool:
+    """Return whether a question asks for a current or intended location.
+
+    Providers distinguish "where are you based" from "where do you plan on
+    working from (for payroll tax purposes)" and "where do you currently
+    live".  All resolve to the candidate's configured location, so all must be
+    recognized here.
+    """
+    normalized = re.sub(r"\s+", " ", str(question_text)).strip().lower()
+    return any(re.search(pattern, normalized) for pattern in _LOCATION_QUESTION_PATTERNS)
+
+
+def location_answer_candidates(profile: Mapping[str, Any]) -> tuple[str, ...]:
+    """Ordered location answers, most to least specific.
+
+    Country-scoped dropdowns (``Where do you currently live?`` listing only
+    countries) cannot match a full "City, State, Country" string, so broader
+    fallbacks must be tried after the precise one.
+    """
+    city = str(profile.get("city", "") or "").strip()
+    state = str(profile.get("state", "") or "").strip()
+    candidates = (
+        str(profile.get("location", "") or "").strip(),
+        f"{city}, {state}" if city and state else "",
+        city,
+        state,
+        str(profile.get("country", "") or "").strip(),
+    )
+    seen: list[str] = []
+    for candidate in candidates:
+        if candidate and candidate.lower() not in {item.lower() for item in seen}:
+            seen.append(candidate)
+    return tuple(seen)
+
+
 def configured_answer(
     label: str,
     profile: Mapping[str, Any],

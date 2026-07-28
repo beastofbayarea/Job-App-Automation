@@ -59,5 +59,68 @@ class EngineSharedConfigTests(unittest.TestCase):
         self.assertEqual(payload["screenshot"], "proof.png")
 
 
+class LocationQuestionTests(unittest.TestCase):
+    def test_intended_work_location_questions_are_recognized(self) -> None:
+        """Providers ask where a candidate will work, not only where they live."""
+        for question in (
+            "where do you plan on working from (for payroll tax purposes)?",
+            "where will you be working from?",
+            "what is your primary work location?",
+            "which office location do you plan to work out of?",
+        ):
+            with self.subTest(question=question):
+                self.assertTrue(engine_shared.is_location_question(question))
+
+    def test_residence_questions_are_recognized(self) -> None:
+        for question in (
+            "where are you based?",
+            "where do you currently reside?",
+            "where do you currently live?",
+            "current location",
+            "city",
+        ):
+            with self.subTest(question=question):
+                self.assertTrue(engine_shared.is_location_question(question))
+
+    def test_unrelated_questions_are_not_treated_as_location(self) -> None:
+        for question in (
+            "how did you hear about us?",
+            "what is your expected compensation range?",
+            "do you now or in the future require sponsorship?",
+            "what is your country of citizenship?",
+        ):
+            with self.subTest(question=question):
+                self.assertFalse(engine_shared.is_location_question(question))
+
+    def test_location_candidates_widen_from_precise_to_country(self) -> None:
+        """Country-only dropdowns need the broader fallbacks."""
+        candidates = engine_shared.location_answer_candidates(
+            {
+                "location": "San Francisco, California, United States",
+                "city": "San Francisco",
+                "state": "California",
+                "country": "United States",
+            }
+        )
+
+        self.assertEqual(
+            candidates,
+            (
+                "San Francisco, California, United States",
+                "San Francisco, California",
+                "San Francisco",
+                "California",
+                "United States",
+            ),
+        )
+
+    def test_location_candidates_skip_blank_and_duplicate_profile_fields(self) -> None:
+        self.assertEqual(
+            engine_shared.location_answer_candidates({"location": "Remote", "country": "Remote"}),
+            ("Remote",),
+        )
+        self.assertEqual(engine_shared.location_answer_candidates({}), ())
+
+
 if __name__ == "__main__":
     unittest.main()

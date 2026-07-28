@@ -37,7 +37,6 @@ from .ashby_sections import (
     aggregate_section_outcomes,
     choice_is_selected,
     configured_screening_answer,
-    is_location_question,
     plan_option_selection,
     required_field_flag,
 )
@@ -51,6 +50,7 @@ from ..core.engine_shared import (
     engine_result,
     require_orchestrated_invocation,
     fill_required_consent,
+    is_location_question,
     load_json_config,
     mask_email as _mask_email,
     open_chrome_session,
