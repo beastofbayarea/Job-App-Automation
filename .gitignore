@@ -42,5 +42,8 @@ htmlcov/
 # Local editor workspace settings
 .vscode/
 
+# Local agent worktrees
+.claude/
+
 # git worktree used by scripts/vps_search_sync.sh
 .sync-worktree/
