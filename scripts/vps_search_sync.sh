@@ -17,8 +17,23 @@
 #   4. Install log rotation for the cron output so vps_sync.log doesn't grow
 #      unbounded:
 #        bash scripts/install_vps_logrotate.sh
+#   5. Install Xvfb (`apt-get install -y xvfb`) so the application stage's
+#      Chrome engines can launch on a display-less host. The engines always
+#      launch a headed (non-headless) browser to avoid headless-detection by
+#      ATS anti-bot checks, so a headless server needs a virtual display
+#      instead of Playwright's own `headless=True` mode.
 
 set -euo pipefail
+
+# The application stage launches headed Chrome (never Playwright's headless
+# mode, since ATS anti-bot checks can fingerprint headless browsers) even
+# though this host has no physical display. Re-exec the whole run under a
+# virtual X server so those browser launches succeed instead of crashing with
+# "Missing X server or $DISPLAY". No-op when a real DISPLAY is already set or
+# Xvfb isn't installed, so this stays safe on desktops and in test sandboxes.
+if [ -z "${DISPLAY:-}" ] && command -v xvfb-run >/dev/null 2>&1; then
+  exec xvfb-run -a --server-args="-screen 0 1280x1024x24" "$0" "$@"
+fi
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BRANCH="vps-search-output"

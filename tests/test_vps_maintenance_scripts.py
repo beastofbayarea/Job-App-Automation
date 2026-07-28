@@ -506,6 +506,58 @@ class BashMaintenanceTests(unittest.TestCase):
         ):
             self.assertNotIn(private_name, sync_block)
 
+    @unittest.skipUnless(shutil.which("flock"), "flock is required")
+    def test_reexecs_under_xvfb_when_no_display_is_set(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            repository = Path(temporary_directory)
+            (repository / "scripts").mkdir()
+            shutil.copy2(SCRIPTS / "vps_search_sync.sh", repository / "scripts")
+            (repository / ".venv" / "bin").mkdir(parents=True)
+            (repository / ".venv" / "bin" / "activate").write_text("", encoding="utf-8")
+            fake_bin = repository / "fake-bin"
+            fake_bin.mkdir()
+            marker_name = "xvfb-run-invoked"
+            marker = repository / marker_name
+            fake_xvfb_run = fake_bin / "xvfb-run"
+            fake_xvfb_run.write_text(
+                f"""#!/usr/bin/env bash
+touch {marker_name}
+export DISPLAY=:99
+args=("$@")
+while [[ ${{#args[@]}} -gt 0 && ${{args[0]}} == -* ]]; do
+  args=("${{args[@]:1}}")
+done
+exec "${{args[@]}}"
+""",
+                encoding="utf-8",
+            )
+            fake_xvfb_run.chmod(0o755)
+            fake_python = fake_bin / "python"
+            fake_python.write_text(
+                """#!/usr/bin/env bash
+mkdir -p output
+printf '{}\\n' > output/job_search_coverage.json
+printf 'title\\n' > output/ai_jobs.csv
+""",
+                encoding="utf-8",
+            )
+            fake_python.chmod(0o755)
+            git(repository, "init")
+            environment = os.environ.copy()
+            environment.pop("DISPLAY", None)
+            environment["PATH"] = str(fake_bin) + os.pathsep + environment["PATH"]
+
+            result = run(
+                [BASH, str(repository / "scripts" / "vps_search_sync.sh")],
+                cwd=repository,
+                env=environment,
+            )
+
+            self.assertTrue(marker.exists(), "xvfb-run was not invoked without a DISPLAY")
+            # Missing ats_boards_cache.json still fails the run downstream, proving
+            # the re-exec reached the script's real logic rather than short-circuiting.
+            self.assertEqual(result.returncode, 66)
+
     def test_shell_scripts_parse_and_logrotate_template_renders(self) -> None:
         for name in ("vps_search_sync.sh", "install_vps_logrotate.sh"):
             result = run([BASH, "-n", f"scripts/{name}"], cwd=ROOT)

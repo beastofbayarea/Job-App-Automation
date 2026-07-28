@@ -127,6 +127,13 @@ unattended resume generation and Greenhouse verification. These files are
 stored with mode `0600`. Complete Gmail authorization locally before running
 the installer; cron cannot complete an interactive OAuth browser flow.
 
+The installer also provisions `xvfb` if missing. The application-stage
+engines always launch a headed (non-headless) Chrome so ATS anti-bot checks
+cannot fingerprint a headless browser; `vps_search_sync.sh` transparently
+re-execs itself under `xvfb-run` when no `DISPLAY` is set, so headed Chrome
+still launches on a display-less VPS instead of crashing with "Missing X
+server or $DISPLAY".
+
 ### Automatic VPS application stage
 
 After publishing the safe search snapshot and successfully generating the

@@ -82,9 +82,9 @@ test -x $Repo/scripts/vps_search_sync.sh
 git -C $Repo pull --ff-only origin main
 install -d -m 0700 $Archive
 install -d -m 0700 $Repo/config $Repo/data
-if ! command -v plink >/dev/null 2>&1 || ! command -v pscp >/dev/null 2>&1; then
+if ! command -v plink >/dev/null 2>&1 || ! command -v pscp >/dev/null 2>&1 || ! command -v xvfb-run >/dev/null 2>&1; then
   apt-get update -qq
-  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq putty-tools
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq putty-tools xvfb
 fi
 current=`$(crontab -l 2>/dev/null || true)
 filtered=`$(printf '%s\n' "`$current" | grep -v '# $Marker' || true)
