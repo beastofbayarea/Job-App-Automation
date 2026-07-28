@@ -35,6 +35,9 @@ Generated artifacts, result JSON, screenshots, and logs can contain personal dat
 - VPS application state, results, screenshots, submission logs, Gmail OAuth
   files, and candidate inputs are private and must never enter the search
   publication worktree.
+- Pull confirmed submissions and failure reports only with
+  `pull_vps_application_reports.ps1`; its local destination remains ignored by
+  Git. Review and securely remove downloaded copies when no longer needed.
 - Archive records are immutable. A content conflict requires review; it is never silently overwritten.
 - Retrieval validates the supplied identity and every document hash before replacing local files.
 - Maintain encrypted backups appropriate for the candidate's retention policy. Private permissions alone do not protect against disk loss or account compromise.

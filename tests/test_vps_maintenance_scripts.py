@@ -188,6 +188,124 @@ class PowerShellMaintenanceTests(unittest.TestCase):
             self.assertIn("DRY RUN", dry_run.stdout)
             self.assertTrue(candidate.exists())
 
+    @unittest.skipUnless(os.name == "nt", "PSCP command discovery test is Windows-specific")
+    def test_private_report_pull_uses_pinned_auth_and_promotes_complete_pair(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            mock_directory = directory / "mock-bin"
+            mock_directory.mkdir()
+            capture_path = directory / "pscp-capture.jsonl"
+            config_path = directory / "vps.json"
+            destination = directory / "reports"
+            password = "sentinel password"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "vps": {
+                            "host": "example.test",
+                            "ssh_user": "tester",
+                            "ssh_port": 2222,
+                            "ssh_host_key": "ssh-ed25519 255 SHA256:trusted",
+                            "ssh_password": {"value": password},
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (mock_directory / "pscp.ps1").write_text(
+                """
+$passwordIndex = [Array]::IndexOf($args, "-pwfile")
+$passwordPath = $args[$passwordIndex + 1]
+$source = [string]$args[$args.Count - 2]
+$target = [string]$args[$args.Count - 1]
+$payload = @{
+    arguments = @($args)
+    password_path = $passwordPath
+    password_content = [IO.File]::ReadAllText($passwordPath)
+}
+[IO.File]::AppendAllText(
+    $env:PSCP_CAPTURE,
+    (($payload | ConvertTo-Json -Compress) + [Environment]::NewLine),
+    [Text.UTF8Encoding]::new($false)
+)
+if ($source.EndsWith("submission_log.json")) {
+    [IO.File]::WriteAllText($target, '{"confirmed": {}}')
+} else {
+    [IO.File]::WriteAllText($target, '{"failure_count": 0, "failures": []}')
+}
+exit 0
+""".strip(),
+                encoding="utf-8",
+            )
+            environment = os.environ.copy()
+            environment["PATH"] = str(mock_directory) + os.pathsep + environment["PATH"]
+            environment["PSCP_CAPTURE"] = str(capture_path)
+
+            result = run(
+                [
+                    PWSH,
+                    "-NoProfile",
+                    "-File",
+                    str(SCRIPTS / "pull_vps_application_reports.ps1"),
+                    "-RemoteRepoPath",
+                    "/root/Job App's",
+                    "-ConfigPath",
+                    str(config_path),
+                    "-Destination",
+                    str(destination),
+                ],
+                cwd=directory,
+                env=environment,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                json.loads((destination / "submission_log.json").read_text(encoding="utf-8")),
+                {"confirmed": {}},
+            )
+            self.assertEqual(
+                json.loads(
+                    (destination / "vps_application_failures.json").read_text(encoding="utf-8")
+                ),
+                {"failure_count": 0, "failures": []},
+            )
+            captures = [
+                json.loads(line)
+                for line in capture_path.read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertEqual(len(captures), 2)
+            for capture in captures:
+                arguments = capture["arguments"]
+                self.assertIn("-pwfile", arguments)
+                self.assertIn("-hostkey", arguments)
+                self.assertIn("ssh-ed25519 255 SHA256:trusted", arguments)
+                self.assertNotIn("-pw", arguments)
+                self.assertNotIn(password, arguments)
+                self.assertEqual(capture["password_content"], password)
+                self.assertFalse(Path(capture["password_path"]).exists())
+            self.assertIn(
+                "tester@example.test:/root/Job App's/output/submission_log.json",
+                captures[0]["arguments"],
+            )
+
+            blocked = run(
+                [
+                    PWSH,
+                    "-NoProfile",
+                    "-File",
+                    str(SCRIPTS / "pull_vps_application_reports.ps1"),
+                    "-ConfigPath",
+                    str(config_path),
+                    "-Destination",
+                    str(destination),
+                ],
+                cwd=directory,
+                env=environment,
+            )
+            self.assertEqual(blocked.returncode, 1)
+            self.assertIn("Use -Overwrite", blocked.stderr)
+            self.assertEqual(len(capture_path.read_text(encoding="utf-8").splitlines()), 2)
+
     @unittest.skipUnless(os.name == "nt", "Plink command discovery test is Windows-specific")
     def test_trigger_uses_temporary_password_file_and_quotes_remote_path(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

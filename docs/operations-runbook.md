@@ -178,6 +178,19 @@ pwsh scripts\pull_search_output.ps1
 pwsh scripts\check_sync_freshness.ps1
 ```
 
+Private application reports are pulled separately over pinned SSH and never
+through the generated-data branch:
+
+```powershell
+pwsh scripts\pull_vps_application_reports.ps1
+pwsh scripts\pull_vps_application_reports.ps1 -Overwrite
+```
+
+The command atomically downloads and validates `submission_log.json` and
+`vps_application_failures.json` into `output/vps_reports/`. Without
+`-Overwrite`, either existing local file prevents the operation before the VPS
+is contacted.
+
 Generated resume and cover-letter cleanup is dry-run by default:
 
 ```powershell

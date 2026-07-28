@@ -247,6 +247,9 @@ These are operational helpers rather than `job-automation` subcommands:
 # Pull one complete generated-output snapshot from origin/vps-search-output.
 pwsh scripts\pull_search_output.ps1
 
+# Privately download the confirmed-submission list and latest failure report.
+pwsh scripts\pull_vps_application_reports.ps1
+
 # Check output/job_search_coverage.json age (24 hours by default).
 pwsh scripts\check_sync_freshness.ps1 -ThresholdHours 24
 
@@ -290,6 +293,11 @@ failure details are written privately to
 `output/vps_application_failures.json` and per-job result files. Application
 results, screenshots, submission logs, and state never enter
 `vps-search-output`.
+
+Use `scripts/pull_vps_application_reports.ps1` whenever the private confirmed
+submission list and latest failure report are needed locally. It downloads both
+files through pinned SSH into `output/vps_reports/`, validates both JSON files,
+and leaves existing local reports untouched unless `-Overwrite` is explicit.
 
 ### Outputs and exit status
 

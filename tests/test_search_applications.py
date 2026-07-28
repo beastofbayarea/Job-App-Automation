@@ -40,6 +40,41 @@ def _confirmed_result() -> dict[str, object]:
 
 
 class SearchApplicationTests(unittest.TestCase):
+    def test_runner_initializes_empty_submission_and_failure_reports(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "jobs.json").write_text("[]", encoding="utf-8")
+            (root / "profile.json").write_text("{}", encoding="utf-8")
+
+            exit_code = search_applications.main(
+                [
+                    "--input",
+                    str(root / "jobs.json"),
+                    "--profile",
+                    str(root / "profile.json"),
+                    "--submission-log",
+                    str(root / "submission_log.json"),
+                    "--state",
+                    str(root / "state.json"),
+                    "--results-dir",
+                    str(root / "results"),
+                    "--failure-report",
+                    str(root / "failures.json"),
+                ]
+            )
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(
+                json.loads((root / "submission_log.json").read_text(encoding="utf-8")),
+                {},
+            )
+            self.assertEqual(
+                json.loads((root / "failures.json").read_text(encoding="utf-8"))[
+                    "failure_count"
+                ],
+                0,
+            )
+
     def test_eligibility_requires_live_supported_complete_unique_jobs(self) -> None:
         live = _job("https://boards.greenhouse.io/example/jobs/1")
         jobs = search_applications._eligible_jobs(

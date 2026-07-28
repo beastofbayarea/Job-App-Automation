@@ -189,6 +189,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     state = _load_state(args.state)
     records: dict[str, Any] = state["jobs"]
     jobs = _eligible_jobs(_load_json(args.input))
+    if not args.submission_log.exists():
+        atomic_write_text(args.submission_log, "{}\n", encoding="utf-8")
     confirmed_urls = _confirmed_urls(args.submission_log)
     args.results_dir.mkdir(parents=True, exist_ok=True)
     run_started_at = datetime.now(UTC)
