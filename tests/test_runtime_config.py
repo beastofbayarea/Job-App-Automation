@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from job_application_automation.core.runtime_config import (  # noqa: E402
+    DEFAULT_RUNTIME_CONFIG_FILE,
     RUNTIME_CONFIG_FILE,
     load_runtime_config,
     resolve_runtime_path,
@@ -18,6 +19,12 @@ from job_application_automation.core.runtime_config import (  # noqa: E402
 
 
 class RuntimeConfigTests(unittest.TestCase):
+    def test_packaged_defaults_match_the_tracked_runtime_config(self) -> None:
+        self.assertEqual(
+            json.loads(DEFAULT_RUNTIME_CONFIG_FILE.read_text(encoding="utf-8")),
+            json.loads(RUNTIME_CONFIG_FILE.read_text(encoding="utf-8")),
+        )
+
     def test_tracked_runtime_config_loads_all_shared_operational_settings(self) -> None:
         config = load_runtime_config()
 

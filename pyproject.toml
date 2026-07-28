@@ -28,6 +28,12 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools]
+py-modules = ["job_automation"]
+
+[tool.setuptools.package-data]
+job_application_automation = ["resources/*.json"]
+
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]

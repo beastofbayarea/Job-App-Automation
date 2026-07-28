@@ -8,6 +8,7 @@ defaults shared by the application, browser, resume, and mail workflows.
 from __future__ import annotations
 
 import json
+from importlib import resources
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
@@ -17,6 +18,9 @@ from .paths import CONFIG_DIR, PROJECT_ROOT
 
 
 RUNTIME_CONFIG_FILE = CONFIG_DIR / "runtime_config.json"
+DEFAULT_RUNTIME_CONFIG_FILE = Path(
+    resources.files("job_application_automation").joinpath("resources/runtime_config.json")
+)
 
 
 def _mapping(document: Mapping[str, Any], key: str) -> Mapping[str, Any]:
@@ -77,9 +81,17 @@ class RuntimeConfig:
     gmail: Mapping[str, Any]
 
 
-def load_runtime_config(path: Path = RUNTIME_CONFIG_FILE) -> RuntimeConfig:
-    """Load the tracked runtime settings and reject incomplete or invalid values."""
-    config_path = Path(path).expanduser().resolve()
+def load_runtime_config(path: Path | None = None) -> RuntimeConfig:
+    """Load local settings, falling back to the packaged safe defaults.
+
+    Source checkouts normally provide ``config/runtime_config.json``. Installed
+    commands instead look for that file in the current working directory and
+    use the bundled defaults when a local override has not been created yet.
+    """
+    requested_path = RUNTIME_CONFIG_FILE if path is None else Path(path)
+    config_path = requested_path.expanduser().resolve()
+    if path is None and not config_path.is_file():
+        config_path = DEFAULT_RUNTIME_CONFIG_FILE
     try:
         with config_path.open("r", encoding="utf-8") as stream:
             document = json.load(stream)

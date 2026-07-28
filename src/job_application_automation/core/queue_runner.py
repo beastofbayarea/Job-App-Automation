@@ -62,6 +62,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--start-index", type=int, default=0)
     parser.add_argument("--timeout", type=int, default=DEFAULT_QUEUE_TIMEOUT_SECONDS)
     args = parser.parse_args(argv)
+    if args.start_index < 0:
+        parser.error("--start-index must be zero or greater")
+    if args.timeout <= 0:
+        parser.error("--timeout must be greater than zero")
 
     urls = [
         line.strip() for line in args.queue.read_text(encoding="utf-8").splitlines() if line.strip()

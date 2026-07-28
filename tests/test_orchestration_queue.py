@@ -258,6 +258,19 @@ class OrchestrationPersistenceTests(unittest.TestCase):
 
 
 class QueueSafetyTests(unittest.TestCase):
+    def test_queue_rejects_invalid_indexes_and_timeouts_before_starting(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            queue_path = Path(directory) / "queue.txt"
+            queue_path.write_text("https://jobs.ashbyhq.com/acme/123\n", encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as negative_index:
+                queue_runner.main(["--queue", str(queue_path), "--start-index", "-1"])
+            with self.assertRaises(SystemExit) as zero_timeout:
+                queue_runner.main(["--queue", str(queue_path), "--timeout", "0"])
+
+        self.assertEqual(2, negative_index.exception.code)
+        self.assertEqual(2, zero_timeout.exception.code)
+
     def test_confirmed_submission_predicate_requires_exact_safe_result(self) -> None:
         confirmed = {
             "success": True,

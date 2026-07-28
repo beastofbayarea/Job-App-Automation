@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+import importlib.util
 from io import StringIO
 from pathlib import Path
 
@@ -12,9 +13,17 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from job_application_automation import cli  # noqa: E402
+from job_application_automation.core import paths  # noqa: E402
 
 
 class UnifiedCliDispatchTests(unittest.TestCase):
+    def test_internal_launcher_resolves_from_the_importable_module(self) -> None:
+        spec = importlib.util.find_spec("job_automation")
+
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.origin)
+        self.assertEqual(Path(spec.origin), paths.CLI_ENTRYPOINT)
+
     def test_public_command_forwards_arguments_and_propagates_exit_code(self) -> None:
         calls: list[tuple[str, list[str]]] = []
 

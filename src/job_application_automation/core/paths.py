@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 
 # The implementation package lives below ``src`` and is launched through the
@@ -9,8 +10,22 @@ from pathlib import Path
 # layout so config, data, output, and subprocess references stay predictable.
 PACKAGE_DIR = Path(__file__).resolve().parent.parent
 SRC_DIR = PACKAGE_DIR.parent
-CLI_ENTRYPOINT = SRC_DIR / "job_automation.py"
+# Keep the single launcher usable in both supported execution modes. In a
+# checkout it resolves to ``src/job_automation.py``; after installation the
+# launcher is installed as a top-level module and its concrete location is
+# discovered from import metadata instead of assuming a source-tree layout.
+_CLI_MODULE_SPEC = importlib.util.find_spec("job_automation")
+CLI_ENTRYPOINT = (
+    Path(_CLI_MODULE_SPEC.origin)
+    if _CLI_MODULE_SPEC is not None and _CLI_MODULE_SPEC.origin is not None
+    else SRC_DIR / "job_automation.py"
+)
 PROJECT_ROOT = SRC_DIR.parent
+if SRC_DIR.name != "src":
+    # Wheels install the package below site-packages rather than a repository
+    # ``src`` directory. Runtime data belongs to the caller's working tree in
+    # that mode, never beside the installed package.
+    PROJECT_ROOT = Path.cwd().resolve()
 CONFIG_DIR = PROJECT_ROOT / "config"
 DATA_DIR = PROJECT_ROOT / "data"
 OUTPUT_DIR = PROJECT_ROOT / "output"

@@ -38,6 +38,11 @@ job-automation --help
 python -m job_application_automation --help
 ```
 
+Installed commands look for local candidate files and an optional
+`config/runtime_config.json` in the directory where they are run. When that
+file is absent, they use the package's safe default operational settings; copy
+the tracked runtime config to customize paths or timeouts.
+
 For contributor checks, install the development dependencies as well:
 
 ```powershell
