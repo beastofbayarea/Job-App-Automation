@@ -204,6 +204,8 @@ class PowerShellMaintenanceTests(unittest.TestCase):
                         "vps": {
                             "host": "example.test",
                             "ssh_user": "tester",
+                            "ssh_port": 2222,
+                            "ssh_host_key": "ssh-ed25519 255 SHA256:trusted",
                             "ssh_password": {"value": password},
                         }
                     }
@@ -252,6 +254,10 @@ exit 23
             capture = json.loads(capture_path.read_text(encoding="utf-8"))
             arguments = capture["arguments"]
             self.assertIn("-pwfile", arguments)
+            self.assertIn("-hostkey", arguments)
+            self.assertIn("ssh-ed25519 255 SHA256:trusted", arguments)
+            self.assertIn("-P", arguments)
+            self.assertIn(2222, arguments)
             self.assertNotIn("-pw", arguments)
             self.assertNotIn(password, arguments)
             self.assertEqual(capture["password_content"], password)

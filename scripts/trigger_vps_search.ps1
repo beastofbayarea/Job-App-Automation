@@ -36,9 +36,15 @@ try {
 $VpsHost = $Config.vps.host
 $SshUser = $Config.vps.ssh_user
 $SshPassword = $Config.vps.ssh_password.value
+$SshHostKey = $Config.vps.ssh_host_key
+$SshPort = if ($null -ne $Config.vps.ssh_port) { [int]$Config.vps.ssh_port } else { 22 }
 
-if (-not $VpsHost -or -not $SshUser -or -not $SshPassword) {
-    Write-Error "$ConfigPath is missing vps.host, vps.ssh_user, or vps.ssh_password.value"
+if (-not $VpsHost -or -not $SshUser -or -not $SshPassword -or -not $SshHostKey) {
+    Write-Error "$ConfigPath is missing vps.host, vps.ssh_user, vps.ssh_password.value, or vps.ssh_host_key"
+    exit 1
+}
+if ($SshPort -lt 1 -or $SshPort -gt 65535) {
+    Write-Error "$ConfigPath contains an invalid vps.ssh_port"
     exit 1
 }
 
@@ -53,7 +59,7 @@ try {
         [string]$SshPassword,
         [System.Text.UTF8Encoding]::new($false)
     )
-    & $PlinkCmd.Source -ssh -batch -pwfile $PasswordFile "$SshUser@$VpsHost" $RemoteCommand
+    & $PlinkCmd.Source -ssh -batch -P $SshPort -hostkey $SshHostKey -pwfile $PasswordFile "$SshUser@$VpsHost" $RemoteCommand
     $RemoteExitCode = $LASTEXITCODE
 } finally {
     if (Test-Path -LiteralPath $PasswordFile) {

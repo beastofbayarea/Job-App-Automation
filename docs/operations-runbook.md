@@ -102,6 +102,18 @@ On the VPS, install the repository-path-aware logrotate policy once:
 bash scripts/install_vps_logrotate.sh
 ```
 
+Alternatively, install or repair the cron entry, log rotation, and private
+archive directory together from Windows:
+
+```powershell
+pwsh scripts\install_vps_daily_automation.ps1 `
+  -RemoteRepoPath /absolute/path/to/Job-App-Automation
+```
+
+The default schedule is 03:00 UTC daily; use `-HourUtc` to select another UTC
+hour. The operation is idempotent and replaces only the cron line marked
+`job-app-automation-daily-search`.
+
 The cron entry and an on-demand trigger both run
 `scripts/vps_search_sync.sh`. That script uses a nonblocking lock and exits
 without starting when another sync is active. It also refuses to publish unless

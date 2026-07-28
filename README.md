@@ -260,6 +260,18 @@ pwsh scripts\prune_old_outputs.ps1 -Days 14 -Delete
 
 On the VPS, `scripts/vps_search_sync.sh` runs the configured search under a nonblocking lock and publishes a complete result set to the dedicated `vps-search-output` branch. Install repository-aware log rotation with `bash scripts/install_vps_logrotate.sh`; add `--stdout` to preview the rendered policy. These workflows, their prerequisites, cron guidance, and safe branch boundary are detailed in the [operations runbook](docs/operations-runbook.md).
 
+Install or repair the unattended daily schedule and private archive root from
+Windows with:
+
+```powershell
+pwsh scripts\install_vps_daily_automation.ps1 `
+  -RemoteRepoPath /absolute/path/to/Job-App-Automation
+```
+
+The installer pins the configured SSH host key, replaces only its own marked
+cron entry, installs log rotation, and creates the private archive directory
+with mode `0700`.
+
 ### Outputs and exit status
 
 | Path | Contents |
