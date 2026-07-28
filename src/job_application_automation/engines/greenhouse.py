@@ -43,6 +43,7 @@ from ..core.engine_shared import (
 from ..core.paths import OUTPUT_DIR, resolve_project_dir
 from ..core.runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from ..mail.gmail_client import (
+    fetch_messages,
     get_gmail_read_service,
     load_used_verification_message_ids,
     poll_for_verification_code,
@@ -718,7 +719,33 @@ def _greenhouse_security_code_query(company: str) -> str:
     return f"from:no-reply@us.greenhouse-mail.io {subject} newer_than:1d"
 
 
-def _fill_security_code_from_gmail(page: Page, company: str) -> bool:
+def _current_greenhouse_verification_message_ids(company: str) -> set[str]:
+    try:
+        service = get_gmail_read_service(
+            resolve_runtime_path(RUNTIME_CONFIG.gmail["credentials_file"]),
+            resolve_runtime_path(RUNTIME_CONFIG.gmail["token_file"]),
+        )
+        return {
+            record.message_id
+            for record in fetch_messages(
+                service,
+                _greenhouse_security_code_query(company),
+                20,
+                False,
+            )
+            if record.message_id
+        }
+    except Exception as exc:
+        logger.warning("Unable to snapshot existing Greenhouse security messages: %s", exc)
+        return set()
+
+
+def _fill_security_code_from_gmail(
+    page: Page,
+    company: str,
+    *,
+    excluded_message_ids: Optional[set[str]] = None,
+) -> bool:
     """Read the five newest matching emails and fill Greenhouse's 8-box code."""
     code_inputs = page.locator('input[id^="security-input"]')
     if code_inputs.count() < 8:
@@ -732,6 +759,8 @@ def _fill_security_code_from_gmail(page: Page, company: str) -> bool:
             resolve_runtime_path(RUNTIME_CONFIG.gmail["token_file"]),
         )
         history_path = resolve_runtime_path(RUNTIME_CONFIG.gmail["verification_history_file"])
+        excluded_ids = load_used_verification_message_ids(history_path)
+        excluded_ids.update(excluded_message_ids or ())
         match = poll_for_verification_code(
             service,
             _greenhouse_security_code_query(company),
@@ -739,7 +768,7 @@ def _fill_security_code_from_gmail(page: Page, company: str) -> bool:
             timeout_seconds=int(RUNTIME_CONFIG.gmail["verification_poll_timeout_seconds"]),
             sender_domains=("us.greenhouse-mail.io",),
             expected_recipient="",
-            excluded_message_ids=load_used_verification_message_ids(history_path),
+            excluded_message_ids=excluded_ids,
         )
         if not match:
             logger.info("No unused Greenhouse security code found before timeout")
@@ -1010,6 +1039,7 @@ def run(
                         "screenshot": confirmed_screenshot,
                     }
                 raise RuntimeError("submit button was not found")
+            verification_message_baseline = _current_greenhouse_verification_message_ids(company)
             submit.click()
             try:
                 page.wait_for_load_state("networkidle", timeout=timeout)
@@ -1026,7 +1056,11 @@ def run(
                     and _security_challenge_visible(page)
                 ):
                     security_challenge_attempted = True
-                    if _fill_security_code_from_gmail(page, company):
+                    if _fill_security_code_from_gmail(
+                        page,
+                        company,
+                        excluded_message_ids=verification_message_baseline,
+                    ):
                         challenge_submit = _first_visible(
                             page.get_by_role(
                                 "button",
