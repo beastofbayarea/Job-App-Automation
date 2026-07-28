@@ -716,7 +716,10 @@ def _greenhouse_security_code_query(company: str) -> str:
         if safe_company
         else 'subject:"Security code for your application"'
     )
-    return f"from:no-reply@us.greenhouse-mail.io {subject} newer_than:1d"
+    return (
+        "from:(no-reply@us.greenhouse-mail.io OR no-reply@eu.greenhouse-mail.io) "
+        f"{subject} newer_than:1d"
+    )
 
 
 def _current_greenhouse_verification_message_ids(company: str) -> set[str]:
@@ -766,7 +769,7 @@ def _fill_security_code_from_gmail(
             _greenhouse_security_code_query(company),
             r"security code field on your application:\s*([A-Za-z0-9]{8})",
             timeout_seconds=int(RUNTIME_CONFIG.gmail["verification_poll_timeout_seconds"]),
-            sender_domains=("us.greenhouse-mail.io",),
+            sender_domains=("us.greenhouse-mail.io", "eu.greenhouse-mail.io"),
             expected_recipient="",
             excluded_message_ids=excluded_ids,
         )

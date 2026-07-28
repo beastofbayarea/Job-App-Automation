@@ -37,6 +37,7 @@ def test_security_challenge_selector_requires_all_eight_code_inputs() -> None:
 def test_security_code_query_uses_company_subject_without_recipient_alias() -> None:
     query = _greenhouse_security_code_query('Example "AI"')
 
-    assert "from:no-reply@us.greenhouse-mail.io" in query
+    assert "no-reply@us.greenhouse-mail.io" in query
+    assert "no-reply@eu.greenhouse-mail.io" in query
     assert 'subject:"Security code for your application to Example  AI"' in query
     assert "deliveredto:" not in query
