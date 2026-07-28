@@ -85,6 +85,28 @@ class _UnusedFlow:
         raise AssertionError("refreshable credentials must not launch OAuth")
 
 
+class _FailingRefreshCredentials(_FakeCredentials):
+    def refresh(self, _request: object) -> None:
+        raise RuntimeError("invalid_scope: Invalid OAuth scope or ID token audience provided.")
+
+
+class _FakeFreshCredentials:
+    def to_json(self) -> str:
+        return '{"token":"reauthorized"}'
+
+
+class _ReauthFlow:
+    ran_local_server = False
+
+    @classmethod
+    def from_client_secrets_file(cls, *_args: object, **_kwargs: object) -> "_ReauthFlow":
+        return cls()
+
+    def run_local_server(self, *, port: int) -> _FakeFreshCredentials:
+        type(self).ran_local_server = True
+        return _FakeFreshCredentials()
+
+
 class GmailOAuthTests(unittest.TestCase):
     def test_oauth_service_refreshes_and_persists_token_through_injected_sdk(self) -> None:
         built: dict[str, object] = {}
@@ -112,6 +134,25 @@ class GmailOAuthTests(unittest.TestCase):
             self.assertEqual(built["name"], "gmail")
             self.assertEqual(built["version"], "v1")
             self.assertFalse(bool(built["cache_discovery"]))
+
+    def test_oauth_service_falls_back_to_local_flow_when_refresh_fails(self) -> None:
+        dependencies = (_FakeRequest, _FailingRefreshCredentials, _ReauthFlow, lambda *_a, **_k: object(), object)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            credentials_path = root / "credentials.json"
+            credentials_path.write_text("{}", encoding="utf-8")
+            token_path = root / "token.json"
+            token_path.write_text('{"token":"stale"}', encoding="utf-8")
+
+            service = gmail_auth.get_gmail_service(
+                credentials_path,
+                token_path,
+                dependencies=dependencies,
+            )
+
+            self.assertIsNotNone(service)
+            self.assertTrue(_ReauthFlow.ran_local_server)
+            self.assertEqual(token_path.read_text(encoding="utf-8"), '{"token":"reauthorized"}')
 
     def test_google_dependency_patch_seam_remains_available(self) -> None:
         dependencies = (

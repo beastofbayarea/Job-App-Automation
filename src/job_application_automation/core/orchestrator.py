@@ -321,6 +321,12 @@ def run_command(
     creationflags = (
         subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
     )
+    # ProcessSettings.environment defaults to an empty mapping (not None) when
+    # a caller has no overrides to add, so treat any provided mapping as
+    # additions layered onto the parent environment rather than a full
+    # replacement; otherwise the child loses PATH/APPDATA/PYTHONPATH and
+    # cannot locate the interpreter's own installed packages.
+    merged_env = {**os.environ, **env} if env is not None else None
     process = subprocess.Popen(
         list(cmd),
         stdout=subprocess.PIPE,
@@ -330,7 +336,7 @@ def run_command(
         errors="replace",
         creationflags=creationflags,
         start_new_session=os.name != "nt",
-        env=dict(env) if env is not None else None,
+        env=merged_env,
     )
     try:
         stdout, stderr = process.communicate(timeout=timeout_seconds)

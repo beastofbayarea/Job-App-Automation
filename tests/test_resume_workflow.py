@@ -431,7 +431,7 @@ class GenerateWithRetriesTests(unittest.TestCase):
             # promoted to output_path once every attempt has been exhausted.
             self.assertEqual(output_path.read_text(encoding="utf-8"), "Candidate-2")
 
-    def test_returns_none_when_the_llm_never_returns_usable_data(self) -> None:
+    def test_falls_back_to_rule_based_data_when_the_llm_never_returns_usable_data(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             output_path = Path(directory) / "Example_Co_Resume.pdf"
             job = _job_info()
@@ -439,6 +439,22 @@ class GenerateWithRetriesTests(unittest.TestCase):
             with _patched_generation_pipeline(
                 call_llm=lambda job, feedback: None,
                 render_pdf=_writing_render,
+                score_pdf=lambda path: (100, []),
+                max_retries=2,
+            ):
+                result = resume_generate._generate_with_retries(job, output_path)
+
+            self.assertEqual(result, output_path)
+            self.assertTrue(output_path.exists())
+
+    def test_returns_none_when_the_llm_fails_and_the_fallback_render_also_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            output_path = Path(directory) / "Example_Co_Resume.pdf"
+            job = _job_info()
+
+            with _patched_generation_pipeline(
+                call_llm=lambda job, feedback: None,
+                render_pdf=lambda data, path, keywords: False,
                 score_pdf=lambda path: (100, []),
                 max_retries=2,
             ):

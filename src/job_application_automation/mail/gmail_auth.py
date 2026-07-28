@@ -66,9 +66,15 @@ def get_gmail_service(
         credentials = Credentials.from_authorized_user_file(str(token_path), list(scopes))
 
     if not credentials or not credentials.valid:
+        refreshed = False
         if credentials and credentials.expired and credentials.refresh_token:
-            credentials.refresh(Request())
-        else:
+            try:
+                credentials.refresh(Request())
+                refreshed = True
+            except Exception:
+                credentials = None
+
+        if not refreshed:
             if not credentials_path.exists():
                 raise FileNotFoundError(f"OAuth client file not found: {credentials_path}")
             flow = InstalledAppFlow.from_client_secrets_file(str(credentials_path), list(scopes))

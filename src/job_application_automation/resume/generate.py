@@ -801,6 +801,21 @@ def _generate_with_retries(
         f"  [V3.1 Flow] Max retries exhausted for {job.company}. Best score: {best_score}",
         flush=True,
     )
+    if not best_data:
+        print(
+            f"  [V3.1 Flow] AI unavailable after {MAX_RETRIES} attempts. "
+            "Using rule-based fallback.",
+            flush=True,
+        )
+        fallback_data = _generate_fallback_resume_data(job)
+        fallback_data = _enforce_candidate_identity(fallback_data, email_override)
+        fallback_data = _normalize_experience(fallback_data)
+        fallback_data = _repair_experience(fallback_data)
+        fallback_data = _enforce_source_invariants(fallback_data)
+        fallback_data = _repair_education(fallback_data)
+        fallback_data = _ensure_min_bullets(fallback_data)
+        best_data = fallback_data
+
     if best_data:
         best_path = output_path.with_name(f".{output_path.stem}.best{output_path.suffix}")
         _remove_file(best_path)
