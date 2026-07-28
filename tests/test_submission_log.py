@@ -87,7 +87,9 @@ class SubmissionLogTests(unittest.TestCase):
         )
 
     def test_load_ignores_non_object_entries(self) -> None:
-        log = SubmissionLog({"bad": "not-an-object", "20260728-openai-product-manager": _record().to_payload()})
+        log = SubmissionLog(
+            {"bad": "not-an-object", "20260728-openai-product-manager": _record().to_payload()}
+        )
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "submission_log.json"
             log.save(path)

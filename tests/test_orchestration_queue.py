@@ -147,6 +147,9 @@ class ChildProcessRoutingTests(unittest.TestCase):
             queue_path.write_text("https://jobs.ashbyhq.com/acme/123\n", encoding="utf-8")
             with (
                 patch.object(queue_runner, "OUTPUT_DIR", root),
+                patch.object(
+                    queue_runner, "DEFAULT_QUEUE_PROGRESS_FILE", root / "queue_progress.json"
+                ),
                 patch.object(queue_runner.subprocess, "run", return_value=completed) as run,
                 patch.object(queue_runner, "read_json", return_value=[confirmed]),
             ):

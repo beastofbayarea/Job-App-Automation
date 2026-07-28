@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "application": {
+    "tracker_file": "data/ai_product_manager_job_tracker.xlsx",
+    "base_resume_file": "data/shivam_singh_ai_product_manager_resume.pdf",
+    "resume_source_file": "data/base_resume.txt",
+    "results_file": "output/orchestration_results.json",
+    "submission_log_file": "output/submission_log.json",
+    "queue_progress_file": "output/job_url_queue_progress.json",
+    "candidate_email_pool_file": "config/candidate_email_pool.json",
+    "engine_timeout_seconds": 180,
+    "resume_timeout_seconds": 600,
+    "queue_timeout_seconds": 300,
+    "default_start_date_offset_days": 14
+  },
+  "browser": {
+    "cdp_endpoint": "http://localhost:9222"
+  },
+  "vertex": {
+    "project_id": "from-service-account",
+    "location": "global",
+    "model": "gemini-flash-latest",
+    "service_account_file": "config/vertex_service_account.json",
+    "max_attempts": 3,
+    "retry_delay_seconds": 2.0,
+    "job_text_limit": 6000,
+    "job_navigation_timeout_ms": 30000
+  },
+  "resume": {
+    "cache_file": "output/llm_cache_v2.json",
+    "llm_min_interval_seconds": 5.0,
+    "max_retries": 5,
+    "minimum_score": 90,
+    "minimum_total_bullets": 14,
+    "original_character_count": 5953,
+    "original_page_height": 792.0,
+    "persistent_cache_enabled": false
+  },
+  "ashby": {
+    "default_timeout_ms": 11000,
+    "navigation_timeout_ms": 40000,
+    "network_idle_timeout_ms": 14000,
+    "max_form_steps": 5,
+    "max_submit_attempts": 3,
+    "screenshot_dir": "output/ashby_screenshots",
+    "submission_confirmation_phrases": [
+      "application submitted",
+      "application has been submitted",
+      "thank you for applying",
+      "thank you for your submission",
+      "thank you for submitting your application",
+      "thank you so much for your interest",
+      "thanks for applying",
+      "received your application",
+      "package received",
+      "application received",
+      "application has been received",
+      "successfully submitted",
+      "thanks for your interest in joining our team"
+    ],
+    "submission_failure_phrases": [
+      "flagged as possible spam",
+      "couldn't submit"
+    ]
+  },
+  "gmail": {
+    "credentials_file": "config/credentials.json",
+    "token_file": "config/token.json",
+    "verification_history_file": "output/used_verification_messages.json",
+    "verification_poll_timeout_seconds": 30,
+    "greenhouse_security_code_wait_ms": 12000
+  }
+}

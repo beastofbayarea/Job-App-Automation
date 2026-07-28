@@ -15,6 +15,7 @@ from job_application_automation.mail.pool import (
     select_emails,
 )
 from ..core.paths import CONFIG_DIR
+from ..core.runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 
 
 def _resolve_email_pool(json_file_path: Path) -> Path:
@@ -54,7 +55,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--file",
         type=str,
-        default=str(CONFIG_DIR / "candidate_email_pool.json"),
+        default=str(resolve_runtime_path(RUNTIME_CONFIG.application["candidate_email_pool_file"])),
         help="Path to candidate_email_pool.json",
     )
     parser.add_argument(

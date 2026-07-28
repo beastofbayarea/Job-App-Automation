@@ -116,7 +116,7 @@ from job_application_automation.mail.gmail_persistence import (
     write_csv as _write_csv,
     write_json as _write_json,
 )
-from ..core.paths import CONFIG_DIR
+from ..core.runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from .gmail_auth import (
     GMAIL_SCOPES,
     get_gmail_service as _get_gmail_service,
@@ -126,8 +126,8 @@ from .gmail_auth import (
 # Keep the mutable list export expected by existing callers and CLI extensions.
 SCOPES = list(GMAIL_SCOPES)
 
-DEFAULT_CREDENTIALS_FILE = str(CONFIG_DIR / "credentials.json")
-DEFAULT_TOKEN_FILE = str(CONFIG_DIR / "token.json")
+DEFAULT_CREDENTIALS_FILE = str(resolve_runtime_path(RUNTIME_CONFIG.gmail["credentials_file"]))
+DEFAULT_TOKEN_FILE = str(resolve_runtime_path(RUNTIME_CONFIG.gmail["token_file"]))
 
 
 def classify_application_email(record: EmailRecord) -> str:

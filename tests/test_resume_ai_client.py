@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -72,6 +74,22 @@ class ResumeAIClientTests(unittest.TestCase):
 
         self.assertEqual(resolved, Path("legacy-credentials.json"))
         self.assertEqual(os.environ.get(ai.GOOGLE_APPLICATION_CREDENTIALS), original_credentials)
+
+    def test_vertex_project_can_be_derived_from_the_configured_service_account(self) -> None:
+        settings = ai.VertexSettings(
+            project_id=ai.PROJECT_ID_FROM_SERVICE_ACCOUNT,
+            service_account_file=Path("configured.json"),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            credentials_path = Path(directory) / "service_account.json"
+            credentials_path.write_text(
+                json.dumps({"project_id": "configured-project"}),
+                encoding="utf-8",
+            )
+
+            project_id = ai.project_id_for(settings, credentials_path)
+
+        self.assertEqual(project_id, "configured-project")
 
 
 if __name__ == "__main__":

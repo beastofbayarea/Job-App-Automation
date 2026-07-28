@@ -14,7 +14,11 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from ..core.artifacts import read_json, write_csv as write_csv_artifact, write_json as write_json_artifact
+from ..core.artifacts import (
+    read_json,
+    write_csv as write_csv_artifact,
+    write_json as write_json_artifact,
+)
 from .gmail_messages import EmailRecord, VerificationCodeMatch, classify_application_email
 
 

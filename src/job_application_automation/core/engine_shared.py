@@ -21,6 +21,7 @@ from playwright.sync_api import Browser, Locator, Page, Playwright
 from .contracts import ENGINE_RESULT_PREFIX, EngineResult
 from .paths import DATA_DIR
 from .profile import AutomationProfile
+from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from pypdf import PdfReader
 
 logger = logging.getLogger("ATSEngineCommon")
@@ -113,7 +114,12 @@ def normalize_profile_config(config: Mapping[str, Any]) -> dict[str, Any]:
         normalized_candidate["current_job_title"] = resume_title
     if not normalized_candidate.get("available_start_date"):
         try:
-            offset_days = int(normalized_candidate.get("start_date_offset_days", 14))
+            offset_days = int(
+                normalized_candidate.get(
+                    "start_date_offset_days",
+                    RUNTIME_CONFIG.application["default_start_date_offset_days"],
+                )
+            )
         except (TypeError, ValueError) as exc:
             raise ValueError("candidate.start_date_offset_days must be an integer") from exc
         if offset_days < 0:
@@ -233,8 +239,12 @@ def resolve_candidate_email(profile: Mapping[str, Any], override: str = "") -> s
 
 def load_candidate_evidence(config: Mapping[str, Any]) -> str:
     """Read configured resume evidence for shared essay generation."""
-    configured = Path(str(config.get("candidate_evidence_file", "base_resume.txt"))).expanduser()
-    path = configured if configured.is_absolute() else DATA_DIR / configured
+    configured_value = config.get("candidate_evidence_file")
+    if configured_value:
+        configured = Path(str(configured_value)).expanduser()
+        path = configured if configured.is_absolute() else DATA_DIR / configured
+    else:
+        path = resolve_runtime_path(RUNTIME_CONFIG.application["resume_source_file"])
     try:
         return path.read_text(encoding="utf-8").strip() if path.is_file() else ""
     except OSError as exc:
@@ -742,17 +752,18 @@ def _find_chrome_executable() -> Optional[Path]:
 def open_chrome_session(
     playwright: Playwright,
     *,
-    cdp_url: str = "http://localhost:9222",
+    cdp_url: str | None = None,
     profile_name: str = "ats-cdp-profile",
     target_url: str = "",
 ) -> BrowserSession:
     # Prefer attaching to a Chrome the candidate is already logged into (via CDP) so
     # site sessions/cookies carry over; only launch a fresh, unauthenticated browser
     # when explicitly requested or when no debuggable Chrome can be found or started.
+    endpoint = cdp_url or str(RUNTIME_CONFIG.browser["cdp_endpoint"])
     force_fresh = os.environ.get("JOB_APP_FRESH_BROWSER") == "1"
     if not force_fresh:
         try:
-            browser = playwright.chromium.connect_over_cdp(cdp_url)
+            browser = playwright.chromium.connect_over_cdp(endpoint)
             page = _reusable_page(browser, target_url) if target_url else None
             return BrowserSession(browser, page or _new_page(browser), False)
         except Exception:
@@ -768,7 +779,7 @@ def open_chrome_session(
         subprocess.Popen(
             [
                 str(chrome),
-                f"--remote-debugging-port={urlparse(cdp_url).port or 9222}",
+                f"--remote-debugging-port={urlparse(endpoint).port or 9222}",
                 f"--user-data-dir={profile}",
                 "--no-first-run",
                 "--no-default-browser-check",
@@ -780,7 +791,7 @@ def open_chrome_session(
         for _ in range(15):
             time.sleep(0.4)
             try:
-                browser = playwright.chromium.connect_over_cdp(cdp_url)
+                browser = playwright.chromium.connect_over_cdp(endpoint)
                 page = _reusable_page(browser, target_url) if target_url else None
                 return BrowserSession(browser, page or _new_page(browser), False)
             except Exception:

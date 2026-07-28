@@ -29,7 +29,8 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
 import fitz  # PyMuPDF remains a compatible module-level scorer patch point.
 
-from ..core.paths import DATA_DIR, OUTPUT_DIR as PROJECT_OUTPUT_DIR, SRC_DIR
+from ..core.paths import OUTPUT_DIR as PROJECT_OUTPUT_DIR, SRC_DIR
+from ..core.runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from .cache import ResumeCache, cache_key
 from .rendering import CallableResumeRenderer, ResumeRenderer, render_resume
 from .scoring import policy_from_source, score_pdf
@@ -74,21 +75,20 @@ FONT_BOLD = _find_font("Carlito-Bold.ttf", "calibrib.ttf")
 FONT_ITALIC = _find_font("Carlito-Italic.ttf", "calibrii.ttf")
 FONT_BI = _find_font("Carlito-BoldItalic.ttf", "calibriz.ttf")
 OUTPUT_DIR = PROJECT_OUTPUT_DIR
-CACHE_DIR = PROJECT_OUTPUT_DIR
 
 # The ignored source material is deliberately loaded only when a caller starts
 # a generation workflow. Importing this module must be safe on fresh clones
 # and in tests that do not have candidate data.
-BASE_RESUME_PATH = DATA_DIR / "base_resume.txt"
+BASE_RESUME_PATH = resolve_runtime_path(RUNTIME_CONFIG.application["resume_source_file"])
+RESUME_CACHE_FILE = resolve_runtime_path(RUNTIME_CONFIG.resume["cache_file"])
 BASE_RESUME_TEXT = ""
 
 # ---- Original Resume Baseline Metrics ----
-# A submitted one-page resume should be compared with the original one-page
-# baseline, not the larger master experience bank stored in base_resume.txt.
-ORIG_CHAR_COUNT = 5953
-ORIG_CONTENT_HEIGHT = 715.1  # top Y (31.2) to bottom Y (746.3)
-ORIG_BOTTOM_MARGIN = 45.7  # 792 - 746.3
-ORIG_PAGE_HEIGHT = 792.0
+# A submitted one-page resume is compared with a candidate-specific baseline
+# supplied through the runtime configuration, not the larger master experience
+# bank stored in the resume source.
+ORIG_CHAR_COUNT = int(RUNTIME_CONFIG.resume["original_character_count"])
+ORIG_PAGE_HEIGHT = float(RUNTIME_CONFIG.resume["original_page_height"])
 
 _resume_source: ResumeSource | None = None
 ORIGINAL_EXPERIENCE: list[dict[str, Any]] = []
@@ -134,15 +134,16 @@ _ai_lock = threading.Lock()
 _llm_lock = threading.Lock()
 _cache_lock = threading.Lock()
 _last_llm_call = 0.0
-LLM_MIN_INTERVAL = 5.0  # seconds between calls
-MAX_RETRIES = 5
-MIN_SCORE = 90
-MIN_TOTAL_BULLETS = 14
-PERSISTENT_CACHE_ENABLED = os.environ.get("RESUME_PERSIST_CACHE", "").lower() in {
-    "1",
-    "true",
-    "yes",
-}
+LLM_MIN_INTERVAL = float(RUNTIME_CONFIG.resume["llm_min_interval_seconds"])
+MAX_RETRIES = int(RUNTIME_CONFIG.resume["max_retries"])
+MIN_SCORE = int(RUNTIME_CONFIG.resume["minimum_score"])
+MIN_TOTAL_BULLETS = int(RUNTIME_CONFIG.resume["minimum_total_bullets"])
+_persistent_cache_override = os.environ.get("RESUME_PERSIST_CACHE", "").strip()
+PERSISTENT_CACHE_ENABLED = (
+    _persistent_cache_override.lower() in {"1", "true", "yes"}
+    if _persistent_cache_override
+    else bool(RUNTIME_CONFIG.resume["persistent_cache_enabled"])
+)
 
 
 # ---- Caching ----
@@ -166,7 +167,7 @@ def _set_cached(job: JobInfo, data: Mapping[str, Any]) -> None:
 def _load_disk_cache() -> None:
     if not PERSISTENT_CACHE_ENABLED:
         return
-    cf = CACHE_DIR / "llm_cache_v2.json"
+    cf = RESUME_CACHE_FILE
     if cf.exists():
         try:
             count = _resume_cache.load(cf)
@@ -178,7 +179,7 @@ def _load_disk_cache() -> None:
 def _save_disk_cache() -> None:
     if not PERSISTENT_CACHE_ENABLED:
         return
-    cf = CACHE_DIR / "llm_cache_v2.json"
+    cf = RESUME_CACHE_FILE
     try:
         _resume_cache.save(cf)
     except OSError as exc:

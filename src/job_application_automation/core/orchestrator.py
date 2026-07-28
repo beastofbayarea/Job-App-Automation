@@ -39,7 +39,8 @@ from .engine_shared import (
 from .adapters import CommandResult, ProcessRunner, ProcessSettings
 from .artifacts import write_json as write_json_artifact
 from .contracts import EngineMode, EngineRequest, EngineResult
-from .paths import CLI_ENTRYPOINT, CONFIG_DIR, DATA_DIR, OUTPUT_DIR, SRC_DIR, resolve_existing
+from .paths import CLI_ENTRYPOINT, CONFIG_DIR, OUTPUT_DIR, SRC_DIR, resolve_existing
+from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from .submission_log import SubmissionLog, SubmissionRecord
 
 logging.basicConfig(
@@ -49,11 +50,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger("ATSOrchestrator")
 
-DEFAULT_TRACKER_FILE = DATA_DIR / "ai_product_manager_job_tracker.xlsx"
-DEFAULT_RESUME_FILE = DATA_DIR / "shivam_singh_ai_product_manager_resume.pdf"
+DEFAULT_TRACKER_FILE = resolve_runtime_path(RUNTIME_CONFIG.application["tracker_file"])
+DEFAULT_RESUME_FILE = resolve_runtime_path(RUNTIME_CONFIG.application["base_resume_file"])
 DEFAULT_CONFIG_FILE = CONFIG_DIR / "candidate_profile_config.json"
-DEFAULT_RESULTS_FILE = OUTPUT_DIR / "orchestration_results.json"
-DEFAULT_SUBMISSION_LOG_FILE = OUTPUT_DIR / "submission_log.json"
+DEFAULT_RESULTS_FILE = resolve_runtime_path(RUNTIME_CONFIG.application["results_file"])
+DEFAULT_SUBMISSION_LOG_FILE = resolve_runtime_path(
+    RUNTIME_CONFIG.application["submission_log_file"]
+)
+DEFAULT_ENGINE_TIMEOUT_SECONDS = int(RUNTIME_CONFIG.application["engine_timeout_seconds"])
+DEFAULT_RESUME_TIMEOUT_SECONDS = int(RUNTIME_CONFIG.application["resume_timeout_seconds"])
 SCREENSHOT_EXTENSIONS = {".jpeg", ".jpg", ".png"}
 
 SUPPORTED_ATS = tuple(ATS_HOSTS)
@@ -620,9 +625,9 @@ def run_orchestrator(
     dry_run: bool = False,
     shuffle: bool = True,
     headed: bool = False,
-    timeout_seconds: int = 180,
+    timeout_seconds: int = DEFAULT_ENGINE_TIMEOUT_SECONDS,
     personalize_resume: bool = True,
-    resume_timeout_seconds: int = 600,
+    resume_timeout_seconds: int = DEFAULT_RESUME_TIMEOUT_SECONDS,
     direct_url: Optional[str] = None,
     direct_company: str = "",
     direct_role: str = "",
@@ -852,8 +857,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--submission-log-file", default=str(DEFAULT_SUBMISSION_LOG_FILE))
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--start-index", type=int, default=0)
-    parser.add_argument("--timeout", type=int, default=180)
-    parser.add_argument("--resume-timeout", type=int, default=600)
+    parser.add_argument("--timeout", type=int, default=DEFAULT_ENGINE_TIMEOUT_SECONDS)
+    parser.add_argument("--resume-timeout", type=int, default=DEFAULT_RESUME_TIMEOUT_SECONDS)
     parser.add_argument("--no-shuffle", action="store_true")
     parser.add_argument("--headed", action="store_true")
     parser.add_argument(
