@@ -120,6 +120,7 @@
     "work_authorization": "Yes",
     "employment_restrictions": "No",
     "previous_employment": "No",
+    "employee_relationship": "No",
     "are_you_comfortable_with": "Yes",
     "experience_level_selection": "max_value",
     "rating_selection": "max_value",
@@ -274,6 +275,11 @@
       "currently employed by",
       "employed, or otherwise engaged",
       "consulted for"
+    ],
+    "employee_relationship": [
+      "know anyone or are you related to anyone who works",
+      "referred to this role by a current employee",
+      "referred to this role by a current"
     ],
     "application_certification": [
       "i certify that the information",

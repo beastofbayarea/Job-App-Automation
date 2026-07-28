@@ -136,6 +136,23 @@ class ScreeningMatcherTests(unittest.TestCase):
 
         self.assertEqual(answer, "Yes")
 
+    def test_example_profile_denies_employee_relationship_and_referral(self) -> None:
+        config = engine_shared.load_json_config(ROOT / "config/candidate_profile_config.example.json")
+
+        for question in (
+            "Do you know anyone or are you related to anyone who works at Example?",
+            "Were you referred to this role by a current Example Employee?",
+        ):
+            with self.subTest(question=question):
+                answer = engine_shared.configured_answer(
+                    question,
+                    config["candidate"],
+                    config["rules"],
+                    config["eeo_defaults"],
+                    config["field_matchers"],
+                )
+                self.assertEqual(answer, "No")
+
 
 if __name__ == "__main__":
     unittest.main()
