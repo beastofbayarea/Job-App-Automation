@@ -24,7 +24,7 @@ CLI
 - `core/document_cli.py` composes paired generation with explicit archive storage and deterministic retrieval.
 - `core/queue_runner.py` invokes live orchestration serially and checkpoints after every URL.
 
-The detailed component diagram is maintained in [architecture.mmd](../architecture.mmd). The PRD describes proposed work; it is not a statement of currently available functionality.
+The detailed component diagram is maintained in [architecture.mmd](../architecture.mmd). The PRD is a living roadmap with per-feature implementation status; use the CLI reference and current code for delivered behavior.
 
 ## Extension points
 

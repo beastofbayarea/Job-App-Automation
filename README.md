@@ -289,7 +289,7 @@ job_automation.py
       └─ engine <ATS>               Ashby, Greenhouse, or Lever browser engine
 ```
 
-See [architecture.mmd](architecture.mmd) for the detailed Mermaid diagram. `PRD.md` and `docs/superpowers/plans/` describe planned work, not currently available commands.
+See [architecture.mmd](architecture.mmd) for the detailed Mermaid diagram. `PRD.md` is a living roadmap with explicit implementation status. Files under `docs/superpowers/` are historical design and implementation records, not current command references.
 
 ## Documentation
 

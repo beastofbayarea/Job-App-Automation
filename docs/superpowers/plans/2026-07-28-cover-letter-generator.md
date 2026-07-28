@@ -1,5 +1,10 @@
 # Cover Letter Generator (PRD F2) Implementation Plan
 
+> **Historical implementation record (completed 2026-07-28).** File paths,
+> intermediate code samples, and commands below describe the implementation
+> sequence at that time. Use the root README and `docs/cli-reference.md` for the
+> current interface.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a standalone `cover-letter` CLI command that generates a one-page,

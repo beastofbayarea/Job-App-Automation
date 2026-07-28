@@ -34,4 +34,4 @@ Run commands with either `python src/job_automation.py` from the repository root
 
 ## Exit status
 
-Commands generally return `0` on success, `1` for an unsuccessful workflow or remote archive failure, and `2` for invalid command-line input. Gmail additionally uses `3` for a configuration error, `4` for an OAuth/API error, and `130` when interrupted. Treat an application as submitted only when its non-test result reports confirmed submission and the submission log contains it.
+Commands generally return `0` on success, `1` for an unsuccessful workflow or remote archive failure, and `2` for invalid command-line input. Gmail additionally uses `3` for a Gmail API error, `4` for a missing dependency or authentication/configuration error, and `130` when interrupted. Treat an application as submitted only when its non-test result reports confirmed submission and the submission log contains it.

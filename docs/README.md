@@ -14,3 +14,7 @@ The root [README](../README.md) is the quick-start for installing and running th
 | [Troubleshooting](troubleshooting.md) | Common local setup and workflow failures |
 
 Contributors should also read [CONTRIBUTING.md](../CONTRIBUTING.md). User-visible releases are recorded in [CHANGELOG.md](../CHANGELOG.md).
+
+`superpowers/plans/` and `superpowers/specs/` preserve implementation history.
+They may contain step-by-step snapshots from before later refactors; they are not
+current user or contributor instructions.

@@ -1,5 +1,8 @@
 # VPS Sync Maintenance Scripts Implementation Plan
 
+> **Historical implementation record (completed 2026-07-28).** Use
+> `docs/operations-runbook.md` for current operating instructions.
+>
 > **Historical plan; safety details superseded.** Post-implementation review
 > hardened the delivered scripts beyond the original snippets below. The
 > current implementation and design spec are authoritative: pulls require all

@@ -15,6 +15,9 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Changed
 
+- Reconciled the PRD and historical implementation records with the delivered
+  cover-letter and VPS-maintenance workflows, and clarified which documents are
+  current operating references.
 - Hardened VPS synchronization with commit-coherent output pulls, cron/manual
   mutual exclusion, shell-safe remote paths, temporary Plink password files,
   and offline regression coverage.
@@ -27,6 +30,8 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Fixed
 
+- Corrected the Gmail API and authentication/configuration exit-code mapping in
+  the CLI reference.
 - Report missing, non-file, symlinked, unreadable, or invalidly encoded
   `cover-letter --jd-file` input as a clean CLI usage error instead of an
   uncaught traceback.

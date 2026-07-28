@@ -1,12 +1,12 @@
 # Product Requirements Document: Future Job-Application Workflow Features
 
 **Product:** Job Application Automation<br>
-**Status:** Draft — future implementation roadmap<br>
+**Status:** Living roadmap — F2 delivered; F1 and F3–F5 proposed<br>
 **Last updated:** 2026-07-28
 
 ## 1. Purpose
 
-This document defines five future features that build on the existing ATS search,
+This document defines five related features that build on the existing ATS search,
 resume-generation, Gmail, orchestration, and artifact-persistence workflows:
 
 1. Applied-role registry and duplicate-submission prevention.
@@ -14,6 +14,20 @@ resume-generation, Gmail, orchestration, and artifact-persistence workflows:
 3. JD-contact extraction and resume-attached outreach drafts.
 4. Gmail SendAs alias audit and setup support.
 5. Evidence-based recruiter and hiring-manager discovery.
+
+Implementation status as of 2026-07-28:
+
+| Feature | Status | Current user interface |
+| --- | --- | --- |
+| F1 Applied-role registry | Proposed | Confirmed submissions use `output/submission_log.json`; the broader registry is not implemented. |
+| F2 One-page personalised cover letters | Delivered | `cover-letter` and `documents generate` |
+| F3 JD-contact extraction and outreach drafts | Proposed | Gmail can create ordinary drafts, but contact extraction and the outreach workflow are not implemented. |
+| F4 SendAs alias audit and setup | Proposed | Not implemented. |
+| F5 Recruiter and hiring-manager discovery | Proposed | Not implemented. |
+
+The requirements below remain the design authority for proposed features. For F2,
+the current CLI documentation and tests are the implementation authority where
+they differ from the original proposal.
 
 The product goal is to reduce duplicate work while preserving candidate control,
 truthfulness, reviewability, and explicit authorization for any external action.
@@ -216,6 +230,12 @@ python src/job_automation.py registry import --results output/orchestration_resu
 - Persistence remains atomic and leaves no partial registry artifact.
 
 ## 6. Feature F2 — One-page personalised cover letters
+
+**Implementation status:** Delivered. The standalone `cover-letter` command and
+the paired `documents generate` workflow produce a validated one-page PDF and an
+audit sidecar. The implementation uses evidence claim IDs, rejects unsupported
+claims, validates the rendered page count, and supports candidate-approved
+career narrative configuration.
 
 ### 6.1 User story
 
@@ -570,9 +590,11 @@ only official sources and manual input.
 
 ## 10. Implementation sequence
 
-1. Add `job_identity.py` and the applied-role registry.
-2. Add `job_context.py` for all supported ATSs plus explicit JD-file fallback.
-3. Build the standalone cover-letter generator and strict one-page validator.
+1. **Delivered:** shared job identity canonicalization and atomic artifact
+   persistence.
+2. **Delivered:** standalone cover-letter generation, strict one-page
+   validation, audit output, and paired-document integration.
+3. **Next:** add the applied-role registry and shared multi-provider job context.
 4. Build contact extraction, evidence artifacts, and the Gmail attachment
    composer/draft workflow.
 5. Add read-only SendAs audit and sender-identity resolution.
@@ -622,8 +644,9 @@ Minimum coverage scenarios:
 4. Gmail account type: personal Gmail, Workspace user, Workspace admin with
    domain-wide delegation, or separate mailboxes.
 5. Approved discovery sources/providers and their data-retention policy.
-6. Whether cover letters should remain standalone/outreach-only or later become
-   supported uploads for individual ATS engines.
+6. Whether the delivered cover letters should later become optional uploads for
+   individual ATS engines; they currently remain standalone or part of the
+   private paired-document workflow.
 
 ## 13. External technical references
 

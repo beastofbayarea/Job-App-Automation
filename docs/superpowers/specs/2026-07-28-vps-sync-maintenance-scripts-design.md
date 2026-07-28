@@ -1,5 +1,8 @@
 # VPS Sync Maintenance Scripts
 
+> **Historical design record (implemented 2026-07-28).** Use
+> `docs/operations-runbook.md` for current operating instructions.
+
 Date: 2026-07-28
 
 ## Context
