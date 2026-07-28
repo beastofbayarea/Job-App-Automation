@@ -11,18 +11,18 @@ if (-not (Test-Path $Path)) {
 }
 
 try {
-    $Report = Get-Content $Path -Raw | ConvertFrom-Json
+    $Report = Get-Content $Path -Raw | ConvertFrom-Json -AsHashtable
 } catch {
     Write-Error "STALE: $Path is not valid JSON."
     exit 1
 }
 
-if (-not $Report.generated_at) {
+if (-not $Report['generated_at']) {
     Write-Error "STALE: $Path has no 'generated_at' field."
     exit 1
 }
 
-$Generated = [DateTimeOffset]::Parse($Report.generated_at)
+$Generated = [DateTimeOffset]::Parse(($Report['generated_at']).ToString("o"))
 $AgeHours = [Math]::Round(([DateTimeOffset]::UtcNow - $Generated).TotalHours, 1)
 
 if ($AgeHours -gt $ThresholdHours) {
