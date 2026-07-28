@@ -134,5 +134,84 @@ class CoverLetterCacheTests(unittest.TestCase):
         self.assertEqual(cache.get("key-1")["paragraphs"], ["one"])
 
 
+from job_application_automation.resume.cover_letter_validation import (  # noqa: E402
+    CoverLetterValidationPolicy,
+    validate_cover_letter_pdf,
+)
+
+
+class _FakeCoverLetterPage:
+    def __init__(self, text: str) -> None:
+        self._text = text
+
+    def get_text(self, mode: str) -> str:
+        assert mode == "text"
+        return self._text
+
+
+class _FakeCoverLetterDocument:
+    def __init__(self, pages: list[str]) -> None:
+        self._pages = [_FakeCoverLetterPage(text) for text in pages]
+        self.closed = False
+
+    def __len__(self) -> int:
+        return len(self._pages)
+
+    def __getitem__(self, index: int) -> _FakeCoverLetterPage:
+        return self._pages[index]
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _FakeCoverLetterFitz:
+    def __init__(self, pages: list[str]) -> None:
+        self.document = _FakeCoverLetterDocument(pages)
+
+    def open(self, path: str) -> _FakeCoverLetterDocument:
+        assert path == "letter.pdf"
+        return self.document
+
+
+def _policy() -> CoverLetterValidationPolicy:
+    return CoverLetterValidationPolicy(
+        minimum_words=3, maximum_words=9, required_signature="Shivam Singh"
+    )
+
+
+class CoverLetterValidationTests(unittest.TestCase):
+    def test_a_valid_one_page_letter_passes_and_closes_the_document(self) -> None:
+        fake_fitz = _FakeCoverLetterFitz(
+            ["Dear Team, I bring proven product results. Shivam Singh"]
+        )
+
+        valid, issues = validate_cover_letter_pdf("letter.pdf", _policy(), fitz_module=fake_fitz)
+
+        self.assertTrue(valid)
+        self.assertEqual(issues, [])
+        self.assertTrue(fake_fitz.document.closed)
+
+    def test_a_two_page_letter_fails_and_is_never_treated_as_passing(self) -> None:
+        fake_fitz = _FakeCoverLetterFitz(["Page one text here Shivam Singh", "Page two overflow"])
+
+        valid, issues = validate_cover_letter_pdf("letter.pdf", _policy(), fitz_module=fake_fitz)
+
+        self.assertFalse(valid)
+        self.assertIn("2 pages", issues[0])
+
+    def test_missing_signature_and_out_of_budget_word_count_are_both_reported(self) -> None:
+        fake_fitz = _FakeCoverLetterFitz(["One two three four five six seven eight nine ten"])
+
+        valid, issues = validate_cover_letter_pdf("letter.pdf", _policy(), fitz_module=fake_fitz)
+
+        self.assertFalse(valid)
+        self.assertTrue(any("Too long" in issue for issue in issues))
+        self.assertTrue(any("signature" in issue for issue in issues))
+
+    def test_policy_rejects_an_inverted_word_budget(self) -> None:
+        with self.assertRaisesRegex(ValueError, "maximum_words"):
+            CoverLetterValidationPolicy(minimum_words=10, maximum_words=5, required_signature="X")
+
+
 if __name__ == "__main__":
     unittest.main()
