@@ -16,10 +16,22 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-git checkout "origin/$Branch" -- $Files
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "Failed to check out sync files from origin/$Branch"
+# Check out each file individually rather than all at once: `git checkout` treats
+# a multi-path checkout as atomic, so one missing file (e.g. the VPS hasn't
+# produced it yet) would otherwise block every other file from being pulled.
+$Pulled = @()
+foreach ($File in $Files) {
+    git checkout "origin/$Branch" -- $File 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        $Pulled += $File
+    } else {
+        Write-Warning "Skipped $File (not present on origin/$Branch)"
+    }
+}
+
+if ($Pulled.Count -eq 0) {
+    Write-Error "No sync files found on origin/$Branch"
     exit 1
 }
 
-Write-Host "Pulled latest VPS search output into output/ from origin/$Branch"
+Write-Host "Pulled from origin/${Branch}: $($Pulled -join ', ')"
