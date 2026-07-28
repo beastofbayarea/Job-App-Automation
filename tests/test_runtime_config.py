@@ -40,6 +40,24 @@ class RuntimeConfigTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "ashby.max_form_steps"):
                 load_runtime_config(path)
 
+    def test_cover_letter_section_loads_with_valid_word_budget(self) -> None:
+        config = load_runtime_config()
+
+        self.assertGreater(config.cover_letter["max_retries"], 0)
+        self.assertGreater(
+            config.cover_letter["maximum_words"], config.cover_letter["minimum_words"]
+        )
+
+    def test_cover_letter_word_budget_must_be_ordered(self) -> None:
+        document = json.loads(RUNTIME_CONFIG_FILE.read_text(encoding="utf-8"))
+        document["cover_letter"]["maximum_words"] = document["cover_letter"]["minimum_words"]
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "runtime_config.json"
+            path.write_text(json.dumps(document), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "maximum_words"):
+                load_runtime_config(path)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -73,6 +73,7 @@ class RuntimeConfig:
     browser: Mapping[str, Any]
     vertex: Mapping[str, Any]
     resume: Mapping[str, Any]
+    cover_letter: Mapping[str, Any]
     ashby: Mapping[str, Any]
     gmail: Mapping[str, Any]
 
@@ -94,6 +95,7 @@ def load_runtime_config(path: Path = RUNTIME_CONFIG_FILE) -> RuntimeConfig:
     browser = _mapping(document, "browser")
     vertex = _mapping(document, "vertex")
     resume = _mapping(document, "resume")
+    cover_letter = _mapping(document, "cover_letter")
     ashby = _mapping(document, "ashby")
     gmail = _mapping(document, "gmail")
 
@@ -135,6 +137,14 @@ def load_runtime_config(path: Path = RUNTIME_CONFIG_FILE) -> RuntimeConfig:
     _positive_number(resume, "resume", "original_page_height")
     _boolean(resume, "resume", "persistent_cache_enabled")
 
+    _string(cover_letter, "cover_letter", "cache_file")
+    for key in ("max_retries", "minimum_words", "maximum_words"):
+        _integer(cover_letter, "cover_letter", key)
+    if cover_letter["maximum_words"] <= cover_letter["minimum_words"]:
+        raise ValueError(
+            "runtime config cover_letter.maximum_words must be greater than minimum_words"
+        )
+
     for key in (
         "default_timeout_ms",
         "navigation_timeout_ms",
@@ -157,6 +167,7 @@ def load_runtime_config(path: Path = RUNTIME_CONFIG_FILE) -> RuntimeConfig:
         browser=browser,
         vertex=vertex,
         resume=resume,
+        cover_letter=cover_letter,
         ashby=ashby,
         gmail=gmail,
     )
