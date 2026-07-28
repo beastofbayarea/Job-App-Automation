@@ -270,8 +270,7 @@ exit 0
                 {"failure_count": 0, "failures": []},
             )
             captures = [
-                json.loads(line)
-                for line in capture_path.read_text(encoding="utf-8").splitlines()
+                json.loads(line) for line in capture_path.read_text(encoding="utf-8").splitlines()
             ]
             self.assertEqual(len(captures), 2)
             for capture in captures:
@@ -488,7 +487,9 @@ class PullSnapshotTests(unittest.TestCase):
 
 @unittest.skipUnless(BASH, "Bash is required")
 class BashMaintenanceTests(unittest.TestCase):
-    def test_application_stage_runs_after_safe_publication_and_keeps_private_files_out(self) -> None:
+    def test_application_stage_runs_after_safe_publication_and_keeps_private_files_out(
+        self,
+    ) -> None:
         script = (SCRIPTS / "vps_search_sync.sh").read_text(encoding="utf-8")
 
         publication = script.index('git push "$PUSH_URL"')

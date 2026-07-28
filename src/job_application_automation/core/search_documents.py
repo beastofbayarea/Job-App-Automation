@@ -92,9 +92,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     records: dict[str, Any] = state["jobs"]
     jobs = _eligible_jobs(_load_json(args.input))
     pending = [
-        job
-        for job in jobs
-        if records.get(str(job["job_url"]), {}).get("status") != "archived"
+        job for job in jobs if records.get(str(job["job_url"]), {}).get("status") != "archived"
     ]
     if args.max_jobs:
         pending = pending[: args.max_jobs]
@@ -165,7 +163,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             _save_state(args.state, state)
 
     archived = sum(
-        1 for value in records.values() if isinstance(value, dict) and value.get("status") == "archived"
+        1
+        for value in records.values()
+        if isinstance(value, dict) and value.get("status") == "archived"
     )
     print(
         f"Document archive: eligible={len(jobs)}, pending={len(pending)}, "

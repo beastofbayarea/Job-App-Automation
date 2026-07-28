@@ -145,4 +145,3 @@ class SearchDocumentTests(unittest.TestCase):
                 )
             state = json.loads(state_path.read_text(encoding="utf-8"))
             self.assertEqual(state["jobs"]["https://jobs.example.test/live"]["status"], "failed")
-

@@ -18,15 +18,11 @@ from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 
 
 SUPPORTED_PLATFORMS = frozenset({"ashby", "greenhouse", "lever"})
-DEFAULT_MAX_ATTEMPTS_PER_ATS = int(
-    RUNTIME_CONFIG.application["vps_max_attempts_per_ats"]
-)
+DEFAULT_MAX_ATTEMPTS_PER_ATS = int(RUNTIME_CONFIG.application["vps_max_attempts_per_ats"])
 DEFAULT_RESULTS_DIR = resolve_runtime_path(
     RUNTIME_CONFIG.application["vps_application_results_dir"]
 )
-DEFAULT_STATE_FILE = resolve_runtime_path(
-    RUNTIME_CONFIG.application["vps_application_state_file"]
-)
+DEFAULT_STATE_FILE = resolve_runtime_path(RUNTIME_CONFIG.application["vps_application_state_file"])
 DEFAULT_FAILURE_REPORT = resolve_runtime_path(
     RUNTIME_CONFIG.application["vps_application_failure_report"]
 )

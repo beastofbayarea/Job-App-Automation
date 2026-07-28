@@ -69,9 +69,7 @@ class SearchApplicationTests(unittest.TestCase):
                 {},
             )
             self.assertEqual(
-                json.loads((root / "failures.json").read_text(encoding="utf-8"))[
-                    "failure_count"
-                ],
+                json.loads((root / "failures.json").read_text(encoding="utf-8"))["failure_count"],
                 0,
             )
 
@@ -188,12 +186,8 @@ class SearchApplicationTests(unittest.TestCase):
                 self.assertEqual(search_applications.main(arguments), 1)
                 self.assertEqual(run.call_count, 2)
                 report = json.loads((root / "failures.json").read_text(encoding="utf-8"))
-                self.assertEqual(
-                    report["failures"][0]["missing_fields"], ["work authorization"]
-                )
-                self.assertEqual(
-                    report["failures"][0]["error"], "confirmation page did not appear"
-                )
+                self.assertEqual(report["failures"][0]["missing_fields"], ["work authorization"])
+                self.assertEqual(report["failures"][0]["error"], "confirmation page did not appear")
                 self.assertEqual(search_applications.main(arguments), 0)
                 self.assertEqual(run.call_count, 2)
 
@@ -215,10 +209,7 @@ class SearchApplicationTests(unittest.TestCase):
                 ("lever", "https://jobs.lever.co/example"),
                 ("ashby", "https://jobs.ashbyhq.com/example"),
             ):
-                jobs.extend(
-                    _job(f"{base}/{index}", platform=platform)
-                    for index in range(1, 4)
-                )
+                jobs.extend(_job(f"{base}/{index}", platform=platform) for index in range(1, 4))
             (root / "jobs.json").write_text(json.dumps(jobs), encoding="utf-8")
             (root / "profile.json").write_text("{}", encoding="utf-8")
             (root / "submissions.json").write_text("{}", encoding="utf-8")

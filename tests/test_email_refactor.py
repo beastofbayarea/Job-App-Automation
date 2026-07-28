@@ -136,7 +136,13 @@ class GmailOAuthTests(unittest.TestCase):
             self.assertFalse(bool(built["cache_discovery"]))
 
     def test_oauth_service_falls_back_to_local_flow_when_refresh_fails(self) -> None:
-        dependencies = (_FakeRequest, _FailingRefreshCredentials, _ReauthFlow, lambda *_a, **_k: object(), object)
+        dependencies = (
+            _FakeRequest,
+            _FailingRefreshCredentials,
+            _ReauthFlow,
+            lambda *_a, **_k: object(),
+            object,
+        )
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             credentials_path = root / "credentials.json"
