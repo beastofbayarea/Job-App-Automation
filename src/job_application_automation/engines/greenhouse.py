@@ -708,7 +708,17 @@ def _required_empty_fields(page: Page) -> list[str]:
     return sorted(set(missing))
 
 
-def _fill_security_code_from_gmail(page: Page, application_email: str) -> bool:
+def _greenhouse_security_code_query(company: str) -> str:
+    safe_company = company.replace('"', " ").strip()
+    subject = (
+        f'subject:"Security code for your application to {safe_company}"'
+        if safe_company
+        else 'subject:"Security code for your application"'
+    )
+    return f"from:no-reply@us.greenhouse-mail.io {subject} newer_than:1d"
+
+
+def _fill_security_code_from_gmail(page: Page, company: str) -> bool:
     """Read the five newest matching emails and fill Greenhouse's 8-box code."""
     code_inputs = page.locator('input[id^="security-input"]')
     if code_inputs.count() < 8:
@@ -724,11 +734,11 @@ def _fill_security_code_from_gmail(page: Page, application_email: str) -> bool:
         history_path = resolve_runtime_path(RUNTIME_CONFIG.gmail["verification_history_file"])
         match = poll_for_verification_code(
             service,
-            f'from:no-reply@us.greenhouse-mail.io deliveredto:{application_email} subject:"Security code for your application" newer_than:1d',
+            _greenhouse_security_code_query(company),
             r"security code field on your application:\s*([A-Za-z0-9]{8})",
             timeout_seconds=int(RUNTIME_CONFIG.gmail["verification_poll_timeout_seconds"]),
             sender_domains=("us.greenhouse-mail.io",),
-            expected_recipient=application_email,
+            expected_recipient="",
             excluded_message_ids=load_used_verification_message_ids(history_path),
         )
         if not match:
@@ -807,7 +817,7 @@ def run(
                         "missing_required": [],
                         "screenshot": "",
                     }
-                if _fill_security_code_from_gmail(page, email):
+                if _fill_security_code_from_gmail(page, company):
                     submit = _first_visible(
                         page.get_by_role(
                             "button",
@@ -912,7 +922,7 @@ def run(
             consent = _fill_consent(page)
             consent.extend(_fill_explicit_required_consents(page))
             if live_submit:
-                _fill_security_code_from_gmail(page, email)
+                _fill_security_code_from_gmail(page, company)
             missing = validate_required_fields(page, _required_empty_fields)
             prefill_screenshot = _screenshot(
                 page, screenshot_dir, company or "Greenhouse", "prefilled"
@@ -1016,7 +1026,7 @@ def run(
                     and _security_challenge_visible(page)
                 ):
                     security_challenge_attempted = True
-                    if _fill_security_code_from_gmail(page, email):
+                    if _fill_security_code_from_gmail(page, company):
                         challenge_submit = _first_visible(
                             page.get_by_role(
                                 "button",

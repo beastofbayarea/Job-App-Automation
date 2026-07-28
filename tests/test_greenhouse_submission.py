@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from job_application_automation.engines.greenhouse import (
     SUBMIT_BUTTON_TEXT_PATTERN,
+    _greenhouse_security_code_query,
     _security_challenge_visible,
 )
 
@@ -31,3 +32,11 @@ def test_security_challenge_selector_requires_all_eight_code_inputs() -> None:
 
     assert not _security_challenge_visible(Page(7))
     assert _security_challenge_visible(Page(8))
+
+
+def test_security_code_query_uses_company_subject_without_recipient_alias() -> None:
+    query = _greenhouse_security_code_query('Example "AI"')
+
+    assert "from:no-reply@us.greenhouse-mail.io" in query
+    assert 'subject:"Security code for your application to Example  AI"' in query
+    assert "deliveredto:" not in query
