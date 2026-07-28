@@ -168,7 +168,7 @@ def orchestrated_config_path() -> Path:
     """Return the profile path supplied by the orchestrator process."""
     raw_path = os.environ.get(ORCHESTRATOR_CONFIG_ENV, "").strip()
     if not raw_path:
-        raise RuntimeError("Application engines must receive config from orchestrator.py.")
+        raise RuntimeError("Application engines must receive config from the application workflow.")
     path = Path(raw_path).expanduser().resolve()
     if not path.is_file():
         raise FileNotFoundError(f"Configuration file not found: {path}")
@@ -811,8 +811,8 @@ def require_orchestrated_invocation(url: str) -> None:
     if os.environ.get(ORCHESTRATOR_INVOCATION_ENV) == "1":
         return
     raise RuntimeError(
-        "Job application URLs must be run through orchestrator.py. "
-        f'Use: python src/orchestrator.py --url "{url}"'
+        "Job application URLs must be run through the application workflow. "
+        f'Use: python src/job_automation.py apply --url "{url}"'
     )
 
 

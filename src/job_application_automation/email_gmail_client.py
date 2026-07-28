@@ -3,7 +3,7 @@
 Gmail OAuth Reader and Sender
 =============================
 
-This single-file script can:
+This Gmail workflow can:
 - Read recent Gmail messages.
 - Search Gmail using Gmail query syntax.
 - Export results to CSV or JSON.
@@ -28,7 +28,7 @@ GOOGLE CLOUD SETUP
 
 IMPORTANT WHEN UPGRADING FROM READ-ONLY
 ---------------------------------------
-This script requests both:
+This workflow requests both:
 - gmail.readonly
 - gmail.send
 
@@ -38,7 +38,7 @@ send permission.
 
 FIRST RUN
 ---------
-    python src/email_gmail_client.py --max-results 10
+    python src/job_automation.py gmail --max-results 10
 
 A browser window will open for OAuth authorization. After approval, token.json
 will be saved locally.
@@ -47,33 +47,33 @@ READ EXAMPLES
 -------------
 Read the 10 newest inbox messages:
 
-    python src/email_gmail_client.py --max-results 10
+    python src/job_automation.py gmail --max-results 10
 
 Read unread messages:
 
-    python src/email_gmail_client.py --unread --max-results 20
+    python src/job_automation.py gmail --unread --max-results 20
 
 Search all mail:
 
-    python src/email_gmail_client.py --all-mail --query "from:example.com newer_than:30d"
+    python src/job_automation.py gmail --all-mail --query "from:example.com newer_than:30d"
 
 Export:
 
-    python src/email_gmail_client.py --max-results 100 --csv output/messages.csv
-    python src/email_gmail_client.py --max-results 100 --json output/messages.json
+    python src/job_automation.py gmail --max-results 100 --csv output/messages.csv
+    python src/job_automation.py gmail --max-results 100 --json output/messages.json
 
 SEND EXAMPLES
 -------------
 Interactive confirmation:
 
-    python email_gmail_client.py \
+    python src/job_automation.py gmail \
         --send-to recipient@example.com \
         --subject "Test email" \
         --body "Hello from my local Python script."
 
 Skip confirmation deliberately:
 
-    python email_gmail_client.py \
+    python src/job_automation.py gmail \
         --send-to recipient@example.com \
         --subject "Test email" \
         --body "Hello from my local Python script." \
@@ -95,7 +95,7 @@ import sys
 import time
 from email.message import EmailMessage
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 from job_application_automation.gmail_messages import (
     EmailRecord,
@@ -135,7 +135,7 @@ def classify_application_email(record: EmailRecord) -> str:
     return _classify_application_email(record)
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Read and send Gmail locally through OAuth.")
 
     parser.add_argument("--max-results", type=int, default=10)
@@ -166,7 +166,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--credentials", default=DEFAULT_CREDENTIALS_FILE)
     parser.add_argument("--token", default=DEFAULT_TOKEN_FILE)
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.max_results < 1:
         parser.error("--max-results must be at least 1")
@@ -324,8 +324,8 @@ def write_json(path: Path, records: list[EmailRecord], redact: bool = False) -> 
     _write_json(path, records, redact)
 
 
-def main() -> int:
-    args = parse_args()
+def main(argv: Sequence[str] | None = None) -> int:
+    args = parse_args(argv)
 
     try:
         _, _, _, _, HttpError = import_google_dependencies()

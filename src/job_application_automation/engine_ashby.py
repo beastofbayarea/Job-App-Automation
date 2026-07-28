@@ -5,7 +5,7 @@ A Playwright CDP automation engine for applying to Ashby job postings.
 Connects to active Google Chrome debugging session (port 9222).
 
 Usage:
-  python engine_ashby.py --url "https://jobs.ashbyhq.com/company/job-id" --resume "/path/to/CV.pdf"
+  Internal engine invoked by: python src/job_automation.py apply --url "https://jobs.ashbyhq.com/company/job-id"
 """
 
 import base64

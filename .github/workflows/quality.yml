@@ -48,16 +48,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for script in \
-            src/search_job_boards.py \
-            src/resume_generate.py \
-            src/queue_runner.py \
-            src/orchestrator.py \
-            src/engine_ashby.py \
-            src/engine_greenhouse.py \
-            src/engine_lever.py \
-            src/engine_shared.py \
-            src/email_gmail_client.py \
-            src/email_pool_select.py; do
-            python "$script" --help >/dev/null
+          python src/job_automation.py --help >/dev/null
+          for command in apply queue resume search gmail email-pool; do
+            python src/job_automation.py "$command" --help >/dev/null
+          done
+          for engine in ashby greenhouse lever; do
+            python src/job_automation.py engine "$engine" --help >/dev/null
           done

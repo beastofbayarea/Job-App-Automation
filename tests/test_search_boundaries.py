@@ -11,7 +11,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-import search_job_boards as search  # noqa: E402
+from job_application_automation import search_job_boards as search  # noqa: E402
 from job_application_automation import search_cache  # noqa: E402
 from job_application_automation import search_discovery  # noqa: E402
 from job_application_automation import search_jsonld  # noqa: E402
@@ -47,7 +47,7 @@ def make_job() -> search.Job:
 
 
 class SearchBoundaryTests(unittest.TestCase):
-    def test_legacy_models_are_reexported_from_the_data_only_module(self) -> None:
+    def test_search_models_are_reexported_from_the_data_only_module(self) -> None:
         self.assertIs(search.Board, search_models.Board)
         self.assertIs(search.SearchCandidate, search_models.SearchCandidate)
         self.assertIs(search.Job, search_models.Job)
@@ -162,13 +162,13 @@ class SearchBoundaryTests(unittest.TestCase):
         self.assertEqual("closed", decision.status)
         self.assertEqual("valid_through_elapsed", decision.reason)
 
-    def test_liveness_facade_keeps_the_public_jsonld_patch_seam(self) -> None:
+    def test_liveness_workflow_keeps_the_public_jsonld_patch_seam(self) -> None:
         job = make_job()
 
         class Response:
             status_code = 200
             url = job.job_url
-            text = "<html>ignored because the facade extractor is patched</html>"
+            text = "<html>ignored because the workflow extractor is patched</html>"
 
         class Session:
             def get(self, *_args: object, **_kwargs: object) -> Response:

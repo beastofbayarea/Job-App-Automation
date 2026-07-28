@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-import search_job_boards as search  # noqa: E402
+from job_application_automation import search_job_boards as search  # noqa: E402
 from job_application_automation import search_terms  # noqa: E402
 
 
@@ -18,7 +18,7 @@ UTC = timezone.utc
 
 
 class SearchCoreTests(unittest.TestCase):
-    def test_legacy_facade_exposes_the_internal_matching_module(self) -> None:
+    def test_search_module_exposes_the_internal_matching_module(self) -> None:
         self.assertIs(search.clean_whitespace, search_terms.clean_whitespace)
         self.assertEqual(
             search.canonical_discovery_terms(["Growth Mkt"], search.ROLE_ALIAS_MAP),

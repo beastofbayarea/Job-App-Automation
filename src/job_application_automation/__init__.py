@@ -1,8 +1,7 @@
-"""Internal, side-effect-free implementation package for job automation.
+"""Side-effect-free implementation package for job automation workflows.
 
-Public compatibility entrypoints remain in ``src/*.py`` so existing commands
-and imports continue to work while reusable workflows live behind typed
-contracts here.
+The source tree exposes one launcher, ``src/job_automation.py``. Reusable
+workflows and typed contracts live in this package.
 """
 
 from .contracts import EngineMode, EngineRequest, EngineResult, EngineStatus

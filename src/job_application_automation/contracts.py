@@ -1,7 +1,7 @@
 """Dependency-free contracts shared by application automation workflows.
 
-The legacy command-line scripts intentionally continue to own their public
-arguments and wire format.  This module provides a typed internal boundary so
+The command workflows retain their public arguments and wire format. This
+module provides a typed internal boundary so
 new orchestration and ATS code can be tested without importing Playwright,
 Google SDKs, or subprocess implementations.
 """

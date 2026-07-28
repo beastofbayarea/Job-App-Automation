@@ -7,34 +7,22 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-import orchestrator as orchestrator_facade  # noqa: E402
-import queue_runner as queue_runner_facade  # noqa: E402
-from job_application_automation import orchestrator as orchestrator_impl  # noqa: E402
-from job_application_automation import queue_runner as queue_runner_impl  # noqa: E402
+from job_application_automation import orchestrator  # noqa: E402
+from job_application_automation import queue_runner  # noqa: E402
 from job_application_automation.contracts import EngineResult, EngineStatus  # noqa: E402
-
-
-class CompatibilityFacadeTests(unittest.TestCase):
-    def test_src_facades_expose_the_internal_workflow_modules(self) -> None:
-        self.assertIs(orchestrator_facade, orchestrator_impl)
-        self.assertIs(queue_runner_facade, queue_runner_impl)
-        self.assertIs(
-            orchestrator_facade.build_engine_command, orchestrator_impl.build_engine_command
-        )
-        self.assertIs(
-            queue_runner_facade._confirmed_submission, queue_runner_impl._confirmed_submission
-        )
 
 
 class EngineCommandContractTests(unittest.TestCase):
     def test_build_engine_command_uses_typed_request_fields_and_fill_only_precedence(self) -> None:
         engine = Path("engine_ashby.py")
-        command = orchestrator_facade.build_engine_command(
+        command = orchestrator.build_engine_command(
             engine,
             "https://jobs.ashbyhq.com/acme/123",
             Path("candidate.pdf"),
@@ -67,6 +55,109 @@ class EngineCommandContractTests(unittest.TestCase):
             ],
         )
 
+    def test_default_engine_command_uses_the_unified_launcher_and_provider(self) -> None:
+        command = orchestrator.build_engine_command(
+            orchestrator.CLI_ENTRYPOINT,
+            "https://jobs.ashbyhq.com/acme/123",
+            Path("candidate.pdf"),
+            "Acme",
+            "Product Manager",
+            "candidate@example.test",
+            live_submit=False,
+            headed=False,
+            fill_only=False,
+            dry_run=True,
+        )
+
+        self.assertEqual(
+            command,
+            [
+                sys.executable,
+                str(orchestrator.CLI_ENTRYPOINT),
+                "engine",
+                "ashby",
+                "--url",
+                "https://jobs.ashbyhq.com/acme/123",
+                "--resume",
+                "candidate.pdf",
+                "--company",
+                "Acme",
+                "--role",
+                "Product Manager",
+                "--email",
+                "candidate@example.test",
+                "--dry-run",
+            ],
+        )
+
+
+class ChildProcessRoutingTests(unittest.TestCase):
+    def test_resume_generation_uses_the_unified_resume_command(self) -> None:
+        class ResumeRunner:
+            command: list[str] = []
+
+            def run(self, command: list[str], _settings: object) -> orchestrator.CommandResult:
+                self.command = command
+                output = Path(command[command.index("--output") + 1])
+                output.write_bytes(b"x" * 5001)
+                return orchestrator.CommandResult(returncode=0, stdout="", stderr="")
+
+        runner = ResumeRunner()
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(orchestrator, "OUTPUT_DIR", Path(directory)):
+                generated = orchestrator.generate_personalized_resume(
+                    "Acme",
+                    "Product Manager",
+                    "https://jobs.ashbyhq.com/acme/123",
+                    timeout_seconds=30,
+                    email="candidate@example.test",
+                    process_runner=runner,
+                )
+
+        self.assertIsNotNone(generated)
+        self.assertEqual(
+            [
+                sys.executable,
+                str(orchestrator.CLI_ENTRYPOINT),
+                "resume",
+                "--company",
+                "Acme",
+                "--role",
+                "Product Manager",
+                "--url",
+                "https://jobs.ashbyhq.com/acme/123",
+            ],
+            runner.command[:9],
+        )
+        self.assertIn("--email", runner.command)
+
+    def test_queue_uses_the_unified_apply_command(self) -> None:
+        confirmed = {
+            "success": True,
+            "status": EngineStatus.SUBMITTED_CONFIRMED.value,
+            "ats": "ashby",
+            "submitted": True,
+            "confirmed": True,
+            "test_mode": False,
+        }
+        completed = SimpleNamespace(returncode=0, stdout="", stderr="")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            queue_path = root / "queue.txt"
+            queue_path.write_text("https://jobs.ashbyhq.com/acme/123\n", encoding="utf-8")
+            with (
+                patch.object(queue_runner, "OUTPUT_DIR", root),
+                patch.object(queue_runner.subprocess, "run", return_value=completed) as run,
+                patch.object(queue_runner, "read_json", return_value=[confirmed]),
+            ):
+                exit_code = queue_runner.main(["--queue", str(queue_path)])
+
+        self.assertEqual(0, exit_code)
+        self.assertEqual(
+            [sys.executable, str(queue_runner.CLI_ENTRYPOINT), "apply"],
+            run.call_args.args[0][:3],
+        )
+
     def test_legacy_mode_flags_resolve_to_one_safe_typed_mode(self) -> None:
         cases = (
             ({"live_submit": True, "fill_only": True, "dry_run": True}, "--fill-only"),
@@ -77,18 +168,18 @@ class EngineCommandContractTests(unittest.TestCase):
 
         for flags, expected in cases:
             with self.subTest(flags=flags):
-                self.assertEqual(orchestrator_impl._engine_mode_flag(**flags), expected)
+                self.assertEqual(orchestrator._engine_mode_flag(**flags), expected)
 
 
 class EngineResultParsingTests(unittest.TestCase):
     def test_malformed_provider_result_maps_to_a_safe_error_payload(self) -> None:
-        process = orchestrator_impl.ProcessResult(
+        process = orchestrator.ProcessResult(
             returncode=1,
             stdout='ENGINE_RESULT_JSON:{"success":"yes","status":"FAILED"}',
             stderr="provider failed",
         )
 
-        parsed = orchestrator_impl.parse_engine_result(process, live_submit=True)
+        parsed = orchestrator.parse_engine_result(process, live_submit=True)
 
         self.assertFalse(parsed["success"])
         self.assertEqual(parsed["status"], "INVALID_ENGINE_RESULT")
@@ -102,14 +193,14 @@ class EngineResultParsingTests(unittest.TestCase):
             test_mode=False,
             extra={"screenshot": "prefilled.png"},
         )
-        process = orchestrator_impl.ProcessResult(
+        process = orchestrator.ProcessResult(
             returncode=0,
             stdout=f"diagnostic line\n{prefill.to_wire_line()}",
             stderr="",
         )
 
-        dry_run = orchestrator_impl.parse_engine_result(process, live_submit=False)
-        live_submit = orchestrator_impl.parse_engine_result(process, live_submit=True)
+        dry_run = orchestrator.parse_engine_result(process, live_submit=False)
+        live_submit = orchestrator.parse_engine_result(process, live_submit=True)
 
         self.assertTrue(dry_run["success"])
         self.assertEqual(dry_run["screenshot"], "prefilled.png")
@@ -128,13 +219,13 @@ class EngineResultParsingTests(unittest.TestCase):
             test_mode=False,
             extra={"confirmation_url": "https://jobs.lever.co/acme/123"},
         )
-        process = orchestrator_impl.ProcessResult(
+        process = orchestrator.ProcessResult(
             returncode=0,
             stdout=confirmed.to_wire_line(),
             stderr="",
         )
 
-        parsed = orchestrator_facade.parse_engine_result(process, live_submit=True)
+        parsed = orchestrator.parse_engine_result(process, live_submit=True)
 
         self.assertTrue(parsed["success"])
         self.assertTrue(parsed["submitted"])
@@ -155,8 +246,8 @@ class OrchestrationPersistenceTests(unittest.TestCase):
                 }
             ]
 
-            orchestrator_facade._write_results(target, initial)
-            orchestrator_facade._write_results(target, final)
+            orchestrator._write_results(target, initial)
+            orchestrator._write_results(target, final)
 
             self.assertEqual(json.loads(target.read_text(encoding="utf-8")), final)
             self.assertIn("München Labs", target.read_text(encoding="utf-8"))
@@ -182,19 +273,19 @@ class QueueSafetyTests(unittest.TestCase):
             "test_mode": False,
         }
 
-        self.assertTrue(queue_runner_facade._confirmed_submission(confirmed))
-        self.assertFalse(queue_runner_facade._confirmed_submission(prefilled))
-        self.assertFalse(queue_runner_facade._confirmed_submission({"success": "true"}))
+        self.assertTrue(queue_runner._confirmed_submission(confirmed))
+        self.assertFalse(queue_runner._confirmed_submission(prefilled))
+        self.assertFalse(queue_runner._confirmed_submission({"success": "true"}))
 
     def test_queue_url_helpers_require_a_company_path_segment(self) -> None:
         url = "https://jobs.lever.co/acme-inc/123?source=queue"
 
-        self.assertEqual(queue_runner_impl._slug(url), "acme_inc_123")
-        self.assertEqual(queue_runner_impl._company_from_url(url), "acme-inc")
+        self.assertEqual(queue_runner._slug(url), "acme_inc_123")
+        self.assertEqual(queue_runner._company_from_url(url), "acme-inc")
         with self.assertRaisesRegex(ValueError, "path segment"):
-            queue_runner_impl._slug("https://jobs.lever.co/")
+            queue_runner._slug("https://jobs.lever.co/")
         with self.assertRaisesRegex(ValueError, "path segment"):
-            queue_runner_impl._company_from_url("https://jobs.lever.co/")
+            queue_runner._company_from_url("https://jobs.lever.co/")
 
 
 if __name__ == "__main__":

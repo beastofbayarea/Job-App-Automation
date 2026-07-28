@@ -14,8 +14,8 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-import email_gmail_client as gmail  # noqa: E402
-import email_pool_select as email_pool_cli  # noqa: E402
+from job_application_automation import email_gmail_client as gmail  # noqa: E402
+from job_application_automation import email_pool_select as email_pool_cli  # noqa: E402
 from job_application_automation import gmail_auth, gmail_messages, gmail_persistence  # noqa: E402
 
 
@@ -113,7 +113,7 @@ class GmailOAuthTests(unittest.TestCase):
             self.assertEqual(built["version"], "v1")
             self.assertFalse(bool(built["cache_discovery"]))
 
-    def test_legacy_facade_keeps_google_dependency_patch_seam(self) -> None:
+    def test_google_dependency_patch_seam_remains_available(self) -> None:
         dependencies = (
             _FakeRequest,
             _FakeCredentials,
@@ -273,7 +273,7 @@ class GmailMessageTests(unittest.TestCase):
             ),
         )
 
-    def test_facade_poll_retains_fetch_and_clock_patch_seams(self) -> None:
+    def test_poll_retains_fetch_and_clock_patch_seams(self) -> None:
         record = gmail.EmailRecord(
             "fresh", "thread", "sender@example.test", "", "OTP 42", "", [], "", "OTP 42"
         )

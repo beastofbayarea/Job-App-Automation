@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-# The implementation package lives below ``src``; public script facades still
-# reside directly in that source directory. Keep the exported paths anchored at
-# the original project layout so existing config, data, output, and subprocess
-# references remain byte-for-byte compatible.
+# The implementation package lives below ``src`` and is launched through the
+# single source-tree command runner. Keep exported paths anchored at the project
+# layout so config, data, output, and subprocess references stay predictable.
 PACKAGE_DIR = Path(__file__).resolve().parent
 SRC_DIR = PACKAGE_DIR.parent
+CLI_ENTRYPOINT = SRC_DIR / "job_automation.py"
 PROJECT_ROOT = SRC_DIR.parent
 CONFIG_DIR = PROJECT_ROOT / "config"
 DATA_DIR = PROJECT_ROOT / "data"

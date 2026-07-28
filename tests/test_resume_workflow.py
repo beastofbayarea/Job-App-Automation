@@ -10,7 +10,7 @@ from types import SimpleNamespace
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-import resume_generate as resume_generate  # noqa: E402
+from job_application_automation import resume_generate  # noqa: E402
 from job_application_automation.resume_cache import ResumeCache, cache_key  # noqa: E402
 from job_application_automation.resume_rendering import ResumeRenderRequest  # noqa: E402
 from job_application_automation.resume_scoring import (  # noqa: E402

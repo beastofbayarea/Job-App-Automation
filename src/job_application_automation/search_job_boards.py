@@ -2412,7 +2412,7 @@ def build_parser() -> argparse.ArgumentParser:
             "platforms, role types, and locations without API keys."
         ),
         epilog=(
-            "Example: python src/search_job_boards.py --role-type product "
+            "Example: python src/job_automation.py search --role-type product "
             '--ats-platform greenhouse --location "New York"'
         ),
     )

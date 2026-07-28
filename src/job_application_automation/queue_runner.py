@@ -8,11 +8,12 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Sequence
 from urllib.parse import unquote, urlparse
 
 from .artifacts import read_json, write_json
 from .contracts import EngineResult
-from .paths import OUTPUT_DIR, PROJECT_ROOT, SRC_DIR
+from .paths import CLI_ENTRYPOINT, OUTPUT_DIR, PROJECT_ROOT
 
 
 def _slug(url: str) -> str:
@@ -44,7 +45,7 @@ def _company_from_url(url: str) -> str:
     return parts[0]
 
 
-def main() -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     if hasattr(sys.stderr, "reconfigure"):
@@ -53,13 +54,13 @@ def main() -> int:
     parser.add_argument("--queue", type=Path, required=True)
     parser.add_argument("--start-index", type=int, default=0)
     parser.add_argument("--timeout", type=int, default=300)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     urls = [
         line.strip() for line in args.queue.read_text(encoding="utf-8").splitlines() if line.strip()
     ]
     progress_path = OUTPUT_DIR / "job_url_queue_progress.json"
-    orchestrator = SRC_DIR / "orchestrator.py"
+    orchestrator = CLI_ENTRYPOINT
 
     for index, url in enumerate(urls[args.start_index :], start=args.start_index):
         slug = _slug(url)
@@ -73,6 +74,7 @@ def main() -> int:
         command = [
             sys.executable,
             str(orchestrator),
+            "apply",
             "--url",
             url,
             "--company",

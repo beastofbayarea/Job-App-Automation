@@ -39,7 +39,7 @@ from .engine_shared import (
 from .adapters import CommandResult, ProcessRunner, ProcessSettings
 from .artifacts import write_json as write_json_artifact
 from .contracts import EngineMode, EngineRequest, EngineResult
-from .paths import CONFIG_DIR, DATA_DIR, OUTPUT_DIR, SRC_DIR, resolve_existing
+from .paths import CLI_ENTRYPOINT, CONFIG_DIR, DATA_DIR, OUTPUT_DIR, SRC_DIR, resolve_existing
 
 logging.basicConfig(
     level=logging.INFO,
@@ -47,8 +47,6 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger("ATSOrchestrator")
-
-SCRIPT_DIR = SRC_DIR
 
 DEFAULT_TRACKER_FILE = DATA_DIR / "ai_product_manager_job_tracker.xlsx"
 DEFAULT_RESUME_FILE = DATA_DIR / "shivam_singh_ai_product_manager_resume.pdf"
@@ -59,9 +57,9 @@ SCREENSHOT_EXTENSIONS = {".jpeg", ".jpg", ".png"}
 SUPPORTED_ATS = tuple(ATS_HOSTS)
 
 DEFAULT_ENGINE_FILES: Mapping[str, Path] = {
-    "ashby": SCRIPT_DIR / "engine_ashby.py",
-    "greenhouse": SCRIPT_DIR / "engine_greenhouse.py",
-    "lever": SCRIPT_DIR / "engine_lever.py",
+    "ashby": CLI_ENTRYPOINT,
+    "greenhouse": CLI_ENTRYPOINT,
+    "lever": CLI_ENTRYPOINT,
 }
 
 
@@ -191,6 +189,16 @@ def resolve_engine_path(raw_path: Path) -> Path:
     return resolve_existing(raw_path, SRC_DIR).resolve()
 
 
+def _uses_project_cli(engine_path: Path) -> bool:
+    """Return whether *engine_path* is the bundled unified command runner."""
+    return engine_path.resolve() == CLI_ENTRYPOINT.resolve()
+
+
+def _engine_label(engine_path: Path, ats: str) -> str:
+    """Return an audit-friendly label for bundled and custom engines."""
+    return f"internal:{ats}" if _uses_project_cli(engine_path) else engine_path.name
+
+
 def _engine_mode_flag(*, live_submit: bool, fill_only: bool, dry_run: bool) -> str:
     """Return the engine mode flag using the established precedence."""
     return _engine_mode(
@@ -238,6 +246,14 @@ def build_engine_command(
         ),
         headed=headed,
     )
+    if _uses_project_cli(engine_path):
+        return [
+            sys.executable,
+            str(engine_path),
+            "engine",
+            request.ats,
+            *request.cli_arguments(),
+        ]
     return [sys.executable, str(engine_path), *request.cli_arguments()]
 
 
@@ -407,7 +423,7 @@ def generate_personalized_resume(
     email: str = "",
     process_runner: ProcessRunner | None = None,
 ) -> Optional[Path]:
-    generator = SCRIPT_DIR / "resume_generate.py"
+    generator = CLI_ENTRYPOINT
     if not generator.exists():
         logger.warning("Resume generator not found: %s", generator)
         return None
@@ -429,6 +445,7 @@ def generate_personalized_resume(
     command = [
         sys.executable,
         str(generator),
+        "resume",
         "--company",
         company,
         "--role",
@@ -623,6 +640,7 @@ def run_orchestrator(
                 results_path,
             )
             continue
+        engine_label = _engine_label(engine_path, ats)
 
         try:
             email = email_from_resume(resume_path, fallback_email)
@@ -652,7 +670,7 @@ def run_orchestrator(
                 results,
                 {
                     **base_result,
-                    "engine": engine_path.name,
+                    "engine": engine_label,
                     "resume": "",
                     "email": _mask_email(email),
                     "confirmed": False,
@@ -675,7 +693,7 @@ def run_orchestrator(
                 results,
                 {
                     **base_result,
-                    "engine": engine_path.name,
+                    "engine": engine_label,
                     "resume": target_resume.name,
                     "email": _mask_email(email),
                     "status": "GENERATED_RESUME_IDENTITY_INVALID",
@@ -750,7 +768,7 @@ def run_orchestrator(
             results,
             {
                 **base_result,
-                "engine": engine_path.name,
+                "engine": engine_label,
                 "resume": target_resume.name,
                 "email": _mask_email(email),
                 **outcome,
@@ -798,10 +816,14 @@ def _build_parser() -> argparse.ArgumentParser:
     mode.add_argument("--fill-only", action="store_true")
     mode.add_argument("--dry-run", action="store_true")
 
-    parser.add_argument("--engine", default=None, help="Deprecated alias for --ashby-engine")
-    parser.add_argument("--ashby-engine", default=None)
-    parser.add_argument("--greenhouse-engine", default=None)
-    parser.add_argument("--lever-engine", default=None)
+    parser.add_argument(
+        "--engine",
+        default=None,
+        help="Deprecated alias for --ashby-engine custom script override",
+    )
+    parser.add_argument("--ashby-engine", default=None, help="Custom Ashby engine script")
+    parser.add_argument("--greenhouse-engine", default=None, help="Custom Greenhouse engine script")
+    parser.add_argument("--lever-engine", default=None, help="Custom Lever engine script")
     return parser
 
 

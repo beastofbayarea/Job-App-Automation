@@ -6,13 +6,33 @@ automating Ashby, Greenhouse, and Lever application forms.
 ## Layout
 
 ```text
-src/       Python scripts
-config/    Candidate settings and local OAuth files
-data/      Base resume material and the job tracker
-output/    Generated resumes, caches, and run results
+src/job_automation.py              Unified command launcher
+src/job_application_automation/    Reusable workflow implementation package
+config/                             Candidate settings and local OAuth files
+data/                               Base resume material and the job tracker
+output/                             Generated resumes, caches, and run results
 ```
 
-The project intentionally uses only one folder level below the repository root.
+Run workflows through `src/job_automation.py`; the implementation package is
+not a collection of independently executed scripts.
+
+### Command migration
+
+The previous root-level workflow scripts have been removed. Replace existing
+commands with the corresponding unified subcommand:
+
+| Previous command | Replacement |
+| --- | --- |
+| `python src/orchestrator.py ...` | `python src/job_automation.py apply ...` |
+| `python src/queue_runner.py ...` | `python src/job_automation.py queue ...` |
+| `python src/resume_generate.py ...` | `python src/job_automation.py resume ...` |
+| `python src/search_job_boards.py ...` | `python src/job_automation.py search ...` |
+| `python src/email_gmail_client.py ...` | `python src/job_automation.py gmail ...` |
+| `python src/email_pool_select.py ...` | `python src/job_automation.py email-pool ...` |
+
+Code that imported a root facade should import its module from
+`job_application_automation` instead, for example
+`from job_application_automation import orchestrator`.
 
 ## Setup
 
@@ -44,8 +64,8 @@ python -m compileall -q src
 python -m pip check
 ```
 
-Pytest is configured to discover tests in `tests/`, import compatibility
-modules from `src/`, and report branch coverage for that source directory.
+Pytest is configured to discover tests in `tests/`, import package modules from
+`src/`, and report branch coverage for that source directory.
 CI disables sockets for the test run, so automated checks must use mocks or
 fixtures for external services. The workflow invokes no live ATS, Gmail,
 browser, or LLM operation.
@@ -67,25 +87,24 @@ OAuth files are deliberately excluded from Git.
 Preview the orchestrator without submitting applications:
 
 ```powershell
-python src/orchestrator.py --dry-run --limit 1
+python src/job_automation.py apply --dry-run --limit 1
 ```
 
 Run the complete workflow for one job URL:
 
 ```powershell
-python src/orchestrator.py `
+python src/job_automation.py apply `
   --url "https://jobs.ashbyhq.com/example/job-id" `
   --dry-run
 ```
 
-Job URLs must enter through `orchestrator.py`; the ATS engine scripts
-(`engine_ashby.py`, `engine_greenhouse.py`, `engine_lever.py`) are internal
-child processes and reject direct URL invocations.
+Job URLs must enter through `job_automation.py apply`. The ATS engines are
+internal package workflows invoked only by that command.
 
 Generate a personalized resume:
 
 ```powershell
-python src/resume_generate.py `
+python src/job_automation.py resume `
   --company "Example" `
   --role "Product Manager" `
   --url "https://jobs.example.com/role"
@@ -94,7 +113,7 @@ python src/resume_generate.py `
 Search supported ATS boards:
 
 ```powershell
-python src/search_job_boards.py `
+python src/job_automation.py search `
   --role-type "Product Manager" `
   --ats-platform greenhouse `
   --ats-platform lever `
@@ -115,7 +134,7 @@ Management Consulting, Corporate Development (`Corp Dev`), and Venture Capital.
 For example:
 
 ```powershell
-python src/search_job_boards.py `
+python src/job_automation.py search `
   --role-type "Growth Mkt" `
   --role-type "Paid Media" `
   --role-type "Corp Dev" `
@@ -155,7 +174,7 @@ their identifiers are not assumed to be provider API IDs.
 Read recent Gmail messages:
 
 ```powershell
-python src/email_gmail_client.py --max-results 10
+python src/job_automation.py gmail --max-results 10
 ```
 
 Generated resumes, caches, screenshots, and run results are written to
@@ -178,7 +197,7 @@ not part of CI.
    with `python -m playwright install chromium`. Keep all credentials out of
    Git.
 2. Use a test candidate and an Ashby, Greenhouse, or Lever URL you are
-   authorized to exercise. Start with `python src/orchestrator.py --url
+   authorized to exercise. Start with `python src/job_automation.py apply --url
    "<authorized-supported-ats-url>" --dry-run` and inspect the generated
    result, resume, and any screenshots.
 3. If an authorized test application needs browser form coverage, rerun the
