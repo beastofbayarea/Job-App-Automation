@@ -7,7 +7,6 @@ import argparse
 import hashlib
 import json
 import os
-import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -254,7 +253,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     narrative = load_career_narrative(profile)
 
     try:
-        source = load_resume_source(resolve_runtime_path(RUNTIME_CONFIG.application["resume_source_file"]))
+        source = load_resume_source(
+            resolve_runtime_path(RUNTIME_CONFIG.application["resume_source_file"])
+        )
     except (OSError, ValueError) as exc:
         print(f"Could not load tagged resume source: {exc}", file=sys.stderr)
         return 2

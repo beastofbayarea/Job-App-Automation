@@ -88,9 +88,7 @@ def render_cover_letter_pdf(
 
     elements: list[Any] = []
     contact_line = " | ".join(
-        str(candidate[key])
-        for key in ("name", "email", "phone", "location")
-        if candidate.get(key)
+        str(candidate[key]) for key in ("name", "email", "phone", "location") if candidate.get(key)
     )
     if contact_line:
         elements.append(Paragraph(xml_escape(contact_line), header))
