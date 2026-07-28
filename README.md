@@ -30,6 +30,26 @@ Application Default Credentials or a service-account credential through the
 standard `GOOGLE_APPLICATION_CREDENTIALS` environment variable. It can fall
 back to rule-based local generation when the AI service is unavailable.
 
+## Development quality checks
+
+Install the runtime and development dependencies, then run the same local,
+non-submitting checks used by CI:
+
+```powershell
+python -m pip install -r requirements-dev.txt
+python -m ruff format --check .
+python -m ruff check .
+python -m pytest
+python -m compileall -q src
+python -m pip check
+```
+
+Pytest is configured to discover tests in `tests/`, import compatibility
+modules from `src/`, and report branch coverage for that source directory.
+CI disables sockets for the test run, so automated checks must use mocks or
+fixtures for external services. The workflow invokes no live ATS, Gmail,
+browser, or LLM operation.
+
 ## Configuration
 
 - Candidate details: `config/candidate_profile_config.json`
@@ -146,3 +166,24 @@ Generated resumes, caches, screenshots, and run results are written to
 Application commands default to dry-run behavior. Review generated answers and
 use the explicit live-submit option only when you intend to submit an
 application.
+
+## Manual credentialed smoke checklist
+
+Run this only when you have explicit authorization for the candidate profile,
+OAuth account, and target ATS job. These steps are intentionally manual and are
+not part of CI.
+
+1. Create the local candidate configuration from the example files, provide
+   the required Gmail OAuth and Vertex AI credentials, and install Chromium
+   with `python -m playwright install chromium`. Keep all credentials out of
+   Git.
+2. Use a test candidate and an Ashby, Greenhouse, or Lever URL you are
+   authorized to exercise. Start with `python src/orchestrator.py --url
+   "<authorized-supported-ats-url>" --dry-run` and inspect the generated
+   result, resume, and any screenshots.
+3. If an authorized test application needs browser form coverage, rerun the
+   same command with `--fill-only`; review every filled response before taking
+   any further action.
+4. Only after deliberate human review, use `--live-submit` for an application
+   you intend to submit. Confirm the recorded result before moving to another
+   job.

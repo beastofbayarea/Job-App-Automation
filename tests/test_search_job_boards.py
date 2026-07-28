@@ -233,7 +233,10 @@ class SearchJobBoardsTests(unittest.TestCase):
             mode="exhaustive",
         )
         families = {query.family for query in queries}
-        self.assertTrue({"role_ai_location", "role_ai", "role_location", "role_only", "careers_role"} <= families)
+        self.assertTrue(
+            {"role_ai_location", "role_ai", "role_location", "role_only", "careers_role"}
+            <= families
+        )
 
     def test_parser_writes_default_results_under_output_directory(self) -> None:
         parser = search.build_parser()
@@ -293,9 +296,7 @@ class SearchJobBoardsTests(unittest.TestCase):
 
     def test_date_only_expiry_is_inclusive(self) -> None:
         self.assertTrue(search.ensure_not_expired("2026-07-28", NOW))
-        self.assertFalse(
-            search.ensure_not_expired("2026-07-28", datetime(2026, 7, 29, tzinfo=UTC))
-        )
+        self.assertFalse(search.ensure_not_expired("2026-07-28", datetime(2026, 7, 29, tzinfo=UTC)))
 
     def test_jsonld_parser_returns_multiple_qualified_jobposting_records(self) -> None:
         html = """
@@ -486,7 +487,9 @@ class SearchJobBoardsTests(unittest.TestCase):
             output_path = root / "jobs.csv"
             cache_path = root / "cache.json"
             coverage_path = root / "coverage.json"
-            with patch.object(search, "fetch_board_jobs", return_value=[make_job(live_status="listed")]):
+            with patch.object(
+                search, "fetch_board_jobs", return_value=[make_job(live_status="listed")]
+            ):
                 exit_code = search.main(
                     [
                         "--role-type",
@@ -510,7 +513,9 @@ class SearchJobBoardsTests(unittest.TestCase):
                 )
             self.assertEqual(0, exit_code)
             self.assertIn("live_status", output_path.read_text(encoding="utf-8-sig"))
-            self.assertEqual(1, json.loads(coverage_path.read_text(encoding="utf-8"))["results"]["returned"])
+            self.assertEqual(
+                1, json.loads(coverage_path.read_text(encoding="utf-8"))["results"]["returned"]
+            )
 
     def test_main_uses_default_locations_only_when_location_is_omitted(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -655,7 +660,9 @@ class SearchJobBoardsTests(unittest.TestCase):
         self.assertEqual(1, exit_code)
         self.assertEqual(1, report["version"])
         self.assertEqual(0, report["results"]["returned"])
-        self.assertTrue({"criteria", "cache", "discovery", "feed_fetch", "fallback", "results"} <= report.keys())
+        self.assertTrue(
+            {"criteria", "cache", "discovery", "feed_fetch", "fallback", "results"} <= report.keys()
+        )
 
     def test_failed_feed_mode_includes_generic_web_candidates(self) -> None:
         web_board = search.Board("web", "example.wd1.myworkdayjobs.com")

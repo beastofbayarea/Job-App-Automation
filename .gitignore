@@ -28,5 +28,10 @@ config/nooks_retry_email.json
 .env
 *.log
 
+# Test and coverage artifacts
+.coverage
+coverage.xml
+htmlcov/
+
 # Local editor workspace settings
 .vscode/
