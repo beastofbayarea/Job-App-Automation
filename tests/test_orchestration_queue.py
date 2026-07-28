@@ -258,6 +258,22 @@ class OrchestrationPersistenceTests(unittest.TestCase):
 
 
 class QueueSafetyTests(unittest.TestCase):
+    def test_orchestrator_submission_log_predicate_requires_exact_safe_result(self) -> None:
+        confirmed = {
+            "success": True,
+            "status": EngineStatus.SUBMITTED_CONFIRMED.value,
+            "ats": "ashby",
+            "submitted": True,
+            "confirmed": True,
+            "test_mode": False,
+        }
+        prefilled = {**confirmed, "status": EngineStatus.PREFILLED_ONLY.value,
+                     "submitted": False, "confirmed": False}
+
+        self.assertTrue(orchestrator._is_confirmed_submission(confirmed))
+        self.assertFalse(orchestrator._is_confirmed_submission(prefilled))
+        self.assertFalse(orchestrator._is_confirmed_submission({"status": "SUBMITTED & CONFIRMED"}))
+
     def test_queue_rejects_invalid_indexes_and_timeouts_before_starting(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             queue_path = Path(directory) / "queue.txt"

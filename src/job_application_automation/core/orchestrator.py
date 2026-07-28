@@ -440,6 +440,14 @@ def _record_submission(
         logger.warning("Could not record submission log entry for %s: %s", job["url"], exc)
 
 
+def _is_confirmed_submission(outcome: Mapping[str, object]) -> bool:
+    """Accept only a validated, confirmed result for the submission log."""
+    try:
+        return EngineResult.from_payload(outcome).is_confirmed_submission
+    except ValueError:
+        return False
+
+
 def cleanup_post_run_artifacts(results_path: Path) -> None:
     """Preserve results, screenshots, and submission proof for auditability."""
     logger.info(
@@ -811,14 +819,15 @@ def run_orchestrator(
             logger.error("Engine execution failed: %s", exc)
             outcome = {"success": False, "status": "ENGINE_EXECUTION_ERROR", "detail": str(exc)}
 
-        _record_submission(
-            submission_log,
-            submission_log_path,
-            job=job,
-            email=email,
-            resume_path=target_resume,
-            status=str(outcome.get("status", "")),
-        )
+        if _is_confirmed_submission(outcome):
+            _record_submission(
+                submission_log,
+                submission_log_path,
+                job=job,
+                email=email,
+                resume_path=target_resume,
+                status=str(outcome["status"]),
+            )
         _append_and_persist(
             results,
             {
