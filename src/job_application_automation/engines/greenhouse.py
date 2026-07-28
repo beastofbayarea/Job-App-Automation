@@ -70,6 +70,10 @@ def _valid_greenhouse_url(url: str) -> bool:
     return validate_ats_url(url, ATS_NAME)
 
 
+def _security_challenge_visible(page: Page) -> bool:
+    return page.locator('input[id^="security-input"]').count() >= 8
+
+
 def _screenshot(page: Page, directory: Path, company: str, tag: str) -> str:
     result = _screenshot_shared(page, directory, company, tag)
     if result:
@@ -786,7 +790,7 @@ def run(
             # directly instead of re-filling (and re-triggering) the whole form.
             if (
                 page.url.rstrip("/") == url.rstrip("/")
-                and page.locator('input[id^="security-input"]').count() >= 8
+                and _security_challenge_visible(page)
             ):
                 if not live_submit:
                     return {
@@ -1001,6 +1005,19 @@ def run(
                 page.wait_for_load_state("networkidle", timeout=timeout)
             except PlaywrightTimeoutError:
                 pass
+            if _security_challenge_visible(page) and _fill_security_code_from_gmail(page, email):
+                challenge_submit = _first_visible(
+                    page.get_by_role(
+                        "button",
+                        name=SUBMIT_BUTTON_TEXT_PATTERN,
+                    )
+                )
+                if challenge_submit is None:
+                    challenge_submit = _first_visible(
+                        page.locator('button[type="submit"], input[type="submit"]')
+                    )
+                if challenge_submit is not None:
+                    challenge_submit.click()
             confirmed = False
             for _ in range(15):
                 if _confirmation_visible(page):
