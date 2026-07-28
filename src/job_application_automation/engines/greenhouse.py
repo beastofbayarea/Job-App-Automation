@@ -50,6 +50,10 @@ from ..mail.gmail_client import (
 )
 
 ATS_NAME = "greenhouse"
+SUBMIT_BUTTON_TEXT_PATTERN = re.compile(
+    r"submit application|envoyer.*candidature|postuler",
+    re.I,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -964,10 +968,7 @@ def run(
             submit = _first_visible(
                 page.get_by_role(
                     "button",
-                    name=re.compile(
-                        r"submit application|apply|envoyer.*candidature|postuler",
-                        re.I,
-                    ),
+                    name=SUBMIT_BUTTON_TEXT_PATTERN,
                 )
             )
             if submit is None:
