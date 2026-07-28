@@ -1,42 +1,26 @@
 # Job Application Automation
 
-Tools for searching ATS job boards, creating personalized resumes, and
-automating Ashby, Greenhouse, and Lever application forms.
+A local, safety-first toolkit for discovering public ATS vacancies, generating tailored PDF resumes, and filling applications on Ashby, Greenhouse, and Lever. It also includes a Gmail OAuth utility and a candidate-email pool selector.
 
-## Layout
+The public entry point is `src/job_automation.py`. The implementation under `src/job_application_automation/` is a reusable Python package; ATS engine commands are primarily diagnostics used by the orchestrator.
 
-```text
-src/job_automation.py              Unified command launcher
-src/job_application_automation/    Reusable workflow implementation package
-config/                             Candidate settings and local OAuth files
-data/                               Base resume material and the job tracker
-output/                             Generated resumes, caches, and run results
-```
+## Capabilities
 
-Run workflows through `src/job_automation.py`; the implementation package is
-not a collection of independently executed scripts.
+- Search Greenhouse, Lever, Ashby, and generic JSON-LD job pages without API keys. Search produces CSV results, optional JSON, a reusable board cache, and a coverage report.
+- Generate a role-specific PDF resume with Vertex AI when configured, or a rule-based fallback if AI is unavailable. Source identity, employment facts, and education are validated before rendering.
+- Apply to a single URL or an Excel tracker. The orchestrator detects the supported ATS, selects a configured candidate email, generates a tailored resume, and records results and confirmed submissions.
+- Run a deliberately live sequential queue that stops at the first unconfirmed application.
+- Read, classify, export, draft, or send Gmail messages through local OAuth.
 
-### Command migration
+## Requirements
 
-The previous root-level workflow scripts have been removed. Replace existing
-commands with the corresponding unified subcommand:
-
-| Previous command | Replacement |
-| --- | --- |
-| `python src/orchestrator.py ...` | `python src/job_automation.py apply ...` |
-| `python src/queue_runner.py ...` | `python src/job_automation.py queue ...` |
-| `python src/resume_generate.py ...` | `python src/job_automation.py resume ...` |
-| `python src/search_job_boards.py ...` | `python src/job_automation.py search ...` |
-| `python src/email_gmail_client.py ...` | `python src/job_automation.py gmail ...` |
-| `python src/email_pool_select.py ...` | `python src/job_automation.py email-pool ...` |
-
-Code that imported a root facade should import its module from
-`job_application_automation` instead, for example
-`from job_application_automation import orchestrator`.
+- Python 3.10 or newer
+- Chromium for browser-based application flows
+- Candidate configuration and resume source material for resume or application workflows
+- Google OAuth credentials for Gmail features
+- A Google Cloud Vertex AI credential is optional; without it, resume generation falls back locally
 
 ## Setup
-
-Create a virtual environment and install the dependencies:
 
 ```powershell
 python -m venv .venv
@@ -45,79 +29,34 @@ python -m pip install -r requirements.txt
 python -m playwright install chromium
 ```
 
-The resume generator uses the Google GenAI SDK with Vertex AI. Configure
-Application Default Credentials or a service-account credential through the
-standard `GOOGLE_APPLICATION_CREDENTIALS` environment variable. It can fall
-back to rule-based local generation when the AI service is unavailable.
-
-## Development quality checks
-
-Install the runtime and development dependencies, then run the same local,
-non-submitting checks used by CI:
+For contributor checks, install the development dependencies as well:
 
 ```powershell
 python -m pip install -r requirements-dev.txt
-python -m ruff format --check .
-python -m ruff check .
-python -m pytest
-python -m compileall -q src
-python -m pip check
 ```
 
-Pytest is configured to discover tests in `tests/`, import package modules from
-`src/`, and report branch coverage for that source directory.
-CI disables sockets for the test run, so automated checks must use mocks or
-fixtures for external services. The workflow invokes no live ATS, Gmail,
-browser, or LLM operation.
+## Configure local data and credentials
 
-## Configuration
+Tracked examples are safe templates. Copy and personalize them; the resulting files, credentials, tokens, candidate source text, and generated output are ignored by Git.
 
-- Candidate details: `config/candidate_profile_config.json`
-- Shared runtime defaults: `config/runtime_config.json`
-- Candidate email pool: `config/candidate_email_pool.json`
-- Gmail desktop OAuth client: `config/credentials.json`
-- Gmail OAuth token: `config/token.json`
-- Vertex service account: `config/vertex_service_account.json`
+| Purpose | Local file | Starting point |
+| --- | --- | --- |
+| Candidate profile and answer policy | `config/candidate_profile_config.json` | `config/candidate_profile_config.example.json` |
+| Candidate email addresses | `config/candidate_email_pool.json` | `config/candidate_email_pool.example.json` |
+| Resume source material | `data/base_resume.txt` | Create from the candidate's resume; this is required for tailored resumes. |
+| Runtime defaults | `config/runtime_config.json` | Already tracked; adjust paths, timeouts, model, and quality thresholds when needed. |
+| Vertex service account | `config/vertex_service_account.json` | `config/vertex_service_account.example.json` |
+| Gmail desktop OAuth client and token | `config/credentials.json`, `config/token.json` | Download OAuth desktop-client credentials from Google Cloud; the token is created during authorization. |
 
-`runtime_config.json` holds non-secret operational settings: input and output
-paths, Chrome's CDP endpoint, Vertex model and retry controls, resume-generation
-quality thresholds, Ashby timings/confirmation phrases, and Gmail verification
-paths. Its default Vertex `project_id` value, `from-service-account`, uses the
-`project_id` in the local service-account JSON; replace it with an explicit
-project ID only when required by your deployment.
+The default runtime configuration resolves paths from the project root. Its Vertex `project_id` can remain `from-service-account` to read the project ID from the configured service-account file. Alternatively, use Application Default Credentials via `GOOGLE_APPLICATION_CREDENTIALS`.
 
-OAuth files, service accounts, and candidate PII configuration are deliberately
-excluded from Git.
+## Commands
 
-## Common commands
+Run all workflows from the repository root.
 
-Preview the orchestrator without submitting applications:
+### Search job boards
 
-```powershell
-python src/job_automation.py apply --dry-run --limit 1
-```
-
-Run the complete workflow for one job URL:
-
-```powershell
-python src/job_automation.py apply `
-  --url "https://jobs.ashbyhq.com/example/job-id" `
-  --dry-run
-```
-
-Job URLs must enter through `job_automation.py apply`. The ATS engines are
-internal package workflows invoked only by that command.
-
-Generate a personalized resume:
-
-```powershell
-python src/job_automation.py resume `
-  --company "Example" `
-  --role "Product Manager" `
-  --url "https://jobs.example.com/role"
-```
-
-Search supported ATS boards:
+`--role-type` and `--ats-platform` are required and repeatable. Supported platforms are `greenhouse`, `lever`, `ashby`, and `web` (generic JSON-LD pages). Searches default to exhaustive board discovery, no rolling date limit, and the following locations when none is supplied: US Remote, UK, Ireland, India Remote, Delhi, Noida, France, Europe Remote, UAE, Saudi Arabia, Singapore, Australia, New Zealand, and Hong Kong.
 
 ```powershell
 python src/job_automation.py search `
@@ -129,87 +68,102 @@ python src/job_automation.py search `
   --require-live
 ```
 
-`--role-type` and `--ats-platform` are required. Repeat `--role-type`,
-`--ats-platform`, or `--location` to search multiple role families, platforms,
-or locations. When `--location` is omitted, the search defaults to US Remote,
-UK, Ireland, India Remote, Delhi, Noida, France, Europe Remote, UAE, Saudi
-Arabia, Singapore, Australia, New Zealand, and Hong Kong. Supplying one or
-more `--location` values replaces that default list. Expanded role matching has
-built-in support for Growth Marketing (`Growth Mkt`), Performance Marketing
-(`Performance Mkt`), Paid Media, Marketing Operations (`Marketing Ops`),
-Management Consulting, Corporate Development (`Corp Dev`), and Venture Capital.
-For example:
+Use `--posted-on YYYY-MM-DD`, or `--posted-since` with `--posted-until`, for explicit calendar filters. `--days 7` applies a rolling window. Seed known boards with `--board-url` or `--boards-file`, or scan company pages with `--career-page` or `--career-pages-file`. Results go to `output/ai_jobs.csv`; `output/job_search_coverage.json` explains discovery, feed, fallback, and live-check coverage. `--require-live` implies `--verify-live` and excludes unknown outcomes.
+
+### Generate a resume
 
 ```powershell
-python src/job_automation.py search `
-  --role-type "Growth Mkt" `
-  --role-type "Paid Media" `
-  --role-type "Corp Dev" `
-  --ats-platform greenhouse `
-  --ats-platform lever `
-  --location "New York"
+python src/job_automation.py resume `
+  --company "Example" `
+  --role "Product Manager" `
+  --url "https://jobs.ashbyhq.com/example/job-id"
 ```
 
-The `web` platform adds JSON-LD job-page discovery for common public ATSs that
-do not have a stable board-feed adapter. The final match uses all configured
-title variants, while discovery uses one canonical phrase per requested family
-so a query budget cannot be consumed by abbreviations or input typos.
+Provide job-description text directly with `--keywords`, `--jd-overview`, `--jd-resp`, and `--jd-req`; otherwise an Ashby URL is used for context. Use `--email` to override the source email for one generated document and `--output` to choose its path. Generated resumes and non-persistent caches are written under `output/` by default.
 
-Use `--posted-on 2026-07-28` for one calendar day, or combine
-`--posted-since` and `--posted-until` for a date range. Explicit posted-date
-filters take precedence over the default unbounded `--days 0` window.
+### Apply to jobs
 
-Searches run in exhaustive discovery mode by default: they use broad role,
-AI, location, and career queries to find boards, then apply the requested
-filters only after reading the live board feed or job page. Results include a
-coverage report at `output/job_search_coverage.json`. Use `--days 7` for a
-recent-only run, `--career-page https://example.com/careers` to scan a custom
-career page for ATS links, and `--boards-file boards.txt` to reuse a maintained
-list of known boards. The default 400-request discovery budget prioritizes an
-early query wave across requested role families; use
-`--max-discovery-queries 0` when you explicitly want every planned query to
-run.
-
-Unverified feed results are marked `listed`. `--verify-live` records a
-`live`, `closed`, or `unknown` outcome when it has decisive evidence.
-`--require-live` keeps only roles confirmed live; transient access failures
-remain `unknown` rather than being treated as closed. A provider-confirmed role
-can remain `listed` when its page blocks verification or has ambiguous evidence;
-`--require-live` excludes it. Generic JSON-LD roles are page-verified because
-their identifiers are not assumed to be provider API IDs.
-
-Read recent Gmail messages:
+Applications are dry runs unless `--live-submit` is explicitly passed. `--fill-only` drives the form without submitting. Review generated results and screenshots before any live action.
 
 ```powershell
-python src/job_automation.py gmail --max-results 10
+# One job; company and role are optional metadata in URL mode.
+python src/job_automation.py apply `
+  --url "https://jobs.ashbyhq.com/example/job-id" `
+  --company "Example" `
+  --role "Product Manager" `
+  --dry-run
+
+# A tracker-driven run. The default tracker and resume paths come from runtime_config.json.
+python src/job_automation.py apply --limit 1 --dry-run
 ```
 
-Generated resumes, caches, screenshots, and run results are written to
-`output/`.
+Use `--tracker`, `--resume`, `--config`, `--results-file`, and `--submission-log-file` to override defaults. `--headed` shows the browser, while `--no-shuffle` preserves tracker order. A URL run ignores `--tracker`. The orchestrator supports Ashby, Greenhouse, and Lever and always enables URL-specific resume personalization. It records workflow results in `output/orchestration_results.json` and confirmed applications in `output/submission_log.json` by default.
 
-## Safety
+### Run a submission queue
 
-Application commands default to dry-run behavior. Review generated answers and
-use the explicit live-submit option only when you intend to submit an
-application.
+The queue file contains one non-empty job URL per line. Unlike `apply`, queue execution always invokes `--live-submit`, and stops as soon as a submission is not confirmed.
 
-## Manual credentialed smoke checklist
+```powershell
+python src/job_automation.py queue --queue .\jobs.txt
+```
 
-Run this only when you have explicit authorization for the candidate profile,
-OAuth account, and target ATS job. These steps are intentionally manual and are
-not part of CI.
+Use `--start-index` to resume and `--timeout` to set each application-engine timeout. Progress is stored in `output/job_url_queue_progress.json`.
 
-1. Create the local candidate configuration from the example files, provide
-   the required Gmail OAuth and Vertex AI credentials, and install Chromium
-   with `python -m playwright install chromium`. Keep all credentials out of
-   Git.
-2. Use a test candidate and an Ashby, Greenhouse, or Lever URL you are
-   authorized to exercise. Start with `python src/job_automation.py apply --url
-   "<authorized-supported-ats-url>" --dry-run` and inspect the generated
-   result, resume, and any screenshots.
-3. If an authorized test application needs browser form coverage, rerun the
-   same command with `--fill-only`; review every filled response before taking
-   any further action.
-4. Only after deliberate human review, use `--live-submit` for an application
-   you intend to submit. Confirm the recorded result before moving to another
-   job.
+### Gmail and email pool
+
+```powershell
+# Read and classify recent matching messages.
+python src/job_automation.py gmail --query "newer_than:30d" --classify --include-body
+
+# Export messages without exposing sensitive data in the export.
+python src/job_automation.py gmail --unread --csv output\mail.csv --redact
+
+# Create a draft. Omit --yes to require an interactive confirmation.
+python src/job_automation.py gmail --send-to "person@example.com" --subject "Hello" --body "Message" --draft
+
+# Select a configured candidate email.
+python src/job_automation.py email-pool --count 1
+```
+
+Gmail supports `--all-mail`, `--unread`, `--json`, HTML bodies, drafts, and sending. It requires local OAuth credentials and does not run in CI.
+
+### Diagnostic engine commands
+
+The engines are normally started by `apply`. For an authorized diagnostic run, use `engine ashby`, `engine greenhouse`, or `engine lever`; each requires `--url` and `--resume` and accepts the same `--dry-run`, `--fill-only`, `--live-submit`, and `--headed` controls.
+
+```powershell
+python src/job_automation.py engine greenhouse --url "<authorized-url>" --resume ".\resume.pdf" --dry-run
+```
+
+## Architecture
+
+```text
+job_automation.py
+  └─ cli.py
+      ├─ apply / queue              core orchestration and shared contracts
+      ├─ resume                     resume source, AI, validation, scoring, rendering
+      ├─ search                     discovery, board feeds, JSON-LD, liveness, caching
+      ├─ gmail / email-pool         Gmail OAuth, messages, exports, email selection
+      └─ engine <ATS>               Ashby, Greenhouse, or Lever browser engine
+```
+
+See [architecture.mmd](architecture.mmd) for the detailed Mermaid diagram. `PRD.md` and `docs/superpowers/plans/` describe planned work, not currently available commands.
+
+## Quality checks
+
+```powershell
+python -m ruff format --check .
+python -m ruff check .
+python -m pytest
+python -m compileall -q src
+python -m pip check
+```
+
+Pytest runs with sockets disabled, so tests use mocks and never invoke live ATS, browser, Gmail, or LLM operations.
+
+## Safety and privacy
+
+- Only use browser automation and email features with explicit authorization for the candidate account and target job.
+- Keep credentials, OAuth tokens, candidate profile data, resume source material, and generated output out of version control.
+- Do not treat a filled form as submitted: rely on the recorded confirmation status before proceeding.
+- Use the queue only for intentional live submissions; it is not a dry-run batch tool.
