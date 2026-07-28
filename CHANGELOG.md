@@ -21,6 +21,15 @@ All notable user-facing changes are documented here. This project currently uses
 - Tightened confirmed-submission handling so test-mode results cannot be
   counted, prevented same-day submission-log collisions, and added a
   cover-letter email override for document identity consistency.
+- Expanded the root README to cover every public command, compatibility alias,
+  operational script, live-action boundary, output artifact, and exit-status
+  convention.
+
+### Fixed
+
+- Report missing, non-file, symlinked, unreadable, or invalidly encoded
+  `cover-letter --jd-file` input as a clean CLI usage error instead of an
+  uncaught traceback.
 
 ## [0.1.0]
 

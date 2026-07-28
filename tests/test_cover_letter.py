@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import io
 import sys
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 
 
@@ -410,6 +412,26 @@ _VALID_RESPONSE = json_module.dumps(
 
 
 class GenerateCoverLetterTests(unittest.TestCase):
+    def test_cli_reports_an_unreadable_jd_file_without_a_traceback(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            missing = Path(directory) / "missing-jd.txt"
+            stderr = io.StringIO()
+
+            with redirect_stderr(stderr):
+                status = cover_letter.main(
+                    [
+                        "--company",
+                        "Example Co",
+                        "--role",
+                        "PM",
+                        "--jd-file",
+                        str(missing),
+                    ]
+                )
+
+        self.assertEqual(status, 2)
+        self.assertIn("Could not load job-description file", stderr.getvalue())
+
     def test_generates_writes_pdf_and_audit_sidecar_on_a_valid_attempt(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             output_path = Path(directory) / "Example_Co_PM_Cover_Letter.pdf"

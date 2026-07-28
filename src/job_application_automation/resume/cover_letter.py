@@ -251,7 +251,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     jd_text = "\n".join(part for part in (args.jd_overview, args.jd_resp, args.jd_req) if part)
     if args.jd_file:
-        jd_text = Path(args.jd_file).read_text(encoding="utf-8")
+        job_description_path = Path(args.jd_file).expanduser()
+        try:
+            if not job_description_path.is_file() or job_description_path.is_symlink():
+                raise ValueError("path is not a regular file")
+            jd_text = job_description_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError, ValueError) as exc:
+            print(
+                f"Could not load job-description file {job_description_path}: {exc}",
+                file=sys.stderr,
+            )
+            return 2
     if not jd_text.strip() and args.url:
         try:
             scraped = scrape_ashby_job(args.url)

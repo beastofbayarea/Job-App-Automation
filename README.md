@@ -8,10 +8,12 @@ The public entry point is `src/job_automation.py`. The implementation under `src
 
 - Search Greenhouse, Lever, Ashby, and generic JSON-LD job pages without API keys. Search produces CSV results, optional JSON, a reusable board cache, and a coverage report.
 - Generate a role-specific PDF resume with Vertex AI when configured, or a rule-based fallback if AI is unavailable. Source identity, employment facts, and education are validated before rendering.
+- Generate a one-page, evidence-constrained cover letter with a JSON audit sidecar. The generator rejects invented source-claim IDs and invalid or multi-page output.
 - Generate a matching CV/cover-letter pair and store or retrieve it from private, hash-verified VPS storage using the job URL, company, title, and candidate email.
 - Apply to a single URL or an Excel tracker. The orchestrator detects the supported ATS, selects a configured candidate email, generates a tailored resume, and records results and confirmed submissions.
 - Run a deliberately live sequential queue that stops at the first unconfirmed application.
-- Read, classify, export, draft, or send Gmail messages through local OAuth.
+- Read, classify, redact, export, draft, or send Gmail messages through local OAuth, and select addresses from the configured candidate-email pool.
+- Run and synchronize scheduled searches on a VPS, verify local result freshness, install log rotation, and preview or prune old generated PDFs.
 
 ## Requirements
 
@@ -69,7 +71,29 @@ The default runtime configuration resolves paths from the project root. Its Vert
 
 ## Commands
 
-Run all workflows from the repository root.
+Run all workflows from the repository root. These forms are equivalent after installing the package:
+
+```powershell
+python src/job_automation.py <command>
+python -m job_application_automation <command>
+job-automation <command>
+```
+
+| Command | Function | Live action boundary |
+| --- | --- | --- |
+| `search` | Discover and filter public ATS jobs | Public HTTP/search requests |
+| `resume` | Generate one tailored resume PDF | May call Vertex AI |
+| `cover-letter` | Generate one validated one-page cover letter and audit JSON | May call Vertex AI |
+| `documents generate` | Generate a matched resume and cover letter | VPS upload only with `--archive` |
+| `documents store` | Validate/hash an existing PDF pair | VPS upload only with `--execute` |
+| `documents retrieve` | Download and verify an archived PDF pair | Always contacts the configured VPS |
+| `apply` | Run one URL or tracker-driven ATS workflow | Submission only with `--live-submit` |
+| `queue` | Run a sequential URL queue | Always requests live submission |
+| `gmail` | Read/export mail or create a draft/send a message | Draft/send only with `--send-to`; confirmation unless `--yes` |
+| `email-pool` | Select configured candidate addresses | Local only |
+| `engine <provider>` | Direct Ashby, Greenhouse, or Lever diagnostic | Submission only with `--live-submit` |
+
+Compatibility aliases are `orchestrate` for `apply`, `archive` for `documents`, and `email` for `gmail`. Use `python src/job_automation.py <command> --help` for the complete, version-specific option list.
 
 ### Search job boards
 
@@ -97,6 +121,22 @@ python src/job_automation.py resume `
 ```
 
 Provide job-description text directly with `--keywords`, `--jd-overview`, `--jd-resp`, and `--jd-req`; otherwise an Ashby URL is used for context. Use `--email` to override the source email for one generated document and `--output` to choose its path. Generated resumes and non-persistent caches are written under `output/` by default.
+
+### Generate a cover letter
+
+The standalone workflow requires job-description context from segmented text, `--jd-file`, or an Ashby `--url` fallback. It produces a one-page PDF and a sibling `.audit.json` file that records evidence claim IDs and source hashes.
+
+```powershell
+python src/job_automation.py cover-letter `
+  --company "Example" `
+  --role "Product Manager" `
+  --url "https://jobs.ashbyhq.com/example/job-id" `
+  --jd-file ".\job-description.txt" `
+  --email "candidate@example.com" `
+  --output ".\output\Example_Product_Manager_Cover_Letter.pdf"
+```
+
+`--profile` overrides the candidate profile. The email override affects only this generated document. If both `--jd-file` and segmented `--jd-*` values are provided, the file is authoritative.
 
 ### Generate and privately archive a CV and cover letter
 
@@ -177,14 +217,18 @@ python src/job_automation.py gmail --query "newer_than:30d" --classify --include
 # Export messages without exposing sensitive data in the export.
 python src/job_automation.py gmail --unread --csv output\mail.csv --redact
 
-# Create a draft. Omit --yes to require an interactive confirmation.
+# Create a draft after interactive confirmation.
 python src/job_automation.py gmail --send-to "person@example.com" --subject "Hello" --body "Message" --draft
+
+# Send after interactive confirmation. Add --yes only for an intentional,
+# non-interactive draft or send.
+python src/job_automation.py gmail --send-to "person@example.com" --subject "Hello" --body "Message"
 
 # Select a configured candidate email.
 python src/job_automation.py email-pool --count 1
 ```
 
-Gmail supports `--all-mail`, `--unread`, `--json`, HTML bodies, drafts, and sending. It requires local OAuth credentials and does not run in CI.
+Gmail supports `--max-results`, `--all-mail`, `--unread`, `--query`, `--include-body`, `--classify`, CSV/JSON exports, `--redact`, plain-text or HTML bodies, drafts, and sending. Reading is the default when `--send-to` is absent. It requires local OAuth credentials and does not run in CI. The email-pool command randomly selects `--count` addresses and accepts a custom pool through `--file`.
 
 ### Diagnostic engine commands
 
@@ -194,6 +238,43 @@ The engines are normally started by `apply`. For an authorized diagnostic run, u
 python src/job_automation.py engine greenhouse --url "<authorized-url>" --resume ".\resume.pdf" --dry-run
 ```
 
+### VPS synchronization and maintenance scripts
+
+These are operational helpers rather than `job-automation` subcommands:
+
+```powershell
+# Pull one complete generated-output snapshot from origin/vps-search-output.
+pwsh scripts\pull_search_output.ps1
+
+# Check output/job_search_coverage.json age (24 hours by default).
+pwsh scripts\check_sync_freshness.ps1 -ThresholdHours 24
+
+# Trigger an out-of-cycle search on the VPS, then pull it on success.
+pwsh scripts\trigger_vps_search.ps1 `
+  -RemoteRepoPath /absolute/path/to/Job-App-Automation
+
+# Preview old top-level generated resume/cover-letter PDFs; deletion is explicit.
+pwsh scripts\prune_old_outputs.ps1 -Days 14
+pwsh scripts\prune_old_outputs.ps1 -Days 14 -Delete
+```
+
+On the VPS, `scripts/vps_search_sync.sh` runs the configured search under a nonblocking lock and publishes a complete result set to the dedicated `vps-search-output` branch. Install repository-aware log rotation with `bash scripts/install_vps_logrotate.sh`; add `--stdout` to preview the rendered policy. These workflows, their prerequisites, cron guidance, and safe branch boundary are detailed in the [operations runbook](docs/operations-runbook.md).
+
+### Outputs and exit status
+
+| Path | Contents |
+| --- | --- |
+| `output/ai_jobs.csv` | Search results |
+| `output/job_search_coverage.json` | Discovery, feed, fallback, and liveness coverage |
+| `output/ats_boards_cache.json` | Reusable discovered-board cache |
+| `output/orchestration_results.json` | Latest application workflow records |
+| `output/submission_log.json` | Confirmed, non-test submissions only |
+| `output/job_url_queue_progress.json` | Latest queue attempt and resume index |
+| `output/application_documents/<id>/` | Locally generated archive-ready PDF pair and audit |
+| `output/retrieved_documents/<id>/` | Verified PDFs and manifest retrieved from the VPS |
+
+Commands generally return `0` for success, `1` for an unsuccessful workflow or remote operation, and `2` for invalid input. Gmail also returns `3` for an API error, `4` for dependency/authentication configuration errors, and `130` when interrupted. A zero exit status from a dry run or fill-only run is not evidence of submission; only an exact, non-test `SUBMITTED & CONFIRMED` result is recorded as complete.
+
 ## Architecture
 
 ```text
@@ -201,6 +282,7 @@ job_automation.py
   └─ cli.py
       ├─ apply / queue              core orchestration and shared contracts
       ├─ resume                     resume source, AI, validation, scoring, rendering
+      ├─ cover-letter               evidence-constrained generation and one-page validation
       ├─ documents                  paired generation and private VPS archive
       ├─ search                     discovery, board feeds, JSON-LD, liveness, caching
       ├─ gmail / email-pool         Gmail OAuth, messages, exports, email selection
