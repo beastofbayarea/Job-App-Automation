@@ -24,6 +24,9 @@ config/candidate_profile_config.json
 config/candidate_email_pool.json
 config/nooks_retry_email.json
 
+# Unrelated-project deployment secrets (VPS password, API keys, service account key)
+config/vps_api_env_config.json
+
 # Local environment and logs
 .env
 *.log
@@ -35,3 +38,6 @@ htmlcov/
 
 # Local editor workspace settings
 .vscode/
+
+# git worktree used by scripts/vps_search_sync.sh
+.sync-worktree/
