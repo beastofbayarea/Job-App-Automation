@@ -81,7 +81,7 @@ class SearchApplicationTests(unittest.TestCase):
         self.assertEqual(len(urls), 1)
         self.assertIn("https://boards.greenhouse.io/example/jobs/1", urls)
 
-    def test_runner_stops_on_unconfirmed_and_never_retries_prior_attempt(self) -> None:
+    def test_runner_records_failure_continues_and_never_retries_prior_attempt(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             input_path = root / "jobs.json"
@@ -101,24 +101,37 @@ class SearchApplicationTests(unittest.TestCase):
             profile.write_text("{}", encoding="utf-8")
             submission_log.write_text("{}", encoding="utf-8")
 
-            def fake_run(command: list[str], check: bool) -> SimpleNamespace:
+            calls = 0
+
+            def fake_run(command: list[str], **kwargs: object) -> SimpleNamespace:
+                nonlocal calls
+                calls += 1
                 result_path = Path(command[command.index("--results-file") + 1])
-                result_path.write_text(
-                    json.dumps(
-                        [
-                            {
-                                "success": False,
-                                "status": "SUBMISSION_UNCONFIRMED",
-                                "ats": "greenhouse",
-                                "submitted": True,
-                                "confirmed": False,
-                                "test_mode": False,
-                            }
-                        ]
-                    ),
-                    encoding="utf-8",
-                )
-                return SimpleNamespace(returncode=1)
+                if calls == 1:
+                    result_path.write_text(
+                        json.dumps(
+                            [
+                                {
+                                    "success": False,
+                                    "status": "SUBMISSION_UNCONFIRMED",
+                                    "ats": "greenhouse",
+                                    "submitted": True,
+                                    "confirmed": False,
+                                    "test_mode": False,
+                                    "error": "confirmation page did not appear",
+                                    "missing_fields": ["work authorization"],
+                                }
+                            ]
+                        ),
+                        encoding="utf-8",
+                    )
+                    return SimpleNamespace(
+                        returncode=1,
+                        stdout="engine output",
+                        stderr="confirmation timeout",
+                    )
+                result_path.write_text(json.dumps([_confirmed_result()]), encoding="utf-8")
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
 
             arguments = [
                 "--input",
@@ -133,33 +146,52 @@ class SearchApplicationTests(unittest.TestCase):
                 str(submission_log),
                 "--state",
                 str(state),
+                "--failure-report",
+                str(root / "failures.json"),
             ]
             with patch.object(search_applications.subprocess, "run", side_effect=fake_run) as run:
                 self.assertEqual(search_applications.main(arguments), 1)
-                self.assertEqual(run.call_count, 1)
-                self.assertEqual(search_applications.main(arguments), 1)
-                self.assertEqual(run.call_count, 1)
+                self.assertEqual(run.call_count, 2)
+                report = json.loads((root / "failures.json").read_text(encoding="utf-8"))
+                self.assertEqual(
+                    report["failures"][0]["missing_fields"], ["work authorization"]
+                )
+                self.assertEqual(
+                    report["failures"][0]["error"], "confirmation page did not appear"
+                )
+                self.assertEqual(search_applications.main(arguments), 0)
+                self.assertEqual(run.call_count, 2)
 
             saved = json.loads(state.read_text(encoding="utf-8"))
-            record = next(iter(saved["jobs"].values()))
-            self.assertEqual(record["status"], "manual_review_required")
-            self.assertEqual(record["result_status"], "SUBMISSION_UNCONFIRMED")
+            failed = next(
+                record for record in saved["jobs"].values() if record["status"] == "failed"
+            )
+            self.assertEqual(failed["result_status"], "SUBMISSION_UNCONFIRMED")
+            self.assertEqual(failed["stderr_tail"], "confirmation timeout")
+            latest = json.loads((root / "failures.json").read_text(encoding="utf-8"))
+            self.assertEqual(latest["failure_count"], 0)
 
-    def test_runner_counts_only_confirmations_and_honors_limit(self) -> None:
+    def test_runner_honors_independent_attempt_limit_for_each_ats(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            jobs = [
-                _job(f"https://boards.greenhouse.io/example/jobs/{index}")
-                for index in range(1, 4)
-            ]
+            jobs = []
+            for platform, base in (
+                ("greenhouse", "https://boards.greenhouse.io/example/jobs"),
+                ("lever", "https://jobs.lever.co/example"),
+                ("ashby", "https://jobs.ashbyhq.com/example"),
+            ):
+                jobs.extend(
+                    _job(f"{base}/{index}", platform=platform)
+                    for index in range(1, 4)
+                )
             (root / "jobs.json").write_text(json.dumps(jobs), encoding="utf-8")
             (root / "profile.json").write_text("{}", encoding="utf-8")
             (root / "submissions.json").write_text("{}", encoding="utf-8")
 
-            def fake_run(command: list[str], check: bool) -> SimpleNamespace:
+            def fake_run(command: list[str], **kwargs: object) -> SimpleNamespace:
                 result_path = Path(command[command.index("--results-file") + 1])
                 result_path.write_text(json.dumps([_confirmed_result()]), encoding="utf-8")
-                return SimpleNamespace(returncode=0)
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
 
             with patch.object(search_applications.subprocess, "run", side_effect=fake_run) as run:
                 exit_code = search_applications.main(
@@ -174,13 +206,13 @@ class SearchApplicationTests(unittest.TestCase):
                         str(root / "submissions.json"),
                         "--state",
                         str(root / "state.json"),
-                        "--max-confirmed",
+                        "--max-attempts-per-ats",
                         "2",
                     ]
                 )
 
             self.assertEqual(exit_code, 0)
-            self.assertEqual(run.call_count, 2)
+            self.assertEqual(run.call_count, 6)
             for call in run.call_args_list:
                 command = call.args[0]
                 self.assertIn("--live-submit", command)

@@ -133,7 +133,8 @@ After publishing the safe search snapshot and successfully generating the
 document archive, the daily workflow invokes the guarded application runner.
 Only complete `live` records for Greenhouse, Lever, and Ashby are eligible. The
 runner calls the existing orchestrator with `--live-submit`, processes records
-sequentially, and stops after 10 exact confirmed submissions.
+sequentially, and attempts at most 10 roles for each ATS in one run (up to 30
+total when all three ATS lists have enough eligible roles).
 
 `output/vps_application_state.json`,
 `output/vps_application_results/`, `output/submission_log.json`, and ATS
@@ -142,13 +143,19 @@ screenshots are private VPS artifacts. They must never be added to
 Every attempted job is recorded atomically.
 
 Any CAPTCHA, required-field failure, timeout, malformed result, engine error,
-or submission lacking exact confirmation is saved as
-`manual_review_required`. The current run stops immediately, and later daily
-runs remain blocked rather than moving to other jobs. Inspect the evidence and
-the employer account or confirmation email. If the application is confirmed,
-record that confirmed submission before removing the blocking state entry. If
-it was definitely not submitted and a retry is appropriate, remove only that
-URL's state entry. Never clear ambiguous state merely to make cron continue.
+or submission lacking exact confirmation is saved as `failed`. The runner
+prints the failure and continues with the remaining eligible roles, including
+later roles on the same ATS. It returns nonzero after completing the lists when
+one or more failures occurred, keeping cron visibly unhealthy without hiding
+successful applications.
+
+Inspect `output/vps_application_failures.json` for the URL, ATS, company, role,
+exit code, result status, error/detail text, missing fields, stdout/stderr
+tails, and per-job evidence path. Failed URLs remain skipped on later runs to
+avoid duplicate submissions. If a reviewed failure is definitely safe to
+retry, remove only that URL's entry from
+`output/vps_application_state.json`; never clear ambiguous state merely to
+increase throughput.
 
 The cron entry and an on-demand trigger both run
 `scripts/vps_search_sync.sh`. That script uses a nonblocking lock and exits

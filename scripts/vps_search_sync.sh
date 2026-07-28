@@ -34,6 +34,7 @@ PRIVATE_GENERATION_OUTPUT="$REPO_DIR/output/vps_generation_jobs.json"
 DOCUMENT_STATE="$REPO_DIR/output/vps_document_archive_state.json"
 APPLICATION_STATE="$REPO_DIR/output/vps_application_state.json"
 APPLICATION_RESULTS="$REPO_DIR/output/vps_application_results"
+APPLICATION_FAILURES="$REPO_DIR/output/vps_application_failures.json"
 SUBMISSION_LOG="$REPO_DIR/output/submission_log.json"
 
 # Cron and an on-demand trigger must never update the search artifacts or sync
@@ -117,6 +118,7 @@ PYTHONPATH="$REPO_DIR/src${PYTHONPATH:+:$PYTHONPATH}" \
   --profile "$REPO_DIR/config/candidate_profile_config.json" \
   --launcher "$REPO_DIR/src/job_automation.py" \
   --results-dir "$APPLICATION_RESULTS" \
+  --failure-report "$APPLICATION_FAILURES" \
   --submission-log "$SUBMISSION_LOG" \
   --state "$APPLICATION_STATE" \
-  --max-confirmed 10
+  --max-attempts-per-ats 10

@@ -18,9 +18,9 @@ This project processes identity, contact, resume, employment, and application da
 - Gmail sends require confirmation unless `--yes` is supplied. Use `--draft` for reviewable outreach.
 - Do not use queue processing for exploratory testing; it is a live submission workflow.
 - The VPS daily workflow is explicitly authorized for unattended live
-  submission. It is capped at 10 confirmations and stops on the first uncertain
-  result. Do not disable its persistent manual-review block or exact
-  confirmation requirement.
+  submission. It is capped at 10 attempts per ATS. Failed applications are
+  recorded and skipped while later roles continue; do not weaken the
+  no-automatic-retry rule or exact confirmation requirement.
 
 ## Retention and sharing
 

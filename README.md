@@ -282,13 +282,14 @@ document-generation state remain private on the VPS and are never copied to
 
 After the safe search snapshot is published and document generation succeeds,
 the VPS automatically submits eligible verified-live Greenhouse, Lever, and
-Ashby applications. It processes jobs sequentially, confirms no more than 10
-applications per run, skips URLs already present as exact confirmed
-submissions, and stops on the first CAPTCHA, missing required field, timeout,
-engine failure, or unconfirmed attempt. The blocking record must be reviewed
-and removed from `output/vps_application_state.json` before unattended
-processing can continue. Application results, screenshots, submission logs,
-and state never enter `vps-search-output`.
+Ashby applications. It processes jobs sequentially, attempts no more than 10
+roles for each ATS per run, and skips every URL already present in confirmed or
+attempted state. A CAPTCHA, missing required field, timeout, engine failure, or
+unconfirmed attempt is recorded and skipped so processing can continue. Full
+failure details are written privately to
+`output/vps_application_failures.json` and per-job result files. Application
+results, screenshots, submission logs, and state never enter
+`vps-search-output`.
 
 ### Outputs and exit status
 

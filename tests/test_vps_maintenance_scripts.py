@@ -383,6 +383,7 @@ class BashMaintenanceTests(unittest.TestCase):
             "vps_generation_jobs.json",
             "vps_application_state.json",
             "vps_application_results",
+            "vps_application_failures.json",
             "submission_log.json",
         ):
             self.assertNotIn(private_name, sync_block)

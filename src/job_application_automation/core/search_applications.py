@@ -18,12 +18,17 @@ from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 
 
 SUPPORTED_PLATFORMS = frozenset({"ashby", "greenhouse", "lever"})
-DEFAULT_MAX_CONFIRMED = int(RUNTIME_CONFIG.application["vps_max_confirmed_per_run"])
+DEFAULT_MAX_ATTEMPTS_PER_ATS = int(
+    RUNTIME_CONFIG.application["vps_max_attempts_per_ats"]
+)
 DEFAULT_RESULTS_DIR = resolve_runtime_path(
     RUNTIME_CONFIG.application["vps_application_results_dir"]
 )
 DEFAULT_STATE_FILE = resolve_runtime_path(
     RUNTIME_CONFIG.application["vps_application_state_file"]
+)
+DEFAULT_FAILURE_REPORT = resolve_runtime_path(
+    RUNTIME_CONFIG.application["vps_application_failure_report"]
 )
 
 
@@ -45,6 +50,35 @@ def _save_state(path: Path, state: dict[str, Any]) -> None:
     atomic_write_text(
         path,
         json.dumps(state, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _save_failure_report(
+    path: Path,
+    *,
+    run_started_at: datetime,
+    failures: list[dict[str, Any]],
+    attempted_by_ats: dict[str, int],
+    confirmed_by_ats: dict[str, int],
+) -> None:
+    atomic_write_text(
+        path,
+        json.dumps(
+            {
+                "version": 1,
+                "run_started_at": run_started_at.isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
+                "attempted_by_ats": attempted_by_ats,
+                "confirmed_by_ats": confirmed_by_ats,
+                "failure_count": len(failures),
+                "failures": failures,
+            },
+            indent=2,
+            sort_keys=True,
+            ensure_ascii=False,
+        )
+        + "\n",
         encoding="utf-8",
     )
 
@@ -131,7 +165,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--results-dir", type=Path, default=DEFAULT_RESULTS_DIR)
     parser.add_argument("--submission-log", type=Path, required=True)
     parser.add_argument("--state", type=Path, default=DEFAULT_STATE_FILE)
-    parser.add_argument("--max-confirmed", type=int, default=DEFAULT_MAX_CONFIRMED)
+    parser.add_argument("--failure-report", type=Path, default=DEFAULT_FAILURE_REPORT)
+    parser.add_argument(
+        "--max-attempts-per-ats",
+        type=int,
+        default=DEFAULT_MAX_ATTEMPTS_PER_ATS,
+    )
     parser.add_argument(
         "--timeout",
         type=int,
@@ -142,43 +181,41 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    if args.max_confirmed <= 0:
-        raise SystemExit("--max-confirmed must be greater than zero")
+    if args.max_attempts_per_ats <= 0:
+        raise SystemExit("--max-attempts-per-ats must be greater than zero")
     if args.timeout <= 0:
         raise SystemExit("--timeout must be greater than zero")
 
     state = _load_state(args.state)
     records: dict[str, Any] = state["jobs"]
-    unresolved = [
-        url
-        for url, record in records.items()
-        if isinstance(record, dict) and record.get("status") == "manual_review_required"
-    ]
-    if unresolved:
-        print(
-            "VPS_APPLICATION_BLOCKED "
-            f"manual_review_required={len(unresolved)} first_url={sorted(unresolved)[0]}",
-            flush=True,
-        )
-        return 1
     jobs = _eligible_jobs(_load_json(args.input))
     confirmed_urls = _confirmed_urls(args.submission_log)
     args.results_dir.mkdir(parents=True, exist_ok=True)
-    confirmed_count = 0
-    attempted_count = 0
+    run_started_at = datetime.now(UTC)
+    attempted_by_ats = {platform: 0 for platform in sorted(SUPPORTED_PLATFORMS)}
+    confirmed_by_ats = {platform: 0 for platform in sorted(SUPPORTED_PLATFORMS)}
+    failures: list[dict[str, Any]] = []
+    _save_failure_report(
+        args.failure_report,
+        run_started_at=run_started_at,
+        failures=failures,
+        attempted_by_ats=attempted_by_ats,
+        confirmed_by_ats=confirmed_by_ats,
+    )
 
     for job in jobs:
         canonical_url = str(job["_canonical_url"])
+        platform = str(job["platform"]).strip().lower()
         if canonical_url in confirmed_urls:
             continue
-        # Any prior attempt requires manual review. This includes ambiguous and
-        # clearly pre-submit failures, preventing unattended retry loops.
+        # Every prior attempt remains terminal until a human deliberately
+        # removes its state entry, preventing accidental duplicate submissions.
         if canonical_url in records:
             continue
-        if confirmed_count >= args.max_confirmed:
-            break
+        if attempted_by_ats[platform] >= args.max_attempts_per_ats:
+            continue
 
-        attempted_count += 1
+        attempted_by_ats[platform] += 1
         result_path = _result_path(args.results_dir, canonical_url)
         result_path.unlink(missing_ok=True)
         command = [
@@ -204,51 +241,107 @@ def main(argv: Sequence[str] | None = None) -> int:
         ]
         started_at = datetime.now(UTC)
         try:
-            completed = subprocess.run(command, check=False)
+            completed = subprocess.run(
+                command,
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
             return_code = completed.returncode
             error = ""
+            stdout = completed.stdout or ""
+            stderr = completed.stderr or ""
         except OSError as exc:
             return_code = 127
             error = str(exc)
+            stdout = ""
+            stderr = ""
+        if stdout:
+            print(stdout, end="" if stdout.endswith("\n") else "\n", flush=True)
+        if stderr:
+            print(
+                stderr,
+                end="" if stderr.endswith("\n") else "\n",
+                file=sys.stderr,
+                flush=True,
+            )
         result = _read_single_result(result_path)
         confirmed = return_code == 0 and _is_confirmed(result)
-        status = "confirmed" if confirmed else "manual_review_required"
-        records[canonical_url] = {
+        status = "confirmed" if confirmed else "failed"
+        record = {
             "status": status,
             "job_url": str(job["job_url"]).strip(),
             "company": str(job["company"]).strip(),
             "title": str(job["title"]).strip(),
-            "platform": str(job["platform"]).strip().lower(),
+            "platform": platform,
             "started_at": started_at.isoformat(),
             "updated_at": datetime.now(UTC).isoformat(),
             "exit_code": return_code,
             "result_status": str(result.get("status", "NO_RESULT")),
             "evidence_path": str(result_path),
+            "result": result,
+            "stdout_tail": stdout[-20000:],
+            "stderr_tail": stderr[-20000:],
             **({"error": error} if error else {}),
         }
+        records[canonical_url] = record
         _save_state(args.state, state)
 
         if not confirmed:
+            failure = {
+                "job_url": record["job_url"],
+                "company": record["company"],
+                "title": record["title"],
+                "platform": platform,
+                "exit_code": return_code,
+                "result_status": record["result_status"],
+                "error": error or str(result.get("error", "")),
+                "detail": str(result.get("detail", "")),
+                "missing_fields": result.get("missing_fields", []),
+                "evidence_path": str(result_path),
+                "stdout_tail": record["stdout_tail"],
+                "stderr_tail": record["stderr_tail"],
+            }
+            failures.append(failure)
+            _save_failure_report(
+                args.failure_report,
+                run_started_at=run_started_at,
+                failures=failures,
+                attempted_by_ats=attempted_by_ats,
+                confirmed_by_ats=confirmed_by_ats,
+            )
             print(
-                "VPS_APPLICATION_STOP "
+                "VPS_APPLICATION_FAILED "
                 f"url={job['job_url']} exit_code={return_code} "
-                f"status={result.get('status', 'NO_RESULT')}",
+                f"status={result.get('status', 'NO_RESULT')} "
+                f"evidence={result_path}",
                 flush=True,
             )
-            return 1
-        confirmed_count += 1
+            continue
+        confirmed_by_ats[platform] += 1
         confirmed_urls.add(canonical_url)
         print(
-            f"VPS_APPLICATION_CONFIRMED count={confirmed_count} url={job['job_url']}",
+            "VPS_APPLICATION_CONFIRMED "
+            f"ats={platform} count={confirmed_by_ats[platform]} url={job['job_url']}",
             flush=True,
         )
 
+    _save_failure_report(
+        args.failure_report,
+        run_started_at=run_started_at,
+        failures=failures,
+        attempted_by_ats=attempted_by_ats,
+        confirmed_by_ats=confirmed_by_ats,
+    )
     print(
-        f"VPS applications: eligible={len(jobs)}, attempted={attempted_count}, "
-        f"confirmed={confirmed_count}, limit={args.max_confirmed}",
+        f"VPS applications: eligible={len(jobs)}, attempted_by_ats={attempted_by_ats}, "
+        f"confirmed_by_ats={confirmed_by_ats}, failures={len(failures)}, "
+        f"limit_per_ats={args.max_attempts_per_ats}",
         flush=True,
     )
-    return 0
+    return 1 if failures else 0
 
 
 if __name__ == "__main__":
