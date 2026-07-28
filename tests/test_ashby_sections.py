@@ -15,6 +15,7 @@ from job_application_automation.engines.ashby_sections import (
     aggregate_section_outcomes,
     choice_is_selected,
     configured_screening_answer,
+    is_location_question,
     normalize_configured_value,
     plan_option_selection,
     required_field_flag,
@@ -68,6 +69,37 @@ class RequiredFieldAndOutcomeTests(unittest.TestCase):
         self.assertTrue(required_field_flag(pseudo_content='"*"'))
         self.assertTrue(required_field_flag(has_required_control=True))
         self.assertFalse(required_field_flag(label_class="optional", pseudo_content="none"))
+
+    def test_intended_work_location_questions_are_recognized(self) -> None:
+        """Ashby asks where a candidate will work, not only where they live."""
+        for question in (
+            "where do you plan on working from (for payroll tax purposes)?",
+            "where will you be working from?",
+            "what is your primary work location?",
+            "which office location do you plan to work out of?",
+        ):
+            with self.subTest(question=question):
+                self.assertTrue(is_location_question(question))
+
+    def test_existing_current_location_questions_still_match(self) -> None:
+        for question in (
+            "where are you based?",
+            "where do you currently reside?",
+            "current location",
+            "city",
+        ):
+            with self.subTest(question=question):
+                self.assertTrue(is_location_question(question))
+
+    def test_unrelated_questions_are_not_treated_as_location(self) -> None:
+        for question in (
+            "how did you hear about us?",
+            "what is your expected compensation range?",
+            "do you now or in the future require sponsorship?",
+            "what is your country of citizenship?",
+        ):
+            with self.subTest(question=question):
+                self.assertFalse(is_location_question(question))
 
     def test_choice_selection_excludes_unselected_class_names(self) -> None:
         self.assertTrue(choice_is_selected(aria_pressed="true"))

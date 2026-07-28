@@ -37,6 +37,7 @@ from .ashby_sections import (
     aggregate_section_outcomes,
     choice_is_selected,
     configured_screening_answer,
+    is_location_question,
     plan_option_selection,
     required_field_flag,
 )
@@ -1611,18 +1612,7 @@ def fill_secondary(
                 source = defaults.get("source", "")
                 if source:
                     select_ashby_combobox(page, inp, source)
-            elif any(
-                k in ctx
-                for k in (
-                    "location",
-                    "where are you located",
-                    "where are you based",
-                    "where do you currently reside",
-                    "currently reside",
-                    "city",
-                    "current location",
-                )
-            ):
+            elif is_location_question(ctx):
                 if not inp.input_value().strip():
                     location = (
                         _configured_answer(profile, ctx)

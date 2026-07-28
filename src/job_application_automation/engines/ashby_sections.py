@@ -80,6 +80,33 @@ def plan_option_selection(value: str) -> OptionSelectionPlan:
     return OptionSelectionPlan(value=value, candidates=candidates)
 
 
+_LOCATION_QUESTION_PATTERNS = (
+    # Where the candidate currently is.
+    r"\blocation\b",
+    r"\bcity\b",
+    r"where are you (?:located|based)",
+    r"where do you (?:currently )?(?:reside|live)",
+    r"currently reside",
+    # Where the candidate intends to work from.  Ashby commonly asks this as a
+    # separate required combobox, often qualified by payroll or tax wording.
+    r"where (?:do|will) you (?:plan (?:on|to) )?(?:be )?work(?:ing)?",
+    r"where would you (?:be )?work(?:ing)?",
+    r"work(?:ing)? (?:from|location|out of)",
+    r"office location",
+)
+
+
+def is_location_question(question_text: Any) -> bool:
+    """Return whether a combobox question asks for a current or intended location.
+
+    Ashby distinguishes "where are you based" from "where do you plan on
+    working from (for payroll tax purposes)".  Both resolve to the candidate's
+    configured location, so both must be recognized here.
+    """
+    normalized = normalize_question_text(question_text)
+    return any(re.search(pattern, normalized) for pattern in _LOCATION_QUESTION_PATTERNS)
+
+
 def required_field_flag(
     *,
     label_class: str = "",
