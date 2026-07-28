@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from job_application_automation.submission_log import (  # noqa: E402
+from job_application_automation.core.submission_log import (  # noqa: E402
     SubmissionLog,
     SubmissionRecord,
     make_submission_id,

@@ -97,7 +97,7 @@ from email.message import EmailMessage
 from pathlib import Path
 from typing import Any, Sequence
 
-from job_application_automation.gmail_messages import (
+from job_application_automation.mail.gmail_messages import (
     EmailRecord,
     VerificationCodeMatch,
     build_query as _build_query,
@@ -109,14 +109,14 @@ from job_application_automation.gmail_messages import (
     html_to_text as _html_to_text,
     poll_for_verification_code as _poll_for_verification_code,
 )
-from job_application_automation.gmail_persistence import (
+from job_application_automation.mail.gmail_persistence import (
     export_rows as _export_rows_impl,
     load_used_verification_message_ids as _load_used_verification_message_ids,
     record_used_verification_message as _record_used_verification_message,
     write_csv as _write_csv,
     write_json as _write_json,
 )
-from .paths import CONFIG_DIR
+from ..core.paths import CONFIG_DIR
 from .gmail_auth import (
     GMAIL_SCOPES,
     get_gmail_service as _get_gmail_service,

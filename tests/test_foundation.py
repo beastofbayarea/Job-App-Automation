@@ -12,15 +12,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from job_application_automation.adapters import (  # noqa: E402
+from job_application_automation.core.adapters import (  # noqa: E402
     BrowserSettings,
     CommandResult,
     LLMSettings,
     ProcessRunner,
     ProcessSettings,
 )
-from job_application_automation.artifacts import read_json, write_csv, write_json  # noqa: E402
-from job_application_automation.contracts import (  # noqa: E402
+from job_application_automation.core.artifacts import read_json, write_csv, write_json  # noqa: E402
+from job_application_automation.core.contracts import (  # noqa: E402
     ENGINE_RESULT_PREFIX,
     ATSEngine,
     EngineMode,
@@ -29,7 +29,7 @@ from job_application_automation.contracts import (  # noqa: E402
     EngineStatus,
     result_from_legacy_payload,
 )
-from job_application_automation.profile import AutomationProfile  # noqa: E402
+from job_application_automation.core.profile import AutomationProfile  # noqa: E402
 
 
 class FakeEngine:

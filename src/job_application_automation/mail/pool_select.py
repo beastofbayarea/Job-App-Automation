@@ -9,12 +9,12 @@ import sys
 from pathlib import Path
 from typing import Literal, Optional, Sequence, overload
 
-from job_application_automation.email_pool import (
+from job_application_automation.mail.pool import (
     load_email_pool as _load_email_pool_impl,
     resolve_email_pool as _resolve_email_pool_impl,
     select_emails,
 )
-from .paths import CONFIG_DIR
+from ..core.paths import CONFIG_DIR
 
 
 def _resolve_email_pool(json_file_path: Path) -> Path:

@@ -569,7 +569,7 @@ def generate_essay_answer(
 ) -> str:
     """Generate an application-ready essay answer via the LLM, or "" on failure."""
     try:
-        from .resume_ai_client import call_essay_llm, strip_markdown_formatting
+        from ..resume.ai_client import call_essay_llm, strip_markdown_formatting
 
         if not candidate_evidence.strip():
             logger.warning("Essay generation skipped because candidate evidence is empty.")

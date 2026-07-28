@@ -13,7 +13,7 @@ from playwright.sync_api import Locator, Page
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
-from .engine_shared import (
+from ..core.engine_shared import (
     SENSITIVE_FIELD_PATTERN as SENSITIVE_EEO,
     answer_variants as _answer_variants,
     build_engine_parser,
@@ -40,8 +40,8 @@ from .engine_shared import (
     validate_nonempty_file,
     validate_required_fields,
 )
-from .paths import CONFIG_DIR, DATA_DIR, OUTPUT_DIR, resolve_project_dir
-from .email_gmail_client import (
+from ..core.paths import CONFIG_DIR, DATA_DIR, OUTPUT_DIR, resolve_project_dir
+from ..mail.gmail_client import (
     get_gmail_service,
     load_used_verification_message_ids,
     poll_for_verification_code,

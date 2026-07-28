@@ -7,7 +7,7 @@ from pathlib import Path
 # The implementation package lives below ``src`` and is launched through the
 # single source-tree command runner. Keep exported paths anchored at the project
 # layout so config, data, output, and subprocess references stay predictable.
-PACKAGE_DIR = Path(__file__).resolve().parent
+PACKAGE_DIR = Path(__file__).resolve().parent.parent
 SRC_DIR = PACKAGE_DIR.parent
 CLI_ENTRYPOINT = SRC_DIR / "job_automation.py"
 PROJECT_ROOT = SRC_DIR.parent

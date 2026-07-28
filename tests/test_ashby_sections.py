@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from job_application_automation.ashby_sections import (
+from job_application_automation.engines.ashby_sections import (
     FormSectionOutcome,
     aggregate_section_outcomes,
     choice_is_selected,

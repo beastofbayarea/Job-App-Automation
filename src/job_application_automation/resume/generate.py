@@ -29,16 +29,16 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
 import fitz  # PyMuPDF remains a compatible module-level scorer patch point.
 
-from .paths import DATA_DIR, OUTPUT_DIR as PROJECT_OUTPUT_DIR, SRC_DIR
-from .resume_cache import ResumeCache, cache_key
-from .resume_rendering import CallableResumeRenderer, ResumeRenderer, render_resume
-from .resume_scoring import policy_from_source, score_pdf
-from .resume_source import (
+from ..core.paths import DATA_DIR, OUTPUT_DIR as PROJECT_OUTPUT_DIR, SRC_DIR
+from .cache import ResumeCache, cache_key
+from .rendering import CallableResumeRenderer, ResumeRenderer, render_resume
+from .scoring import policy_from_source, score_pdf
+from .source import (
     ResumeSource,
     load_resume_source,
 )
-from .resume_ai_client import call_resume_llm, generate_fallback_resume_data, scrape_ashby_job
-from .resume_validation import (
+from .ai_client import call_resume_llm, generate_fallback_resume_data, scrape_ashby_job
+from .validation import (
     build_quality_feedback,
     company_matches,
     enforce_candidate_identity,

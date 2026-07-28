@@ -40,7 +40,7 @@ from .ashby_sections import (
     plan_option_selection,
     required_field_flag,
 )
-from .engine_shared import (
+from ..core.engine_shared import (
     answer_variants,
     build_engine_parser,
     configured_answer as common_configured_answer,
@@ -61,7 +61,7 @@ from .engine_shared import (
     validate_ats_url,
     validate_required_fields,
 )
-from .paths import DATA_DIR, OUTPUT_DIR, SRC_DIR
+from ..core.paths import DATA_DIR, OUTPUT_DIR, SRC_DIR
 
 # ==============================================================================
 # DEFAULT CONFIGURATION
@@ -513,7 +513,7 @@ def verify_value(loc: Any, expected_substr: str, name: str) -> bool:
 def generate_essay_safely(question: str, jd_text: str, company: str, role: str) -> str:
     """Load the optional essay generator only when an unanswered essay is encountered."""
     try:
-        from .resume_ai_client import call_essay_llm, strip_markdown_formatting
+        from ..resume.ai_client import call_essay_llm, strip_markdown_formatting
     except Exception as exc:
         logger.warning("Essay generator is unavailable; leaving the field for review: %s", exc)
         return ""

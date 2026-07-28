@@ -16,21 +16,21 @@ from typing import TextIO
 CommandMain = Callable[[Sequence[str] | None], int]
 
 COMMAND_MODULES = {
-    "apply": "job_application_automation.orchestrator",
-    "queue": "job_application_automation.queue_runner",
-    "resume": "job_application_automation.resume_generate",
-    "search": "job_application_automation.search_job_boards",
-    "gmail": "job_application_automation.email_gmail_client",
-    "email-pool": "job_application_automation.email_pool_select",
+    "apply": "job_application_automation.core.orchestrator",
+    "queue": "job_application_automation.core.queue_runner",
+    "resume": "job_application_automation.resume.generate",
+    "search": "job_application_automation.search.job_boards",
+    "gmail": "job_application_automation.mail.gmail_client",
+    "email-pool": "job_application_automation.mail.pool_select",
 }
 COMMAND_ALIASES = {
     "orchestrate": "apply",
     "email": "gmail",
 }
 ENGINE_MODULES = {
-    "ashby": "job_application_automation.engine_ashby",
-    "greenhouse": "job_application_automation.engine_greenhouse",
-    "lever": "job_application_automation.engine_lever",
+    "ashby": "job_application_automation.engines.ashby",
+    "greenhouse": "job_application_automation.engines.greenhouse",
+    "lever": "job_application_automation.engines.lever",
 }
 
 

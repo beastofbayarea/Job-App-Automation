@@ -13,7 +13,7 @@ import threading
 from pathlib import Path
 from typing import Any, Mapping, MutableMapping, Protocol
 
-from .artifacts import read_json, write_json
+from ..core.artifacts import read_json, write_json
 
 
 class ResumeCacheJob(Protocol):

@@ -11,13 +11,13 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from job_application_automation import search_job_boards as search  # noqa: E402
-from job_application_automation import search_cache  # noqa: E402
-from job_application_automation import search_discovery  # noqa: E402
-from job_application_automation import search_jsonld  # noqa: E402
-from job_application_automation import search_liveness  # noqa: E402
-from job_application_automation import search_models  # noqa: E402
-from job_application_automation import search_serialization  # noqa: E402
+from job_application_automation.search import job_boards as search  # noqa: E402
+from job_application_automation.search import cache as search_cache  # noqa: E402
+from job_application_automation.search import discovery as search_discovery  # noqa: E402
+from job_application_automation.search import jsonld as search_jsonld  # noqa: E402
+from job_application_automation.search import liveness as search_liveness  # noqa: E402
+from job_application_automation.search import models as search_models  # noqa: E402
+from job_application_automation.search import serialization as search_serialization  # noqa: E402
 
 
 UTC = timezone.utc

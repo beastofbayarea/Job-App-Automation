@@ -24,9 +24,9 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 import pypdf
 from playwright.sync_api import sync_playwright
 
-from .paths import CONFIG_DIR
-from .adapters import LLMClient, LLMSettings
-from .engine_shared import validate_ats_url
+from ..core.paths import CONFIG_DIR
+from ..core.adapters import LLMClient, LLMSettings
+from ..core.engine_shared import validate_ats_url
 
 try:
     from google import genai

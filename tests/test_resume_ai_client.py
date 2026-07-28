@@ -9,8 +9,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from job_application_automation import resume_ai_client as ai  # noqa: E402
-from job_application_automation.adapters import LLMSettings  # noqa: E402
+from job_application_automation.resume import ai_client as ai  # noqa: E402
+from job_application_automation.core.adapters import LLMSettings  # noqa: E402
 
 
 class FakeGateway:

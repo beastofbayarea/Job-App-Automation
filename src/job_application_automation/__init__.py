@@ -4,6 +4,6 @@ The source tree exposes one launcher, ``src/job_automation.py``. Reusable
 workflows and typed contracts live in this package.
 """
 
-from .contracts import EngineMode, EngineRequest, EngineResult, EngineStatus
+from .core.contracts import EngineMode, EngineRequest, EngineResult, EngineStatus
 
 __all__ = ("EngineMode", "EngineRequest", "EngineResult", "EngineStatus")

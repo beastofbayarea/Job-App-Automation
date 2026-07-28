@@ -14,9 +14,9 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from job_application_automation import orchestrator  # noqa: E402
-from job_application_automation import queue_runner  # noqa: E402
-from job_application_automation.contracts import EngineResult, EngineStatus  # noqa: E402
+from job_application_automation.core import orchestrator  # noqa: E402
+from job_application_automation.core import queue_runner  # noqa: E402
+from job_application_automation.core.contracts import EngineResult, EngineStatus  # noqa: E402
 
 
 class EngineCommandContractTests(unittest.TestCase):
