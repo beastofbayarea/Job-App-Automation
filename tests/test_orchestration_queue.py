@@ -267,8 +267,12 @@ class QueueSafetyTests(unittest.TestCase):
             "confirmed": True,
             "test_mode": False,
         }
-        prefilled = {**confirmed, "status": EngineStatus.PREFILLED_ONLY.value,
-                     "submitted": False, "confirmed": False}
+        prefilled = {
+            **confirmed,
+            "status": EngineStatus.PREFILLED_ONLY.value,
+            "submitted": False,
+            "confirmed": False,
+        }
 
         self.assertTrue(orchestrator._is_confirmed_submission(confirmed))
         self.assertFalse(orchestrator._is_confirmed_submission(prefilled))
