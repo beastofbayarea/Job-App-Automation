@@ -163,6 +163,10 @@ job_automation.py
 
 See [architecture.mmd](architecture.mmd) for the detailed Mermaid diagram. `PRD.md` and `docs/superpowers/plans/` describe planned work, not currently available commands.
 
+## Documentation
+
+The [documentation guide](docs/README.md) links to detailed configuration, CLI, operations, data-format, ATS-support, security, architecture, and troubleshooting references. Contributors should read [CONTRIBUTING.md](CONTRIBUTING.md); user-facing changes are recorded in [CHANGELOG.md](CHANGELOG.md).
+
 ## Quality checks
 
 ```powershell
