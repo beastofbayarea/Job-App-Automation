@@ -60,7 +60,9 @@ $PrivateInputs = @(
     @{ Local = "config/candidate_profile_config.json"; Remote = "config/candidate_profile_config.json" },
     @{ Local = "config/vps_config.json"; Remote = "config/vps_config.json" },
     @{ Local = "data/base_resume.txt"; Remote = "data/base_resume.txt" },
-    @{ Local = "config/vertex_service_account.json"; Remote = "config/vertex_service_account.json" }
+    @{ Local = "config/vertex_service_account.json"; Remote = "config/vertex_service_account.json" },
+    @{ Local = "config/credentials.json"; Remote = "config/credentials.json" },
+    @{ Local = "config/token.json"; Remote = "config/token.json" }
 )
 foreach ($InputFile in $PrivateInputs) {
     if (-not (Test-Path -LiteralPath $InputFile.Local)) {
@@ -113,7 +115,7 @@ try {
         }
     }
     if ($RemoteExitCode -eq 0) {
-        $ProtectCommand = "chmod 0600 $Repo/config/candidate_profile_config.json $Repo/config/vps_config.json $Repo/config/vertex_service_account.json $Repo/data/base_resume.txt"
+        $ProtectCommand = "chmod 0600 $Repo/config/candidate_profile_config.json $Repo/config/vps_config.json $Repo/config/vertex_service_account.json $Repo/config/credentials.json $Repo/config/token.json $Repo/data/base_resume.txt"
         & $PlinkCmd.Source -ssh -batch -P $SshPort -hostkey $SshHostKey -pwfile $PasswordFile `
             "$SshUser@$VpsHost" $ProtectCommand
         $RemoteExitCode = $LASTEXITCODE

@@ -13,7 +13,8 @@ The public entry point is `src/job_automation.py`. The implementation under `src
 - Apply to a single URL or an Excel tracker. The orchestrator detects the supported ATS, selects a configured candidate email, generates a tailored resume, and records results and confirmed submissions.
 - Run a deliberately live sequential queue that stops at the first unconfirmed application.
 - Read, classify, redact, export, draft, or send Gmail messages through local OAuth, and select addresses from the configured candidate-email pool.
-- Run and synchronize scheduled searches on a VPS, verify local result freshness, install log rotation, and preview or prune old generated PDFs.
+- Run scheduled searches and guarded automatic applications on a VPS, synchronize
+  public-safe results, verify freshness, rotate logs, and prune old generated PDFs.
 
 ## Requirements
 
@@ -278,6 +279,16 @@ An ignored state file records completed URLs, so later daily runs skip documents
 that were already archived and retry only failures. Full job descriptions and
 document-generation state remain private on the VPS and are never copied to
 `vps-search-output`.
+
+After the safe search snapshot is published and document generation succeeds,
+the VPS automatically submits eligible verified-live Greenhouse, Lever, and
+Ashby applications. It processes jobs sequentially, confirms no more than 10
+applications per run, skips URLs already present as exact confirmed
+submissions, and stops on the first CAPTCHA, missing required field, timeout,
+engine failure, or unconfirmed attempt. The blocking record must be reviewed
+and removed from `output/vps_application_state.json` before unattended
+processing can continue. Application results, screenshots, submission logs,
+and state never enter `vps-search-output`.
 
 ### Outputs and exit status
 

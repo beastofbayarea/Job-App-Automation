@@ -1,0 +1,255 @@
+"""Submit verified-live VPS search results through the guarded orchestrator."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import subprocess
+import sys
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Sequence
+
+from .artifacts import atomic_write_text, read_json
+from .contracts import EngineResult
+from .identity import canonical_job_url
+from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
+
+
+SUPPORTED_PLATFORMS = frozenset({"ashby", "greenhouse", "lever"})
+DEFAULT_MAX_CONFIRMED = int(RUNTIME_CONFIG.application["vps_max_confirmed_per_run"])
+DEFAULT_RESULTS_DIR = resolve_runtime_path(
+    RUNTIME_CONFIG.application["vps_application_results_dir"]
+)
+DEFAULT_STATE_FILE = resolve_runtime_path(
+    RUNTIME_CONFIG.application["vps_application_state_file"]
+)
+
+
+def _load_json(path: Path) -> Any:
+    with path.open(encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def _load_state(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {"version": 1, "jobs": {}}
+    payload = _load_json(path)
+    if not isinstance(payload, dict) or not isinstance(payload.get("jobs"), dict):
+        raise ValueError(f"invalid VPS application state: {path}")
+    return payload
+
+
+def _save_state(path: Path, state: dict[str, Any]) -> None:
+    atomic_write_text(
+        path,
+        json.dumps(state, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _eligible_jobs(payload: Any) -> list[dict[str, Any]]:
+    if not isinstance(payload, list):
+        raise ValueError("private application input must be a JSON array")
+    eligible: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for value in payload:
+        if not isinstance(value, dict):
+            continue
+        platform = str(value.get("platform", "")).strip().lower()
+        if platform not in SUPPORTED_PLATFORMS:
+            continue
+        if str(value.get("live_status", "")).strip().lower() != "live":
+            continue
+        if not all(
+            str(value.get(key, "")).strip()
+            for key in ("job_url", "company", "title", "description")
+        ):
+            continue
+        try:
+            canonical_url = canonical_job_url(str(value["job_url"]))
+        except ValueError:
+            continue
+        if canonical_url in seen:
+            continue
+        seen.add(canonical_url)
+        job = dict(value)
+        job["_canonical_url"] = canonical_url
+        eligible.append(job)
+    return eligible
+
+
+def _confirmed_urls(submission_log_path: Path) -> set[str]:
+    if not submission_log_path.exists():
+        return set()
+    payload = read_json(submission_log_path)
+    if not isinstance(payload, dict):
+        raise ValueError("submission log root must be an object")
+    confirmed: set[str] = set()
+    for value in payload.values():
+        if not isinstance(value, dict):
+            continue
+        if str(value.get("status", "")).strip() != "SUBMITTED & CONFIRMED":
+            continue
+        try:
+            confirmed.add(canonical_job_url(str(value.get("job_url", ""))))
+        except ValueError:
+            continue
+    return confirmed
+
+
+def _result_path(results_dir: Path, canonical_url: str) -> Path:
+    digest = hashlib.sha256(canonical_url.encode("utf-8")).hexdigest()[:16]
+    return results_dir / f"application_{digest}.json"
+
+
+def _read_single_result(path: Path) -> dict[str, Any]:
+    try:
+        payload = read_json(path)
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(payload, list) or len(payload) != 1 or not isinstance(payload[0], dict):
+        return {}
+    return payload[0]
+
+
+def _is_confirmed(result: dict[str, Any]) -> bool:
+    try:
+        return EngineResult.from_payload(result).is_confirmed_submission
+    except ValueError:
+        return False
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Automatically submit eligible verified-live VPS search results."
+    )
+    parser.add_argument("--input", type=Path, required=True)
+    parser.add_argument("--profile", type=Path, required=True)
+    parser.add_argument("--launcher", type=Path, default=Path("src/job_automation.py"))
+    parser.add_argument("--results-dir", type=Path, default=DEFAULT_RESULTS_DIR)
+    parser.add_argument("--submission-log", type=Path, required=True)
+    parser.add_argument("--state", type=Path, default=DEFAULT_STATE_FILE)
+    parser.add_argument("--max-confirmed", type=int, default=DEFAULT_MAX_CONFIRMED)
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=int(RUNTIME_CONFIG.application["queue_timeout_seconds"]),
+    )
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    if args.max_confirmed <= 0:
+        raise SystemExit("--max-confirmed must be greater than zero")
+    if args.timeout <= 0:
+        raise SystemExit("--timeout must be greater than zero")
+
+    state = _load_state(args.state)
+    records: dict[str, Any] = state["jobs"]
+    unresolved = [
+        url
+        for url, record in records.items()
+        if isinstance(record, dict) and record.get("status") == "manual_review_required"
+    ]
+    if unresolved:
+        print(
+            "VPS_APPLICATION_BLOCKED "
+            f"manual_review_required={len(unresolved)} first_url={sorted(unresolved)[0]}",
+            flush=True,
+        )
+        return 1
+    jobs = _eligible_jobs(_load_json(args.input))
+    confirmed_urls = _confirmed_urls(args.submission_log)
+    args.results_dir.mkdir(parents=True, exist_ok=True)
+    confirmed_count = 0
+    attempted_count = 0
+
+    for job in jobs:
+        canonical_url = str(job["_canonical_url"])
+        if canonical_url in confirmed_urls:
+            continue
+        # Any prior attempt requires manual review. This includes ambiguous and
+        # clearly pre-submit failures, preventing unattended retry loops.
+        if canonical_url in records:
+            continue
+        if confirmed_count >= args.max_confirmed:
+            break
+
+        attempted_count += 1
+        result_path = _result_path(args.results_dir, canonical_url)
+        result_path.unlink(missing_ok=True)
+        command = [
+            sys.executable,
+            str(args.launcher),
+            "apply",
+            "--url",
+            str(job["job_url"]).strip(),
+            "--company",
+            str(job["company"]).strip(),
+            "--role",
+            str(job["title"]).strip(),
+            "--config",
+            str(args.profile),
+            "--results-file",
+            str(result_path),
+            "--submission-log-file",
+            str(args.submission_log),
+            "--live-submit",
+            "--no-shuffle",
+            "--timeout",
+            str(args.timeout),
+        ]
+        started_at = datetime.now(UTC)
+        try:
+            completed = subprocess.run(command, check=False)
+            return_code = completed.returncode
+            error = ""
+        except OSError as exc:
+            return_code = 127
+            error = str(exc)
+        result = _read_single_result(result_path)
+        confirmed = return_code == 0 and _is_confirmed(result)
+        status = "confirmed" if confirmed else "manual_review_required"
+        records[canonical_url] = {
+            "status": status,
+            "job_url": str(job["job_url"]).strip(),
+            "company": str(job["company"]).strip(),
+            "title": str(job["title"]).strip(),
+            "platform": str(job["platform"]).strip().lower(),
+            "started_at": started_at.isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
+            "exit_code": return_code,
+            "result_status": str(result.get("status", "NO_RESULT")),
+            "evidence_path": str(result_path),
+            **({"error": error} if error else {}),
+        }
+        _save_state(args.state, state)
+
+        if not confirmed:
+            print(
+                "VPS_APPLICATION_STOP "
+                f"url={job['job_url']} exit_code={return_code} "
+                f"status={result.get('status', 'NO_RESULT')}",
+                flush=True,
+            )
+            return 1
+        confirmed_count += 1
+        confirmed_urls.add(canonical_url)
+        print(
+            f"VPS_APPLICATION_CONFIRMED count={confirmed_count} url={job['job_url']}",
+            flush=True,
+        )
+
+    print(
+        f"VPS applications: eligible={len(jobs)}, attempted={attempted_count}, "
+        f"confirmed={confirmed_count}, limit={args.max_confirmed}",
+        flush=True,
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

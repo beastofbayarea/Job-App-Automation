@@ -7,10 +7,13 @@
     "results_file": "output/orchestration_results.json",
     "submission_log_file": "output/submission_log.json",
     "queue_progress_file": "output/job_url_queue_progress.json",
+    "vps_application_results_dir": "output/vps_application_results",
+    "vps_application_state_file": "output/vps_application_state.json",
     "candidate_email_pool_file": "config/candidate_email_pool.json",
     "engine_timeout_seconds": 180,
     "resume_timeout_seconds": 600,
     "queue_timeout_seconds": 300,
+    "vps_max_confirmed_per_run": 10,
     "default_start_date_offset_days": 14
   },
   "browser": {"cdp_endpoint": "http://localhost:9222"},

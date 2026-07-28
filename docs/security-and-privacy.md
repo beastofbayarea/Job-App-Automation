@@ -12,11 +12,15 @@ This project processes identity, contact, resume, employment, and application da
 
 ## Submission and email safety
 
-- Start application workflows with `--dry-run` or `--fill-only`.
+- Start interactive application workflows with `--dry-run` or `--fill-only`.
 - Use `--live-submit` only after a candidate review. Do not infer an answer to sensitive, legal, work-authorization, compensation, or screening questions.
 - A browser fill is not a submission. Depend on explicit confirmation and `submission_log.json`.
 - Gmail sends require confirmation unless `--yes` is supplied. Use `--draft` for reviewable outreach.
 - Do not use queue processing for exploratory testing; it is a live submission workflow.
+- The VPS daily workflow is explicitly authorized for unattended live
+  submission. It is capped at 10 confirmations and stops on the first uncertain
+  result. Do not disable its persistent manual-review block or exact
+  confirmation requirement.
 
 ## Retention and sharing
 
@@ -28,6 +32,9 @@ Generated artifacts, result JSON, screenshots, and logs can contain personal dat
 - Pin the expected SSH host key. Never accept an unexpected key merely to make a transfer work.
 - Do not reuse the Git search-publication deploy key for private documents.
 - `vps-search-output` is public generated data and must remain limited to search coverage, job CSV, and board-cache artifacts. Never add archive paths or content to its allow-list.
+- VPS application state, results, screenshots, submission logs, Gmail OAuth
+  files, and candidate inputs are private and must never enter the search
+  publication worktree.
 - Archive records are immutable. A content conflict requires review; it is never silently overwritten.
 - Retrieval validates the supplied identity and every document hash before replacing local files.
 - Maintain encrypted backups appropriate for the candidate's retention policy. Private permissions alone do not protect against disk loss or account compromise.

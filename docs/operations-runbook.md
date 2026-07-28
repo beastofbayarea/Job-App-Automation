@@ -121,6 +121,35 @@ on the next run. Search results are still published as one coherent snapshot
 when individual document generation fails; the cron run reports failure so the
 problem remains visible in `output/vps_sync.log`.
 
+The installer also transfers the candidate profile, resume source, Vertex
+credential, and pre-authorized Gmail OAuth credential/token needed by
+unattended resume generation and Greenhouse verification. These files are
+stored with mode `0600`. Complete Gmail authorization locally before running
+the installer; cron cannot complete an interactive OAuth browser flow.
+
+### Automatic VPS application stage
+
+After publishing the safe search snapshot and successfully generating the
+document archive, the daily workflow invokes the guarded application runner.
+Only complete `live` records for Greenhouse, Lever, and Ashby are eligible. The
+runner calls the existing orchestrator with `--live-submit`, processes records
+sequentially, and stops after 10 exact confirmed submissions.
+
+`output/vps_application_state.json`,
+`output/vps_application_results/`, `output/submission_log.json`, and ATS
+screenshots are private VPS artifacts. They must never be added to
+`vps-search-output`. A prior exact `SUBMITTED & CONFIRMED` log entry is skipped.
+Every attempted job is recorded atomically.
+
+Any CAPTCHA, required-field failure, timeout, malformed result, engine error,
+or submission lacking exact confirmation is saved as
+`manual_review_required`. The current run stops immediately, and later daily
+runs remain blocked rather than moving to other jobs. Inspect the evidence and
+the employer account or confirmation email. If the application is confirmed,
+record that confirmed submission before removing the blocking state entry. If
+it was definitely not submitted and a retry is appropriate, remove only that
+URL's state entry. Never clear ambiguous state merely to make cron continue.
+
 The cron entry and an on-demand trigger both run
 `scripts/vps_search_sync.sh`. That script uses a nonblocking lock and exits
 without starting when another sync is active. It also refuses to publish unless

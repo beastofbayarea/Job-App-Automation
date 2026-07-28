@@ -32,6 +32,9 @@ SYNC_FILES=(
 )
 PRIVATE_GENERATION_OUTPUT="$REPO_DIR/output/vps_generation_jobs.json"
 DOCUMENT_STATE="$REPO_DIR/output/vps_document_archive_state.json"
+APPLICATION_STATE="$REPO_DIR/output/vps_application_state.json"
+APPLICATION_RESULTS="$REPO_DIR/output/vps_application_results"
+SUBMISSION_LOG="$REPO_DIR/output/submission_log.json"
 
 # Cron and an on-demand trigger must never update the search artifacts or sync
 # worktree concurrently. Keep the file descriptor open for the entire run.
@@ -106,3 +109,14 @@ if ((DOCUMENT_EXIT != 0)); then
   echo "One or more document pairs could not be generated or archived; failed jobs will retry on the next daily run." >&2
   exit "$DOCUMENT_EXIT"
 fi
+
+cd "$REPO_DIR"
+PYTHONPATH="$REPO_DIR/src${PYTHONPATH:+:$PYTHONPATH}" \
+  python -m job_application_automation.core.search_applications \
+  --input "$PRIVATE_GENERATION_OUTPUT" \
+  --profile "$REPO_DIR/config/candidate_profile_config.json" \
+  --launcher "$REPO_DIR/src/job_automation.py" \
+  --results-dir "$APPLICATION_RESULTS" \
+  --submission-log "$SUBMISSION_LOG" \
+  --state "$APPLICATION_STATE" \
+  --max-confirmed 10

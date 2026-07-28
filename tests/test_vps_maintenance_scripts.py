@@ -370,6 +370,23 @@ class PullSnapshotTests(unittest.TestCase):
 
 @unittest.skipUnless(BASH, "Bash is required")
 class BashMaintenanceTests(unittest.TestCase):
+    def test_application_stage_runs_after_safe_publication_and_keeps_private_files_out(self) -> None:
+        script = (SCRIPTS / "vps_search_sync.sh").read_text(encoding="utf-8")
+
+        publication = script.index('git push "$PUSH_URL"')
+        application = script.index("job_application_automation.core.search_applications")
+        self.assertLess(publication, application)
+        sync_block = script[
+            script.index("SYNC_FILES=(") : script.index("PRIVATE_GENERATION_OUTPUT=")
+        ]
+        for private_name in (
+            "vps_generation_jobs.json",
+            "vps_application_state.json",
+            "vps_application_results",
+            "submission_log.json",
+        ):
+            self.assertNotIn(private_name, sync_block)
+
     def test_shell_scripts_parse_and_logrotate_template_renders(self) -> None:
         for name in ("vps_search_sync.sh", "install_vps_logrotate.sh"):
             result = run([BASH, "-n", f"scripts/{name}"], cwd=ROOT)

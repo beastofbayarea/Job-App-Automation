@@ -118,6 +118,8 @@ def load_runtime_config(path: Path | None = None) -> RuntimeConfig:
         "results_file",
         "submission_log_file",
         "queue_progress_file",
+        "vps_application_results_dir",
+        "vps_application_state_file",
         "candidate_email_pool_file",
     ):
         _string(application, "application", key)
@@ -125,6 +127,7 @@ def load_runtime_config(path: Path | None = None) -> RuntimeConfig:
         "engine_timeout_seconds",
         "resume_timeout_seconds",
         "queue_timeout_seconds",
+        "vps_max_confirmed_per_run",
         "default_start_date_offset_days",
     ):
         _integer(application, "application", key)
