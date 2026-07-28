@@ -7,6 +7,8 @@ flowchart TD
     CLI -->|apply / orchestrate| Orchestrator["orchestrator.py"]
     CLI -->|queue| Queue["queue_runner.py"]
     CLI -->|resume| Resume["resume/generate.py"]
+    CLI -->|cover-letter| CoverLetter["resume/cover_letter.py"]
+    CLI -->|documents / archive| Documents["core/document_cli.py"]
     CLI -->|search| Search["search/job_boards.py"]
     CLI -->|gmail / email| Gmail["mail/gmail_client.py"]
     CLI -->|email-pool| EmailPool["mail/pool_select.py"]
@@ -52,6 +54,25 @@ flowchart TD
     Resume --> ResumeValid
     Resume --> Paths
 
+    subgraph CoverLetterPipeline["Cover-letter generation"]
+        direction LR
+        CoverAI["resume/cover_letter_ai.py"]
+        CoverCache["resume/cover_letter_cache.py"]
+        CoverRender["resume/cover_letter_rendering.py"]
+        CoverValid["resume/cover_letter_validation.py"]
+    end
+    CoverLetter --> CoverAI
+    CoverLetter --> CoverCache
+    CoverLetter --> CoverRender
+    CoverLetter --> CoverValid
+    CoverLetter --> ResumeSrc
+
+    Documents --> DocumentArchive["core/document_archive.py<br/>(manifest / integrity / PuTTY)"]
+    Documents --> Identity["core/identity.py"]
+    Documents --> Resume
+    Documents --> CoverLetter
+    DocumentArchive -.Plink / PSCP, never Git.-> PrivateVPS["Private VPS archive<br/>0700 dirs / 0600 files"]
+
     subgraph SearchPipeline["ATS board search"]
         direction LR
         SearchCache["search/cache.py"]
@@ -92,5 +113,5 @@ flowchart TD
     classDef shared fill:#868e96,color:#fff,stroke:#495057;
     classDef pipeline fill:#12b886,color:#fff,stroke:#0b7285;
     class Entry,CLI entry;
-    class Adapters,Contracts,Artifacts,Paths,EngShared shared;
-    class Orchestrator,Queue,Resume,Search,Gmail,EmailPool pipeline;
+    class Adapters,Contracts,Artifacts,Paths,EngShared,Identity shared;
+    class Orchestrator,Queue,Resume,CoverLetter,Documents,DocumentArchive,Search,Gmail,EmailPool pipeline;

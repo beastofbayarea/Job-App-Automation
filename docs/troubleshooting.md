@@ -23,3 +23,15 @@ Inspect the application result, screenshot, and provider page. Queue execution s
 ## Search returns too few results
 
 Read `output/job_search_coverage.json`. Broaden locations, provide known boards or career pages, use more than one ATS, and avoid an unnecessarily narrow date filter. `--require-live` intentionally excludes roles whose liveness cannot be confirmed.
+
+## VPS document archive cannot connect
+
+Confirm that PuTTY `plink` and `pscp` are on `PATH`, the ignored VPS config has the dedicated archive user, and `ssh_host_key` is the trusted PuTTY-format fingerprint. An unknown or changed host key fails closed in batch mode; verify changes independently instead of bypassing the pin. If using `archive_private_key_file`, confirm it points to an existing dedicated `.ppk`.
+
+## Archive already exists with different content
+
+Records are immutable for one canonical job URL and normalized email. A different company/title or PDF under that identity is reported as a conflict and is not overwritten. Verify the URL/email and whether the existing record is the reviewed document set before changing anything on the VPS.
+
+## Retrieved document fails verification
+
+No downloaded file is promoted when the manifest, identity, size, PDF signature, or SHA-256 check fails. Preserve the local archive output, inspect VPS/backups for corruption, and do not use the partial temporary download.

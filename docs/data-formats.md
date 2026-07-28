@@ -57,11 +57,11 @@ The JSON output is an array of objects with the same public fields. An empty val
 }
 ```
 
-Completed engine results add `success`, `status`, `submitted`, `confirmed`, and `test_mode`, plus engine, resume, masked email, errors, or provider-specific diagnostics when available. Only the exact `SUBMITTED & CONFIRMED` state with successful, submitted, and confirmed flags is safe to count as a completed application.
+Completed engine results add `success`, `status`, `submitted`, `confirmed`, and `test_mode`, plus engine, resume, masked email, errors, or provider-specific diagnostics when available. Only the exact `SUBMITTED & CONFIRMED` state with successful, submitted, and confirmed flags and `test_mode: false` is safe to count as a completed application.
 
 ## Submission log
 
-`output/submission_log.json` is an object keyed by `YYYYMMDD-company-role`. Entries contain:
+`output/submission_log.json` is an object whose first same-day company/role entry uses `YYYYMMDD-company-role`. A short deterministic suffix prevents a distinct same-day application from overwriting that entry. Entries contain:
 
 ```json
 {
@@ -79,6 +79,50 @@ Completed engine results add `success`, `status`, `submitted`, `confirmed`, and 
 ```
 
 The log stores confirmed submissions only. It contains personal data and must not be committed or shared without authorization.
+
+## Private document archive manifest
+
+Each VPS record stores `resume.pdf`, `cover_letter.pdf`, `manifest.json`, and an internal fingerprint file below an opaque path such as `records/ab/ja1_<sha256>`. The manifest schema is:
+
+```json
+{
+  "schema_version": 1,
+  "identity_version": 1,
+  "archive_id": "ja1_<sha256>",
+  "record_fingerprint": "<sha256>",
+  "created_at": "2026-07-28T12:00:00+00:00",
+  "identity": {
+    "job_url": "https://jobs.example.com/role-id",
+    "canonical_job_url": "https://jobs.example.com/role-id",
+    "company": "Example",
+    "company_key": "example",
+    "job_title": "Product Manager",
+    "job_title_key": "product manager",
+    "email_used": "candidate@example.com",
+    "email_key": "candidate@example.com"
+  },
+  "documents": {
+    "resume": {
+      "kind": "resume",
+      "stored_name": "resume.pdf",
+      "original_filename": "reviewed-resume.pdf",
+      "sha256": "<sha256>",
+      "size_bytes": 12345,
+      "media_type": "application/pdf"
+    },
+    "cover_letter": {
+      "kind": "cover_letter",
+      "stored_name": "cover_letter.pdf",
+      "original_filename": "reviewed-cover-letter.pdf",
+      "sha256": "<sha256>",
+      "size_bytes": 6789,
+      "media_type": "application/pdf"
+    }
+  }
+}
+```
+
+The URL and normalized email derive the opaque archive ID. Retrieval also requires exact normalized company and job-title matches. The manifest and PDFs are private PII and must never be committed.
 
 ## Queue progress
 

@@ -5,6 +5,7 @@ This project processes identity, contact, resume, employment, and application da
 ## Protect local secrets
 
 - Keep Google OAuth credentials, OAuth tokens, Vertex service-account keys, candidate profile data, email pools, resume sources, and generated output out of Git.
+- Keep the VPS archive config, private key, PDFs, manifests, job metadata, and candidate emails out of Git and every publicly served directory.
 - Use the provided example JSON files as templates; do not put real values in examples, test fixtures, issues, or commit messages.
 - Limit local filesystem access and remove unused credential copies. Revoke and rotate a credential if it is exposed.
 - Prefer `--redact` when exporting Gmail data. Review every export before sharing it.
@@ -20,3 +21,13 @@ This project processes identity, contact, resume, employment, and application da
 ## Retention and sharing
 
 Generated artifacts, result JSON, screenshots, and logs can contain personal data. Keep only what is needed for the candidate's application process, share it only with authorized people, and securely delete local copies according to the candidate's retention requirements.
+
+## VPS archive boundary
+
+- Use a dedicated unprivileged SSH account, archive root mode `0700`, file mode `0600`, and a separately managed authentication key.
+- Pin the expected SSH host key. Never accept an unexpected key merely to make a transfer work.
+- Do not reuse the Git search-publication deploy key for private documents.
+- `vps-search-output` is public generated data and must remain limited to search coverage, job CSV, and board-cache artifacts. Never add archive paths or content to its allow-list.
+- Archive records are immutable. A content conflict requires review; it is never silently overwritten.
+- Retrieval validates the supplied identity and every document hash before replacing local files.
+- Maintain encrypted backups appropriate for the candidate's retention policy. Private permissions alone do not protect against disk loss or account compromise.

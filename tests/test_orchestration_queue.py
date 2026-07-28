@@ -276,6 +276,7 @@ class QueueSafetyTests(unittest.TestCase):
 
         self.assertTrue(orchestrator._is_confirmed_submission(confirmed))
         self.assertFalse(orchestrator._is_confirmed_submission(prefilled))
+        self.assertFalse(orchestrator._is_confirmed_submission({**confirmed, "test_mode": True}))
         self.assertFalse(orchestrator._is_confirmed_submission({"status": "SUBMITTED & CONFIRMED"}))
 
     def test_queue_rejects_invalid_indexes_and_timeouts_before_starting(self) -> None:
@@ -311,6 +312,7 @@ class QueueSafetyTests(unittest.TestCase):
 
         self.assertTrue(queue_runner._confirmed_submission(confirmed))
         self.assertFalse(queue_runner._confirmed_submission(prefilled))
+        self.assertFalse(queue_runner._confirmed_submission({**confirmed, "test_mode": True}))
         self.assertFalse(queue_runner._confirmed_submission({"success": "true"}))
 
     def test_queue_url_helpers_require_a_company_path_segment(self) -> None:

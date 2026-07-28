@@ -119,6 +119,41 @@ class UnifiedCliDispatchTests(unittest.TestCase):
             calls,
         )
 
+    def test_documents_command_and_archive_alias_dispatch_lazily(self) -> None:
+        calls: list[tuple[str, list[str]]] = []
+
+        def resolve_main(module_name: str):
+            def handler(arguments: list[str] | None) -> int:
+                calls.append((module_name, list(arguments or [])))
+                return 0
+
+            return handler
+
+        self.assertEqual(
+            0,
+            cli.dispatch(
+                ["documents", "retrieve", "--url", "https://example.test/job"],
+                resolve_main=resolve_main,
+            ),
+        )
+        self.assertEqual(
+            0,
+            cli.dispatch(["archive", "store", "--help"], resolve_main=resolve_main),
+        )
+        self.assertEqual(
+            [
+                (
+                    "job_application_automation.core.document_cli",
+                    ["retrieve", "--url", "https://example.test/job"],
+                ),
+                (
+                    "job_application_automation.core.document_cli",
+                    ["store", "--help"],
+                ),
+            ],
+            calls,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

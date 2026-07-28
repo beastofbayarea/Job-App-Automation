@@ -7,6 +7,7 @@ CLI
 ├── search: discovery, feeds, JSON-LD, liveness, cache, serialization
 ├── resume: source validation, AI/local generation, scoring, rendering
 ├── cover-letter: claims, AI generation, validation, rendering, cache
+├── documents: paired generation, immutable manifests, pinned PuTTY transport
 ├── apply / queue: profile, runtime config, orchestration, submission log
 ├── engines: Ashby, Greenhouse, Lever browser adapters
 └── mail: Gmail OAuth/messages/persistence and email-pool selection
@@ -18,6 +19,9 @@ CLI
 - `core/contracts.py` defines data passed between orchestrator and engines; `EngineResult` is the submission-confirmation boundary.
 - `core/artifacts.py` atomically writes JSON, CSV, and text artifacts.
 - `core/orchestrator.py` coordinates candidate profile, resume generation, provider detection, engine invocation, result persistence, and confirmed-submission logging.
+- `core/identity.py` provides dependency-free canonical job URL, email, and lookup normalization.
+- `core/document_archive.py` owns immutable manifests, opaque IDs, integrity checks, atomic local promotion, and the injected VPS transport boundary.
+- `core/document_cli.py` composes paired generation with explicit archive storage and deterministic retrieval.
 - `core/queue_runner.py` invokes live orchestration serially and checkpoints after every URL.
 
 The detailed component diagram is maintained in [architecture.mmd](../architecture.mmd). The PRD describes proposed work; it is not a statement of currently available functionality.

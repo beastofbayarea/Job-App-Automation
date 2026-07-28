@@ -1,6 +1,6 @@
 # Job Application Automation
 
-A local, safety-first toolkit for discovering public ATS vacancies, generating tailored PDF resumes, and filling applications on Ashby, Greenhouse, and Lever. It also includes a Gmail OAuth utility and a candidate-email pool selector.
+A local, safety-first toolkit for discovering public ATS vacancies, generating tailored PDF resumes and cover letters, privately archiving those documents on a VPS, and filling applications on Ashby, Greenhouse, and Lever. It also includes a Gmail OAuth utility and a candidate-email pool selector.
 
 The public entry point is `src/job_automation.py`. The implementation under `src/job_application_automation/` is a reusable Python package; ATS engine commands are primarily diagnostics used by the orchestrator.
 
@@ -8,6 +8,7 @@ The public entry point is `src/job_automation.py`. The implementation under `src
 
 - Search Greenhouse, Lever, Ashby, and generic JSON-LD job pages without API keys. Search produces CSV results, optional JSON, a reusable board cache, and a coverage report.
 - Generate a role-specific PDF resume with Vertex AI when configured, or a rule-based fallback if AI is unavailable. Source identity, employment facts, and education are validated before rendering.
+- Generate a matching CV/cover-letter pair and store or retrieve it from private, hash-verified VPS storage using the job URL, company, title, and candidate email.
 - Apply to a single URL or an Excel tracker. The orchestrator detects the supported ATS, selects a configured candidate email, generates a tailored resume, and records results and confirmed submissions.
 - Run a deliberately live sequential queue that stops at the first unconfirmed application.
 - Read, classify, export, draft, or send Gmail messages through local OAuth.
@@ -19,6 +20,7 @@ The public entry point is `src/job_automation.py`. The implementation under `src
 - Candidate configuration and resume source material for resume or application workflows
 - Google OAuth credentials for Gmail features
 - A Google Cloud Vertex AI credential is optional; without it, resume generation falls back locally
+- PuTTY `plink` and `pscp` for private VPS document storage and retrieval
 
 ## Setup
 
@@ -61,6 +63,7 @@ Tracked examples are safe templates. Copy and personalize them; the resulting fi
 | Runtime defaults | `config/runtime_config.json` | Already tracked; adjust paths, timeouts, model, and quality thresholds when needed. |
 | Vertex service account | `config/vertex_service_account.json` | `config/vertex_service_account.example.json` |
 | Gmail desktop OAuth client and token | `config/credentials.json`, `config/token.json` | Download OAuth desktop-client credentials from Google Cloud; the token is created during authorization. |
+| Private VPS archive | `config/vps_config.json` | Copy `config/vps_config.example.json`, then add a trusted host-key fingerprint and dedicated archive authentication. |
 
 The default runtime configuration resolves paths from the project root. Its Vertex `project_id` can remain `from-service-account` to read the project ID from the configured service-account file. Alternatively, use Application Default Credentials via `GOOGLE_APPLICATION_CREDENTIALS`.
 
@@ -94,6 +97,48 @@ python src/job_automation.py resume `
 ```
 
 Provide job-description text directly with `--keywords`, `--jd-overview`, `--jd-resp`, and `--jd-req`; otherwise an Ashby URL is used for context. Use `--email` to override the source email for one generated document and `--output` to choose its path. Generated resumes and non-persistent caches are written under `output/` by default.
+
+### Generate and privately archive a CV and cover letter
+
+The `documents` workflow gives the resume and cover letter one shared identity. Local generation does not contact the VPS:
+
+```powershell
+python src/job_automation.py documents generate `
+  --url "https://jobs.ashbyhq.com/example/job-id" `
+  --company "Example" `
+  --job-title "Product Manager" `
+  --email "candidate@example.com" `
+  --jd-file ".\job-description.txt"
+```
+
+For an intentional one-step generate-and-upload run, add `--archive`. To archive the exact files after reviewing them, use `documents store` instead.
+
+Existing PDFs can be validated without network access, then explicitly uploaded:
+
+```powershell
+# Local plan only.
+python src/job_automation.py documents store `
+  --url "https://jobs.ashbyhq.com/example/job-id" `
+  --company "Example" `
+  --job-title "Product Manager" `
+  --email "candidate@example.com" `
+  --cv ".\output\resume.pdf" `
+  --cover-letter ".\output\cover_letter.pdf"
+
+# Add --execute to perform the upload.
+```
+
+Retrieve both PDFs with the same four selectors:
+
+```powershell
+python src/job_automation.py documents retrieve `
+  --url "https://jobs.ashbyhq.com/example/job-id" `
+  --company "Example" `
+  --job-title "Product Manager" `
+  --email "candidate@example.com"
+```
+
+Archives use opaque IDs, immutable manifests, pinned SSH host keys, private VPS permissions, and SHA-256 verification. They are stored outside the repository and never enter `vps-search-output`. See the [operations runbook](docs/operations-runbook.md) for one-time VPS setup.
 
 ### Apply to jobs
 
@@ -156,6 +201,7 @@ job_automation.py
   └─ cli.py
       ├─ apply / queue              core orchestration and shared contracts
       ├─ resume                     resume source, AI, validation, scoring, rendering
+      ├─ documents                  paired generation and private VPS archive
       ├─ search                     discovery, board feeds, JSON-LD, liveness, caching
       ├─ gmail / email-pool         Gmail OAuth, messages, exports, email selection
       └─ engine <ATS>               Ashby, Greenhouse, or Lever browser engine
@@ -183,5 +229,6 @@ Pytest runs with sockets disabled, so tests use mocks and never invoke live ATS,
 
 - Only use browser automation and email features with explicit authorization for the candidate account and target job.
 - Keep credentials, OAuth tokens, candidate profile data, resume source material, and generated output out of version control.
+- Keep the private archive outside the VPS repository and web roots; never publish its PDFs, manifest, or email metadata through Git.
 - Do not treat a filled form as submitted: rely on the recorded confirmation status before proceeding.
 - Use the queue only for intentional live submissions; it is not a dry-run batch tool.

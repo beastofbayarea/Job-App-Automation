@@ -20,12 +20,14 @@ COMMAND_MODULES = {
     "queue": "job_application_automation.core.queue_runner",
     "resume": "job_application_automation.resume.generate",
     "cover-letter": "job_application_automation.resume.cover_letter",
+    "documents": "job_application_automation.core.document_cli",
     "search": "job_application_automation.search.job_boards",
     "gmail": "job_application_automation.mail.gmail_client",
     "email-pool": "job_application_automation.mail.pool_select",
 }
 COMMAND_ALIASES = {
     "orchestrate": "apply",
+    "archive": "documents",
     "email": "gmail",
 }
 ENGINE_MODULES = {
@@ -43,6 +45,7 @@ def _print_usage(stream: TextIO) -> None:
         "  queue       Run a sequential application queue\n"
         "  resume      Generate a personalised resume\n"
         "  cover-letter  Generate a one-page personalised cover letter\n"
+        "  documents   Generate, store, or retrieve a private CV/cover-letter pair\n"
         "  search      Search supported ATS job boards\n"
         "  gmail       Read, export, draft, or send Gmail messages\n"
         "  email-pool  Select configured candidate email addresses\n\n"

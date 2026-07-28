@@ -10,12 +10,17 @@ All notable user-facing changes are documented here. This project currently uses
 - Contributor guidance for safe local development and test boundaries.
 - VPS search-sync freshness reporting, dry-run generated-PDF pruning, an
   on-demand search trigger, and repository-aware logrotate installation.
+- Private, immutable VPS storage and verified retrieval for paired CV and
+  cover-letter PDFs, including a combined generation workflow.
 
 ### Changed
 
 - Hardened VPS synchronization with commit-coherent output pulls, cron/manual
   mutual exclusion, shell-safe remote paths, temporary Plink password files,
   and offline regression coverage.
+- Tightened confirmed-submission handling so test-mode results cannot be
+  counted, prevented same-day submission-log collisions, and added a
+  cover-letter email override for document identity consistency.
 
 ## [0.1.0]
 

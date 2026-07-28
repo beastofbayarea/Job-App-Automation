@@ -52,6 +52,10 @@ class SubmissionRecordTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             _record(email_used="@example.com")
 
+    def test_rejects_email_without_a_domain(self) -> None:
+        with self.assertRaises(ValueError):
+            _record(email_used="candidate@")
+
     def test_payload_round_trips_through_from_payload(self) -> None:
         record = _record()
         restored = SubmissionRecord.from_payload(record.to_payload())
@@ -70,6 +74,23 @@ class SubmissionLogTests(unittest.TestCase):
         log.record(_record())
         matches = log.find_by_company("openai")
         self.assertEqual(len(matches), 1)
+
+    def test_distinct_same_day_company_role_records_do_not_overwrite(self) -> None:
+        log = SubmissionLog()
+        first_id = log.record(_record())
+        second_id = log.record(
+            _record(
+                job_url="https://jobs.ashbyhq.com/openai/another-role",
+                email_used="candidate@example.com",
+                applied_at=datetime(2026, 7, 28, 15, 0, tzinfo=timezone.utc),
+            )
+        )
+
+        self.assertEqual(first_id, "20260728-openai-product-manager")
+        self.assertNotEqual(second_id, first_id)
+        self.assertIsNotNone(log.get(first_id))
+        self.assertIsNotNone(log.get(second_id))
+        self.assertEqual(len(log.find_by_company("OpenAI")), 2)
 
     def test_save_and_load_round_trip_preserves_entries(self) -> None:
         log = SubmissionLog()

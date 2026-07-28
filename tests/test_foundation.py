@@ -96,6 +96,18 @@ class ContractTests(unittest.TestCase):
         self.assertTrue(parsed.is_confirmed_submission)
         self.assertEqual(parsed.extra["screenshot"], "proof.png")
 
+    def test_test_mode_result_is_never_a_confirmed_submission(self) -> None:
+        result = EngineResult(
+            success=True,
+            status=EngineStatus.SUBMITTED_CONFIRMED.value,
+            ats="ashby",
+            submitted=True,
+            confirmed=True,
+            test_mode=True,
+        )
+
+        self.assertFalse(result.is_confirmed_submission)
+
     def test_result_enforces_confirmation_safety_invariants(self) -> None:
         with self.assertRaisesRegex(ValueError, "also be submitted"):
             EngineResult(

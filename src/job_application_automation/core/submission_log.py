@@ -1,22 +1,22 @@
-"""Local record of submitted job applications, keyed for later lookup.
+"""Local record of confirmed job applications, keyed for later lookup.
 
-Resume and cover letter *files* are expected to live on the deployment VPS
-(too large to keep locally at scale); this module persists the small JSON
-index that answers "which resume/cover letter/email did I use for role X"
-without needing to fetch those files back.
+The private ``documents`` workflow owns VPS document storage and retrieval.
+This log remains a small, backward-compatible record of confirmed submissions;
+it is not the source of truth for archive paths or document integrity.
 """
 
 from __future__ import annotations
 
+import hashlib
 import re
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Mapping, MutableMapping
-from urllib.parse import urlparse
 
 from .artifacts import read_json, write_json
+from .identity import canonical_job_url, normalize_email
 
 _SLUG_PATTERN = re.compile(r"[^a-z0-9]+")
 
@@ -39,16 +39,16 @@ def _require_string(value: object, field_name: str, *, allow_empty: bool = False
 
 def _require_url(value: object, field_name: str) -> str:
     url = _require_string(value, field_name)
-    parsed = urlparse(url)
-    if parsed.scheme.lower() != "https" or not parsed.netloc:
-        raise ValueError(f"{field_name} must be an absolute HTTPS URL")
+    try:
+        canonical_job_url(url)
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must be a valid absolute HTTPS URL") from exc
     return url
 
 
 def _require_email(value: object, field_name: str) -> str:
     email = _require_string(value, field_name)
-    if "@" not in email or email.startswith("@"):
-        raise ValueError(f"{field_name} must contain a local part and @")
+    normalize_email(email, field_name)
     return email
 
 
@@ -69,9 +69,8 @@ class SubmissionRecord:
     status: str
     email_used: str
     resume_filename: str
-    # Cover letters and VPS storage are not automated yet (see submission_log
-    # module docstring); both default to "" so callers can log a submission
-    # as soon as it happens instead of waiting on those pipelines to exist.
+    # Archive-aware callers may populate these values. They remain optional so
+    # confirmed resume-only submissions retain their legacy shape.
     cover_letter_filename: str = ""
     remote_path: str = ""
     applied_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -149,10 +148,26 @@ class SubmissionLog:
         self._lock = threading.Lock()
 
     def record(self, submission: SubmissionRecord) -> str:
-        """Add or overwrite one entry keyed by its computed submission id."""
+        """Add one entry without overwriting a distinct same-day application."""
         with self._lock:
-            submission_id = submission.submission_id
-            self._entries[submission_id] = submission.to_payload()
+            payload = submission.to_payload()
+            base_id = submission.submission_id
+            existing = self._entries.get(base_id)
+            if existing is None or existing == payload:
+                submission_id = base_id
+            else:
+                discriminator = hashlib.sha256(
+                    (
+                        f"{submission.job_url}\0{submission.email_used}\0"
+                        f"{submission.applied_at.isoformat()}"
+                    ).encode("utf-8")
+                ).hexdigest()[:12]
+                submission_id = f"{base_id}-{discriminator}"
+                suffix = 2
+                while submission_id in self._entries and self._entries[submission_id] != payload:
+                    submission_id = f"{base_id}-{discriminator}-{suffix}"
+                    suffix += 1
+            self._entries[submission_id] = payload
             return submission_id
 
     def get(self, submission_id: str) -> dict[str, object] | None:

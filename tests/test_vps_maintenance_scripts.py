@@ -10,7 +10,7 @@ import subprocess
 import tempfile
 import time
 import unittest
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -101,7 +101,11 @@ class PowerShellMaintenanceTests(unittest.TestCase):
 
             report.write_text(
                 json.dumps(
-                    {"generated_at": (datetime.now(UTC) - timedelta(seconds=1)).isoformat()}
+                    {
+                        "generated_at": (
+                            datetime.now(timezone.utc) - timedelta(seconds=1)
+                        ).isoformat()
+                    }
                 ),
                 encoding="utf-8",
             )
@@ -114,7 +118,11 @@ class PowerShellMaintenanceTests(unittest.TestCase):
 
             report.write_text(
                 json.dumps(
-                    {"generated_at": (datetime.now(UTC) + timedelta(minutes=10)).isoformat()}
+                    {
+                        "generated_at": (
+                            datetime.now(timezone.utc) + timedelta(minutes=10)
+                        ).isoformat()
+                    }
                 ),
                 encoding="utf-8",
             )
@@ -126,7 +134,7 @@ class PowerShellMaintenanceTests(unittest.TestCase):
             self.assertIn("future", future.stderr)
 
             report.write_text(
-                json.dumps({"generated_at": datetime.now(UTC).isoformat()}),
+                json.dumps({"generated_at": datetime.now(timezone.utc).isoformat()}),
                 encoding="utf-8",
             )
             fresh = run(

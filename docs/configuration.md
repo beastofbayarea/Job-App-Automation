@@ -10,6 +10,7 @@ Copy the tracked examples before adding personal data. Local candidate data, cre
 | Runtime settings | `config/runtime_config.json` | Tracked default configuration |
 | Vertex service account | `config/vertex_service_account.json` | `config/vertex_service_account.example.json` |
 | Gmail OAuth client and token | `config/credentials.json`, `config/token.json` | Google Cloud OAuth desktop-client credentials; token is created during authorization |
+| Private VPS document archive | `config/vps_config.json` | `config/vps_config.example.json` |
 
 ## Candidate profile
 
@@ -29,6 +30,18 @@ The `candidate` object supplies personal fields and education history. `policies
 - `gmail`: OAuth credential/token locations and verification polling settings.
 
 Paths are resolved from the project root. Keep secrets in the local files named above; never put them in runtime configuration committed to Git.
+
+## Private VPS document archive
+
+Copy `config/vps_config.example.json` to the ignored `config/vps_config.json`. The `documents` workflow reads these fields from its `vps` object:
+
+- `host`, `ssh_user`, and optional `ssh_port`: use a dedicated, unprivileged archive account.
+- `ssh_host_key`: the trusted PuTTY-format fingerprint obtained through an independent channel. Archive operations require it and pass it through `-hostkey`.
+- `document_archive_root`: a private absolute POSIX path outside the repository and every web root. The default is `/var/lib/job-application-automation/private-archive`.
+- `archive_private_key_file`: a dedicated PuTTY key file. This is preferred and must not be the Git publication deploy key.
+- `ssh_password.value`: compatibility fallback when no archive key is configured. It is supplied to PuTTY through a per-run `-pwfile`, never a process argument.
+
+The private key, password, and real config remain ignored by Git. The runtime configuration schema is unchanged.
 
 ## Minimal setup check
 

@@ -436,7 +436,7 @@ def _record_submission(
             )
         )
         submission_log.save(submission_log_path)
-    except ValueError as exc:
+    except (OSError, ValueError) as exc:
         logger.warning("Could not record submission log entry for %s: %s", job["url"], exc)
 
 

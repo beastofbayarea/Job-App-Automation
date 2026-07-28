@@ -31,6 +31,8 @@ config/cent_capital_config.json
 
 # VPS credentials, split out from cent_capital_config.json for reuse across projects
 config/vps_config.json
+config/*.ppk
+config/*.pem
 
 # Local environment and logs
 .env

@@ -15,6 +15,7 @@ from typing import Any, Callable, Optional, Sequence
 from ..core.adapters import LLMClient
 from ..core.artifacts import write_json
 from ..core.engine_shared import load_json_config
+from ..core.identity import normalize_email
 from ..core.paths import CONFIG_DIR, OUTPUT_DIR
 from ..core.runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from .ai_client import scrape_ashby_job
@@ -119,6 +120,7 @@ def generate_cover_letter(
     source: ResumeSource,
     output_path: Path,
     *,
+    email_override: str = "",
     gateway: LLMClient | None = None,
     renderer: CoverLetterRenderer | None = None,
     fitz_module: Any | None = None,
@@ -137,6 +139,9 @@ def generate_cover_letter(
         raise JDContextUnavailable(
             f"No job-description context available for {job.company} - {job.role}."
         )
+    candidate = dict(source.candidate)
+    if email_override:
+        candidate["email"] = normalize_email(email_override, "email_override")
 
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -154,7 +159,7 @@ def generate_cover_letter(
     def _finish(letter: dict[str, Any]) -> Optional[Path]:
         attempt_path = output_path.with_name(f".{output_path.stem}.attempt{output_path.suffix}")
         _remove_file(attempt_path)
-        if not render_cover_letter(active_renderer, letter, dict(source.candidate), attempt_path):
+        if not render_cover_letter(active_renderer, letter, candidate, attempt_path):
             _remove_file(attempt_path)
             return None
         valid, _issues = validate_cover_letter_pdf(attempt_path, policy, fitz_module=fitz_module)
@@ -225,6 +230,11 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--jd-resp", default="")
     parser.add_argument("--jd-req", default="")
     parser.add_argument("--jd-file", default="", help="Path to a file containing JD text")
+    parser.add_argument(
+        "--email",
+        default="",
+        help="Override the source email in the generated cover letter for this run",
+    )
     parser.add_argument("--profile", default=str(DEFAULT_CONFIG_FILE))
     parser.add_argument("--output", default=None)
     return parser
@@ -232,6 +242,12 @@ def _build_argument_parser() -> argparse.ArgumentParser:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = _build_argument_parser().parse_args(argv)
+    if args.email:
+        try:
+            normalize_email(args.email, "email")
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
 
     jd_text = "\n".join(part for part in (args.jd_overview, args.jd_resp, args.jd_req) if part)
     if args.jd_file:
@@ -271,7 +287,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             pass
 
     try:
-        result = generate_cover_letter(job, narrative, source, output, cache=cache)
+        result = generate_cover_letter(
+            job,
+            narrative,
+            source,
+            output,
+            email_override=args.email,
+            cache=cache,
+        )
     except JDContextUnavailable as exc:
         print(f"JD_CONTEXT_UNAVAILABLE: {exc}", file=sys.stderr)
         return 2

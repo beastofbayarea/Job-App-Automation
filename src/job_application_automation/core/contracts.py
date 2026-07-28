@@ -278,6 +278,7 @@ class EngineResult:
             self.success
             and self.submitted
             and self.confirmed
+            and not self.test_mode
             and self.known_status is EngineStatus.SUBMITTED_CONFIRMED
         )
 

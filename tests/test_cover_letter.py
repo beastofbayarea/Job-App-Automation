@@ -354,9 +354,11 @@ class _RecordingRenderer:
     def __init__(self, page_texts: list[str]) -> None:
         self._page_texts = page_texts
         self.render_count = 0
+        self.last_candidate = None
 
     def render(self, request) -> bool:
         self.render_count += 1
+        self.last_candidate = dict(request.candidate)
         request.output_path.parent.mkdir(parents=True, exist_ok=True)
         request.output_path.write_text("stub-pdf", encoding="utf-8")
         return True
@@ -436,6 +438,29 @@ class GenerateCoverLetterTests(unittest.TestCase):
             self.assertEqual(audit["evidence_claim_ids"], ["AWS-1"])
             self.assertEqual(audit["prompt_template_version"], "cover-letter-v1")
             self.assertEqual(audit["generated_at"], "2026-07-28T00:00:00+00:00")
+
+    def test_email_override_is_rendered_without_mutating_the_source(self) -> None:
+        source = _fake_source()
+        with tempfile.TemporaryDirectory() as directory:
+            output_path = Path(directory) / "letter.pdf"
+            renderer = _RecordingRenderer([])
+            result = cover_letter.generate_cover_letter(
+                CoverLetterJob(company="Example Co", role="PM", jd_text="Build things."),
+                CareerNarrative(),
+                source,
+                output_path,
+                email_override="Application.Email@Example.com",
+                gateway=_RecordingGateway(_VALID_RESPONSE),
+                renderer=renderer,
+                fitz_module=_FakeGenFitz([[" ".join(["word"] * 30) + " Shivam Singh"]]),
+                max_retries=1,
+                minimum_words=5,
+                maximum_words=100,
+            )
+
+        self.assertEqual(result, output_path)
+        self.assertEqual(renderer.last_candidate["email"], "application.email@example.com")
+        self.assertEqual(source.candidate["email"], "shiv@example.test")
 
     def test_an_unmatched_claim_id_is_rejected_and_never_rendered(self) -> None:
         bad_response = json_module.dumps(
