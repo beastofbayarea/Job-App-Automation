@@ -122,5 +122,20 @@ class LocationQuestionTests(unittest.TestCase):
         self.assertEqual(engine_shared.location_answer_candidates({}), ())
 
 
+class ScreeningMatcherTests(unittest.TestCase):
+    def test_example_profile_answers_weekly_in_office_requirement(self) -> None:
+        config = engine_shared.load_json_config(ROOT / "config/candidate_profile_config.example.json")
+
+        answer = engine_shared.configured_answer(
+            "Are you available to work 3 days a week in our Melbourne office?",
+            config["candidate"],
+            config["rules"],
+            config["eeo_defaults"],
+            config["field_matchers"],
+        )
+
+        self.assertEqual(answer, "Yes")
+
+
 if __name__ == "__main__":
     unittest.main()
