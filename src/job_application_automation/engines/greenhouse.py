@@ -950,8 +950,6 @@ def run(
             )
             consent = _fill_consent(page)
             consent.extend(_fill_explicit_required_consents(page))
-            if live_submit:
-                _fill_security_code_from_gmail(page, company)
             missing = validate_required_fields(page, _required_empty_fields)
             prefill_screenshot = _screenshot(
                 page, screenshot_dir, company or "Greenhouse", "prefilled"
