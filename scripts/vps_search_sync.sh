@@ -14,6 +14,9 @@
 #      keys) with "Allow write access" checked, scoped to this repo only:
 #        ssh-keygen -t ed25519 -C "vps-search-sync" -f ~/.ssh/vps_search_sync -N ""
 #   3. Add a cron entry, e.g.: 0 3 * * * REPO_DIR/scripts/vps_search_sync.sh >> REPO_DIR/output/vps_sync.log 2>&1
+#   4. Install log rotation for the cron output so vps_sync.log doesn't grow
+#      unbounded:
+#        sudo cp scripts/vps-sync.logrotate /etc/logrotate.d/vps-sync
 
 set -euo pipefail
 

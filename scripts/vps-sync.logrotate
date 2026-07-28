@@ -1,0 +1,9 @@
+# Install on the VPS with: sudo cp scripts/vps-sync.logrotate /etc/logrotate.d/vps-sync
+/root/Job-App-Automation/output/vps_sync.log {
+    weekly
+    rotate 4
+    compress
+    missingok
+    notifempty
+    copytruncate
+}
