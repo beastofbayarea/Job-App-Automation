@@ -356,5 +356,12 @@
     ]
   }
   },
+  "career_narrative": {
+    "reason_for_change": "Candidate-approved wording only",
+    "next_role_priorities": ["AI product ownership", "customer impact"],
+    "tone": "direct",
+    "default_salutation": "Hiring Team",
+    "do_not_claim": ["People-management experience"]
+  },
   "company_overrides": {}
 }
