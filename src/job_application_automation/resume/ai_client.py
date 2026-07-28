@@ -76,6 +76,7 @@ LOCATION = VERTEX_SETTINGS.location
 MODEL = VERTEX_SETTINGS.model
 SERVICE_ACCOUNT_FILE = VERTEX_SETTINGS.service_account_file
 GOOGLE_APPLICATION_CREDENTIALS = "GOOGLE_APPLICATION_CREDENTIALS"
+VERTEX_AUTH_SCOPES = ("https://www.googleapis.com/auth/cloud-platform",)
 
 # Serializes LLM calls; the orchestrator can run multiple ATS engines concurrently
 # but Vertex AI quota and the shared client are not safe for parallel requests.
@@ -178,7 +179,9 @@ def build_client(settings: VertexSettings = VERTEX_SETTINGS) -> Any:
     try:
         from google.oauth2 import service_account
 
-        credentials = service_account.Credentials.from_service_account_file(str(credentials_path))
+        credentials = service_account.Credentials.from_service_account_file(
+            str(credentials_path), scopes=list(VERTEX_AUTH_SCOPES)
+        )
         project_id = project_id_for(settings, credentials_path)
         logger.info(
             "Auth: Vertex service account | project=%s | location=%s",
