@@ -191,6 +191,15 @@ The command atomically downloads and validates `submission_log.json` and
 `-Overwrite`, either existing local file prevents the operation before the VPS
 is contacted.
 
+Check a live run without acquiring its lock or starting another workflow:
+
+```powershell
+pwsh scripts\check_vps_automation_status.ps1 -LogLines 120
+```
+
+This read-only command prints matching remote processes, report/log file
+timestamps and sizes, and the requested tail of `output/vps_sync.log`.
+
 Generated resume and cover-letter cleanup is dry-run by default:
 
 ```powershell

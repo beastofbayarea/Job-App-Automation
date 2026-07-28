@@ -250,6 +250,9 @@ pwsh scripts\pull_search_output.ps1
 # Privately download the confirmed-submission list and latest failure report.
 pwsh scripts\pull_vps_application_reports.ps1
 
+# Inspect the active VPS process and recent log without starting a run.
+pwsh scripts\check_vps_automation_status.ps1
+
 # Check output/job_search_coverage.json age (24 hours by default).
 pwsh scripts\check_sync_freshness.ps1 -ThresholdHours 24
 
