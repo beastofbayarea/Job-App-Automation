@@ -15,7 +15,7 @@ Run commands with either `python src/job_automation.py` from the repository root
 
 ## Safety modes
 
-`apply` accepts exactly one of `--live-submit`, `--fill-only`, and `--dry-run`; without an explicit mode it remains dry-run. `queue` deliberately invokes `apply --live-submit` for each URL and stops after an unconfirmed result.
+`apply` accepts at most one of `--live-submit`, `--fill-only`, and `--dry-run`; without an explicit mode it remains dry-run. `queue` deliberately invokes `apply --live-submit` for each URL and stops after an unconfirmed result.
 
 ## Common options
 
