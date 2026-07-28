@@ -17,6 +17,12 @@ from job_application_automation.resume.cover_letter_claims import (  # noqa: E40
     validate_claim_ids,
 )
 from job_application_automation.resume.cover_letter_models import CoverLetterJob  # noqa: E402
+import tempfile  # noqa: E402
+
+from job_application_automation.resume.cover_letter_cache import (  # noqa: E402
+    CoverLetterCache,
+    cover_letter_cache_key,
+)
 
 
 class CareerNarrativeTests(unittest.TestCase):
@@ -82,6 +88,50 @@ class CoverLetterClaimsTests(unittest.TestCase):
         known = {"AWS-1"}
 
         self.assertEqual(validate_claim_ids(["AWS-1"], known), [])
+
+
+class CoverLetterCacheTests(unittest.TestCase):
+    def test_cache_key_changes_when_any_hash_input_changes(self) -> None:
+        base = dict(
+            job_identity="Example Co|Product Manager",
+            jd_sha256="a" * 64,
+            source_sha256="b" * 64,
+            narrative_sha256="c" * 64,
+            template_version="cover-letter-v1",
+        )
+
+        key = cover_letter_cache_key(**base)
+        changed = dict(base, jd_sha256="d" * 64)
+
+        self.assertEqual(len(key), 64)
+        self.assertNotEqual(key, cover_letter_cache_key(**changed))
+
+    def test_cache_round_trips_through_disk(self) -> None:
+        cache = CoverLetterCache()
+        cache.set("key-1", {"salutation": "Hiring Team"})
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "cover_letter_cache.json"
+            cache.save(path)
+
+            restored = CoverLetterCache()
+            self.assertEqual(restored.load(path), 1)
+
+        self.assertEqual(restored.get("key-1"), {"salutation": "Hiring Team"})
+        restored.discard("key-1")
+        self.assertIsNone(restored.get("key-1"))
+
+    def test_cache_returns_isolated_copies(self) -> None:
+        cache = CoverLetterCache()
+        payload = {"paragraphs": ["one"]}
+        cache.set("key-1", payload)
+        payload["paragraphs"].append("mutated by caller")
+
+        cached = cache.get("key-1")
+        assert cached is not None
+        cached["paragraphs"].append("mutated by reader")
+
+        self.assertEqual(cache.get("key-1")["paragraphs"], ["one"])
 
 
 if __name__ == "__main__":
