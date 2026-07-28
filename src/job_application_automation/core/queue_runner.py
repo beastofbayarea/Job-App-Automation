@@ -28,7 +28,9 @@ def _slug(url: str) -> str:
     if not parts:
         raise ValueError("Queue URL must contain a company or posting path segment")
     company = "".join(char if char.isalnum() else "_" for char in parts[0]).strip("_")
-    posting = parts[-1].split("?")[0]
+    posting = "".join(char if char.isalnum() else "_" for char in parts[-1]).strip("_")
+    if not company or not posting:
+        raise ValueError("Queue URL must contain a valid company and posting path segment")
     return f"{company}_{posting}"
 
 

@@ -323,6 +323,14 @@ class QueueSafetyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "path segment"):
             queue_runner._company_from_url("https://jobs.lever.co/")
 
+    def test_queue_slug_cannot_escape_the_output_directory(self) -> None:
+        slug = queue_runner._slug("https://jobs.lever.co/acme/..%2Foutside")
+
+        self.assertEqual("acme_outside", slug)
+        self.assertNotIn("/", slug)
+        self.assertNotIn("\\", slug)
+        self.assertNotIn("..", slug)
+
 
 if __name__ == "__main__":
     unittest.main()
