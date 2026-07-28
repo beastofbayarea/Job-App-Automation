@@ -1005,24 +1005,30 @@ def run(
                 page.wait_for_load_state("networkidle", timeout=timeout)
             except PlaywrightTimeoutError:
                 pass
-            if _security_challenge_visible(page) and _fill_security_code_from_gmail(page, email):
-                challenge_submit = _first_visible(
-                    page.get_by_role(
-                        "button",
-                        name=SUBMIT_BUTTON_TEXT_PATTERN,
-                    )
-                )
-                if challenge_submit is None:
-                    challenge_submit = _first_visible(
-                        page.locator('button[type="submit"], input[type="submit"]')
-                    )
-                if challenge_submit is not None:
-                    challenge_submit.click()
             confirmed = False
+            security_challenge_attempted = False
             for _ in range(15):
                 if _confirmation_visible(page):
                     confirmed = True
                     break
+                if (
+                    not security_challenge_attempted
+                    and _security_challenge_visible(page)
+                ):
+                    security_challenge_attempted = True
+                    if _fill_security_code_from_gmail(page, email):
+                        challenge_submit = _first_visible(
+                            page.get_by_role(
+                                "button",
+                                name=SUBMIT_BUTTON_TEXT_PATTERN,
+                            )
+                        )
+                        if challenge_submit is None:
+                            challenge_submit = _first_visible(
+                                page.locator('button[type="submit"], input[type="submit"]')
+                            )
+                        if challenge_submit is not None:
+                            challenge_submit.click()
                 page.wait_for_timeout(1_000)
             submitted_screenshot = _screenshot(
                 page, screenshot_dir, company or "Greenhouse", "submitted_verified"
