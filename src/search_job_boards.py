@@ -82,6 +82,27 @@ DEFAULT_AI_TERMS = (
     "NLP",
 )
 
+# Used only when the caller does not supply any ``--location`` parameters.
+# Keep region-specific remote preferences separate from generic ``Remote`` so
+# a default search does not silently include roles that can be performed from
+# any country.
+DEFAULT_LOCATION_TERMS = (
+    "US Remote",
+    "UK",
+    "Ireland",
+    "India Remote",
+    "Delhi",
+    "Noida",
+    "France",
+    "Europe Remote",
+    "UAE",
+    "Saudi Arabia",
+    "Singapore",
+    "Australia",
+    "New Zealand",
+    "Hong Kong",
+)
+
 # Queries deliberately use a smaller, diverse vocabulary than final matching to
 # avoid spending most of a discovery run on near-identical search-engine queries.
 AI_DISCOVERY_TERMS = (
@@ -3091,11 +3112,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--location",
         action="append",
-        required=True,
         metavar="LOCATION",
         help=(
             "Keep jobs whose location contains this term and include it in web "
-            "discovery; repeat for OR matching (required)."
+            "discovery; repeat for OR matching. When omitted, searches the default "
+            "locations: US Remote, UK, Ireland, India Remote, Delhi, Noida, France, "
+            "Europe Remote, UAE, Saudi Arabia, Singapore, Australia, New Zealand, "
+            "and Hong Kong."
         ),
     )
     parser.add_argument(
@@ -3322,9 +3345,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     role_aliases = split_repeated_terms(args.role_alias)
     ai_terms = split_terms(args.ai_terms, DEFAULT_AI_TERMS)
     exclude_terms = split_terms(args.exclude_terms, ())
+    raw_location_values = (
+        args.location if args.location is not None else DEFAULT_LOCATION_TERMS
+    )
     base_location_terms = list(
         dict.fromkeys(
-            clean_whitespace(value) for value in args.location if clean_whitespace(value)
+            clean_whitespace(value) for value in raw_location_values if clean_whitespace(value)
         )
     )
     custom_location_aliases = [

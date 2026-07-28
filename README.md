@@ -83,12 +83,16 @@ python src/search_job_boards.py `
   --require-live
 ```
 
-`--role-type`, `--ats-platform`, and `--location` are required. Repeat
-`--role-type`, `--ats-platform`, or `--location` to search multiple role
-families, platforms, or locations. Expanded role matching has built-in support
-for Growth Marketing (`Growth Mkt`), Performance Marketing (`Performance Mkt`),
-Paid Media, Marketing Operations (`Marketing Ops`), Management Consulting,
-Corporate Development (`Corp Dev`), and Venture Capital. For example:
+`--role-type` and `--ats-platform` are required. Repeat `--role-type`,
+`--ats-platform`, or `--location` to search multiple role families, platforms,
+or locations. When `--location` is omitted, the search defaults to US Remote,
+UK, Ireland, India Remote, Delhi, Noida, France, Europe Remote, UAE, Saudi
+Arabia, Singapore, Australia, New Zealand, and Hong Kong. Supplying one or
+more `--location` values replaces that default list. Expanded role matching has
+built-in support for Growth Marketing (`Growth Mkt`), Performance Marketing
+(`Performance Mkt`), Paid Media, Marketing Operations (`Marketing Ops`),
+Management Consulting, Corporate Development (`Corp Dev`), and Venture Capital.
+For example:
 
 ```powershell
 python src/search_job_boards.py `

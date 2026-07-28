@@ -249,6 +249,17 @@ class SearchJobBoardsTests(unittest.TestCase):
         )
         self.assertEqual(search.OUTPUT_DIR / "ai_jobs.csv", args.output)
 
+    def test_parser_allows_default_locations_when_location_is_omitted(self) -> None:
+        args = search.build_parser().parse_args(
+            [
+                "--role-type",
+                "Product Manager",
+                "--ats-platform",
+                "greenhouse",
+            ]
+        )
+        self.assertIsNone(args.location)
+
     def test_generic_ats_url_becomes_web_candidate(self) -> None:
         board = search.board_from_url(
             "https://example.wd1.myworkdayjobs.com/en-US/Careers/job/New-York/Product-Manager_123"
@@ -500,6 +511,84 @@ class SearchJobBoardsTests(unittest.TestCase):
             self.assertEqual(0, exit_code)
             self.assertIn("live_status", output_path.read_text(encoding="utf-8-sig"))
             self.assertEqual(1, json.loads(coverage_path.read_text(encoding="utf-8"))["results"]["returned"])
+
+    def test_main_uses_default_locations_only_when_location_is_omitted(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            captured_contexts: list[search.FetchContext] = []
+
+            def capture_fetch(
+                _session: object,
+                _board: search.Board,
+                context: search.FetchContext,
+            ) -> list[search.Job]:
+                captured_contexts.append(context)
+                return []
+
+            with patch.object(search, "fetch_board_jobs", side_effect=capture_fetch):
+                exit_code = search.main(
+                    [
+                        "--role-type",
+                        "Product Manager",
+                        "--ats-platform",
+                        "greenhouse",
+                        "--skip-search",
+                        "--board-url",
+                        "https://boards.greenhouse.io/example",
+                        "--scrape-discovered-pages",
+                        "none",
+                        "--cache",
+                        str(root / "cache.json"),
+                        "--output",
+                        str(root / "jobs.csv"),
+                        "--no-coverage-report",
+                    ]
+                )
+        self.assertEqual(0, exit_code)
+        self.assertEqual(1, len(captured_contexts))
+        self.assertEqual(
+            list(search.DEFAULT_LOCATION_TERMS),
+            list(captured_contexts[0].criteria.location_terms),
+        )
+
+    def test_explicit_location_replaces_default_locations(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            captured_contexts: list[search.FetchContext] = []
+
+            def capture_fetch(
+                _session: object,
+                _board: search.Board,
+                context: search.FetchContext,
+            ) -> list[search.Job]:
+                captured_contexts.append(context)
+                return []
+
+            with patch.object(search, "fetch_board_jobs", side_effect=capture_fetch):
+                exit_code = search.main(
+                    [
+                        "--role-type",
+                        "Product Manager",
+                        "--ats-platform",
+                        "greenhouse",
+                        "--location",
+                        "New York",
+                        "--skip-search",
+                        "--board-url",
+                        "https://boards.greenhouse.io/example",
+                        "--scrape-discovered-pages",
+                        "none",
+                        "--cache",
+                        str(root / "cache.json"),
+                        "--output",
+                        str(root / "jobs.csv"),
+                        "--no-coverage-report",
+                    ]
+                )
+        self.assertEqual(0, exit_code)
+        self.assertEqual(1, len(captured_contexts))
+        self.assertIn("New York", captured_contexts[0].criteria.location_terms)
+        self.assertNotIn("US Remote", captured_contexts[0].criteria.location_terms)
 
     def test_recent_only_run_excludes_unknown_dates_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
