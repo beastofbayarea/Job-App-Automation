@@ -213,5 +213,35 @@ class CoverLetterValidationTests(unittest.TestCase):
             CoverLetterValidationPolicy(minimum_words=10, maximum_words=5, required_signature="X")
 
 
+from job_application_automation.resume.cover_letter_rendering import (  # noqa: E402
+    CoverLetterRenderRequest,
+    render_cover_letter,
+)
+
+
+class _FakeCoverLetterRenderer:
+    def __init__(self) -> None:
+        self.request: CoverLetterRenderRequest | None = None
+
+    def render(self, request: CoverLetterRenderRequest) -> bool:
+        self.request = request
+        return True
+
+
+class CoverLetterRenderingTests(unittest.TestCase):
+    def test_render_cover_letter_builds_a_request_and_delegates_to_the_renderer(self) -> None:
+        renderer = _FakeCoverLetterRenderer()
+        letter = {"salutation": "Dear Team,"}
+        candidate = {"name": "Shivam Singh"}
+
+        rendered = render_cover_letter(renderer, letter, candidate, Path("letter.pdf"))
+
+        self.assertTrue(rendered)
+        assert renderer.request is not None
+        self.assertIs(renderer.request.letter, letter)
+        self.assertIs(renderer.request.candidate, candidate)
+        self.assertEqual(renderer.request.output_path, Path("letter.pdf"))
+
+
 if __name__ == "__main__":
     unittest.main()
