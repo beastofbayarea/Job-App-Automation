@@ -105,6 +105,9 @@
     }
   },
   "policies": {
+  "explicit_answers": {
+    "email me about future job openings": "No"
+  },
   "answers": {
     "visa_sponsorship": "No",
     "bachelors_degree": "Yes",

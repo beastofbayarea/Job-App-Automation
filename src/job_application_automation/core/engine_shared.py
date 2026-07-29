@@ -423,6 +423,13 @@ def is_location_question(question_text: Any) -> bool:
     recognized here.
     """
     normalized = re.sub(r"\s+", " ", str(question_text)).strip().lower()
+    # Binary onsite/hybrid questions can mention an "office location" while
+    # asking for a Yes/No commitment rather than a geographic selection.
+    if re.match(r"^(?:are|can|could|do|would|will|have)\s+you\b", normalized) and re.search(
+        r"\b(?:willing|able|available|comfortable|agree|accept|work|commute)\b",
+        normalized,
+    ):
+        return False
     return any(re.search(pattern, normalized) for pattern in _LOCATION_QUESTION_PATTERNS)
 
 
@@ -457,6 +464,11 @@ def configured_answer(
     field_matchers: Optional[Mapping[str, Sequence[str]]] = None,
 ) -> Optional[str]:
     text = label.lower()
+    explicit_answers = profile.get("screening_answers", {})
+    if isinstance(explicit_answers, Mapping):
+        for question_alias, answer in explicit_answers.items():
+            if answer not in (None, "") and _matcher_alias_matches(text, str(question_alias)):
+                return str(answer)
     if re.search(
         r"\byears?\s+of\s+.*experience\b|"
         r"\b\d+\+?\s*years?\b.*\bexperience\b",

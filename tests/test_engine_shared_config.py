@@ -89,6 +89,7 @@ class LocationQuestionTests(unittest.TestCase):
             "what is your expected compensation range?",
             "do you now or in the future require sponsorship?",
             "what is your country of citizenship?",
+            "Are you willing to work from our office location 3 days per week?",
         ):
             with self.subTest(question=question):
                 self.assertFalse(engine_shared.is_location_question(question))
@@ -124,6 +125,21 @@ class LocationQuestionTests(unittest.TestCase):
 
 
 class ScreeningMatcherTests(unittest.TestCase):
+    def test_explicit_screening_answer_is_used_before_semantic_matchers(self) -> None:
+        config = engine_shared.load_json_config(
+            ROOT / "config/candidate_profile_config.example.json"
+        )
+
+        answer = engine_shared.configured_answer(
+            "Please email me about future job openings",
+            config["candidate"],
+            config["rules"],
+            config["eeo_defaults"],
+            config["field_matchers"],
+        )
+
+        self.assertEqual(answer, "No")
+
     def test_example_profile_answers_weekly_in_office_requirement(self) -> None:
         config = engine_shared.load_json_config(
             ROOT / "config/candidate_profile_config.example.json"
