@@ -106,7 +106,12 @@
   },
   "policies": {
   "explicit_answers": {
-    "email me about future job openings": "No"
+    "availability to join us": "2 weeks",
+    "email me about future job openings": "No",
+    "if you answered yes to the reasonable adjustments question": "N/A",
+    "non-disclosure agreement": "I Agree",
+    "reasonable adjustments": "No",
+    "upon hire, can you provide verification of your identity and legal right to work": "Yes"
   },
   "answers": {
     "visa_sponsorship": "No",

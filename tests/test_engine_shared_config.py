@@ -126,6 +126,31 @@ class LocationQuestionTests(unittest.TestCase):
 
 
 class ScreeningMatcherTests(unittest.TestCase):
+    def test_example_profile_answers_observed_greenhouse_required_fields(self) -> None:
+        config = engine_shared.load_json_config(
+            ROOT / "config/candidate_profile_config.example.json"
+        )
+        expected = {
+            "What would be your availability to join us?": "2 weeks",
+            "Reasonable Adjustments": "No",
+            "If you answered yes to the Reasonable Adjustments question, "
+            "please provide additional details. If not, enter N/A.": "N/A",
+            "Non-Disclosure Agreement": "I Agree",
+            "Upon hire, can you provide verification of your identity and legal "
+            "right to work in the country where this job is located?": "Yes",
+        }
+
+        for question, expected_answer in expected.items():
+            with self.subTest(question=question):
+                answer = engine_shared.configured_answer(
+                    question,
+                    config["candidate"],
+                    config["rules"],
+                    config["eeo_defaults"],
+                    config["field_matchers"],
+                )
+                self.assertEqual(answer, expected_answer)
+
     def test_explicit_screening_answer_is_used_before_semantic_matchers(self) -> None:
         config = engine_shared.load_json_config(
             ROOT / "config/candidate_profile_config.example.json"
