@@ -1,5 +1,21 @@
 #!/usr/bin/env python3
-"""Standalone one-page, fact-grounded cover-letter generator (PRD F2)."""
+"""Standalone one-page, fact-grounded cover-letter generator (PRD F2).
+
+==============================================================================
+OUT-OF-THE-BOX ALTERNATE APPROACHES / ARCHITECTURAL OPTIONS:
+1. Dynamic Company Culture & News Hook Synthesizer (Perplexity API / Tavily Live Search):
+   - Before drafting the cover letter, perform live web search (via Tavily or Perplexity API) for the target company's recent engineering blogs, product launches, or funding announcements.
+   - Inject these real-time hooks into the introduction paragraph.
+   - Benefit: Produces hyper-personalized cover letters referencing actual recent company events, boosting callback rates significantly.
+
+2. Fact-Checking Grounding Claim Validator with Hallucination Guardrail:
+   - Run an automated NLI (Natural Language Inference) entailment model (e.g. `roberta-large-mnli`) comparing generated cover letter claims against the candidate's career narrative JSON.
+   - Benefit: Programmatically guarantees zero hallucinated metrics or fabricated job titles before PDF compilation.
+
+3. Modular Executive Template Selection Engine (Minimalist / Modern / Classic PDF styles):
+   - Support multiple visual template layouts dynamically matched to the target company culture (e.g. modern startup vs traditional enterprise).
+==============================================================================
+"""
 
 from __future__ import annotations
 

@@ -3,6 +3,25 @@
 The implementation package owns every workflow.  This module keeps command
 selection lightweight and lazy so ``--help`` does not instantiate browser,
 Gmail, or LLM dependencies.
+
+==============================================================================
+OUT-OF-THE-BOX ALTERNATE APPROACHES / ARCHITECTURAL OPTIONS:
+1. Dynamic Plugin-Based Entrypoint Discovery (Typer / Click + Python Entry Points):
+   - Instead of maintaining hardcoded dictionaries (COMMAND_MODULES), register
+     commands via standard Python entry_points (`job_automation.commands`).
+   - Benefit: Enables third-party extensions (e.g., Workday or Lever-specific
+     custom plugins) without mutating core code.
+
+2. High-Performance Client-Daemon IPC Architecture (gRPC / FastAPI + Unix Sockets):
+   - Replace one-off script executions (which incur interpreter startup overhead,
+     import delays, and browser re-initialization) with a background daemon process.
+   - The CLI becomes a thin client forwarding RPC requests to a pre-warmed daemon
+     managing persistent Playwright browser pools and cached LLM credentials.
+
+3. Interactive Terminal User Interface (TUI) Dashboard (Textual / Urwid):
+   - Implement an interactive TUI for command dispatch, live progress visualization
+     of batch queue execution, application status Kanban view, and interactive form debuggers.
+==============================================================================
 """
 
 from __future__ import annotations

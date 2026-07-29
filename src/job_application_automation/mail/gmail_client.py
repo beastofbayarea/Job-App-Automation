@@ -10,6 +10,21 @@ This Gmail workflow can:
 - Send a plain-text email from the authenticated Gmail account.
 - Require explicit confirmation before sending unless --yes is supplied.
 
+==============================================================================
+OUT-OF-THE-BOX ALTERNATE APPROACHES / ARCHITECTURAL OPTIONS:
+1. Webhook Real-Time Event Push via Google Cloud Pub/Sub:
+   - Replace manual polling intervals (`fetch_messages`, periodic queries) with real-time Gmail Push Notifications delivered to a Webhook via Google Cloud Pub/Sub.
+   - Benefit: Triggers instantaneous event processing when recruiter emails arrive, zero API polling quota waste.
+
+2. Autonomous LLM Recruiter Email Intent Parser & Auto-Drafting Agent:
+   - Feed incoming recruiter emails to an LLM intent classifier to extract email intent (`INTERVIEW_INVITATION`, `TECHNICAL_SCREEN`, `REJECTION`, `OFFER`).
+   - Automatically draft personalized responses in Gmail Drafts folder or create calendar invites automatically.
+   - Benefit: Converts email inbox monitoring into an automated recruiter assistant pipeline.
+
+3. Protocol-Agnostic Mail Adapter Layer (IMAP / SMTP / Microsoft Graph API / Fastmail):
+   - Decouple Gmail API into a pluggable `EmailProvider` interface supporting Outlook, Fastmail, custom IMAP/SMTP servers.
+==============================================================================
+
 REQUIREMENTS
 ------------
 Python 3.9+

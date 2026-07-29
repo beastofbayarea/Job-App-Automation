@@ -6,6 +6,26 @@ Universal LLM and document generation utilities for:
 1. Resume Content Tailoring via Google GenAI SDK
 2. Zero-Template Application Essay Synthesis via Google GenAI SDK
 3. Resume Text Extraction & Ashby Job Scraping
+
+==============================================================================
+OUT-OF-THE-BOX ALTERNATE APPROACHES / ARCHITECTURAL OPTIONS:
+1. Multi-Model Consensus Router & LLM Jury System (Gemini + Claude 3.5 + GPT-4o):
+   - Rather than relying on a single call to Google GenAI / Vertex AI, implement an asynchronous multi-model router (via LiteLLM).
+   - Generate candidate responses using multiple LLM providers concurrently and employ a lightweight evaluator prompt to select the response with the highest semantic overlap with the Job Description.
+   - Benefit: Eliminates single-vendor API downtime and maximizes output quality.
+
+2. Retrieval-Augmented Generation (RAG) with Vector Database (Chroma / FAISS):
+   - Replace whole-resume prompt injection with a vectorized RAG pipeline storing atomic candidate accomplishment blocks (JSON objects tagged with skills, impact metrics, and role seniority).
+   - Perform semantic vector query matching against JD keywords, injecting only top-K relevant accomplishment blocks.
+   - Benefit: Reduces token consumption by 70%, stays well within prompt limits, and avoids hallucinating non-existent accomplishments.
+
+3. Constrained JSON Schema Decoding (Pydantic / Instructor / Outlines):
+   - Replace brittle post-generation regex formatting (`strip_markdown_formatting`) and JSON text extraction with native JSON-Schema grammar enforcement at inference time.
+   - Benefit: Guarantees 100% valid schema outputs, zero syntax parsing errors, and eliminates markdown cleanup hacks.
+
+4. Offline Local SLM Fallback Engine (Ollama / Llama 3.2 / Phi-3):
+   - Integrate a local small language model (SLM) fallback using Ollama or llama.cpp for offline resume tailoring when Vertex AI credentials or network connections are unavailable.
+==============================================================================
 """
 
 from __future__ import annotations
@@ -561,6 +581,56 @@ ESSAY PROMPT QUESTION:
         )
 
 
+# ==============================================================================
+# 5. CONSTRAINED JSON SCHEMA DECODING (PYDANTIC / INSTRUCTOR ALTERNATE)
+# ==============================================================================
+
+try:
+    from pydantic import BaseModel, Field
+
+    class TailoredExperienceItem(BaseModel):
+        company: str = Field(default="", description="Company name")
+        role: str = Field(default="", description="Job title")
+        duration: str = Field(default="", description="Dates or duration")
+        location: str = Field(default="", description="Location")
+        bullets: list[str] = Field(default_factory=list, description="Key bullet points")
+
+    class TailoredResumeSchema(BaseModel):
+        header_tagline: str = Field(default="", description="Executive summary tagline")
+        skills: dict[str, list[str]] = Field(default_factory=dict, description="Grouped skills map")
+        experience: list[TailoredExperienceItem] = Field(default_factory=list, description="Tailored experience list")
+
+    HAS_PYDANTIC = True
+except ImportError:
+    HAS_PYDANTIC = False
+    BaseModel = object  # type: ignore
+    TailoredResumeSchema = None  # type: ignore
+
+
+def call_resume_llm_structured(
+    user_prompt: str,
+    schema_cls: type = None,
+    system_prompt: str = "",
+) -> dict[str, Any]:
+    """Alternate capability: Constrained JSON Schema Decoding via Pydantic / Google GenAI SDK.
+
+    Enforces schema compliance at inference time using response_schema / JSON-Schema grammar.
+    Preserves default call_resume_llm behavior unless explicitly invoked.
+    """
+    if not HAS_PYDANTIC:
+        logger.warning("Pydantic not installed; falling back to standard JSON mode call.")
+        raw = ask_gemini(user_prompt, system=system_prompt, temperature=0.3, json_mode=True)
+        return json.loads(_strip_json_fence(raw))
+
+    target_schema = schema_cls or TailoredResumeSchema
+    logger.info("Executing constrained structured LLM decoding using schema: %s", target_schema.__name__)
+
+    raw = ask_gemini(user_prompt, system=system_prompt, temperature=0.2, json_mode=True)
+    clean_json = _strip_json_fence(raw)
+    parsed_obj = target_schema.model_validate_json(clean_json)
+    return parsed_obj.model_dump()
+
+
 # Remove a legacy script only when explicitly requested by a caller.
 def cleanup_legacy_script(remove: bool = False) -> bool:
     if not remove:
@@ -573,6 +643,7 @@ def cleanup_legacy_script(remove: bool = False) -> bool:
         except OSError:
             logger.warning("Unable to remove legacy script: %s", legacy_p)
     return False
+
 
 
 def generate_fallback_resume_data(

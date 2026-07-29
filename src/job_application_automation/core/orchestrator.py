@@ -5,6 +5,26 @@ ATS-aware job application orchestrator.
 Reads jobs from an Excel tracker, detects the ATS from each URL, selects the
 matching engine, optionally generates a URL-specific resume, and persists a
 structured result after every job.
+
+==============================================================================
+OUT-OF-THE-BOX ALTERNATE APPROACHES / ARCHITECTURAL OPTIONS:
+1. State-Machine Resilience Engine (Temporal.io / Prefect / Celery Orchestration):
+   - Replace sequential Excel-row iterations and fragile subprocess invocation loops
+     with a durable workflow orchestration engine (e.g. Temporal or Prefect).
+   - Benefit: Automatic workflow state checkpoints, automatic step-level retries
+     upon engine timeout/crash, and distributed parallel execution across multi-node worker pools.
+
+2. Reactive Event-Driven Application Pipeline (Kafka / RabbitMQ / Redis Streams):
+   - Decouple job application steps into asynchronous micro-events:
+     JobDiscovered -> TailoringRequested -> BrowserSessionAllocated -> Submitted -> Verified.
+   - Benefit: Maximizes throughput by running LLM resume tailoring asynchronously
+     in parallel while Playwright engines submit previously tailored applications.
+
+3. Live Browser Context Pool with Hot-Swappable Fingerprints:
+   - Instead of launching fresh `python -m job_automation engine ...` subprocesses
+     per job row (incurring cold startup penalty), orchestrate an in-memory Playwright
+     browser pool with dynamic anti-detection profile rotations and residential proxy binding.
+==============================================================================
 """
 
 from __future__ import annotations

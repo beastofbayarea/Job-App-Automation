@@ -3,6 +3,23 @@
 The archive is deliberately independent from Git and the public search-output
 branch. Records are addressed by an opaque URL/email identity, contain a
 strict manifest, and are verified before upload or local promotion.
+
+==============================================================================
+OUT-OF-THE-BOX ALTERNATE APPROACHES / ARCHITECTURAL OPTIONS:
+1. Encrypted Content-Addressable Storage (CAS) on S3/R2/MinIO with Client-Side AES-256-GCM:
+   - Instead of relying on raw SSH/rsync file transfers to a remote VPS directory structure,
+     implement a cloud-native Content-Addressable Storage layer using S3 API compatible storage (AWS S3, Cloudflare R2, MinIO).
+   - Documents are encrypted client-side with AES-256-GCM before upload, keyed strictly by SHA-256 content hashes.
+   - Benefit: Provides zero-knowledge privacy, high availability across regions, instant HTTP CDN delivery, and eliminates SSH key management overhead.
+
+2. Embedded Compressed SQLite / DuckDB Blob Vault with Columnar Search:
+   - Package all archived resumes, cover letters, metadata manifests, and SHA-256 checksums into an embedded, ZSTD-compressed SQLite database file.
+   - Benefit: Single-file portable database backing up thousands of applications, with SQL index querying capabilities over historical application text.
+
+3. IPFS / Decentralized Filecoin Archive with Immutable CIDs:
+   - Store generated application records immutably on IPFS (InterPlanetary File System) nodes using Content Identifiers (CIDs).
+   - Benefit: Cryptographically verifiable document authenticity and tamper-proof historic record keeping.
+==============================================================================
 """
 
 from __future__ import annotations

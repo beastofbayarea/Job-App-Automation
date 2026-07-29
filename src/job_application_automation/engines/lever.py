@@ -1,4 +1,20 @@
-"""Lever application engine built on the shared ATS engine foundation."""
+"""Lever application engine built on the shared ATS engine foundation.
+
+==============================================================================
+OUT-OF-THE-BOX ALTERNATE APPROACHES / ARCHITECTURAL OPTIONS:
+1. Lever Direct REST Endpoint Ingestion (`/postings/:id/apply` API):
+   - Lever exposes a documented POST endpoint for submissions (`https://api.lever.co/v0/postings/{company}/{job_id}?mode=json`).
+   - Construct a JSON payload containing base64 PDF strings and candidate profile metadata directly.
+   - Benefit: Near-instantaneous response times (<300ms) with deterministic error responses (e.g. invalid file size or missing fields).
+
+2. DOM Shadow Tree Traversal and Dynamic Input Heuristics Engine:
+   - Implement a dynamic DOM tree navigator using Playwright's `evaluate` script API to evaluate custom web components and custom dropdown pickers unique to modern Lever templates.
+   - Benefit: Handles custom screening questions and non-standard HTML controls without locator failures.
+
+3. Parallel Multi-Account Lever Submission Engine:
+   - Rotate applicant email alias tokens and IP proxies dynamically for high-volume enterprise application tracking testing.
+==============================================================================
+"""
 
 from __future__ import annotations
 

@@ -1,4 +1,27 @@
-"""Shared runtime, policy, CLI, and shell-test utilities for ATS engines."""
+"""Shared runtime, policy, CLI, and shell-test utilities for ATS engines.
+
+==============================================================================
+OUT-OF-THE-BOX ALTERNATE APPROACHES / ARCHITECTURAL OPTIONS:
+1. Autonomous Vision-Language Model (VLM) Grounding Agent (Gemini 1.5 Flash / Claude 3.5 Sonnet Vision):
+   - Replace brittle DOM selector lookup heuristics (`label_for`, regex label matching, `fill_first`)
+     with a zero-shot multimodal vision model that inspects full-page browser screenshots,
+     identifies input bounding boxes, and executes visual clicks & typing via pixel coordinates.
+   - Benefit: Immunizes application filling against DOM obfuscation, dynamic dynamic CSS class names,
+     shadow DOM trees, and non-standard custom web components.
+
+2. DOM Abstract Syntax Tree (AST) Vector Embedding Matcher (Sentence-Transformers):
+   - Parse form DOM trees into hierarchical AST nodes, vectorize label text, placeholders, and aria-attributes,
+     and calculate cosine similarity against candidate profile schema fields.
+   - Benefit: Handles multilingual job postings (French, German, Spanish, Japanese) seamlessly
+     without relying on hardcoded English regex patterns.
+
+3. Advanced Stealth Chrome DevTools Protocol (CDP) Wrapper with TCP/IP & TLS Fingerprint Spoofing:
+   - Enhance Playwright CDP sessions with lower-level browser fingerprint injection (`playwright-stealth`,
+     JA3/TLS client hello randomization, WebGL renderer spoofing, and Canvas noise generator).
+   - Benefit: Bypasses sophisticated anti-bot protections (Cloudflare Turnstile, DataDome, PerimeterX)
+     frequently embedded on enterprise ATS platforms.
+==============================================================================
+"""
 
 from __future__ import annotations
 

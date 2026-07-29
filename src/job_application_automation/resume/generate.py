@@ -10,6 +10,22 @@ Key Features:
   - Metric Density Scoring Engine (scans content lines for % / $ / numbers / scale)
   - Higher Content Capacity (0.38" L/R, 0.26" T/B margins; target 14-18 bullets)
   - AI-Native Text Bolding (LLM **bold** markdown merged with keyword extraction)
+
+==============================================================================
+OUT-OF-THE-BOX ALTERNATE APPROACHES / ARCHITECTURAL OPTIONS:
+1. Headless Typst / LaTeX Binary Compilation Engine:
+   - Replace complex procedural Python ReportLab drawing code (which requires manual spacing math and flowable table management) with Typst (`typst compile input.typ output.pdf`).
+   - Typst is a state-of-the-art document compilation engine that compiles in <30ms, supports pixel-perfect CSS/grid styling, and naturally formats single-page executive resumes.
+   - Benefit: 10x faster PDF compilation, superior typography layout engine, zero ReportLab canvas math bugs.
+
+2. Web-Standard HTML/Tailwind to PDF rendering (WeasyPrint / Playwright PDF export):
+   - Render tailored resumes as semantic HTML templates styled with Tailwind CSS, then export to PDF using headless Playwright (`page.pdf()`).
+   - Benefit: Visual fidelity is identical to web view; easy live browser preview and web inspection.
+
+3. Automated ATS Keyword Matcher & Single-Page Constraints Visual Feedback Loop:
+   - Integrate an automated ATS parsing engine (e.g. PyResparser / Sovren / ResumeParser) locally to test parsed keyword match score before rendering PDF.
+   - If page count exceeds 1.0 pages, employ a binary search optimizer on font size and line spacing parameters automatically.
+==============================================================================
 """
 
 from __future__ import annotations
