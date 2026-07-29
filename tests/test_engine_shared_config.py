@@ -67,6 +67,7 @@ class LocationQuestionTests(unittest.TestCase):
             "where will you be working from?",
             "what is your primary work location?",
             "which office location do you plan to work out of?",
+            "in what cities are you available to work?",
         ):
             with self.subTest(question=question):
                 self.assertTrue(engine_shared.is_location_question(question))

@@ -401,7 +401,7 @@ def _matcher_alias_matches(label: str, alias: str) -> bool:
 _LOCATION_QUESTION_PATTERNS = (
     # Where the candidate currently is.
     r"\blocation\b",
-    r"\bcity\b",
+    r"\bcit(?:y|ies)\b",
     r"where are you (?:located|based)",
     r"where do you (?:currently )?(?:reside|live)",
     r"currently reside",
