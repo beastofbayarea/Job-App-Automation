@@ -428,7 +428,7 @@ def is_location_question(question_text: Any) -> bool:
     if re.search(
         r"\b(?:are|would)\s+you\s+(?:willing|able|available|comfortable)\b",
         normalized,
-    ):
+    ) and re.search(r"\b(?:office|onsite|on-site|hybrid|commute)\b", normalized):
         return False
     return any(re.search(pattern, normalized) for pattern in _LOCATION_QUESTION_PATTERNS)
 
