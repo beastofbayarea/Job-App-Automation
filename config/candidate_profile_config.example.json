@@ -184,7 +184,14 @@
     ],
     "email": ["email", "email address"],
     "phone": ["phone", "mobile", "contact number"],
-    "location": ["location", "city", "where are you based", "physically based", "current location"],
+    "location": [
+      "location",
+      "city",
+      "cities are you available to work",
+      "where are you based",
+      "physically based",
+      "current location"
+    ],
     "linkedin": ["linkedin", "linkedin profile", "linkedin url"],
     "portfolio": ["portfolio", "website", "personal website", "researchgate"],
     "public_username": ["public username"],

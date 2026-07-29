@@ -153,6 +153,19 @@ class ScreeningMatcherTests(unittest.TestCase):
                 )
                 self.assertEqual(answer, "No")
 
+    def test_example_profile_answers_plural_city_availability(self) -> None:
+        config = engine_shared.load_json_config(ROOT / "config/candidate_profile_config.example.json")
+
+        answer = engine_shared.configured_answer(
+            "In what cities are you available to work?",
+            config["candidate"],
+            config["rules"],
+            config["eeo_defaults"],
+            config["field_matchers"],
+        )
+
+        self.assertEqual(answer, "City, State, Country")
+
 
 if __name__ == "__main__":
     unittest.main()
