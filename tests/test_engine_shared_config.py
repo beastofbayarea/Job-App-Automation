@@ -4,6 +4,7 @@ import json
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 
@@ -57,6 +58,38 @@ class EngineSharedConfigTests(unittest.TestCase):
         self.assertFalse(payload["submitted"])
         self.assertTrue(payload["test_mode"])
         self.assertEqual(payload["screenshot"], "proof.png")
+
+
+class ShellValidatorHostTests(unittest.TestCase):
+    def test_custom_domain_greenhouse_url_is_accepted_like_the_orchestrator(self) -> None:
+        # Companies embed the Greenhouse form on their own domain; a numeric
+        # gh_jid is what detect_ats()/validate_ats_url() key on, so the shell
+        # validator must not reject a URL the orchestrator routes to Greenhouse.
+        url = "https://careers.acme.test/careers?gh_jid=1234567"
+
+        self.assertTrue(engine_shared.validate_ats_url(url, "greenhouse"))
+        self.assertEqual(
+            engine_shared._parse_and_validate_host(url, "greenhouse"),
+            "careers.acme.test",
+        )
+
+    def test_unrelated_host_is_still_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "not recognized as Greenhouse"):
+            engine_shared._parse_and_validate_host("https://example.test/jobs/1", "greenhouse")
+        with self.assertRaisesRegex(ValueError, "absolute HTTPS URL"):
+            engine_shared._parse_and_validate_host("http://boards.greenhouse.io/a/1", "greenhouse")
+
+    def test_main_accepts_the_custom_domain_url_it_detects(self) -> None:
+        url = "https://careers.acme.test/careers?gh_jid=1234567"
+        with tempfile.TemporaryDirectory() as directory:
+            resume = Path(directory) / "resume.pdf"
+            resume.write_bytes(b"%PDF-1.4 resume")
+            with unittest.mock.patch.dict(
+                "os.environ", {engine_shared.ORCHESTRATOR_INVOCATION_ENV: "1"}
+            ):
+                exit_code = engine_shared.main(["--url", url, "--resume", str(resume)])
+
+        self.assertEqual(exit_code, 0)
 
 
 class LocationQuestionTests(unittest.TestCase):

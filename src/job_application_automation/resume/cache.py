@@ -93,7 +93,7 @@ class ResumeCache:
         }
         with self._lock:
             self._entries.update(copy.deepcopy(valid))
-        return len(payload)
+        return len(valid)
 
     def save(self, path: Path) -> None:
         """Atomically write a snapshot using the previous compact JSON format."""

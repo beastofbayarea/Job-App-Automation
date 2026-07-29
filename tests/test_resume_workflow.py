@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import sys
 import tempfile
 import unittest
@@ -88,6 +89,20 @@ class ResumeCacheTests(unittest.TestCase):
             self.assertEqual(restored.load(path), 1)
 
         self.assertEqual(restored.get(job), {"header_name": "Candidate"})
+
+    def test_load_counts_only_the_entries_it_actually_merged(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "llm_cache_v2.json"
+            path.write_text(
+                json.dumps({"good": {"header_name": "Candidate"}, "bad": "not-an-object"}),
+                encoding="utf-8",
+            )
+            cache = ResumeCache()
+
+            merged = cache.load(path)
+
+        self.assertEqual(merged, 1)
+        self.assertEqual(set(cache.entries), {"good"})
 
 
 class ResumeValidationTests(unittest.TestCase):

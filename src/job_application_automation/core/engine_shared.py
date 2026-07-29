@@ -973,8 +973,10 @@ def _parse_and_validate_host(url: str, ats: str) -> str:
     if parsed.scheme.lower() != "https" or not host:
         raise ValueError("job URL must be an absolute HTTPS URL")
 
-    markers = ATS_HOST_MARKERS[ats]
-    if not any(_host_matches(host, marker) for marker in markers):
+    # Delegate to the single URL-acceptance rule the orchestrator's detect_ats()
+    # uses, so the shell validator cannot reject a URL that was already routed
+    # to this ATS (notably a custom-domain Greenhouse posting carrying gh_jid).
+    if not validate_ats_url(url, ats):
         raise ValueError(f"URL host {host!r} is not recognized as {ats.title()}")
     return host
 

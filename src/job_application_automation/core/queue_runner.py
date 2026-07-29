@@ -76,8 +76,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     orchestrator = CLI_ENTRYPOINT
 
     for index, url in enumerate(urls[args.start_index :], start=args.start_index):
-        slug = _slug(url)
         try:
+            # Both helpers reject a URL with no usable path, so they belong
+            # together inside the guard that reports the stop reason.
+            slug = _slug(url)
             company = _company_from_url(url)
         except ValueError as exc:
             print(f"QUEUE_STOP index={index + 1}/{len(urls)} error={exc}", flush=True)
@@ -117,7 +119,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         result: dict[str, object] = {}
         try:
             payload = read_json(result_path)
-            if isinstance(payload, list) and len(payload) == 1:
+            if isinstance(payload, list) and len(payload) == 1 and isinstance(payload[0], dict):
                 result = payload[0]
         except (OSError, ValueError):
             pass

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 import sys
 import tempfile
@@ -324,6 +325,40 @@ class QueueSafetyTests(unittest.TestCase):
             queue_runner._slug("https://jobs.lever.co/")
         with self.assertRaisesRegex(ValueError, "path segment"):
             queue_runner._company_from_url("https://jobs.lever.co/")
+
+    def test_queue_reports_an_unusable_url_instead_of_crashing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            queue_path = Path(directory) / "queue.txt"
+            # A path-less URL cannot yield either a slug or a company name.
+            queue_path.write_text("https://jobs.lever.co/\n", encoding="utf-8")
+
+            with patch("sys.stdout", new=io.StringIO()) as stdout:
+                exit_code = queue_runner.main(["--queue", str(queue_path)])
+
+        self.assertEqual(exit_code, 2)
+        self.assertIn("QUEUE_STOP", stdout.getvalue())
+        self.assertIn("path segment", stdout.getvalue())
+
+    def test_queue_tolerates_a_non_object_orchestration_result(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            queue_path = Path(directory) / "queue.txt"
+            queue_path.write_text("https://jobs.lever.co/acme/123\n", encoding="utf-8")
+            completed = SimpleNamespace(returncode=0, stdout="", stderr="")
+
+            with (
+                patch.object(queue_runner, "OUTPUT_DIR", Path(directory)),
+                patch.object(
+                    queue_runner, "DEFAULT_QUEUE_PROGRESS_FILE", Path(directory) / "p.json"
+                ),
+                patch.object(queue_runner.subprocess, "run", return_value=completed),
+                # A malformed results file yields a bare string rather than an object.
+                patch.object(queue_runner, "read_json", return_value=["not-an-object"]),
+                patch("sys.stdout", new=io.StringIO()) as stdout,
+            ):
+                exit_code = queue_runner.main(["--queue", str(queue_path)])
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("status=NO_RESULT", stdout.getvalue())
 
     def test_queue_slug_cannot_escape_the_output_directory(self) -> None:
         slug = queue_runner._slug("https://jobs.lever.co/acme/..%2Foutside")
