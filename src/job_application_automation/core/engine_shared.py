@@ -863,7 +863,9 @@ def open_chrome_session(
                 return BrowserSession(browser, page or _new_page(browser), False)
             except Exception:
                 continue
-        logger.info("Chrome process started but CDP on %s did not become ready; falling back", endpoint)
+        logger.info(
+            "Chrome process started but CDP on %s did not become ready; falling back", endpoint
+        )
 
     logger.info("CDP connection unavailable on %s; launching fresh Chromium instance", endpoint)
     browser = playwright.chromium.launch(headless=False)

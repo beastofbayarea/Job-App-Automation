@@ -49,6 +49,7 @@ from ..core.paths import OUTPUT_DIR
 
 try:
     from ddgs import DDGS
+
     try:
         from ddgs.exceptions import DDGSException, RatelimitException  # type: ignore
     except ImportError:
@@ -58,6 +59,7 @@ except ImportError:
     try:
         # Compatibility with the package's former name.
         from duckduckgo_search import DDGS  # type: ignore
+
         try:
             from duckduckgo_search.exceptions import (  # type: ignore
                 DuckDuckGoSearchException as DDGSException,

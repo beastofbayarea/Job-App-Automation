@@ -886,9 +886,7 @@ def run(
                             "button",
                             name=re.compile(r"submit|verify|confirm|envoyer|postuler", re.I),
                         )
-                    ) or _first_visible(
-                        page.locator('button[type="submit"], input[type="submit"]')
-                    )
+                    ) or _first_visible(page.locator('button[type="submit"], input[type="submit"]'))
                     if submit is not None:
                         try:
                             submit.click()
