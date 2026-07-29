@@ -161,7 +161,10 @@ def _option_matches_variant(option_label: str, variant: str) -> bool:
     # profile but country nouns in the dropdown (Indian -> India, Canadian ->
     # Canada, Australian -> Australia). Only accept an exact one-character
     # stem match so unrelated options cannot be selected.
-    return answer.endswith("n") and option == answer[:-1]
+    country_stems = {answer[:-1]} if answer.endswith("n") else set()
+    if answer.endswith("ian"):
+        country_stems.add(f"{answer[:-3]}a")
+    return option in country_stems
 
 
 def _question_label(control: Locator) -> str:
