@@ -744,6 +744,16 @@ class SearchJobBoardsTests(unittest.TestCase):
         self.assertEqual(1, len(jobs))
         self.assertEqual("New York", jobs[0].location)
 
+    def test_lever_api_base_and_salary_format(self) -> None:
+        eu_board = search.Board("lever", "acme", region="eu")
+        us_board = search.Board("lever", "acme", region="us")
+        self.assertEqual("https://api.eu.lever.co/v0/postings/acme", search.lever_api_base(eu_board))
+        self.assertEqual("https://api.lever.co/v0/postings/acme", search.lever_api_base(us_board))
+
+        salary_dict = {"currency": "USD", "min": 120000, "max": 150000, "interval": "per year"}
+        self.assertEqual("USD 120000 - 150000 per year", search.format_lever_salary(salary_dict))
+        self.assertEqual("", search.format_lever_salary(None))
+
 
 if __name__ == "__main__":
     unittest.main()
