@@ -89,7 +89,8 @@ class LocationQuestionTests(unittest.TestCase):
             "what is your expected compensation range?",
             "do you now or in the future require sponsorship?",
             "what is your country of citizenship?",
-            "Are you willing to work from our office location 3 days per week?",
+            "We work under a hybrid in-office model. Are you willing to work "
+            "from our office location 3 days per week?",
         ):
             with self.subTest(question=question):
                 self.assertFalse(engine_shared.is_location_question(question))

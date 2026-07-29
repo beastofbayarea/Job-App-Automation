@@ -425,7 +425,7 @@ def is_location_question(question_text: Any) -> bool:
     normalized = re.sub(r"\s+", " ", str(question_text)).strip().lower()
     # Binary onsite/hybrid questions can mention an "office location" while
     # asking for a Yes/No commitment rather than a geographic selection.
-    if re.match(r"^(?:are|can|could|do|would|will|have)\s+you\b", normalized) and re.search(
+    if re.search(r"\b(?:are|can|could|do|would|will|have)\s+you\b", normalized) and re.search(
         r"\b(?:willing|able|available|comfortable|agree|accept|work|commute)\b",
         normalized,
     ):
