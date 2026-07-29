@@ -156,6 +156,21 @@ class ScreeningMatcherTests(unittest.TestCase):
 
         self.assertEqual(answer, "Yes")
 
+    def test_example_profile_answers_attend_office_requirement(self) -> None:
+        config = engine_shared.load_json_config(
+            ROOT / "config/candidate_profile_config.example.json"
+        )
+
+        answer = engine_shared.configured_answer(
+            "Are you able to attend the office in Cardiff 2-days per week?",
+            config["candidate"],
+            config["rules"],
+            config["eeo_defaults"],
+            config["field_matchers"],
+        )
+
+        self.assertEqual(answer, "Yes")
+
     def test_example_profile_denies_employee_relationship_and_referral(self) -> None:
         config = engine_shared.load_json_config(
             ROOT / "config/candidate_profile_config.example.json"
