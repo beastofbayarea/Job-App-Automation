@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from job_application_automation.engines.greenhouse import (
+    CUSTOM_QUESTION_CONTROL_SELECTOR,
     SUBMIT_BUTTON_TEXT_PATTERN,
     _greenhouse_security_code_query,
     _security_challenge_visible,
@@ -12,6 +13,10 @@ def test_submit_button_pattern_excludes_page_level_apply_cta() -> None:
     assert SUBMIT_BUTTON_TEXT_PATTERN.search("Envoyer ma candidature")
     assert SUBMIT_BUTTON_TEXT_PATTERN.search("Postuler")
     assert not SUBMIT_BUTTON_TEXT_PATTERN.search("Apply")
+
+
+def test_custom_question_selector_includes_button_comboboxes() -> None:
+    assert 'button[role="combobox"][id^="question_"]' in CUSTOM_QUESTION_CONTROL_SELECTOR
 
 
 def test_security_challenge_selector_requires_all_eight_code_inputs() -> None:

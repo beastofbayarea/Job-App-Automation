@@ -57,6 +57,14 @@ SUBMIT_BUTTON_TEXT_PATTERN = re.compile(
     r"submit application|envoyer.*candidature|postuler",
     re.I,
 )
+CUSTOM_QUESTION_CONTROL_SELECTOR = (
+    'input[id^="question_"], textarea[id^="question_"], '
+    'select[id^="question_"], input[role="combobox"][id^="question_"], '
+    'button[role="combobox"][id^="question_"], '
+    'input[role="combobox"][id^="degree"], '
+    'input[role="combobox"][id^="school"], '
+    'input[role="combobox"][id^="discipline"]'
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -348,13 +356,7 @@ def _fill_custom_questions(
 ) -> dict[str, bool]:
     results: dict[str, bool] = {}
     job_text = page.locator("body").inner_text()[:30_000]
-    controls = page.locator(
-        'input[id^="question_"], textarea[id^="question_"], '
-        'select[id^="question_"], input[role="combobox"][id^="question_"], '
-        'input[role="combobox"][id^="degree"], '
-        'input[role="combobox"][id^="school"], '
-        'input[role="combobox"][id^="discipline"]'
-    )
+    controls = page.locator(CUSTOM_QUESTION_CONTROL_SELECTOR)
     handled_groups: set[str] = set()
     for index in range(controls.count()):
         control = controls.nth(index)
