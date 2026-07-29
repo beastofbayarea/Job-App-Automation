@@ -32,6 +32,8 @@ class RuntimeConfigTests(unittest.TestCase):
         self.assertEqual(config.vertex["project_id"], "from-service-account")
         self.assertGreater(config.ashby["max_submit_attempts"], 0)
         self.assertGreater(config.resume["original_character_count"], 0)
+        self.assertEqual(config.application["vps_max_document_jobs"], 10)
+        self.assertEqual(config.application["vps_document_retry_jobs"], 2)
         self.assertEqual(config.application["vps_max_attempts_per_ats"], 10)
         self.assertEqual(
             config.application["vps_application_state_file"],

@@ -114,12 +114,18 @@ The default schedule is 03:00 UTC daily; use `-HourUtc` to select another UTC
 hour. The operation is idempotent and replaces only the cron line marked
 `job-app-automation-daily-search`.
 
-After search and liveness verification, the scheduled workflow generates and
-archives one CV/cover-letter pair for every verified-live job. It processes
-jobs sequentially, skips URLs already marked archived, and retries failed URLs
-on the next run. Search results are still published as one coherent snapshot
-when individual document generation fails; the cron run reports failure so the
-problem remains visible in `output/vps_sync.log`.
+After search and liveness verification, the scheduled workflow first publishes
+the complete coverage, jobs, and board-cache snapshot. Private document work
+cannot delay that publication. It then generates and archives a bounded set of
+CV/cover-letter pairs: `application.vps_max_document_jobs` controls the total
+per run (10 by default), while `application.vps_document_retry_jobs` reserves
+part of that capacity for prior failures (two by default). Remaining capacity
+advances new jobs, so permanent failures cannot starve the backlog. Archived
+URLs are skipped.
+
+Individual document failures keep the final cron status nonzero and remain
+visible in `output/vps_sync.log`, but they do not suppress the guarded
+application stage for other jobs with archived pairs.
 
 The installer also transfers the candidate profile, resume source, Vertex
 credential, and pre-authorized Gmail OAuth credential/token needed by
@@ -136,12 +142,12 @@ server or $DISPLAY".
 
 ### Automatic VPS application stage
 
-After publishing the safe search snapshot and successfully generating the
-document archive, the daily workflow invokes the guarded application runner.
-Only complete `live` records for Greenhouse, Lever, and Ashby are eligible. The
-runner calls the existing orchestrator with `--live-submit`, processes records
-sequentially, and attempts at most 10 roles for each ATS in one run (up to 30
-total when all three ATS lists have enough eligible roles).
+After publishing the safe search snapshot and completing the bounded document
+stage, the daily workflow invokes the guarded application runner. Only complete
+`live` records for Greenhouse, Lever, and Ashby with an `archived` entry in
+`output/vps_document_archive_state.json` are eligible. The runner calls the
+existing orchestrator with `--live-submit`, processes records sequentially, and
+uses `application.vps_max_attempts_per_ats` as its per-provider limit.
 
 `output/vps_application_state.json`,
 `output/vps_application_results/`, `output/submission_log.json`, and ATS
@@ -204,8 +210,12 @@ Check a live run without acquiring its lock or starting another workflow:
 pwsh scripts\check_vps_automation_status.ps1 -LogLines 120
 ```
 
-This read-only command prints matching remote processes, report/log file
-timestamps and sizes, and the requested tail of `output/vps_sync.log`.
+This read-only command has a bounded SSH timeout and prints the installed cron
+entry, remote clock/uptime, self-filtered automation processes, repository
+commit/state, structured `output/vps_run_status.json`, key artifact timestamps
+and sizes, and the requested tail of `output/vps_sync.log`. The status JSON is
+updated atomically at every stage and on normal success or failure; a stale
+`running` record after a reboot indicates an interrupted run.
 
 Generated resume and cover-letter cleanup is dry-run by default:
 

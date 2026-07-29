@@ -42,6 +42,12 @@ def _integer(section: Mapping[str, Any], section_name: str, key: str) -> None:
         raise ValueError(f"runtime config {section_name}.{key} must be a positive integer")
 
 
+def _nonnegative_integer(section: Mapping[str, Any], section_name: str, key: str) -> None:
+    value = section.get(key)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(f"runtime config {section_name}.{key} must be a non-negative integer")
+
+
 def _number(section: Mapping[str, Any], section_name: str, key: str) -> None:
     value = section.get(key)
     if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
@@ -128,10 +134,16 @@ def load_runtime_config(path: Path | None = None) -> RuntimeConfig:
         "engine_timeout_seconds",
         "resume_timeout_seconds",
         "queue_timeout_seconds",
+        "vps_max_document_jobs",
         "vps_max_attempts_per_ats",
         "default_start_date_offset_days",
     ):
         _integer(application, "application", key)
+    _nonnegative_integer(application, "application", "vps_document_retry_jobs")
+    if application["vps_document_retry_jobs"] > application["vps_max_document_jobs"]:
+        raise ValueError(
+            "runtime config application.vps_document_retry_jobs cannot exceed vps_max_document_jobs"
+        )
 
     _string(browser, "browser", "cdp_endpoint")
 

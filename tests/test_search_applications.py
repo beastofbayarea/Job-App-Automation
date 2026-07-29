@@ -114,6 +114,63 @@ class SearchApplicationTests(unittest.TestCase):
         self.assertEqual(len(urls), 1)
         self.assertIn("https://boards.greenhouse.io/example/jobs/1", urls)
 
+    def test_document_state_limits_automatic_attempts_to_archived_pairs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archived_url = "https://boards.greenhouse.io/example/jobs/1"
+            missing_url = "https://jobs.lever.co/example/2"
+            (root / "jobs.json").write_text(
+                json.dumps(
+                    [
+                        _job(archived_url),
+                        _job(missing_url, platform="lever"),
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (root / "profile.json").write_text("{}", encoding="utf-8")
+            (root / "submissions.json").write_text("{}", encoding="utf-8")
+            (root / "documents.json").write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "jobs": {
+                            archived_url: {"status": "archived"},
+                            missing_url: {"status": "failed"},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            def fake_run(command: list[str], **kwargs: object) -> SimpleNamespace:
+                result_path = Path(command[command.index("--results-file") + 1])
+                result_path.write_text(json.dumps([_confirmed_result()]), encoding="utf-8")
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+            with patch.object(search_applications.subprocess, "run", side_effect=fake_run) as run:
+                exit_code = search_applications.main(
+                    [
+                        "--input",
+                        str(root / "jobs.json"),
+                        "--profile",
+                        str(root / "profile.json"),
+                        "--results-dir",
+                        str(root / "results"),
+                        "--submission-log",
+                        str(root / "submissions.json"),
+                        "--document-state",
+                        str(root / "documents.json"),
+                        "--state",
+                        str(root / "state.json"),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            run.assert_called_once()
+            command = run.call_args.args[0]
+            self.assertEqual(command[command.index("--url") + 1], archived_url)
+
     def test_runner_records_failure_continues_and_never_retries_prior_attempt(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -129,6 +129,21 @@ def _confirmed_urls(submission_log_path: Path) -> set[str]:
     return confirmed
 
 
+def _archived_document_urls(document_state_path: Path) -> set[str]:
+    if not document_state_path.exists():
+        return set()
+    payload = _load_state(document_state_path)
+    archived: set[str] = set()
+    for job_url, value in payload["jobs"].items():
+        if not isinstance(value, dict) or value.get("status") != "archived":
+            continue
+        try:
+            archived.add(canonical_job_url(str(job_url)))
+        except ValueError:
+            continue
+    return archived
+
+
 def _result_path(results_dir: Path, canonical_url: str) -> Path:
     digest = hashlib.sha256(canonical_url.encode("utf-8")).hexdigest()[:16]
     return results_dir / f"application_{digest}.json"
@@ -160,6 +175,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--launcher", type=Path, default=Path("src/job_automation.py"))
     parser.add_argument("--results-dir", type=Path, default=DEFAULT_RESULTS_DIR)
     parser.add_argument("--submission-log", type=Path, required=True)
+    parser.add_argument(
+        "--document-state",
+        type=Path,
+        help="When supplied, attempt only URLs with an archived document pair.",
+    )
     parser.add_argument("--state", type=Path, default=DEFAULT_STATE_FILE)
     parser.add_argument("--failure-report", type=Path, default=DEFAULT_FAILURE_REPORT)
     parser.add_argument(
@@ -185,6 +205,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     state = _load_state(args.state)
     records: dict[str, Any] = state["jobs"]
     jobs = _eligible_jobs(_load_json(args.input))
+    if args.document_state is not None:
+        archived_urls = _archived_document_urls(args.document_state)
+        jobs = [job for job in jobs if str(job["_canonical_url"]) in archived_urls]
     if not args.submission_log.exists():
         atomic_write_text(args.submission_log, "{}\n", encoding="utf-8")
     confirmed_urls = _confirmed_urls(args.submission_log)

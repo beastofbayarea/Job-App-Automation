@@ -10,6 +10,57 @@ from job_application_automation.core import search_documents
 
 
 class SearchDocumentTests(unittest.TestCase):
+    def test_bounded_selection_reserves_retry_slots_without_starving_new_jobs(self) -> None:
+        jobs = [
+            {
+                "job_url": f"https://jobs.example.test/{index}",
+                "company": "Example",
+                "title": "Product Manager",
+                "description": "Build AI products.",
+                "live_status": "live",
+            }
+            for index in range(12)
+        ]
+        records = {str(jobs[index]["job_url"]): {"status": "failed"} for index in range(4)}
+
+        selected = search_documents._select_pending_jobs(
+            jobs,
+            records,
+            max_jobs=5,
+            retry_jobs=2,
+        )
+
+        self.assertEqual(len(selected), 5)
+        self.assertEqual(
+            sum(str(job["job_url"]) in records for job in selected),
+            2,
+        )
+        self.assertEqual(
+            sum(str(job["job_url"]) not in records for job in selected),
+            3,
+        )
+
+    def test_bounded_selection_fills_unused_retry_capacity_with_new_jobs(self) -> None:
+        jobs = [
+            {
+                "job_url": f"https://jobs.example.test/{index}",
+                "company": "Example",
+                "title": "Product Manager",
+                "description": "Build AI products.",
+                "live_status": "live",
+            }
+            for index in range(6)
+        ]
+
+        selected = search_documents._select_pending_jobs(
+            jobs,
+            {},
+            max_jobs=5,
+            retry_jobs=2,
+        )
+
+        self.assertEqual(len(selected), 5)
+
     def test_generates_only_live_unarchived_jobs_and_persists_success(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

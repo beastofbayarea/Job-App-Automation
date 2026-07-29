@@ -279,20 +279,23 @@ The installer pins the configured SSH host key, replaces only its own marked
 cron entry, installs log rotation, and creates the private archive directory
 with mode `0700`.
 
-Each successful scheduled search also generates a tailored CV and cover letter
-for every verified-live result and uploads the pair to the private VPS archive.
-An ignored state file records completed URLs, so later daily runs skip documents
-that were already archived and retry only failures. Full job descriptions and
-document-generation state remain private on the VPS and are never copied to
-`vps-search-output`.
+Each successful scheduled search publishes its complete safe snapshot before
+starting private document work. The workflow then processes a bounded number of
+tailored CV/cover-letter pairs per run (10 by default, including two reserved
+retry slots) and uploads successful pairs to the private VPS archive. An
+ignored state file records completed URLs, so later runs skip archived pairs
+while continuing through both new jobs and prior failures. Full job
+descriptions and document-generation state remain private on the VPS and are
+never copied to `vps-search-output`.
 
-After the safe search snapshot is published and document generation succeeds,
-the VPS automatically submits eligible verified-live Greenhouse, Lever, and
-Ashby applications. It processes jobs sequentially, attempts no more than 10
-roles for each ATS per run, and skips every URL already present in confirmed or
-attempted state. A CAPTCHA, missing required field, timeout, engine failure, or
-unconfirmed attempt is recorded and skipped so processing can continue. Full
-failure details are written privately to
+The VPS then submits only eligible verified-live Greenhouse, Lever, and Ashby
+jobs whose document pair is already archived. Document failures remain visible
+without suppressing safe application work for other archived jobs. The runner
+processes jobs sequentially, attempts no more than the configured per-ATS limit,
+and skips every URL already present in confirmed or attempted state. A CAPTCHA,
+missing required field, timeout, engine failure, or unconfirmed attempt is
+recorded and skipped so processing can continue. Full failure details are
+written privately to
 `output/vps_application_failures.json` and per-job result files. Application
 results, screenshots, submission logs, and state never enter
 `vps-search-output`.

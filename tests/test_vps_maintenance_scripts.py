@@ -55,6 +55,64 @@ def git(cwd: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
 
 @unittest.skipUnless(PWSH, "PowerShell 7 is required")
 class PowerShellMaintenanceTests(unittest.TestCase):
+    def test_status_probe_is_bounded_and_excludes_its_own_process_match(self) -> None:
+        script = (SCRIPTS / "check_vps_automation_status.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("[int]$TimeoutSeconds = 30", script)
+        self.assertIn("Invoke-ExternalCommandWithTimeout", script)
+        self.assertIn("[v]ps_search_sync.sh", script)
+        self.assertIn("vps_run_status.json", script)
+        self.assertIn("job-app-automation-daily-search", script)
+
+    def test_external_command_timeout_returns_output_exit_code_and_stops_hangs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            mock = directory / "mock-command.ps1"
+            mock.write_text(
+                """
+param([string]$Value)
+Write-Output "mock:$Value"
+& $env:ComSpec /c exit 7
+""".strip(),
+                encoding="utf-8",
+            )
+            helper = SCRIPTS / "vps_script_helpers.ps1"
+            completed_command = (
+                f". '{helper}';"
+                f"$result=Invoke-ExternalCommandWithTimeout -FilePath '{mock}' "
+                "-ArgumentList @('hello') -TimeoutSeconds 5;"
+                "$result | ConvertTo-Json -Depth 5 -Compress"
+            )
+
+            completed = run(
+                [PWSH, "-NoProfile", "-Command", completed_command],
+                cwd=directory,
+                check=True,
+            )
+            payload = json.loads(completed.stdout)
+            self.assertFalse(payload["TimedOut"])
+            self.assertEqual(payload["ExitCode"], 7)
+            self.assertEqual(payload["Output"], ["mock:hello"])
+
+            mock.write_text("Start-Sleep -Seconds 5", encoding="utf-8")
+            timeout_command = (
+                f". '{helper}';"
+                f"$result=Invoke-ExternalCommandWithTimeout -FilePath '{mock}' "
+                "-ArgumentList @() -TimeoutSeconds 1;"
+                "$result | ConvertTo-Json -Depth 5 -Compress"
+            )
+            started = time.monotonic()
+            timed_out = run(
+                [PWSH, "-NoProfile", "-Command", timeout_command],
+                cwd=directory,
+                check=True,
+            )
+            elapsed = time.monotonic() - started
+            payload = json.loads(timed_out.stdout)
+            self.assertTrue(payload["TimedOut"])
+            self.assertEqual(payload["ExitCode"], 124)
+            self.assertLess(elapsed, 4)
+
     def test_shell_literal_round_trips_as_one_argument_without_execution(self) -> None:
         dangerous_value = "/tmp/Job App's;$(touch should-not-exist);`echo unsafe`"
         encoded_value = base64.b64encode(dangerous_value.encode()).decode()
@@ -493,8 +551,14 @@ class BashMaintenanceTests(unittest.TestCase):
         script = (SCRIPTS / "vps_search_sync.sh").read_text(encoding="utf-8")
 
         publication = script.index('git push "$PUSH_URL"')
+        documents = script.index("job_application_automation.core.search_documents")
         application = script.index("job_application_automation.core.search_applications")
+        self.assertLess(publication, documents)
+        self.assertLess(documents, application)
         self.assertLess(publication, application)
+        self.assertIn('--document-state "$DOCUMENT_STATE"', script)
+        self.assertIn('RUN_STATUS="$REPO_DIR/output/vps_run_status.json"', script)
+        self.assertNotIn("--max-attempts-per-ats 10", script)
         sync_block = script[
             script.index("SYNC_FILES=(") : script.index("PRIVATE_GENERATION_OUTPUT=")
         ]

@@ -51,6 +51,7 @@ APPLICATION_STATE="$REPO_DIR/output/vps_application_state.json"
 APPLICATION_RESULTS="$REPO_DIR/output/vps_application_results"
 APPLICATION_FAILURES="$REPO_DIR/output/vps_application_failures.json"
 SUBMISSION_LOG="$REPO_DIR/output/submission_log.json"
+RUN_STATUS="$REPO_DIR/output/vps_run_status.json"
 
 # Cron and an on-demand trigger must never update the search artifacts or sync
 # worktree concurrently. Keep the file descriptor open for the entire run.
@@ -73,6 +74,81 @@ export GIT_SSH_COMMAND="ssh -i $DEPLOY_KEY -o IdentitiesOnly=yes"
 
 source .venv/bin/activate
 
+RUN_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+CURRENT_STAGE="initializing"
+RUN_COMMIT="$(git rev-parse HEAD)"
+
+write_run_status() {
+  local state="$1"
+  local exit_code="$2"
+  local finished_at="$3"
+  python - "$RUN_STATUS" "$RUN_STARTED_AT" "$CURRENT_STAGE" "$state" \
+    "$exit_code" "$$" "$RUN_COMMIT" "$finished_at" <<'PY'
+import json
+import os
+import sys
+from datetime import UTC, datetime
+from pathlib import Path
+
+(
+    status_path,
+    started_at,
+    stage,
+    state,
+    exit_code,
+    pid,
+    commit,
+    finished_at,
+) = sys.argv[1:]
+path = Path(status_path)
+path.parent.mkdir(parents=True, exist_ok=True)
+payload = {
+    "version": 1,
+    "state": state,
+    "stage": stage,
+    "started_at": started_at,
+    "updated_at": datetime.now(UTC).isoformat(),
+    "finished_at": finished_at or None,
+    "exit_code": int(exit_code),
+    "pid": int(pid),
+    "commit": commit,
+}
+temporary = path.with_name(f"{path.name}.tmp.{os.getpid()}")
+temporary.write_text(
+    json.dumps(payload, indent=2, sort_keys=True) + "\n",
+    encoding="utf-8",
+)
+os.replace(temporary, path)
+PY
+}
+
+set_stage() {
+  CURRENT_STAGE="$1"
+  write_run_status "running" 0 "" ||
+    echo "Unable to update VPS run status for stage $CURRENT_STAGE." >&2
+  printf 'VPS_RUN_STAGE stage=%s at=%s\n' \
+    "$CURRENT_STAGE" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+
+finish_run() {
+  local exit_code=$?
+  local state="success"
+  local finished_at
+  trap - EXIT
+  if ((exit_code != 0)); then
+    state="failed"
+  fi
+  finished_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  write_run_status "$state" "$exit_code" "$finished_at" ||
+    echo "Unable to write the final VPS run status." >&2
+  printf 'VPS_RUN_FINISH state=%s stage=%s exit_code=%s at=%s\n' \
+    "$state" "$CURRENT_STAGE" "$exit_code" "$finished_at"
+  exit "$exit_code"
+}
+
+trap finish_run EXIT
+set_stage "search"
+
 python src/job_automation.py search \
   --role-type "Product Manager" \
   --ats-platform greenhouse \
@@ -81,15 +157,7 @@ python src/job_automation.py search \
   --verify-live \
   --private-generation-output "$PRIVATE_GENERATION_OUTPUT"
 
-DOCUMENT_EXIT=0
-PYTHONPATH="$REPO_DIR/src${PYTHONPATH:+:$PYTHONPATH}" \
-  python -m job_application_automation.core.search_documents \
-  --input "$PRIVATE_GENERATION_OUTPUT" \
-  --profile "$REPO_DIR/config/candidate_profile_config.json" \
-  --vps-config "$REPO_DIR/config/vps_config.json" \
-  --state "$DOCUMENT_STATE" \
-  --launcher "$REPO_DIR/src/job_automation.py" || DOCUMENT_EXIT=$?
-
+set_stage "publication"
 MISSING_SYNC_FILES=()
 for f in "${SYNC_FILES[@]}"; do
   if [ ! -f "$REPO_DIR/$f" ]; then
@@ -121,12 +189,19 @@ else
   echo "No changes to sync."
 fi
 
-if ((DOCUMENT_EXIT != 0)); then
-  echo "One or more document pairs could not be generated or archived; failed jobs will retry on the next daily run." >&2
-  exit "$DOCUMENT_EXIT"
-fi
-
 cd "$REPO_DIR"
+set_stage "documents"
+DOCUMENT_EXIT=0
+PYTHONPATH="$REPO_DIR/src${PYTHONPATH:+:$PYTHONPATH}" \
+  python -m job_application_automation.core.search_documents \
+  --input "$PRIVATE_GENERATION_OUTPUT" \
+  --profile "$REPO_DIR/config/candidate_profile_config.json" \
+  --vps-config "$REPO_DIR/config/vps_config.json" \
+  --state "$DOCUMENT_STATE" \
+  --launcher "$REPO_DIR/src/job_automation.py" || DOCUMENT_EXIT=$?
+
+set_stage "applications"
+APPLICATION_EXIT=0
 PYTHONPATH="$REPO_DIR/src${PYTHONPATH:+:$PYTHONPATH}" \
   python -m job_application_automation.core.search_applications \
   --input "$PRIVATE_GENERATION_OUTPUT" \
@@ -135,5 +210,15 @@ PYTHONPATH="$REPO_DIR/src${PYTHONPATH:+:$PYTHONPATH}" \
   --results-dir "$APPLICATION_RESULTS" \
   --failure-report "$APPLICATION_FAILURES" \
   --submission-log "$SUBMISSION_LOG" \
-  --state "$APPLICATION_STATE" \
-  --max-attempts-per-ats 10
+  --document-state "$DOCUMENT_STATE" \
+  --state "$APPLICATION_STATE" || APPLICATION_EXIT=$?
+
+CURRENT_STAGE="finalizing"
+if ((DOCUMENT_EXIT != 0)); then
+  echo "One or more bounded document jobs failed; archived jobs were still eligible for the guarded application stage and failures will retry in later runs." >&2
+fi
+if ((APPLICATION_EXIT != 0)); then
+  echo "One or more guarded application attempts failed; inspect the private failure report before any reviewed retry." >&2
+  exit "$APPLICATION_EXIT"
+fi
+exit "$DOCUMENT_EXIT"

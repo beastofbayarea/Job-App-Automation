@@ -24,6 +24,20 @@ Inspect the application result, screenshot, and provider page. Queue execution s
 
 Read `output/job_search_coverage.json`. Broaden locations, provide known boards or career pages, use more than one ATS, and avoid an unnecessarily narrow date filter. `--require-live` intentionally excludes roles whose liveness cannot be confirmed.
 
+## VPS cron is installed but search output is stale
+
+Run `pwsh scripts\check_vps_automation_status.ps1`. Compare the cron entry,
+process list, repository commit, `vps_run_status.json`, artifact timestamps,
+and log tail. Search publication now precedes bounded document generation, so
+an old public snapshot with a run stuck in `documents` usually means the VPS is
+running older code. Deploy the current `main` commit before retrying. Do not
+start a second run while the lock holder is active.
+
+If the status helper times out before printing remote state, verify the VPS
+provider status and try the provider console or a network path that can receive
+the SSH banner. The helper exits after its configured timeout instead of
+leaving a hidden `plink` process running.
+
 ## VPS document archive cannot connect
 
 Confirm that PuTTY `plink` and `pscp` are on `PATH`, the ignored VPS config has the dedicated archive user, and `ssh_host_key` is the trusted PuTTY-format fingerprint. An unknown or changed host key fails closed in batch mode; verify changes independently instead of bypassing the pin. If using `archive_private_key_file`, confirm it points to an existing dedicated `.ppk`.

@@ -22,7 +22,10 @@ The `candidate` object supplies personal fields and education history. `policies
 
 `config/runtime_config.json` is the shared default for operational paths and limits. Its main sections are:
 
-- `application`: tracker, resume source, output artifact locations, email pool, and application/queue timeouts.
+- `application`: tracker, resume source, output artifact locations, email pool,
+  application/queue timeouts, bounded VPS document work
+  (`vps_max_document_jobs` and `vps_document_retry_jobs`), and the guarded
+  per-ATS application limit (`vps_max_attempts_per_ats`).
 - `browser`: the optional Chromium CDP endpoint.
 - `vertex`: project, service-account path, model, retry, and job-text limits. `project_id: "from-service-account"` reads the project from the service-account file. Application Default Credentials can instead be supplied through `GOOGLE_APPLICATION_CREDENTIALS`.
 - `resume` and `cover_letter`: caches, retry limits, quality threshold, and word limits.

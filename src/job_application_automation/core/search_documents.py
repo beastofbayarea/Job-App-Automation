@@ -13,6 +13,11 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from .artifacts import atomic_write_text
+from .runtime_config import RUNTIME_CONFIG
+
+
+DEFAULT_MAX_JOBS = int(RUNTIME_CONFIG.application["vps_max_document_jobs"])
+DEFAULT_RETRY_JOBS = int(RUNTIME_CONFIG.application["vps_document_retry_jobs"])
 
 
 def _load_json(path: Path) -> Any:
@@ -64,6 +69,34 @@ def _eligible_jobs(payload: Any) -> list[dict[str, Any]]:
     return jobs
 
 
+def _select_pending_jobs(
+    jobs: list[dict[str, Any]],
+    records: dict[str, Any],
+    *,
+    max_jobs: int,
+    retry_jobs: int,
+) -> list[dict[str, Any]]:
+    pending = [
+        job for job in jobs if records.get(str(job["job_url"]), {}).get("status") != "archived"
+    ]
+    if not max_jobs:
+        return pending
+
+    fresh = [job for job in pending if str(job["job_url"]) not in records]
+    retries = [job for job in pending if str(job["job_url"]) in records]
+    retry_budget = min(retry_jobs, max_jobs, len(retries))
+    fresh_budget = min(max_jobs - retry_budget, len(fresh))
+    remaining = max_jobs - retry_budget - fresh_budget
+    selected_urls = {
+        str(job["job_url"])
+        for job in (
+            fresh[: fresh_budget + remaining]
+            + retries[: retry_budget + max(0, remaining - (len(fresh) - fresh_budget))]
+        )
+    }
+    return [job for job in pending if str(job["job_url"]) in selected_urls][:max_jobs]
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Generate and archive one CV/cover-letter pair for every live search result."
@@ -76,8 +109,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max-jobs",
         type=int,
-        default=0,
-        help="Maximum new jobs per run; 0 processes every eligible job.",
+        default=DEFAULT_MAX_JOBS,
+        help=(
+            "Maximum document jobs per run; 0 processes every eligible job "
+            f"(default: {DEFAULT_MAX_JOBS})."
+        ),
+    )
+    parser.add_argument(
+        "--retry-jobs",
+        type=int,
+        default=DEFAULT_RETRY_JOBS,
+        help=(
+            "Reserve up to this many bounded-run slots for prior failures "
+            f"(default: {DEFAULT_RETRY_JOBS})."
+        ),
     )
     return parser
 
@@ -86,16 +131,25 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.max_jobs < 0:
         raise SystemExit("--max-jobs cannot be negative")
+    if args.retry_jobs < 0:
+        raise SystemExit("--retry-jobs cannot be negative")
+    if args.max_jobs and args.retry_jobs > args.max_jobs:
+        raise SystemExit("--retry-jobs cannot exceed --max-jobs")
 
     email = _candidate_email(args.profile)
     state = _load_state(args.state)
     records: dict[str, Any] = state["jobs"]
     jobs = _eligible_jobs(_load_json(args.input))
-    pending = [
+    all_pending = [
         job for job in jobs if records.get(str(job["job_url"]), {}).get("status") != "archived"
     ]
-    if args.max_jobs:
-        pending = pending[: args.max_jobs]
+    pending = _select_pending_jobs(
+        jobs,
+        records,
+        max_jobs=args.max_jobs,
+        retry_jobs=args.retry_jobs,
+    )
+    selected_retries = sum(1 for job in pending if str(job["job_url"]) in records)
 
     failures = 0
     for job in pending:
@@ -168,8 +222,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if isinstance(value, dict) and value.get("status") == "archived"
     )
     print(
-        f"Document archive: eligible={len(jobs)}, pending={len(pending)}, "
-        f"archived_total={archived}, failures={failures}"
+        f"Document archive: eligible={len(jobs)}, pending_total={len(all_pending)}, "
+        f"processed={len(pending)}, retries={selected_retries}, "
+        f"archived_total={archived}, failures={failures}, max_jobs={args.max_jobs}"
     )
     return 1 if failures else 0
 

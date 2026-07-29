@@ -14,6 +14,8 @@
     "engine_timeout_seconds": 180,
     "resume_timeout_seconds": 600,
     "queue_timeout_seconds": 300,
+    "vps_max_document_jobs": 10,
+    "vps_document_retry_jobs": 2,
     "vps_max_attempts_per_ats": 10,
     "default_start_date_offset_days": 14
   },
