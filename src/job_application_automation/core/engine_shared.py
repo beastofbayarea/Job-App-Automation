@@ -832,10 +832,11 @@ def open_chrome_session(
             browser = playwright.chromium.connect_over_cdp(endpoint)
             page = _reusable_page(browser, target_url) if target_url else None
             return BrowserSession(browser, page or _new_page(browser), False)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Could not connect to existing CDP endpoint %s: %s", endpoint, exc)
 
     if force_fresh:
+        logger.info("JOB_APP_FRESH_BROWSER requested; launching fresh Chromium instance")
         browser = playwright.chromium.launch(headless=False)
         return BrowserSession(browser, _new_page(browser), True)
 
@@ -862,7 +863,9 @@ def open_chrome_session(
                 return BrowserSession(browser, page or _new_page(browser), False)
             except Exception:
                 continue
+        logger.info("Chrome process started but CDP on %s did not become ready; falling back", endpoint)
 
+    logger.info("CDP connection unavailable on %s; launching fresh Chromium instance", endpoint)
     browser = playwright.chromium.launch(headless=False)
     page = _reusable_page(browser, target_url) if target_url else None
     return BrowserSession(browser, page or _new_page(browser), True)

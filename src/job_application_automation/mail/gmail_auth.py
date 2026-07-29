@@ -82,8 +82,9 @@ def get_gmail_service(
 
         token_writer(token_path, credentials.to_json())
         try:
-            chmod(token_path, 0o600)
-        except OSError:
+            if os.name != "nt":
+                chmod(token_path, 0o600)
+        except (OSError, NotImplementedError):
             pass
 
     return build("gmail", "v1", credentials=credentials, cache_discovery=False)

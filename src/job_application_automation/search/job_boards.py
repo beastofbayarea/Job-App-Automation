@@ -49,12 +49,27 @@ from ..core.paths import OUTPUT_DIR
 
 try:
     from ddgs import DDGS
+    try:
+        from ddgs.exceptions import DDGSException, RatelimitException  # type: ignore
+    except ImportError:
+        DDGSException = Exception  # type: ignore[assignment,misc]
+        RatelimitException = Exception  # type: ignore[assignment,misc]
 except ImportError:
     try:
         # Compatibility with the package's former name.
         from duckduckgo_search import DDGS  # type: ignore
+        try:
+            from duckduckgo_search.exceptions import (  # type: ignore
+                DuckDuckGoSearchException as DDGSException,
+                RatelimitException,
+            )
+        except ImportError:
+            DDGSException = Exception  # type: ignore[assignment,misc]
+            RatelimitException = Exception  # type: ignore[assignment,misc]
     except ImportError:
         DDGS = None  # type: ignore[assignment,misc]
+        DDGSException = Exception  # type: ignore[assignment,misc]
+        RatelimitException = Exception  # type: ignore[assignment,misc]
 
 
 LOGGER = logging.getLogger("search_job_boards")
