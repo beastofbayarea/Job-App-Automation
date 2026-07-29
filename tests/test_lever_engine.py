@@ -1,4 +1,7 @@
-from job_application_automation.engines.lever import _lever_semantic_answer
+from job_application_automation.engines.lever import (
+    _lever_semantic_answer,
+    _option_matches_variant,
+)
 
 
 def test_numbered_language_questions_use_candidate_languages_in_order() -> None:
@@ -26,3 +29,9 @@ def test_expected_compensation_range_uses_salary_policy() -> None:
         )
         == "Negotiable"
     )
+
+
+def test_country_dropdown_accepts_exact_demonym_stem_only() -> None:
+    assert _option_matches_variant("India", "Indian")
+    assert _option_matches_variant("Canada", "Canadian")
+    assert not _option_matches_variant("Indonesia", "Indian")

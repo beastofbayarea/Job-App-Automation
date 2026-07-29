@@ -146,12 +146,22 @@ def _select_option(
         for index in range(options.count()):
             option = options.nth(index)
             option_label = option.inner_text().strip()
-            if option_label and (
-                option_label.lower() == variant.lower() or variant.lower() in option_label.lower()
-            ):
+            if option_label and _option_matches_variant(option_label, variant):
                 control.select_option(label=option_label)
                 return bool(control.input_value())
     return False
+
+
+def _option_matches_variant(option_label: str, variant: str) -> bool:
+    option = " ".join(option_label.lower().split())
+    answer = " ".join(variant.lower().split())
+    if option == answer or answer in option:
+        return True
+    # Lever nationality questions frequently use demonyms in the candidate
+    # profile but country nouns in the dropdown (Indian -> India, Canadian ->
+    # Canada, Australian -> Australia). Only accept an exact one-character
+    # stem match so unrelated options cannot be selected.
+    return answer.endswith("n") and option == answer[:-1]
 
 
 def _question_label(control: Locator) -> str:
