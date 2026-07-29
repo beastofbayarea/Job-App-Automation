@@ -875,57 +875,68 @@ def run(
                         "screenshot": "",
                     }
                 if _fill_security_code_from_gmail(page, company):
+                    code_inputs = page.locator('input[id^="security-input"]')
+                    if code_inputs.count():
+                        try:
+                            code_inputs.last.press("Enter")
+                        except Exception:
+                            pass
                     submit = _first_visible(
                         page.get_by_role(
                             "button",
-                            name=re.compile(r"submit application", re.I),
+                            name=re.compile(r"submit|verify|confirm|envoyer|postuler", re.I),
                         )
+                    ) or _first_visible(
+                        page.locator('button[type="submit"], input[type="submit"]')
                     )
                     if submit is not None:
-                        submit.click()
-                        for _ in range(20):
-                            if _confirmation_visible(page):
-                                screenshot = _screenshot(
-                                    page,
-                                    screenshot_dir,
-                                    company or "Greenhouse",
-                                    "submitted_verified",
-                                )
-                                return {
-                                    "success": True,
-                                    "status": "SUBMITTED & CONFIRMED",
-                                    "ats": ATS_NAME,
-                                    "submitted": True,
-                                    "confirmed": True,
-                                    "test_mode": False,
-                                    "filled_fields": {},
-                                    "custom_questions": {},
-                                    "eeo_fields": {},
-                                    "consent_fields": [],
-                                    "missing_required": [],
-                                    "screenshot": screenshot,
-                                }
-                            page.wait_for_timeout(1_000)
-                        screenshot = _screenshot(
-                            page,
-                            screenshot_dir,
-                            company or "Greenhouse",
-                            "submitted_verified",
-                        )
-                        return {
-                            "success": False,
-                            "status": "SUBMISSION_UNCONFIRMED",
-                            "ats": ATS_NAME,
-                            "submitted": True,
-                            "confirmed": False,
-                            "test_mode": False,
-                            "filled_fields": {},
-                            "custom_questions": {},
-                            "eeo_fields": {},
-                            "consent_fields": [],
-                            "missing_required": [],
-                            "screenshot": screenshot,
-                        }
+                        try:
+                            submit.click()
+                        except Exception:
+                            pass
+                    for _ in range(20):
+                        if _confirmation_visible(page):
+                            screenshot = _screenshot(
+                                page,
+                                screenshot_dir,
+                                company or "Greenhouse",
+                                "submitted_verified",
+                            )
+                            return {
+                                "success": True,
+                                "status": "SUBMITTED & CONFIRMED",
+                                "ats": ATS_NAME,
+                                "submitted": True,
+                                "confirmed": True,
+                                "test_mode": False,
+                                "filled_fields": {},
+                                "custom_questions": {},
+                                "eeo_fields": {},
+                                "consent_fields": [],
+                                "missing_required": [],
+                                "screenshot": screenshot,
+                            }
+                        page.wait_for_timeout(1_000)
+                    screenshot = _screenshot(
+                        page,
+                        screenshot_dir,
+                        company or "Greenhouse",
+                        "submitted_verified",
+                    )
+                    return {
+                        "success": False,
+                        "status": "SUBMISSION_UNCONFIRMED",
+                        "ats": ATS_NAME,
+                        "submitted": True,
+                        "confirmed": False,
+                        "test_mode": False,
+                        "filled_fields": {},
+                        "custom_questions": {},
+                        "eeo_fields": {},
+                        "consent_fields": [],
+                        "missing_required": [],
+                        "screenshot": screenshot,
+                    }
             navigate_reusing_tab(
                 page,
                 url,
@@ -1084,18 +1095,27 @@ def run(
                         company,
                         excluded_message_ids=verification_message_baseline,
                     ):
+                        code_inputs = page.locator('input[id^="security-input"]')
+                        if code_inputs.count():
+                            try:
+                                code_inputs.last.press("Enter")
+                            except Exception:
+                                pass
                         challenge_submit = _first_visible(
                             page.get_by_role(
                                 "button",
-                                name=SUBMIT_BUTTON_TEXT_PATTERN,
+                                name=re.compile(r"submit|verify|confirm|envoyer|postuler", re.I),
                             )
+                        ) or _first_visible(
+                            page.locator('button[type="submit"], input[type="submit"]')
                         )
                         if challenge_submit is None:
-                            challenge_submit = _first_visible(
-                                page.locator('button[type="submit"], input[type="submit"]')
-                            )
+                            challenge_submit = submit
                         if challenge_submit is not None:
-                            challenge_submit.click()
+                            try:
+                                challenge_submit.click()
+                            except Exception:
+                                pass
                 page.wait_for_timeout(1_000)
             submitted_screenshot = _screenshot(
                 page, screenshot_dir, company or "Greenhouse", "submitted_verified"
