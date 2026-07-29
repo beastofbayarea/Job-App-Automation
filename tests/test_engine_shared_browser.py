@@ -10,7 +10,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from job_application_automation.core.engine_shared import navigate_reusing_tab  # noqa: E402
+from job_application_automation.core.engine_shared import (  # noqa: E402
+    navigate_reusing_tab,
+    text_confirms_submission,
+)
 
 
 class FakeLocator:
@@ -39,6 +42,13 @@ class FakePage:
 
 
 class NavigationTests(unittest.TestCase):
+    def test_greenhouse_thanks_a_lot_confirmation_is_recognized(self) -> None:
+        self.assertTrue(
+            text_confirms_submission(
+                "Thanks a lot for applying to Fin! We will review your application carefully."
+            )
+        )
+
     def test_matching_page_is_reloaded_with_fake_playwright_page(self) -> None:
         page = FakePage("https://boards.greenhouse.io/example/jobs/123/")
 

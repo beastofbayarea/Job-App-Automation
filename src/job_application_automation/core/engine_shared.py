@@ -39,6 +39,7 @@ DEFAULT_CONFIRMATION_PHRASES = (
     "thank you for applying",
     "thank you so much for your interest",
     "thanks for applying",
+    "thanks a lot for applying",
     "application received",
     "application has been received",
     "successfully submitted",
