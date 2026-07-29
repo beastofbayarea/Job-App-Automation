@@ -167,6 +167,19 @@ class ScreeningMatcherTests(unittest.TestCase):
 
         self.assertEqual(answer, "City, State, Country")
 
+    def test_example_profile_uses_portfolio_for_work_samples(self) -> None:
+        config = engine_shared.load_json_config(ROOT / "config/candidate_profile_config.example.json")
+
+        answer = engine_shared.configured_answer(
+            "Please share some samples of your work",
+            config["candidate"],
+            config["rules"],
+            config["eeo_defaults"],
+            config["field_matchers"],
+        )
+
+        self.assertEqual(answer, "https://example.com/portfolio")
+
 
 if __name__ == "__main__":
     unittest.main()

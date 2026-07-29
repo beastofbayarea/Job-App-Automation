@@ -193,7 +193,13 @@
       "current location"
     ],
     "linkedin": ["linkedin", "linkedin profile", "linkedin url"],
-    "portfolio": ["portfolio", "website", "personal website", "researchgate"],
+    "portfolio": [
+      "portfolio",
+      "website",
+      "personal website",
+      "researchgate",
+      "samples of your work"
+    ],
     "public_username": ["public username"],
     "sponsorship": ["sponsorship", "require sponsorship", "visa sponsorship", "future sponsorship"],
     "work_auth": [
