@@ -91,6 +91,11 @@ class ResumeAIClientTests(unittest.TestCase):
 
         self.assertEqual(project_id, "configured-project")
 
+    def test_strip_markdown_formatting_strips_backticks(self) -> None:
+        raw_markdown = "```json\n* Tailored engineer **summary**\n```"
+        cleaned = ai.strip_markdown_formatting(raw_markdown)
+        self.assertIn("Tailored engineer summary", cleaned)
+
 
 if __name__ == "__main__":
     unittest.main()
