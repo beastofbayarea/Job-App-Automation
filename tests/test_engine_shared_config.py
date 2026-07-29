@@ -180,6 +180,24 @@ class ScreeningMatcherTests(unittest.TestCase):
 
         self.assertEqual(answer, "https://example.com/portfolio")
 
+    def test_example_profile_handles_sponsor_and_pay_transparency_wording(self) -> None:
+        config = engine_shared.load_json_config(ROOT / "config/candidate_profile_config.example.json")
+
+        cases = {
+            "Would you need us to sponsor a work visa?": "No",
+            "Pay range transparency": "Acknowledge",
+        }
+        for question, expected in cases.items():
+            with self.subTest(question=question):
+                answer = engine_shared.configured_answer(
+                    question,
+                    config["candidate"],
+                    config["rules"],
+                    config["eeo_defaults"],
+                    config["field_matchers"],
+                )
+                self.assertEqual(answer, expected)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -286,6 +286,23 @@ def _select_greenhouse_combobox(
                     return True
             except Exception:
                 pass
+        if preferred and str(preferred[0]).strip().lower() in {
+            "acknowledge",
+            "i acknowledge",
+        }:
+            try:
+                control.click()
+                control.press("ArrowDown")
+                control.press("Enter")
+                container_text = control.evaluate(
+                    "el => (el.parentElement?.parentElement?.innerText || '').trim()"
+                )
+                if container_text and not re.fullmatch(
+                    r"(?:select|choose)(?:\.\.\.)?", container_text, re.I
+                ):
+                    return True
+            except Exception:
+                pass
         # Do not guess when no configured option matches.
         visible_options = []
         for index in range(options.count()):

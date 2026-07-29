@@ -201,7 +201,13 @@
       "samples of your work"
     ],
     "public_username": ["public username"],
-    "sponsorship": ["sponsorship", "require sponsorship", "visa sponsorship", "future sponsorship"],
+    "sponsorship": [
+      "sponsorship",
+      "require sponsorship",
+      "need us to sponsor",
+      "visa sponsorship",
+      "future sponsorship"
+    ],
     "work_auth": [
       "authorized",
       "legally authorized",
@@ -348,7 +354,8 @@
       "gdpr",
       "privacy consent",
       "privacy",
-      "personal information retained"
+      "personal information retained",
+      "pay range transparency"
     ],
     "hispanic_latino": [
       "hispanic",
