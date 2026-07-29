@@ -164,7 +164,15 @@ def _option_matches_variant(option_label: str, variant: str) -> bool:
     country_stems = {answer[:-1]} if answer.endswith("n") else set()
     if answer.endswith("ian"):
         country_stems.add(f"{answer[:-3]}a")
-    return option in country_stems
+    if option in country_stems:
+        return True
+    duration_days = {
+        "2 weeks": "15 days",
+        "two weeks": "15 days",
+        "4 weeks": "30 days",
+        "four weeks": "30 days",
+    }
+    return duration_days.get(answer) == option
 
 
 def _question_label(control: Locator) -> str:
@@ -213,6 +221,12 @@ def _lever_semantic_answer(
         return str(profile.get("nationality") or profile.get("citizenship") or "").strip() or None
     if re.search(r"\bexpected compensation range\b", normalized):
         return str(rules.get("salary_expectation") or "").strip() or None
+    if "current ctc" in normalized:
+        return str(rules.get("current_salary") or "").strip() or None
+    if "expected ctc" in normalized:
+        return str(rules.get("salary_expectation") or "").strip() or None
+    if re.search(r"\bhow soon\b.*\bjoin\b", normalized):
+        return str(profile.get("available_start_date") or "").strip() or None
     return None
 
 
@@ -335,12 +349,10 @@ def _fill_custom_questions(
                 desired = _lever_semantic_answer(label, profile, rules)
             if posting_location_question:
                 desired = None
-            location_question = (
-                not desired
-                and not posting_location_question
-                and is_location_question(normalized_label)
+            location_question = not posting_location_question and is_location_question(
+                normalized_label
             )
-            if location_question:
+            if location_question and not desired:
                 desired = str(profile.get("location", ""))
             if "are you flexible" in normalized_label:
                 desired = "Yes"
@@ -374,6 +386,11 @@ def _fill_custom_questions(
                         if _select_option(control, label, fallback, configured_variants):
                             success = True
                             break
+                    if not success:
+                        try:
+                            success = bool(control.select_option(label="Any Other"))
+                        except Exception:
+                            success = False
                 if not success and desired.lower() == "yes":
                     # Fallback for closed <select> elements where inner_text()
                     # can read back empty/stale option text; Playwright's own
