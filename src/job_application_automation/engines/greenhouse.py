@@ -858,10 +858,7 @@ def run(
             # 8-box code challenge, a prior run already filled the form and is
             # only waiting on email verification. Handle the code and submit
             # directly instead of re-filling (and re-triggering) the whole form.
-            if (
-                page.url.rstrip("/") == url.rstrip("/")
-                and _security_challenge_visible(page)
-            ):
+            if page.url.rstrip("/") == url.rstrip("/") and _security_challenge_visible(page):
                 if not live_submit:
                     return {
                         "success": True,
@@ -1080,10 +1077,7 @@ def run(
                 if _confirmation_visible(page):
                     confirmed = True
                     break
-                if (
-                    not security_challenge_attempted
-                    and _security_challenge_visible(page)
-                ):
+                if not security_challenge_attempted and _security_challenge_visible(page):
                     security_challenge_attempted = True
                     if _fill_security_code_from_gmail(
                         page,

@@ -125,7 +125,9 @@ class LocationQuestionTests(unittest.TestCase):
 
 class ScreeningMatcherTests(unittest.TestCase):
     def test_example_profile_answers_weekly_in_office_requirement(self) -> None:
-        config = engine_shared.load_json_config(ROOT / "config/candidate_profile_config.example.json")
+        config = engine_shared.load_json_config(
+            ROOT / "config/candidate_profile_config.example.json"
+        )
 
         answer = engine_shared.configured_answer(
             "Are you available to work 3 days a week in our Melbourne office?",
@@ -138,7 +140,9 @@ class ScreeningMatcherTests(unittest.TestCase):
         self.assertEqual(answer, "Yes")
 
     def test_example_profile_denies_employee_relationship_and_referral(self) -> None:
-        config = engine_shared.load_json_config(ROOT / "config/candidate_profile_config.example.json")
+        config = engine_shared.load_json_config(
+            ROOT / "config/candidate_profile_config.example.json"
+        )
 
         for question in (
             "Do you know anyone or are you related to anyone who works at Example?",
@@ -155,7 +159,9 @@ class ScreeningMatcherTests(unittest.TestCase):
                 self.assertEqual(answer, "No")
 
     def test_example_profile_answers_plural_city_availability(self) -> None:
-        config = engine_shared.load_json_config(ROOT / "config/candidate_profile_config.example.json")
+        config = engine_shared.load_json_config(
+            ROOT / "config/candidate_profile_config.example.json"
+        )
 
         answer = engine_shared.configured_answer(
             "In what cities are you available to work?",
@@ -168,7 +174,9 @@ class ScreeningMatcherTests(unittest.TestCase):
         self.assertEqual(answer, "City, State, Country")
 
     def test_example_profile_uses_portfolio_for_work_samples(self) -> None:
-        config = engine_shared.load_json_config(ROOT / "config/candidate_profile_config.example.json")
+        config = engine_shared.load_json_config(
+            ROOT / "config/candidate_profile_config.example.json"
+        )
 
         answer = engine_shared.configured_answer(
             "Please share some samples of your work",
@@ -181,7 +189,9 @@ class ScreeningMatcherTests(unittest.TestCase):
         self.assertEqual(answer, "https://example.com/portfolio")
 
     def test_example_profile_handles_sponsor_and_pay_transparency_wording(self) -> None:
-        config = engine_shared.load_json_config(ROOT / "config/candidate_profile_config.example.json")
+        config = engine_shared.load_json_config(
+            ROOT / "config/candidate_profile_config.example.json"
+        )
 
         cases = {
             "Would you need us to sponsor a work visa?": "No",
