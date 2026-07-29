@@ -28,8 +28,10 @@ from ..core.engine_shared import (
     first_visible as _first_visible,
     generate_essay_answer as _generate_essay,
     is_essay_question as _is_essay_question,
+    is_location_question,
     label_for as _label_for,
     load_json_config,
+    location_answer_candidates,
     load_candidate_evidence as _shared_candidate_evidence,
     orchestrated_config_path,
     resolve_candidate_email,
@@ -383,8 +385,15 @@ def _fill_custom_questions(
 
             if role_name == "combobox":
                 if desired:
+                    preferred = (
+                        location_answer_candidates(profile)
+                        if is_location_question(label)
+                        else _answer_variants(label, desired, option_variants)
+                    )
                     success = _select_greenhouse_combobox(
-                        page, control, _answer_variants(label, desired, option_variants)
+                        page,
+                        control,
+                        preferred,
                     )
                 elif control.get_attribute("aria-required") == "true":
                     try:
