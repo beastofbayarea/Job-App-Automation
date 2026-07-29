@@ -1,6 +1,5 @@
 """Unit tests for Greenhouse direct multipart POST submission."""
 
-from pathlib import Path
 from job_application_automation.engines.greenhouse import submit_greenhouse_direct_post
 
 

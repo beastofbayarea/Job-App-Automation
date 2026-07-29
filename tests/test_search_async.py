@@ -1,7 +1,6 @@
 """Unit tests for search_job_boards_async."""
 
 import asyncio
-import pytest
 from job_application_automation.search.job_boards import search_job_boards_async
 
 

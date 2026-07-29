@@ -81,6 +81,8 @@ def select_emails(
     sample: EmailSample = random.sample,
 ) -> str | list[str]:
     """Choose one address or a unique sample, preserving legacy count behavior."""
+    if not emails:
+        raise ValueError("emails sequence cannot be empty")
     if count < 1:
         raise ValueError("count must be greater than zero")
     if count == 1:

@@ -10,7 +10,6 @@ from job_application_automation.engines.lever import (
     _upload_resume,
     _fill_location,
     _select_option,
-    _question_label,
     _required_issues,
     _captcha_present,
     _parser,

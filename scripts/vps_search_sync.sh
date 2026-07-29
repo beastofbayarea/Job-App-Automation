@@ -70,7 +70,7 @@ fi
 # Push goes over SSH with the repo-scoped deploy key; clone/fetch stays on the
 # origin remote's existing HTTPS URL since the repo is public and needs no
 # credentials to read.
-export GIT_SSH_COMMAND="ssh -i $DEPLOY_KEY -o IdentitiesOnly=yes"
+export GIT_SSH_COMMAND="ssh -i \"$DEPLOY_KEY\" -o IdentitiesOnly=yes"
 
 source .venv/bin/activate
 

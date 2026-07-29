@@ -1169,10 +1169,6 @@ def submit_greenhouse_direct_post(
     """
     logger.info("Executing direct Greenhouse multipart POST submission for: %s", url)
 
-    cfg = config or {}
-    candidate = cfg.get("candidate", {})
-    email = email_override or candidate.get("fallback_email") or "applicant@example.com"
-
     if not live_submit:
         logger.info("[DIRECT API - FILL ONLY] Greenhouse multipart form payload constructed.")
         return {

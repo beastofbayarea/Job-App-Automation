@@ -2736,7 +2736,7 @@ def submit_ashby_graphql_direct(
     except Exception as exc:
         logger.warning("Direct GraphQL API attempt failed (%s), status check completed.", exc)
 
-    return "SUBMITTED & CONFIRMED" if live else "PREFILLED_ONLY"
+    return "FAILED: DIRECT_GRAPHQL_API_ERROR" if live else "PREFILLED_ONLY"
 
 
 # ==============================================================================

@@ -1,12 +1,10 @@
 """Unit and mock integration tests for ashby.py ATS engine."""
 
-import os
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 import pytest
 
 from job_application_automation.engines.ashby import (
-    DEFAULT_CONFIG,
     _safe_filename_part,
     _start_date_from_offset,
     expand,
@@ -15,7 +13,6 @@ from job_application_automation.engines.ashby import (
     load_config,
     retry,
     signal_handler,
-    _shutdown,
 )
 
 

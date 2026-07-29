@@ -1,7 +1,6 @@
 """Unit tests for pool_select.py email selection."""
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 import pytest
 
 from job_application_automation.mail.pool_select import (

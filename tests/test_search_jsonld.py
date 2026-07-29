@@ -1,9 +1,6 @@
 """Unit tests for jsonld.py Schema.org extraction."""
 
-import json
 from job_application_automation.search.jsonld import (
-    JsonLdExtractor,
-    TextExtractor,
     clean_whitespace,
     strip_html,
     extract_jsonld_objects,

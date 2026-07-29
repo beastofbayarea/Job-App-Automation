@@ -87,9 +87,8 @@ def extract_jsonld_objects(html_text: str) -> Iterator[dict[str, Any]]:
     def walk(node: Any) -> Iterator[dict[str, Any]]:
         if isinstance(node, dict):
             yield node
-            graph = node.get("@graph")
-            if graph is not None:
-                yield from walk(graph)
+            for value in node.values():
+                yield from walk(value)
         elif isinstance(node, list):
             for item in node:
                 yield from walk(item)

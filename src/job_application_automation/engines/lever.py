@@ -139,15 +139,18 @@ def _fill_location(page: Page, value: str) -> bool:
             option.click()
     except Exception:
         pass
-    if not location.input_value().strip():
+    try:
+        if not location.input_value().strip():
+            return False
+        selected = page.locator('input[name="selectedLocation"]').first
+        if selected.count() and not selected.input_value().strip():
+            try:
+                selected.evaluate("(el, value) => { el.value = value; }", value)
+            except Exception:
+                pass
+        return bool(location.input_value().strip())
+    except Exception:
         return False
-    selected = page.locator('input[name="selectedLocation"]').first
-    if selected.count() and not selected.input_value().strip():
-        try:
-            selected.evaluate("(el, value) => { el.value = value; }", value)
-        except Exception:
-            pass
-    return bool(location.input_value().strip())
 
 
 def _select_option(
