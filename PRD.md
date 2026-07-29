@@ -56,8 +56,8 @@ The proposed features should extend rather than replace the existing structure.
   successful, confirmed application. It must remain the basis for registry and
   post-submission behavior.
 - `artifacts.py` already provides atomic text and JSON writes.
-- `resume_source.py` supplies tagged candidate identity, experience, education,
-  and claim evidence. `resume_ai_client.py` provides an injectable LLM gateway.
+- `resume/source.py` supplies tagged candidate identity, experience, education,
+  and claim evidence. `resume/ai_client.py` provides an injectable LLM gateway.
 - ReportLab and PyMuPDF are already available for document rendering and PDF
   validation.
 - The `gmail` workflow already creates Gmail drafts or sends MIME messages,
