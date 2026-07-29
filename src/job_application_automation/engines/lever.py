@@ -155,16 +155,52 @@ def _select_option(
 
 
 def _question_label(control: Locator) -> str:
-    context = _context(control)
-    if not context:
-        return ""
-    option_text = []
-    if control.evaluate("el => el.tagName.toLowerCase()") == "select":
-        option_text = [option.inner_text().strip() for option in control.locator("option").all()]
-    label = context
-    for option in option_text:
-        label = label.replace(option, "")
+    try:
+        label = control.evaluate(
+            """el => {
+                const explicit = el.id
+                    ? document.querySelector(`label[for="${CSS.escape(el.id)}"]`)
+                    : null;
+                if (explicit?.innerText) return explicit.innerText;
+                const field = el.closest('.application-field');
+                const sibling = field?.previousElementSibling;
+                if (sibling?.classList?.contains('application-label')) {
+                    return sibling.innerText || '';
+                }
+                const root = el.closest(
+                    '.application-question, .application-additional, li, label'
+                );
+                if (!root) return '';
+                const copy = root.cloneNode(true);
+                copy.querySelectorAll(
+                    'option, input, select, textarea, .dropdown-results'
+                ).forEach(node => node.remove());
+                return copy.innerText || '';
+            }"""
+        )
+    except Exception:
+        label = _context(control)
     return re.sub(r"[\s?*✱]+$", "", " ".join(label.split())).strip()
+
+
+def _lever_semantic_answer(
+    label: str,
+    profile: Mapping[str, Any],
+    rules: Mapping[str, Any],
+) -> Optional[str]:
+    """Resolve common Lever questions whose labels are too terse for shared matchers."""
+    normalized = " ".join(label.lower().split())
+    language_match = re.fullmatch(r"(?:preferred\s+)?language\s*(\d+)", normalized)
+    languages = profile.get("languages", ())
+    if language_match and isinstance(languages, Sequence) and not isinstance(languages, str):
+        index = int(language_match.group(1)) - 1
+        if 0 <= index < len(languages):
+            return str(languages[index]).strip() or None
+    if re.search(r"\b(?:nationality|country of citizenship)\b", normalized):
+        return str(profile.get("nationality") or profile.get("citizenship") or "").strip() or None
+    if re.search(r"\bexpected compensation range\b", normalized):
+        return str(rules.get("salary_expectation") or "").strip() or None
+    return None
 
 
 def _fill_choice_group(page: Page, control: Locator, desired: str) -> bool:
@@ -282,6 +318,8 @@ def _fill_custom_questions(
                 re.search(r"\bwhich location\b.*\bapplying\b", normalized_label)
             )
             desired = configured_answer(label, profile, rules, eeo, field_matchers)
+            if not desired:
+                desired = _lever_semantic_answer(label, profile, rules)
             if posting_location_question:
                 desired = None
             location_question = (
