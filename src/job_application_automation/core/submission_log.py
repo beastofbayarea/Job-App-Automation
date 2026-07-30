@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Mapping, MutableMapping
 
 from .artifacts import read_json, write_json
-from .identity import canonical_job_url, normalize_email
+from .identity import canonical_job_url, normalize_email, _require_string
 
 _SLUG_PATTERN = re.compile(r"[^a-z0-9]+")
 _LOCK_TIMEOUT_SECONDS = 30.0
@@ -33,13 +33,6 @@ def _slugify(value: str) -> str:
     return slug
 
 
-def _require_string(value: object, field_name: str, *, allow_empty: bool = False) -> str:
-    if not isinstance(value, str):
-        raise ValueError(f"{field_name} must be a string")
-    normalized = value.strip()
-    if not allow_empty and not normalized:
-        raise ValueError(f"{field_name} cannot be empty")
-    return normalized
 
 
 def _require_url(value: object, field_name: str) -> str:

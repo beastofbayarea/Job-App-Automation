@@ -20,6 +20,15 @@ _DOMAIN_LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
 _LOCAL_PART = re.compile(r"^[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+$")
 
 
+def _require_string(value: object, field_name: str, *, allow_empty: bool = False) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"{field_name} must be a string")
+    normalized = value.strip()
+    if not allow_empty and not normalized:
+        raise ValueError(f"{field_name} cannot be empty")
+    return normalized
+
+
 def normalize_lookup_text(value: object, field_name: str) -> str:
     """Return a case-insensitive, whitespace-stable lookup value."""
     if not isinstance(value, str):

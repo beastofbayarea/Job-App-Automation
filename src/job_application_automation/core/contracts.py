@@ -73,13 +73,7 @@ class EngineStatus(str, Enum):
             return None
 
 
-def _require_string(value: object, field_name: str, *, allow_empty: bool = False) -> str:
-    if not isinstance(value, str):
-        raise ValueError(f"{field_name} must be a string")
-    normalized = value.strip()
-    if not allow_empty and not normalized:
-        raise ValueError(f"{field_name} cannot be empty")
-    return normalized
+from .identity import _require_string
 
 
 def _require_bool(value: object, field_name: str) -> bool:
