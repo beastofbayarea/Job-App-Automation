@@ -1,4 +1,4 @@
-# Downloads private VPS submission and failure reports without using Git.
+# Downloads private VPS submission, failure, and infrastructure reports without using Git.
 param(
     [string]$RemoteRepoPath = "/root/Job-App-Automation",
     [string]$ConfigPath = "config/vps_config.json",
@@ -52,7 +52,7 @@ $DestinationPath = [IO.Path]::GetFullPath($Destination)
 foreach ($Name in $ReportNames) {
     $Existing = Join-Path $DestinationPath $Name
     if ((Test-Path -LiteralPath $Existing) -and -not $Overwrite) {
-        Write-Error "Local report already exists: $Existing. Use -Overwrite to replace both reports."
+        Write-Error "Local report already exists: $Existing. Use -Overwrite to replace all reports."
         exit 1
     }
 }

@@ -393,7 +393,7 @@ Write-Output "mock:$Value"
             self.assertTrue(candidate.exists())
 
     @unittest.skipUnless(os.name == "nt", "PSCP command discovery test is Windows-specific")
-    def test_private_report_pull_uses_pinned_auth_and_promotes_complete_pair(self) -> None:
+    def test_private_report_pull_uses_pinned_auth_and_promotes_complete_report_set(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             directory = Path(temporary_directory)
             mock_directory = directory / "mock-bin"
@@ -434,6 +434,8 @@ $payload = @{
 )
 if ($source.EndsWith("submission_log.json")) {
     [IO.File]::WriteAllText($target, '{"confirmed": {}}')
+} elseif ($source.EndsWith("vps_infra_status.json")) {
+    [IO.File]::WriteAllText($target, '{"active_services": [], "uptime": "up 1 day"}')
 } else {
     [IO.File]::WriteAllText($target, '{"failure_count": 0, "failures": []}')
 }
@@ -473,10 +475,16 @@ exit 0
                 ),
                 {"failure_count": 0, "failures": []},
             )
+            self.assertEqual(
+                json.loads(
+                    (destination / "vps_infra_status.json").read_text(encoding="utf-8")
+                ),
+                {"active_services": [], "uptime": "up 1 day"},
+            )
             captures = [
                 json.loads(line) for line in capture_path.read_text(encoding="utf-8").splitlines()
             ]
-            self.assertEqual(len(captures), 2)
+            self.assertEqual(len(captures), 3)
             for capture in captures:
                 arguments = capture["arguments"]
                 self.assertIn("-pwfile", arguments)
@@ -507,7 +515,7 @@ exit 0
             )
             self.assertEqual(blocked.returncode, 1)
             self.assertIn("Use -Overwrite", blocked.stderr)
-            self.assertEqual(len(capture_path.read_text(encoding="utf-8").splitlines()), 2)
+            self.assertEqual(len(capture_path.read_text(encoding="utf-8").splitlines()), 3)
 
     @unittest.skipUnless(os.name == "nt", "Plink command discovery test is Windows-specific")
     def test_trigger_uses_temporary_password_file_and_quotes_remote_path(self) -> None:
