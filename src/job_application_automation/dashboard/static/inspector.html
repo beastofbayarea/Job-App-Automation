@@ -101,27 +101,9 @@
 
   <main class="container" id="mainContent">
 
-    <!-- RAW FILE INSPECTOR PAGE CONTENT -->
+    <!-- RAW FILE INSPECTOR PAGE CONTENT: one section per report file -->
     <section class="section">
-      <div class="controls-bar">
-        <label for="rawFileSelect" style="align-self: center; font-weight: 600; color: var(--text-muted);">Select Target Report File:</label>
-        <select id="rawFileSelect" class="file-select" onchange="loadRawFile()">
-          <option value="submission_log.json">submission_log.json (Section 3)</option>
-          <option value="vps_application_failures.json">vps_application_failures.json (Section 3)</option>
-          <option value="vps_application_state.json">vps_application_state.json (Section 3)</option>
-          <option value="ai_jobs.csv">ai_jobs.csv (Section 1)</option>
-          <option value="job_search_coverage.json">job_search_coverage.json (Section 1)</option>
-          <option value="ats_boards_cache.json">ats_boards_cache.json (Section 1)</option>
-          <option value="vps_generation_jobs.json">vps_generation_jobs.json (Section 2)</option>
-          <option value="vps_document_archive_state.json">vps_document_archive_state.json (Section 2)</option>
-        </select>
-      </div>
-
-      <div id="inspectorMetaBar" class="inspector-meta-bar">
-        <span>Select a file above to inspect metadata and content.</span>
-      </div>
-
-      <pre class="json-viewer" id="rawFileViewer">Select a file above to inspect its contents.</pre>
+      <div id="inspectorSections"></div>
     </section>
 
   </main>
