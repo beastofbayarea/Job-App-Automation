@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "domain": "skybison.cloud",
+  "gsc": {
+    "verification_type": "TXT",
+    "record_name": "@",
+    "txt_record_value": "google-site-verification=65-AJq-bjmravI1f7-MdGzsK7LGkaZfCyWLK0nxU_1M",
+    "sitemap_url": "https://skybison.cloud/sitemap.xml",
+    "robots_url": "https://skybison.cloud/robots.txt"
+  },
+  "indexnow": {
+    "api_key": "b10fccb4cc5444ffa939921ba44ad5e0",
+    "key_filename": "b10fccb4cc5444ffa939921ba44ad5e0.txt",
+    "key_location": "https://skybison.cloud/b10fccb4cc5444ffa939921ba44ad5e0.txt",
+    "endpoints": [
+      "https://api.indexnow.org/indexnow",
+      "https://www.bing.com/indexnow"
+    ]
+  },
+  "indexed_urls": [
+    "https://skybison.cloud/",
+    "https://skybison.cloud/index.html",
+    "https://skybison.cloud/cent-capital.html",
+    "https://skybison.cloud/search.html",
+    "https://skybison.cloud/generation.html",
+    "https://skybison.cloud/logs.html",
+    "https://skybison.cloud/inspector.html"
+  ],
+  "last_submission_date": "2026-07-30"
+}

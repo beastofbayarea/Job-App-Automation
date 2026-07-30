@@ -9,6 +9,7 @@ Allow: /inspector.html
 Allow: /cent-capital.html
 Allow: /sitemap.xml
 Allow: /site.webmanifest
+Allow: /b10fccb4cc5444ffa939921ba44ad5e0.txt
 
 Disallow: /api/download/
 
