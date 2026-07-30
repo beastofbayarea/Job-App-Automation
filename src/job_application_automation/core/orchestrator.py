@@ -1016,10 +1016,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             start_index=args.start_index,
             live_submit=args.live_submit,
             fill_only=args.fill_only,
-            # Defaults to dry-run whenever --live-submit was not explicitly
-            # requested, even if --dry-run itself was omitted, so a bare
-            # invocation can never submit an application by accident.
-            dry_run=args.dry_run or not args.live_submit,
+            # dry_run is only active when neither --live-submit nor --fill-only
+            # was explicitly requested, ensuring a bare invocation cannot submit
+            # an application by accident while still letting --fill-only work
+            # correctly with its own mode flag.
+            dry_run=not args.live_submit and not args.fill_only,
             shuffle=not args.no_shuffle,
             headed=args.headed,
             timeout_seconds=args.timeout,
