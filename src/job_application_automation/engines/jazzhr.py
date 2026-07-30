@@ -7,6 +7,8 @@ import logging
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 
+from playwright.sync_api import sync_playwright
+
 from ..core.engine_shared import (
     build_engine_parser,
     capture_screenshot,
@@ -93,85 +95,91 @@ def run(
         "resume": str(resume),
     }
 
-    session = open_chrome_session(headless=headless)
-    page = session.page
-
-    try:
-        page.goto(url, wait_until="networkidle", timeout=timeout)
-
-        apply_btn = first_visible(
-            page.locator('a:has-text("Apply for this Job"), button:has-text("Apply"), a:has-text("Apply")')
+    with sync_playwright() as playwright:
+        del headless
+        session = open_chrome_session(
+            playwright,
+            profile_name="jazzhr-cdp-profile",
+            target_url=url,
         )
-        if apply_btn:
-            try:
-                apply_btn.click()
-                page.wait_for_timeout(1000)
-            except Exception:
-                pass
+        page = session.page
 
-        filled_fn = fill_first(page, 'input[name="first_name"], input#first_name, input[name="firstName"]', first_name)
-        filled_ln = fill_first(page, 'input[name="last_name"], input#last_name, input[name="lastName"]', last_name)
-        if not filled_fn or not filled_ln:
-            fill_first(page, 'input[name="name"], input[id*="name"]', full_name)
+        try:
+            page.goto(url, wait_until="networkidle", timeout=timeout)
 
-        fill_first(page, 'input[name="email"], input#email, input[type="email"]', email)
-        if phone:
-            fill_first(page, 'input[name="phone"], input#phone, input[type="tel"]', phone)
-        if headline:
-            fill_first(page, 'input[name*="headline"], input[id*="headline"]', headline)
-        if linkedin:
-            fill_first(page, 'input[name*="linkedin"], input[id*="linkedin"]', linkedin)
-        if github:
-            fill_first(page, 'input[name*="github"], input[id*="github"]', github)
-        if portfolio:
-            fill_first(page, 'input[name*="website"], input[name*="portfolio"]', portfolio)
+            apply_btn = first_visible(
+                page.locator('a:has-text("Apply Now"), button:has-text("Apply"), a:has-text("Apply")')
+            )
+            if apply_btn:
+                try:
+                    apply_btn.click()
+                    page.wait_for_timeout(1000)
+                except Exception:
+                    pass
 
-        file_input = page.locator('input[type="file"]').first
-        if file_input.count() > 0:
-            file_input.set_input_files(str(resume))
+            filled_fn = fill_first(page, 'input[name="first_name"], input#first_name, input[name="firstName"]', first_name)
+            filled_ln = fill_first(page, 'input[name="last_name"], input#last_name, input[name="lastName"]', last_name)
+            if not filled_fn or not filled_ln:
+                fill_first(page, 'input[name="name"], input[id*="name"]', full_name)
 
-        consent = fill_required_consent(page)
-        captcha = page_has_captcha(page)
-        missing_req = validate_required_fields(page, _required_issues)
-        screenshot = capture_screenshot(page, screenshot_dir, company or "JazzHR", "prefill")
+            fill_first(page, 'input[name="email"], input#email, input[type="email"]', email)
+            if phone:
+                fill_first(page, 'input[name="phone"], input#phone, input[type="tel"]', phone)
+            if headline:
+                fill_first(page, 'input[name*="headline"], input[id*="headline"]', headline)
+            if linkedin:
+                fill_first(page, 'input[name*="linkedin"], input[id*="linkedin"]', linkedin)
+            if github:
+                fill_first(page, 'input[name*="github"], input[id*="github"]', github)
+            if portfolio:
+                fill_first(page, 'input[name*="website"], input[name*="portfolio"]', portfolio)
 
-        status = "PREFILLED_ONLY"
-        confirmed = False
-        submitted = False
+            file_input = page.locator('input[type="file"]').first
+            if file_input.count() > 0:
+                file_input.set_input_files(str(resume))
 
-        if live_submit:
-            if captcha:
-                status = "CAPTCHA_REQUIRED"
-            else:
-                submit_btn = first_visible(
-                    page.locator('input[type="submit"], button[type="submit"], input#btn_submit')
-                )
-                if submit_btn:
-                    submit_btn.click()
-                    page.wait_for_timeout(3000)
-                    confirmed = confirmation_visible(page)
-                    status = "SUBMITTED & CONFIRMED" if confirmed else "SUBMISSION_UNCONFIRMED"
-                    submitted = True
-                    screenshot = capture_screenshot(page, screenshot_dir, company or "JazzHR", "submitted")
+            consent = fill_required_consent(page)
+            captcha = page_has_captcha(page)
+            missing_req = validate_required_fields(page, _required_issues)
+            screenshot = capture_screenshot(page, screenshot_dir, company or "JazzHR", "prefill")
 
-        return {
-            "success": True if (not live_submit or confirmed) else False,
-            "status": status,
-            "ats": ATS_NAME,
-            "submitted": submitted,
-            "confirmed": confirmed,
-            "test_mode": not live_submit,
-            "filled_fields": fields,
-            "custom_questions": {},
-            "consent_fields": consent,
-            "missing_critical": [],
-            "missing_required": missing_req,
-            "captcha_present": captcha,
-            "screenshot": screenshot,
-        }
-    finally:
-        if session.close_browser_on_exit:
-            session.browser.close()
+            status = "PREFILLED_ONLY"
+            confirmed = False
+            submitted = False
+
+            if live_submit:
+                if captcha:
+                    status = "CAPTCHA_REQUIRED"
+                else:
+                    submit_btn = first_visible(
+                        page.locator('button[type="submit"], input[type="submit"], button:has-text("Submit Application")')
+                    )
+                    if submit_btn:
+                        submit_btn.click()
+                        page.wait_for_timeout(3000)
+                        confirmed = confirmation_visible(page)
+                        status = "SUBMITTED & CONFIRMED" if confirmed else "SUBMISSION_UNCONFIRMED"
+                        submitted = True
+                        screenshot = capture_screenshot(page, screenshot_dir, company or "JazzHR", "submitted")
+
+            return {
+                "success": True if (not live_submit or confirmed) else False,
+                "status": status,
+                "ats": ATS_NAME,
+                "submitted": submitted,
+                "confirmed": confirmed,
+                "test_mode": not live_submit,
+                "filled_fields": fields,
+                "custom_questions": {},
+                "consent_fields": consent,
+                "missing_critical": [],
+                "missing_required": missing_req,
+                "captcha_present": captcha,
+                "screenshot": screenshot,
+            }
+        finally:
+            if session.close_browser_on_exit:
+                session.browser.close()
 
 
 def _parser() -> argparse.ArgumentParser:

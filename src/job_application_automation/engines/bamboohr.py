@@ -7,6 +7,8 @@ import logging
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 
+from playwright.sync_api import sync_playwright
+
 from ..core.engine_shared import (
     build_engine_parser,
     capture_screenshot,
@@ -93,83 +95,94 @@ def run(
         "resume": str(resume),
     }
 
-    session = open_chrome_session(headless=headless)
-    page = session.page
-
-    try:
-        page.goto(url, wait_until="networkidle", timeout=timeout)
-
-        apply_btn = first_visible(
-            page.locator('button:has-text("Apply for This Job"), button:has-text("Apply"), a:has-text("Apply")')
+    with sync_playwright() as playwright:
+        del headless
+        session = open_chrome_session(
+            playwright,
+            profile_name="bamboohr-cdp-profile",
+            target_url=url,
         )
-        if apply_btn:
+        page = session.page
+
+        try:
             try:
-                apply_btn.click()
-                page.wait_for_timeout(1000)
+                page.goto(url, wait_until="domcontentloaded", timeout=timeout)
+                # BambooHR is a React SPA — wait for dynamic content to render
+                page.wait_for_timeout(2000)
             except Exception:
                 pass
 
-        filled_fn = fill_first(page, 'input[name="firstName"], input#firstName, input[name="first_name"]', first_name)
-        filled_ln = fill_first(page, 'input[name="lastName"], input#lastName, input[name="last_name"]', last_name)
-        if not filled_fn or not filled_ln:
-            fill_first(page, 'input[name="fullName"], input#fullName, input[name="name"]', full_name)
+            apply_btn = first_visible(
+                page.locator('button:has-text("Apply for This Job"), a:has-text("Apply for This Job"), button:has-text("Apply"), a[href*="apply"]')
+            )
+            if apply_btn:
+                try:
+                    apply_btn.click()
+                    page.wait_for_timeout(1000)
+                except Exception:
+                    pass
 
-        fill_first(page, 'input[name="email"], input#email, input[type="email"]', email)
-        if phone:
-            fill_first(page, 'input[name="phone"], input#phone, input[type="tel"]', phone)
-        if linkedin:
-            fill_first(page, 'input[name*="linkedin"], input[id*="linkedin"]', linkedin)
-        if github:
-            fill_first(page, 'input[name*="github"], input[id*="github"]', github)
-        if portfolio:
-            fill_first(page, 'input[name*="website"], input[name*="portfolio"]', portfolio)
+            filled_fn = fill_first(page, 'input[name="firstName"], input#firstName, input[name="first_name"]', first_name)
+            filled_ln = fill_first(page, 'input[name="lastName"], input#lastName, input[name="last_name"]', last_name)
+            if not filled_fn or not filled_ln:
+                fill_first(page, 'input[name="fullName"], input#fullName, input[name="name"]', full_name)
 
-        file_input = page.locator('input[type="file"]').first
-        if file_input.count() > 0:
-            file_input.set_input_files(str(resume))
+            fill_first(page, 'input[name="email"], input#email, input[type="email"]', email)
+            if phone:
+                fill_first(page, 'input[name="phone"], input#phone, input[type="tel"]', phone)
+            if linkedin:
+                fill_first(page, 'input[name*="linkedin"], input[id*="linkedin"]', linkedin)
+            if github:
+                fill_first(page, 'input[name*="github"], input[id*="github"]', github)
+            if portfolio:
+                fill_first(page, 'input[name*="website"], input[name*="portfolio"]', portfolio)
 
-        consent = fill_required_consent(page)
-        captcha = page_has_captcha(page)
-        missing_req = validate_required_fields(page, _required_issues)
-        screenshot = capture_screenshot(page, screenshot_dir, company or "BambooHR", "prefill")
+            file_input = page.locator('input[type="file"]').first
+            if file_input.count() > 0:
+                file_input.set_input_files(str(resume))
 
-        status = "PREFILLED_ONLY"
-        confirmed = False
-        submitted = False
+            consent = fill_required_consent(page)
+            captcha = page_has_captcha(page)
+            missing_req = validate_required_fields(page, _required_issues)
+            screenshot = capture_screenshot(page, screenshot_dir, company or "BambooHR", "prefill")
 
-        if live_submit:
-            if captcha:
-                status = "CAPTCHA_REQUIRED"
-            else:
-                submit_btn = first_visible(
-                    page.locator('button[type="submit"], button:has-text("Submit Application"), input[type="submit"]')
-                )
-                if submit_btn:
-                    submit_btn.click()
-                    page.wait_for_timeout(3000)
-                    confirmed = confirmation_visible(page)
-                    status = "SUBMITTED & CONFIRMED" if confirmed else "SUBMISSION_UNCONFIRMED"
-                    submitted = True
-                    screenshot = capture_screenshot(page, screenshot_dir, company or "BambooHR", "submitted")
+            status = "PREFILLED_ONLY"
+            confirmed = False
+            submitted = False
 
-        return {
-            "success": True if (not live_submit or confirmed) else False,
-            "status": status,
-            "ats": ATS_NAME,
-            "submitted": submitted,
-            "confirmed": confirmed,
-            "test_mode": not live_submit,
-            "filled_fields": fields,
-            "custom_questions": {},
-            "consent_fields": consent,
-            "missing_critical": [],
-            "missing_required": missing_req,
-            "captcha_present": captcha,
-            "screenshot": screenshot,
-        }
-    finally:
-        if session.close_browser_on_exit:
-            session.browser.close()
+            if live_submit:
+                if captcha:
+                    status = "CAPTCHA_REQUIRED"
+                else:
+                    submit_btn = first_visible(
+                        page.locator('button[type="submit"], input[type="submit"], button:has-text("Submit Application")')
+                    )
+                    if submit_btn:
+                        submit_btn.click()
+                        page.wait_for_timeout(3000)
+                        confirmed = confirmation_visible(page)
+                        status = "SUBMITTED & CONFIRMED" if confirmed else "SUBMISSION_UNCONFIRMED"
+                        submitted = True
+                        screenshot = capture_screenshot(page, screenshot_dir, company or "BambooHR", "submitted")
+
+            return {
+                "success": True if (not live_submit or confirmed) else False,
+                "status": status,
+                "ats": ATS_NAME,
+                "submitted": submitted,
+                "confirmed": confirmed,
+                "test_mode": not live_submit,
+                "filled_fields": fields,
+                "custom_questions": {},
+                "consent_fields": consent,
+                "missing_critical": [],
+                "missing_required": missing_req,
+                "captcha_present": captcha,
+                "screenshot": screenshot,
+            }
+        finally:
+            if session.close_browser_on_exit:
+                session.browser.close()
 
 
 def _parser() -> argparse.ArgumentParser:

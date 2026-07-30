@@ -344,10 +344,11 @@ def first_visible(locator: Locator) -> Optional[Locator]:
     return None
 
 
-def fill_first(page: Page, selectors: Sequence[str], value: str) -> bool:
+def fill_first(page: Page, selectors: Sequence[str] | str, value: str) -> bool:
     if not value:
         return False
-    for selector in selectors:
+    selector_list = [s.strip() for s in selectors.split(",") if s.strip()] if isinstance(selectors, str) else list(selectors)
+    for selector in selector_list:
         target = first_visible(page.locator(selector))
         if target is None:
             continue

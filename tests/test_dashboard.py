@@ -1,12 +1,11 @@
 """Unit tests for VPS Output Monitor Dashboard server."""
 
-import base64
 import json
 from email.message import Message
+from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
+from job_application_automation.dashboard import server
 from job_application_automation.dashboard.server import (
     DashboardRequestHandler,
     build_kpi_metrics,
@@ -14,7 +13,6 @@ from job_application_automation.dashboard.server import (
     load_json_file,
     load_vps_config,
     load_vps_log,
-    run_dashboard_server,
 )
 
 
@@ -51,40 +49,34 @@ def test_load_vps_config_exposes_only_operational_metadata(tmp_path):
         assert data == {"vps": {"hostname": "example-vps", "memory_gb": 4}}
 
 
-def test_dashboard_basic_authentication():
+def test_dashboard_exposes_no_authentication_surface():
+    """The dashboard is public by design; no credential gate may reappear."""
+    assert not hasattr(DashboardRequestHandler, "_is_authorized")
+    assert not hasattr(DashboardRequestHandler, "_require_authorization")
+
+    source = Path(server.__file__).read_text(encoding="utf-8")
+    assert "WWW-Authenticate" not in source
+    assert "JOB_APP_DASHBOARD_USERNAME" not in source
+    assert "JOB_APP_DASHBOARD_PASSWORD" not in source
+
+
+def test_dashboard_rejects_all_post_requests():
+    """POST previously shelled out to VPS scripts; unauthenticated, it must not."""
     handler = DashboardRequestHandler.__new__(DashboardRequestHandler)
     handler.headers = Message()
+    errors = []
+    handler.send_error = lambda code, message=None: errors.append((code, message))
 
-    with patch.dict(
-        "os.environ",
-        {
-            "JOB_APP_DASHBOARD_USERNAME": "reader",
-            "JOB_APP_DASHBOARD_PASSWORD": "secret",
-        },
-        clear=False,
-    ):
-        assert handler._is_authorized() is False
-        encoded = base64.b64encode(b"reader:secret").decode("ascii")
-        handler.headers["Authorization"] = f"Basic {encoded}"
-        assert handler._is_authorized() is True
-        handler.headers.replace_header(
-            "Authorization",
-            f"Basic {base64.b64encode(b'reader:wrong').decode('ascii')}",
-        )
-        assert handler._is_authorized() is False
+    for path in ("/api/vps/sync", "/api/vps/status", "/api/metrics", "/"):
+        handler.path = path
+        handler.do_POST()
 
+    assert [code for code, _ in errors] == [404, 404, 404, 404]
 
-def test_dashboard_rejects_public_bind_without_credentials():
-    with patch.dict(
-        "os.environ",
-        {
-            "JOB_APP_DASHBOARD_USERNAME": "",
-            "JOB_APP_DASHBOARD_PASSWORD": "",
-        },
-        clear=False,
-    ):
-        with pytest.raises(RuntimeError, match="credentials are required"):
-            run_dashboard_server(host="0.0.0.0", port=8000, open_browser=False)
+    source = Path(server.__file__).read_text(encoding="utf-8")
+    assert "subprocess" not in source
+    assert "_handle_vps_sync" not in source
+    assert "_handle_vps_status" not in source
 
 
 def test_load_vps_log_missing(tmp_path):

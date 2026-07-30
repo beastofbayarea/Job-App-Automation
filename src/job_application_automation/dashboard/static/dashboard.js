@@ -468,64 +468,30 @@ async function loadRawFile() {
   }
 }
 
-async function triggerVpsSync() {
-  const btn = document.getElementById('syncBtn');
-  const originalText = btn.innerHTML;
-  btn.disabled = true;
-  btn.innerHTML = '<span>⏳ Syncing with VPS...</span>';
-
-  try {
-    const res = await fetch('/api/vps/sync', { method: 'POST' });
-    const data = await res.json();
-    if (res.ok) {
-      btn.innerHTML = '<span>✅ Sync Complete!</span>';
-      setTimeout(() => { btn.innerHTML = originalText; btn.disabled = false; }, 3000);
-      fetchMetrics();
-      fetchSubmissions();
-      fetchJobs();
-      fetchSection2();
-      fetchVpsLog();
-    } else {
-      alert('VPS Sync failed: ' + (data.message || data.output || 'Unknown error'));
-      btn.innerHTML = originalText;
-      btn.disabled = false;
-    }
-  } catch (err) {
-    alert('Failed to connect to backend for VPS sync');
-    btn.innerHTML = originalText;
-    btn.disabled = false;
-  }
-}
-
-async function fetchVpsStatus() {
-  const badge = document.getElementById('vpsStatusBadge');
-  if (badge) {
-    badge.textContent = 'CHECKING...';
-    badge.className = 'badge badge-ashby';
+// Re-reads the public read-only endpoints. This does not run anything on the
+// server: report syncing is an operator task run from a shell, because this
+// dashboard is served to the public internet without authentication.
+async function refreshDashboardData() {
+  const btn = document.getElementById('refreshBtn');
+  const originalText = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>⏳ Refreshing...</span>';
   }
 
+  const loaders = [fetchMetrics, fetchSubmissions, fetchJobs, fetchSection2, fetchVpsLog];
   try {
-    const res = await fetch('/api/vps/status', { method: 'POST' });
-    const data = await res.json();
-    if (data.status === 'success' && data.exit_code === 0) {
-      if (badge) {
-        badge.textContent = 'ACTIVE & ONLINE';
-        badge.className = 'badge badge-confirmed';
-      }
-      alert('VPS Status Check Passed cleanly!\n\n' + (data.output || '').slice(0, 300));
-    } else {
-      if (badge) {
-        badge.textContent = 'ERROR / TIMEOUT';
-        badge.className = 'badge badge-failed';
-      }
-      alert('VPS Status Check response:\n' + (data.output || data.message || 'Error'));
+    await Promise.allSettled(
+      loaders.map((load) => (typeof load === 'function' ? load() : undefined)),
+    );
+    if (btn) btn.innerHTML = '<span>✅ Up to date</span>';
+  } finally {
+    if (btn) {
+      setTimeout(() => {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+      }, 2000);
     }
-  } catch (err) {
-    if (badge) {
-      badge.textContent = 'OFFLINE';
-      badge.className = 'badge badge-failed';
-    }
-    alert('Could not reach VPS status endpoint.');
   }
 }
 

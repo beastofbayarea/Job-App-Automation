@@ -1,9 +1,10 @@
-# Installs the authenticated loopback dashboard and restores Nginx routing.
+# Installs the public loopback dashboard and restores Nginx routing.
+# The dashboard serves no authentication: Nginx publishes it to the internet and
+# every route it exposes is public and read-only.
 param(
     [string]$RemoteRepoPath = "/root/Job-App-Automation",
     [string]$ConfigPath = "config/vps_config.json",
-    [string]$ServiceTemplatePath = "scripts/job-app-dashboard.service.template",
-    [string]$DashboardEnvironmentPath = "config/dashboard.env"
+    [string]$ServiceTemplatePath = "scripts/job-app-dashboard.service.template"
 )
 
 . "$PSScriptRoot\vps_script_helpers.ps1"
@@ -52,28 +53,8 @@ if (-not $PlinkCmd -or -not $PscpCmd) {
     exit 1
 }
 
-if (-not (Test-Path -LiteralPath $DashboardEnvironmentPath)) {
-    $RandomBytes = [byte[]]::new(24)
-    [Security.Cryptography.RandomNumberGenerator]::Fill($RandomBytes)
-    $DashboardPassword = [Convert]::ToBase64String($RandomBytes).TrimEnd("=").Replace("+", "-").Replace("/", "_")
-    $Environment = (
-        "JOB_APP_DASHBOARD_USERNAME=skybison`n" +
-        "JOB_APP_DASHBOARD_PASSWORD=$DashboardPassword`n"
-    )
-    $EnvironmentDirectory = Split-Path -Parent $DashboardEnvironmentPath
-    if ($EnvironmentDirectory) {
-        [IO.Directory]::CreateDirectory($EnvironmentDirectory) | Out-Null
-    }
-    [IO.File]::WriteAllText(
-        $DashboardEnvironmentPath,
-        $Environment,
-        [Text.UTF8Encoding]::new($false)
-    )
-}
-
 $Token = [guid]::NewGuid().ToString("N")
 $RemoteUnitStage = "/tmp/vps-dashboard-$Token.service"
-$RemoteEnvironmentStage = "/tmp/vps-dashboard-$Token.env"
 $RenderedUnitPath = Join-Path ([IO.Path]::GetTempPath()) "vps-dashboard-$Token.service"
 $PasswordFile = Join-Path ([IO.Path]::GetTempPath()) "vps-dashboard-$Token.txt"
 $RenderedUnit = (
@@ -81,7 +62,6 @@ $RenderedUnit = (
 ).Replace("__REPO_DIR__", $RemoteRepoPath)
 $Repo = ConvertTo-PosixShellLiteral $RemoteRepoPath
 $UnitStage = ConvertTo-PosixShellLiteral $RemoteUnitStage
-$EnvironmentStage = ConvertTo-PosixShellLiteral $RemoteEnvironmentStage
 
 $RemoteCommand = @"
 set -eu
@@ -90,19 +70,14 @@ git -C "`$repo" pull --ff-only origin main
 test -x "`$repo/.venv/bin/python"
 test -f "`$repo/src/job_application_automation/dashboard/server.py"
 install -d -m 0700 "`$repo/config"
-install -m 0600 $EnvironmentStage "`$repo/config/dashboard.env"
 install -m 0644 $UnitStage /etc/systemd/system/vps-dashboard.service
-rm -f $EnvironmentStage $UnitStage
+rm -f $UnitStage
 systemctl daemon-reload
 systemctl enable vps-dashboard.service
 systemctl restart vps-dashboard.service
-set -a
-. "`$repo/config/dashboard.env"
-set +a
 for attempt in `$(seq 1 20); do
   if systemctl is-active --quiet vps-dashboard.service &&
      curl --fail --silent --show-error --output /dev/null \
-       --user "`$JOB_APP_DASHBOARD_USERNAME:`$JOB_APP_DASHBOARD_PASSWORD" \
        http://127.0.0.1:8000/; then
     break
   fi
@@ -130,8 +105,7 @@ try {
         [Text.UTF8Encoding]::new($false)
     )
     foreach ($Transfer in @(
-        @($RenderedUnitPath, "$SshUser@${VpsHost}:$RemoteUnitStage"),
-        @($DashboardEnvironmentPath, "$SshUser@${VpsHost}:$RemoteEnvironmentStage")
+        @($RenderedUnitPath, "$SshUser@${VpsHost}:$RemoteUnitStage")
     )) {
         $Result = Invoke-ExternalCommandWithTimeout `
             -FilePath $PscpCmd.Source `
@@ -180,6 +154,7 @@ try {
 }
 
 Write-Host (
-    "Installed the authenticated dashboard on 127.0.0.1:8000 and restored " +
-    "validated Nginx routing. Credentials remain in ignored $DashboardEnvironmentPath."
+    "Installed the public dashboard on 127.0.0.1:8000 and restored validated " +
+    "Nginx routing. The dashboard requires no credentials: every route Nginx " +
+    "publishes is reachable by anyone on the internet."
 )

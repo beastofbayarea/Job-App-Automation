@@ -39,7 +39,9 @@ def test_breezy_run_mocked(tmp_path: Path) -> None:
     mock_file_input.count.return_value = 1
     mock_page.locator.return_value.first = mock_file_input
 
-    with patch("job_application_automation.engines.breezy.open_chrome_session", return_value=mock_session), \
+    mock_playwright = MagicMock()
+    with patch("job_application_automation.engines.breezy.sync_playwright", return_value=MagicMock(__enter__=MagicMock(return_value=mock_playwright))), \
+         patch("job_application_automation.engines.breezy.open_chrome_session", return_value=mock_session), \
          patch("job_application_automation.engines.breezy.resolve_candidate_email", return_value="jane@example.com"), \
          patch("job_application_automation.engines.breezy.fill_required_consent", return_value={}), \
          patch("job_application_automation.engines.breezy.page_has_captcha", return_value=False), \

@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 from urllib.parse import urlparse
 
+from playwright.sync_api import sync_playwright
+
 from ..core.engine_shared import (
     build_engine_parser,
     capture_screenshot,
@@ -111,90 +113,96 @@ def run(
         "resume": str(resume),
     }
 
-    session = open_chrome_session(headless=headless)
-    page = session.page
+    with sync_playwright() as playwright:
+        del headless
+        session = open_chrome_session(
+            playwright,
+            profile_name="workable-cdp-profile",
+            target_url=url,
+        )
+        page = session.page
 
-    try:
-        page.goto(url, wait_until="networkidle", timeout=timeout)
+        try:
+            page.goto(url, wait_until="networkidle", timeout=timeout)
         
-        apply_btn = first_visible(
-            page.locator('a[data-ui="apply-button"], button[data-ui="apply-button"], a:has-text("Apply"), button:has-text("Apply")')
-        )
-        if apply_btn:
-            try:
-                apply_btn.click()
-                page.wait_for_timeout(1000)
-            except Exception:
-                pass
+            apply_btn = first_visible(
+                page.locator('a[data-ui="apply-button"], button[data-ui="apply-button"], a:has-text("Apply"), button:has-text("Apply")')
+            )
+            if apply_btn:
+                try:
+                    apply_btn.click()
+                    page.wait_for_timeout(1000)
+                except Exception:
+                    pass
 
-        filled_fn = fill_first(page, 'input[name="firstname"], input[name="first_name"], input[id*="first_name"]', first_name)
-        filled_ln = fill_first(page, 'input[name="lastname"], input[name="last_name"], input[id*="last_name"]', last_name)
-        if not filled_fn or not filled_ln:
-            fill_first(page, 'input[name="name"], input[name="full_name"], input[id*="full_name"]', full_name)
+            filled_fn = fill_first(page, 'input[name="firstname"], input[name="first_name"], input[id*="first_name"]', first_name)
+            filled_ln = fill_first(page, 'input[name="lastname"], input[name="last_name"], input[id*="last_name"]', last_name)
+            if not filled_fn or not filled_ln:
+                fill_first(page, 'input[name="name"], input[name="full_name"], input[id*="full_name"]', full_name)
 
-        fill_first(page, 'input[name="email"], input[type="email"]', email)
-        if phone:
-            fill_first(page, 'input[name="phone"], input[type="tel"]', phone)
-        if headline:
-            fill_first(page, 'input[name="headline"], input[name="summary"], input[id*="headline"]', headline)
-        if linkedin:
-            fill_first(page, 'input[name*="linkedin"], input[id*="linkedin"]', linkedin)
-        if github:
-            fill_first(page, 'input[name*="github"], input[id*="github"]', github)
-        if portfolio:
-            fill_first(page, 'input[name*="portfolio"], input[name*="website"], input[id*="website"]', portfolio)
+            fill_first(page, 'input[name="email"], input[type="email"]', email)
+            if phone:
+                fill_first(page, 'input[name="phone"], input[type="tel"]', phone)
+            if headline:
+                fill_first(page, 'input[name="headline"], input[name="summary"], input[id*="headline"]', headline)
+            if linkedin:
+                fill_first(page, 'input[name*="linkedin"], input[id*="linkedin"]', linkedin)
+            if github:
+                fill_first(page, 'input[name*="github"], input[id*="github"]', github)
+            if portfolio:
+                fill_first(page, 'input[name*="portfolio"], input[name*="website"], input[id*="website"]', portfolio)
 
-        file_input = page.locator('input[type="file"]').first
-        if file_input.count() > 0:
-            file_input.set_input_files(str(resume))
+            file_input = page.locator('input[type="file"]').first
+            if file_input.count() > 0:
+                file_input.set_input_files(str(resume))
 
-        consent = fill_required_consent(page)
-        captcha = page_has_captcha(page)
-        missing_req = validate_required_fields(page, _required_issues)
+            consent = fill_required_consent(page)
+            captcha = page_has_captcha(page)
+            missing_req = validate_required_fields(page, _required_issues)
 
-        screenshot = capture_screenshot(
-            page, screenshot_dir, company or "Workable", "prefill"
-        )
+            screenshot = capture_screenshot(
+                page, screenshot_dir, company or "Workable", "prefill"
+            )
 
-        status = "PREFILLED_ONLY"
-        confirmed = False
-        submitted = False
+            status = "PREFILLED_ONLY"
+            confirmed = False
+            submitted = False
 
-        if live_submit:
-            if captcha:
-                status = "CAPTCHA_REQUIRED"
-            else:
-                submit_btn = first_visible(
-                    page.locator('button[type="submit"], button:has-text("Submit application"), input[type="submit"]')
-                )
-                if submit_btn:
-                    submit_btn.click()
-                    page.wait_for_timeout(3000)
-                    confirmed = confirmation_visible(page)
-                    status = "SUBMITTED & CONFIRMED" if confirmed else "SUBMISSION_UNCONFIRMED"
-                    submitted = True
-                    screenshot = capture_screenshot(
-                        page, screenshot_dir, company or "Workable", "submitted"
+            if live_submit:
+                if captcha:
+                    status = "CAPTCHA_REQUIRED"
+                else:
+                    submit_btn = first_visible(
+                        page.locator('button[type="submit"], button:has-text("Submit application"), input[type="submit"]')
                     )
+                    if submit_btn:
+                        submit_btn.click()
+                        page.wait_for_timeout(3000)
+                        confirmed = confirmation_visible(page)
+                        status = "SUBMITTED & CONFIRMED" if confirmed else "SUBMISSION_UNCONFIRMED"
+                        submitted = True
+                        screenshot = capture_screenshot(
+                            page, screenshot_dir, company or "Workable", "submitted"
+                        )
 
-        return {
-            "success": True if (not live_submit or confirmed) else False,
-            "status": status,
-            "ats": ATS_NAME,
-            "submitted": submitted,
-            "confirmed": confirmed,
-            "test_mode": not live_submit,
-            "filled_fields": fields,
-            "custom_questions": {},
-            "consent_fields": consent,
-            "missing_critical": [],
-            "missing_required": missing_req,
-            "captcha_present": captcha,
-            "screenshot": screenshot,
-        }
-    finally:
-        if session.close_browser_on_exit:
-            session.browser.close()
+            return {
+                "success": True if (not live_submit or confirmed) else False,
+                "status": status,
+                "ats": ATS_NAME,
+                "submitted": submitted,
+                "confirmed": confirmed,
+                "test_mode": not live_submit,
+                "filled_fields": fields,
+                "custom_questions": {},
+                "consent_fields": consent,
+                "missing_critical": [],
+                "missing_required": missing_req,
+                "captcha_present": captcha,
+                "screenshot": screenshot,
+            }
+        finally:
+            if session.close_browser_on_exit:
+                session.browser.close()
 
 
 def _parser() -> argparse.ArgumentParser:

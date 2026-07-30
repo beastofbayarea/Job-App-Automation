@@ -1,14 +1,16 @@
-"""HTTP REST & Static server for VPS Output Monitor Dashboard."""
+"""HTTP REST & Static server for the public VPS Output Monitor Dashboard.
+
+This server is unauthenticated by design: every route it serves is public and
+read-only. Anything reachable here should be treated as published to the open
+internet, so do not add routes that expose secrets or perform actions.
+"""
 
 from __future__ import annotations
 
 import argparse
-import base64
 import csv
-import hmac
 import json
 import os
-import subprocess
 import sys
 import webbrowser
 from http.server import HTTPServer, SimpleHTTPRequestHandler
@@ -19,7 +21,6 @@ STATIC_DIR = Path(__file__).parent / "static"
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 OUTPUT_DIR = PROJECT_ROOT / "output"
 CONFIG_DIR = PROJECT_ROOT / "config"
-_LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
 _PUBLIC_VPS_FIELDS = {
     "hostname",
     "os",
@@ -89,14 +90,6 @@ def load_vps_config() -> dict[str, Any]:
         }
     except Exception:
         return {}
-
-
-def get_dashboard_credentials() -> tuple[str, str]:
-    """Return optional HTTP Basic credentials from the process environment."""
-    return (
-        os.environ.get("JOB_APP_DASHBOARD_USERNAME", "").strip(),
-        os.environ.get("JOB_APP_DASHBOARD_PASSWORD", ""),
-    )
 
 
 def load_vps_log(lines: int = 250) -> str:
@@ -176,14 +169,10 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
         super().end_headers()
 
     def do_OPTIONS(self) -> None:
-        if not self._require_authorization():
-            return
         self.send_response(204)
         self.end_headers()
 
     def do_GET(self) -> None:
-        if not self._require_authorization():
-            return
         path = self.path.split("?")[0]
         
         # Clean page route mappings
@@ -213,41 +202,12 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self) -> None:
-        if not self._require_authorization():
-            return
-        if self.path == "/api/vps/sync":
-            self._handle_vps_sync()
-            return
-        if self.path == "/api/vps/status":
-            self._handle_vps_status()
-            return
+        # The dashboard is a public, read-only site. The former /api/vps/sync and
+        # /api/vps/status endpoints shelled out to PowerShell scripts that SSH into
+        # the VPS; with no authentication in front of them they would let any
+        # anonymous visitor trigger privileged remote actions, so no write or
+        # command-executing route is exposed. Run those scripts from a shell instead.
         self.send_error(404, "Endpoint not found")
-
-    def _is_authorized(self) -> bool:
-        username, password = get_dashboard_credentials()
-        if not username or not password:
-            return True
-        header = self.headers.get("Authorization", "")
-        if not header.startswith("Basic "):
-            return False
-        try:
-            decoded = base64.b64decode(header[6:], validate=True).decode("utf-8")
-            supplied_username, supplied_password = decoded.split(":", 1)
-        except (ValueError, UnicodeDecodeError):
-            return False
-        return hmac.compare_digest(supplied_username, username) and hmac.compare_digest(
-            supplied_password,
-            password,
-        )
-
-    def _require_authorization(self) -> bool:
-        if self._is_authorized():
-            return True
-        self.send_response(401)
-        self.send_header("WWW-Authenticate", 'Basic realm="SkyBison VPS Dashboard"')
-        self.send_header("Content-Length", "0")
-        self.end_headers()
-        return False
 
     def _send_json(self, data: Any, status: int = 200) -> None:
         payload = json.dumps(data, indent=2).encode("utf-8")
@@ -336,46 +296,12 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
         else:
             self._send_json({"error": "Unknown API route"}, status=404)
 
-    def _handle_vps_sync(self) -> None:
-        try:
-            script = PROJECT_ROOT / "scripts" / "pull_vps_application_reports.ps1"
-            if not script.exists():
-                self._send_json({"status": "error", "message": "Pull script not found"}, status=400)
-                return
-
-            cmd = ["pwsh", "-ExecutionPolicy", "Bypass", "-File", str(script), "-Overwrite"]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=45)
-            if res.returncode == 0:
-                self._send_json({"status": "success", "output": res.stdout})
-            else:
-                self._send_json({"status": "error", "output": res.stderr}, status=500)
-        except Exception as e:
-            self._send_json({"status": "error", "message": str(e)}, status=500)
-
-    def _handle_vps_status(self) -> None:
-        try:
-            script = PROJECT_ROOT / "scripts" / "check_vps_automation_status.ps1"
-            if not script.exists():
-                self._send_json({"status": "error", "message": "Status script not found"}, status=400)
-                return
-
-            cmd = ["pwsh", "-ExecutionPolicy", "Bypass", "-File", str(script), "-LogLines", "50"]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=35)
-            self._send_json({"status": "success", "output": res.stdout, "exit_code": res.returncode})
-        except Exception as e:
-            self._send_json({"status": "error", "message": str(e)}, status=500)
-
 
 class ReuseAddrHTTPServer(HTTPServer):
     allow_reuse_address = True
 
 
 def run_dashboard_server(host: str = "127.0.0.1", port: int = 8000, open_browser: bool = True) -> None:
-    username, password = get_dashboard_credentials()
-    if host not in _LOOPBACK_HOSTS and (not username or not password):
-        raise RuntimeError(
-            "Dashboard credentials are required when binding to a non-loopback address."
-        )
     server_address = (host, port)
     httpd = ReuseAddrHTTPServer(server_address, DashboardRequestHandler)
     url = f"http://{host}:{port}/"

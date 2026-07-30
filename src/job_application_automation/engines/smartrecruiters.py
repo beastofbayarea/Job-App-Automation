@@ -7,6 +7,8 @@ import logging
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 
+from playwright.sync_api import sync_playwright
+
 from ..core.engine_shared import (
     build_engine_parser,
     capture_screenshot,
@@ -93,85 +95,91 @@ def run(
         "resume": str(resume),
     }
 
-    session = open_chrome_session(headless=headless)
-    page = session.page
-
-    try:
-        page.goto(url, wait_until="networkidle", timeout=timeout)
-
-        apply_btn = first_visible(
-            page.locator('a[id*="st-apply"], button:has-text("Apply"), a:has-text("I\'m interested"), button:has-text("I\'m interested")')
+    with sync_playwright() as playwright:
+        del headless
+        session = open_chrome_session(
+            playwright,
+            profile_name="smartrecruiters-cdp-profile",
+            target_url=url,
         )
-        if apply_btn:
-            try:
-                apply_btn.click()
-                page.wait_for_timeout(1000)
-            except Exception:
-                pass
+        page = session.page
 
-        filled_fn = fill_first(page, 'input[name="first-name"], input[id*="first-name"], input[name="firstName"]', first_name)
-        filled_ln = fill_first(page, 'input[name="last-name"], input[id*="last-name"], input[name="lastName"]', last_name)
-        if not filled_fn or not filled_ln:
-            fill_first(page, 'input[name="name"], input[name="full-name"], input[id*="full-name"]', full_name)
+        try:
+            page.goto(url, wait_until="networkidle", timeout=timeout)
 
-        fill_first(page, 'input[name="email"], input[type="email"]', email)
-        if phone:
-            fill_first(page, 'input[name="phone-number"], input[name="phone"], input[type="tel"]', phone)
-        if headline:
-            fill_first(page, 'input[name*="headline"], input[name*="title"], input[id*="headline"]', headline)
-        if linkedin:
-            fill_first(page, 'input[name*="linkedin"], input[id*="linkedin"]', linkedin)
-        if github:
-            fill_first(page, 'input[name*="github"], input[id*="github"]', github)
-        if portfolio:
-            fill_first(page, 'input[name*="website"], input[name*="portfolio"]', portfolio)
+            apply_btn = first_visible(
+                page.locator('a[id*="st-apply"], button:has-text("Apply"), a:has-text("I\'m interested"), button:has-text("I\'m interested")')
+            )
+            if apply_btn:
+                try:
+                    apply_btn.click()
+                    page.wait_for_timeout(1000)
+                except Exception:
+                    pass
 
-        file_input = page.locator('input[type="file"]').first
-        if file_input.count() > 0:
-            file_input.set_input_files(str(resume))
+            filled_fn = fill_first(page, ['input[name="first-name"]', 'input[id*="first-name"]', 'input[name="firstName"]', 'input[id*="firstName"]', 'input[data-qa="first-name"]'], first_name)
+            filled_ln = fill_first(page, ['input[name="last-name"]', 'input[id*="last-name"]', 'input[name="lastName"]', 'input[id*="lastName"]', 'input[data-qa="last-name"]'], last_name)
+            if not filled_fn or not filled_ln:
+                fill_first(page, ['input[name="name"]', 'input[name="full-name"]', 'input[id*="full-name"]'], full_name)
 
-        consent = fill_required_consent(page)
-        captcha = page_has_captcha(page)
-        missing_req = validate_required_fields(page, _required_issues)
-        screenshot = capture_screenshot(page, screenshot_dir, company or "SmartRecruiters", "prefill")
+            fill_first(page, ['input[name="email"]', 'input[type="email"]', 'input[id*="email"]', 'input[data-qa="email"]'], email)
+            if phone:
+                fill_first(page, ['input[name="phone-number"]', 'input[name="phone"]', 'input[type="tel"]', 'input[id*="phone"]', 'input[data-qa="phone"]'], phone)
+            if headline:
+                fill_first(page, ['input[name*="headline"]', 'input[name*="title"]', 'input[id*="headline"]', 'textarea[name*="message"]'], headline)
+            if linkedin:
+                fill_first(page, ['input[name*="linkedin"]', 'input[id*="linkedin"]', 'input[data-qa="linkedin"]'], linkedin)
+            if github:
+                fill_first(page, ['input[name*="github"]', 'input[id*="github"]'], github)
+            if portfolio:
+                fill_first(page, ['input[name*="website"]', 'input[name*="portfolio"]'], portfolio)
 
-        status = "PREFILLED_ONLY"
-        confirmed = False
-        submitted = False
+            file_input = page.locator('input[type="file"]').first
+            if file_input.count() > 0:
+                file_input.set_input_files(str(resume))
 
-        if live_submit:
-            if captcha:
-                status = "CAPTCHA_REQUIRED"
-            else:
-                submit_btn = first_visible(
-                    page.locator('button[type="submit"], button:has-text("Submit"), button:has-text("Send")')
-                )
-                if submit_btn:
-                    submit_btn.click()
-                    page.wait_for_timeout(3000)
-                    confirmed = confirmation_visible(page)
-                    status = "SUBMITTED & CONFIRMED" if confirmed else "SUBMISSION_UNCONFIRMED"
-                    submitted = True
-                    screenshot = capture_screenshot(page, screenshot_dir, company or "SmartRecruiters", "submitted")
+            consent = fill_required_consent(page)
+            captcha = page_has_captcha(page)
+            missing_req = validate_required_fields(page, _required_issues)
+            screenshot = capture_screenshot(page, screenshot_dir, company or "SmartRecruiters", "prefill")
 
-        return {
-            "success": True if (not live_submit or confirmed) else False,
-            "status": status,
-            "ats": ATS_NAME,
-            "submitted": submitted,
-            "confirmed": confirmed,
-            "test_mode": not live_submit,
-            "filled_fields": fields,
-            "custom_questions": {},
-            "consent_fields": consent,
-            "missing_critical": [],
-            "missing_required": missing_req,
-            "captcha_present": captcha,
-            "screenshot": screenshot,
-        }
-    finally:
-        if session.close_browser_on_exit:
-            session.browser.close()
+            status = "PREFILLED_ONLY"
+            confirmed = False
+            submitted = False
+
+            if live_submit:
+                if captcha:
+                    status = "CAPTCHA_REQUIRED"
+                else:
+                    submit_btn = first_visible(
+                        page.locator('button[type="submit"], button:has-text("Submit"), button:has-text("Send")')
+                    )
+                    if submit_btn:
+                        submit_btn.click()
+                        page.wait_for_timeout(3000)
+                        confirmed = confirmation_visible(page)
+                        status = "SUBMITTED & CONFIRMED" if confirmed else "SUBMISSION_UNCONFIRMED"
+                        submitted = True
+                        screenshot = capture_screenshot(page, screenshot_dir, company or "SmartRecruiters", "submitted")
+
+            return {
+                "success": True if (not live_submit or confirmed) else False,
+                "status": status,
+                "ats": ATS_NAME,
+                "submitted": submitted,
+                "confirmed": confirmed,
+                "test_mode": not live_submit,
+                "filled_fields": fields,
+                "custom_questions": {},
+                "consent_fields": consent,
+                "missing_critical": [],
+                "missing_required": missing_req,
+                "captcha_present": captcha,
+                "screenshot": screenshot,
+            }
+        finally:
+            if session.close_browser_on_exit:
+                session.browser.close()
 
 
 def _parser() -> argparse.ArgumentParser:

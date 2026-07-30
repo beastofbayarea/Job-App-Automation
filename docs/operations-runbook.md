@@ -183,18 +183,32 @@ job-application unit resource counters, log usage, and reboot/update status.
 It pins the configured SSH host key, redacts email addresses in command lines,
 and does not start, stop, enable, or restart workloads.
 
-Install or repair the dashboard as an authenticated loopback service behind
-the VPS's validated Nginx configuration:
+Install or repair the dashboard as a loopback service behind the VPS's
+validated Nginx configuration:
 
 ```powershell
 pwsh scripts\install_vps_dashboard.ps1
 ```
 
-The installer creates a strong password on first use, keeps it in ignored
-`config/dashboard.env`, deploys it with mode `0600`, binds the Python server
-only to `127.0.0.1:8000`, and restarts Nginx only after `nginx -t` succeeds.
-The browser will request HTTP Basic credentials; read them from the ignored
-environment file. Never publish that file.
+The installer binds the Python server only to `127.0.0.1:8000` and restarts
+Nginx only after `nginx -t` succeeds. It provisions no credentials.
+
+**The dashboard is public and unauthenticated.** Nginx publishes it to the open
+internet, and every route — KPI metrics, the submission log, the raw file
+inspector under `/api/files/`, generated resumes and cover letters under
+`/api/download/`, and the sync log at `/api/vps/log` — is readable by anyone
+with the URL, including search-engine crawlers. Treat anything reachable from
+`output/` as published. Before deploying, confirm that directory holds nothing
+you would not post publicly.
+
+The server exposes no write or command-executing routes: `POST` returns `404`
+for every path. Report syncing and VPS status checks are operator tasks, run
+from a shell on your workstation:
+
+```powershell
+pwsh scripts\pull_vps_application_reports.ps1 -Overwrite
+pwsh scripts\check_vps_automation_status.ps1 -LogLines 50
+```
 
 If the shared VPS's Cent Capital backend is active but not listening on port
 8080 because its journal shows rejected database credentials, quarantine that
