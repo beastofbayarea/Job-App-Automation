@@ -408,7 +408,7 @@ _VALID_RESPONSE = json_module.dumps(
         ],
         "closing": "Sincerely,",
         "signature": "Shivam Singh",
-        "evidence_claim_ids": ["AWS-1"],
+        "evidence_claim_ids": ["CLAIM AWS-1"],
     }
 )
 

@@ -23,6 +23,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -94,6 +95,12 @@ def cache_key_for(job: CoverLetterJob, narrative: CareerNarrative, source: Resum
 
 def _normalize_letter(payload: dict[str, Any]) -> dict[str, Any]:
     paragraphs = payload.get("paragraphs", [])
+
+    def normalize_claim_id(value: object) -> str:
+        claim_id = str(value).strip()
+        match = re.fullmatch(r"\[?\s*CLAIM\s+(.+?)\s*\]?", claim_id, re.IGNORECASE)
+        return match.group(1).strip() if match else claim_id
+
     return {
         "salutation": str(payload.get("salutation", "")).strip(),
         "paragraphs": [str(p).strip() for p in paragraphs if str(p).strip()]
@@ -102,9 +109,9 @@ def _normalize_letter(payload: dict[str, Any]) -> dict[str, Any]:
         "closing": str(payload.get("closing", "")).strip(),
         "signature": str(payload.get("signature", "")).strip(),
         "evidence_claim_ids": [
-            str(cid).strip()
+            normalize_claim_id(cid)
             for cid in (payload.get("evidence_claim_ids") or [])
-            if str(cid).strip()
+            if normalize_claim_id(cid)
         ],
     }
 
