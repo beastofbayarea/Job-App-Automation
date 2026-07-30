@@ -106,6 +106,18 @@
     </nav>
   </aside>
 
+  <!-- Job Detail Slide-Out Overlay Drawer -->
+  <div class="drawer-backdrop" id="jobDetailBackdrop"></div>
+  <aside class="job-detail-drawer" id="jobDetailDrawer" aria-label="Job Submission Details">
+    <div class="detail-drawer-header">
+      <span class="detail-drawer-title">Submission Details</span>
+      <button class="drawer-close" onclick="closeJobDetail()">&times;</button>
+    </div>
+    <div id="jobDetailContent">
+      <div style="color: var(--text-muted);">Select a submission to inspect full details.</div>
+    </div>
+  </aside>
+
   <main class="container" id="mainContent">
 
     <!-- Secondary Page Tab Bar -->
@@ -116,6 +128,44 @@
       <a href="logs.html" class="tab-btn">🔥 Real-time VPS Sync Logs</a>
       <a href="inspector.html" class="tab-btn">📁 Raw File Inspector</a>
     </nav>
+
+    <!-- Interactive Automated Pipeline Funnel Banner -->
+    <section class="pipeline-funnel-card">
+      <div class="funnel-header">
+        <h2 class="funnel-main-title">🚀 Automated Application Funnel Lifecycle</h2>
+        <span class="badge badge-info">4-STAGE PIPELINE</span>
+      </div>
+      <div class="funnel-grid">
+        <div class="funnel-step step-water" onclick="filterByFunnelStage('water')">
+          <div class="funnel-icon">🌊</div>
+          <div class="funnel-meta">
+            <span class="funnel-name">1. Discovered Jobs</span>
+            <span class="funnel-val" id="funnelValWater">--</span>
+          </div>
+        </div>
+        <div class="funnel-step step-earth" onclick="filterByFunnelStage('earth')">
+          <div class="funnel-icon">🪨</div>
+          <div class="funnel-meta">
+            <span class="funnel-name">2. AI Queue</span>
+            <span class="funnel-val" id="funnelValEarth">--</span>
+          </div>
+        </div>
+        <div class="funnel-step step-air" onclick="filterByFunnelStage('air')">
+          <div class="funnel-icon">🌀</div>
+          <div class="funnel-meta">
+            <span class="funnel-name">3. Submissions</span>
+            <span class="funnel-val" id="funnelValAir">--</span>
+          </div>
+        </div>
+        <div class="funnel-step step-fire" onclick="filterByFunnelStage('fire')">
+          <div class="funnel-icon">🔥</div>
+          <div class="funnel-meta">
+            <span class="funnel-name">4. Archives</span>
+            <span class="funnel-val" id="funnelValFire">--</span>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <!-- VPS Infrastructure Specs Panel -->
     <section class="infra-card">
@@ -247,6 +297,30 @@
     </section>
 
   </main>
+
+  <!-- Mobile Bottom Command Bar (< 768px) -->
+  <nav class="mobile-bottom-nav" aria-label="Mobile Bottom Command Bar">
+    <a href="index.html" class="bottom-nav-item active">
+      <span class="bottom-nav-icon">📜</span>
+      <span class="bottom-nav-label">Matrix</span>
+    </a>
+    <a href="search.html" class="bottom-nav-item">
+      <span class="bottom-nav-icon">🌊</span>
+      <span class="bottom-nav-label">Search</span>
+    </a>
+    <a href="generation.html" class="bottom-nav-item">
+      <span class="bottom-nav-icon">🪨</span>
+      <span class="bottom-nav-label">Queue</span>
+    </a>
+    <a href="logs.html" class="bottom-nav-item">
+      <span class="bottom-nav-icon">🔥</span>
+      <span class="bottom-nav-label">Logs</span>
+    </a>
+    <a href="inspector.html" class="bottom-nav-item">
+      <span class="bottom-nav-icon">📁</span>
+      <span class="bottom-nav-label">Inspect</span>
+    </a>
+  </nav>
 
   <!-- Site Global Footer with Candidate & Config Links -->
   <footer class="app-footer">

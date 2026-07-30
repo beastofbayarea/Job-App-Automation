@@ -7,7 +7,8 @@ let state = {
   archives: {},
   rawLog: '',
   parsedLogs: [],
-  currentLogFilter: 'all'
+  currentLogFilter: 'all',
+  activeFunnelStage: 'all'
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -32,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-/* --- Mobile Navigation Drawer Setup ------------------------------------- */
+/* --- Mobile Navigation Drawer & Bottom Bar Setup ----------------------- */
 
 function setupNavigation() {
   const hamburgerBtn = document.getElementById('hamburgerBtn');
@@ -53,6 +54,12 @@ function setupNavigation() {
     }
     backdrop.addEventListener('click', closeMobileDrawer);
   }
+
+  // Job Detail Backdrop listener
+  const detailBackdrop = document.getElementById('jobDetailBackdrop');
+  if (detailBackdrop) {
+    detailBackdrop.addEventListener('click', closeJobDetail);
+  }
 }
 
 function closeMobileDrawer() {
@@ -65,6 +72,79 @@ function closeMobileDrawer() {
   if (hamburgerBtn) {
     hamburgerBtn.classList.remove('is-open');
     hamburgerBtn.setAttribute('aria-expanded', 'false');
+  }
+}
+
+/* --- Job Detail Drawer Overlay ------------------------------------------ */
+
+function openJobDetail(submissionKey) {
+  const drawer = document.getElementById('jobDetailDrawer');
+  const backdrop = document.getElementById('jobDetailBackdrop');
+  const content = document.getElementById('jobDetailContent');
+  if (!drawer || !content) return;
+
+  const item = state.submissions[submissionKey];
+  if (!item) return;
+
+  const resumeFile = item.resume_filename ? escapeHtml(item.resume_filename) : '';
+  const resumeLink = resumeFile
+    ? `<a href="/api/download/${encodeURIComponent(item.resume_filename)}" target="_blank" download="${resumeFile}" class="resume-download-link">📄 Download Tailored PDF Resume 📥</a>`
+    : '<span style="color: var(--text-muted);">N/A</span>';
+
+  content.innerHTML = `
+    <div class="detail-field">
+      <span class="detail-label">Company</span>
+      <span class="detail-value" style="font-size: 1.1rem; font-weight: 700; color: var(--air);">${escapeHtml(item.company)}</span>
+    </div>
+    <div class="detail-field">
+      <span class="detail-label">Role / Job Title</span>
+      <span class="detail-value">${escapeHtml(item.role)}</span>
+    </div>
+    <div class="detail-field">
+      <span class="detail-label">ATS Platform</span>
+      <span class="detail-value"><span class="badge badge-${(item.ats || '').toLowerCase()}">${escapeHtml(item.ats)}</span></span>
+    </div>
+    <div class="detail-field">
+      <span class="detail-label">Application Status</span>
+      <span class="detail-value"><span class="badge badge-confirmed">${escapeHtml(item.status)}</span></span>
+    </div>
+    <div class="detail-field">
+      <span class="detail-label">Applied Timestamp</span>
+      <span class="detail-value">${formatDate(item.applied_at)}</span>
+    </div>
+    <div class="detail-field">
+      <span class="detail-label">Candidate Email Used</span>
+      <span class="detail-value" style="color: var(--earth);">${escapeHtml(item.email_used)}</span>
+    </div>
+    <div class="detail-field">
+      <span class="detail-label">Tailored Resume PDF</span>
+      <div style="margin-top: 0.3rem;">${resumeLink}</div>
+    </div>
+  `;
+
+  drawer.classList.add('is-open');
+  if (backdrop) backdrop.classList.add('is-visible');
+}
+
+function closeJobDetail() {
+  const drawer = document.getElementById('jobDetailDrawer');
+  const backdrop = document.getElementById('jobDetailBackdrop');
+  if (drawer) drawer.classList.remove('is-open');
+  if (backdrop) backdrop.classList.remove('is-visible');
+}
+
+/* --- Pipeline Funnel Stage Filter --------------------------------------- */
+
+function filterByFunnelStage(stage) {
+  state.activeFunnelStage = stage;
+  if (stage === 'water') {
+    window.location.href = 'search.html';
+  } else if (stage === 'earth') {
+    window.location.href = 'generation.html';
+  } else if (stage === 'fire') {
+    window.location.href = 'generation.html#archives';
+  } else {
+    renderSubmissionsTable();
   }
 }
 
@@ -91,6 +171,12 @@ async function fetchMetrics() {
     if (document.getElementById('kpiArchives')) document.getElementById('kpiArchives').textContent = data.archived_document_sets ?? 0;
     if (document.getElementById('kpiCachedBoards')) document.getElementById('kpiCachedBoards').textContent = data.cached_boards_count ?? 0;
     if (document.getElementById('kpiFailures')) document.getElementById('kpiFailures').textContent = data.failure_count ?? 0;
+
+    // Funnel Values
+    if (document.getElementById('funnelValWater')) document.getElementById('funnelValWater').textContent = data.total_jobs_found ?? 0;
+    if (document.getElementById('funnelValEarth')) document.getElementById('funnelValEarth').textContent = data.generation_queue_count ?? 0;
+    if (document.getElementById('funnelValAir')) document.getElementById('funnelValAir').textContent = data.total_submissions ?? 0;
+    if (document.getElementById('funnelValFire')) document.getElementById('funnelValFire').textContent = data.archived_document_sets ?? 0;
 
     // Render ATS Submissions Breakdown Subtext
     if (data.ats_submissions && document.getElementById('kpiAtsBreakdown')) {
@@ -403,8 +489,8 @@ function renderSubmissionsTable() {
     return;
   }
   
-  const entries = Object.values(state.submissions);
-  const filtered = entries.filter(item => {
+  const entries = Object.entries(state.submissions);
+  const filtered = entries.filter(([key, item]) => {
     return (
       (item.company || '').toLowerCase().includes(query) ||
       (item.role || '').toLowerCase().includes(query) ||
@@ -420,14 +506,14 @@ function renderSubmissionsTable() {
     return;
   }
 
-  tbody.innerHTML = filtered.map(item => {
+  tbody.innerHTML = filtered.map(([key, item]) => {
     const resumeFile = item.resume_filename ? escapeHtml(item.resume_filename) : '';
     const resumeCell = resumeFile
-      ? `<a href="/api/download/${encodeURIComponent(item.resume_filename)}" target="_blank" download="${resumeFile}" class="resume-download-link" title="Click to download tailored PDF resume">📄 ${resumeFile} 📥</a>`
+      ? `<a href="/api/download/${encodeURIComponent(item.resume_filename)}" target="_blank" download="${resumeFile}" class="resume-download-link" title="Click to download tailored PDF resume" onclick="event.stopPropagation();">📄 ${resumeFile} 📥</a>`
       : '<span style="color: var(--text-muted); font-size: 0.75rem;">N/A</span>';
 
     return `
-      <tr>
+      <tr onclick="openJobDetail('${escapeHtml(key)}')">
         <td style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted);">${formatDate(item.applied_at)}</td>
         <td style="font-weight: 600;">${escapeHtml(item.company)}</td>
         <td>${escapeHtml(item.role)}</td>

@@ -1,7 +1,8 @@
 /* ==========================================================================
    SkyBison Cloud Engine - Modern Glassmorphic Responsive Dashboard
    Single mobile-first stylesheet with responsive breakpoints, glassmorphism,
-   fluid typography, elevated dark theme, and mobile drawer navigation.
+   fluid typography, elevated dark theme, mobile drawer navigation,
+   pipeline funnel banner, job detail drawer, and mobile bottom command bar.
    ========================================================================== */
 
 :root {
@@ -81,6 +82,10 @@ body {
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
+  padding-bottom: 70px;
+}
+@media (min-width: 768px) {
+  body { padding-bottom: 0; }
 }
 
 img { max-width: 100%; height: auto; display: block; }
@@ -393,6 +398,144 @@ img { max-width: 100%; height: auto; display: block; }
 }
 .nav-tabs::-webkit-scrollbar { height: 4px; }
 .nav-tabs::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.2); border-radius: 4px; }
+
+/* --- Interactive Pipeline Funnel Banner -------------------------------- */
+
+.pipeline-funnel-card {
+  background: var(--bg-elevated);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  margin-bottom: 1.75rem;
+  box-shadow: var(--shadow);
+}
+.funnel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+.funnel-main-title {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--fire-gold);
+}
+.funnel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: 1rem;
+}
+
+.funnel-step {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  transition: all 0.25s ease;
+}
+.funnel-step:hover {
+  transform: translateY(-2px);
+  border-color: var(--air);
+  box-shadow: 0 4px 16px rgba(56, 189, 248, 0.15);
+}
+.funnel-step.step-water { border-left: 4px solid var(--water); }
+.funnel-step.step-earth { border-left: 4px solid var(--earth); }
+.funnel-step.step-air { border-left: 4px solid var(--air); }
+.funnel-step.step-fire { border-left: 4px solid var(--fire); }
+
+.funnel-icon { font-size: 1.6rem; flex: none; }
+.funnel-meta { display: flex; flex-direction: column; min-width: 0; }
+.funnel-name { font-size: 0.75rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; color: var(--text-muted); }
+.funnel-val { font-family: var(--font-mono); font-size: 1.3rem; font-weight: 800; color: #fff; }
+
+/* --- Job Detail Slide-Out Overlay Drawer -------------------------------- */
+
+.job-detail-drawer {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: min(90vw, 480px);
+  z-index: 220;
+  background: var(--bg-deep);
+  border-left: 1px solid var(--border-strong);
+  padding: 1.75rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  transform: translateX(100%);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.8);
+  overflow-y: auto;
+}
+.job-detail-drawer.is-open { transform: translateX(0); }
+
+.detail-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.detail-drawer-title {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--air);
+}
+.detail-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.detail-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 600; }
+.detail-value { font-family: var(--font-mono); font-size: 0.9rem; color: #fff; word-break: break-all; }
+
+/* --- Mobile Bottom Navigation Bar (< 768px) ----------------------------- */
+
+.mobile-bottom-nav {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: 60px;
+  z-index: 140;
+  background: rgba(5, 8, 20, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+}
+@media (min-width: 768px) {
+  .mobile-bottom-nav { display: none; }
+}
+
+.bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.68rem;
+  font-weight: 600;
+  flex: 1;
+  height: 100%;
+  transition: color 0.2s ease;
+}
+.bottom-nav-item:hover, .bottom-nav-item.active {
+  color: var(--air);
+}
+.bottom-nav-icon { font-size: 1.15rem; }
 
 /* --- Layout Containers & Cards ------------------------------------------ */
 
@@ -714,8 +857,8 @@ img { max-width: 100%; height: auto; display: block; }
   border-bottom: 1px solid var(--border);
   vertical-align: middle;
 }
-.data-table tbody tr { transition: background 0.15s ease; }
-.data-table tbody tr:hover { background: rgba(56, 189, 248, 0.05); }
+.data-table tbody tr { cursor: pointer; transition: background 0.15s ease; }
+.data-table tbody tr:hover { background: rgba(56, 189, 248, 0.08); }
 .data-table tbody tr:last-child td { border-bottom: 0; }
 
 /* --- Badges & Status Chips ---------------------------------------------- */
@@ -963,7 +1106,7 @@ img { max-width: 100%; height: auto; display: block; }
 /* --- Print -------------------------------------------------------------- */
 
 @media print {
-  .app-header, .nav-tabs, .app-footer, .controls-bar, .log-filter-pills, .hamburger-btn, .mobile-drawer { display: none !important; }
+  .app-header, .nav-tabs, .app-footer, .controls-bar, .log-filter-pills, .hamburger-btn, .mobile-drawer, .mobile-bottom-nav { display: none !important; }
   body { background: #fff; color: #000; }
   .card, .infra-card, .table-card { border-color: #ccc; box-shadow: none; background: #fff; }
   .data-table { min-width: 0; }
