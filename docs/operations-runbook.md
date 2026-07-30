@@ -99,18 +99,30 @@ candidate/Vertex/Gmail inputs are present:
 
 ```powershell
 pwsh scripts\install_vps_continuous_ashby.ps1
-# Alternative provider:
 pwsh scripts\install_vps_continuous_greenhouse.ps1
+pwsh scripts\install_vps_continuous_lever.ps1
 ```
 
 These installations replace the marked daily cron entry with the systemd
-units `job-app-ashby.service` and `job-app-greenhouse.service`. The two
-provider workers run in parallel, while the broad continuous search/submission
-service remains disabled. Each installer waits for active `apply` subprocesses
-before restarting an existing worker onto newly deployed code. The ignored
+units `job-app-ashby.service`, `job-app-greenhouse.service`, and
+`job-app-lever.service`. All provider workers run in parallel, while the broad
+continuous search/submission service remains disabled. Installing or repairing
+one provider does not stop or restart another. When replacing an already-active
+instance of that same provider, the installer waits for active `apply`
+subprocesses before restarting it onto newly deployed code. The ignored
 candidate email pool is copied to the VPS with mode `0600`. Each service runs
 headed Chromium under its own Xvfb display, starts automatically on boot, and
 has `Restart=always`.
+
+Future ATS engines use the same provider-neutral unit without changes to the
+supervisor:
+
+```powershell
+pwsh scripts\install_vps_continuous_ats.ps1 -AtsPlatform providername
+```
+
+The provider must have an installed engine module and search support for the
+same lowercase platform name.
 
 Each cycle selects exactly one unattempted, verified-live record for the
 configured ATS from `output/continuous_<ats>_jobs.json`, initially seeded from

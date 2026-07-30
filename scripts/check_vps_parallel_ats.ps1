@@ -1,4 +1,4 @@
-# Reads both continuous ATS services without starting or stopping work.
+# Reads every continuous ATS service without starting or stopping work.
 param(
     [string]$RemoteRepoPath = "/root/Job-App-Automation",
     [string]$ConfigPath = "config/vps_config.json",
@@ -46,15 +46,28 @@ date --iso-8601=seconds
 uptime
 free -h
 printf '%s\n' '=== PARALLEL ATS SERVICES ==='
-systemctl show job-app-ashby.service job-app-greenhouse.service \
-  --property=Id,LoadState,UnitFileState,ActiveState,SubState,MainPID,NRestarts,ExecMainStartTimestamp \
-  2>/dev/null || true
+ats_services=`$(systemctl list-unit-files 'job-app-*.service' --no-legend --no-pager |
+  awk '{print `$1}' |
+  while read -r service; do
+    exec_start=`$(systemctl show "`$service" --property=ExecStart --value 2>/dev/null || true)
+    case "`$exec_start" in
+      *continuous_ats*|*continuous-ashby*|*continuous-greenhouse*|*continuous-lever*)
+        printf '%s\n' "`$service"
+        ;;
+    esac
+  done)
+if [ -n "`$ats_services" ]; then
+  systemctl show `$ats_services \
+    --property=Id,LoadState,UnitFileState,ActiveState,SubState,MainPID,NRestarts,ExecMainStartTimestamp \
+    2>/dev/null || true
+else
+  printf '%s\n' 'No continuous ATS services installed.'
+fi
 printf '%s\n' '=== ATS PROCESSES ==='
-pgrep -af '[c]ontinuous-(ashby|greenhouse)|[j]ob_automation.py apply' |
+pgrep -af '[c]ontinuous-(ashby|greenhouse|lever)|[c]ontinuous_ats|[j]ob_automation.py apply' |
   sed -E 's/(--email )[[:graph:]]+/\1[REDACTED]/g' || true
 printf '%s\n' '=== PROVIDER STATE ==='
-python3 - "`$repo/output/continuous_ashby_state.json" \
-  "`$repo/output/continuous_greenhouse_state.json" <<'PY'
+python3 - "`$repo"/output/continuous_*_state.json <<'PY'
 import json
 import sys
 from collections import Counter
@@ -87,10 +100,10 @@ for raw_path in sys.argv[1:]:
         }
         print(f"{provider}: latest=" + json.dumps(summary, sort_keys=True))
 PY
-printf '%s\n' '=== ASHBY JOURNAL ==='
-journalctl -u job-app-ashby.service -n $LogLines --no-pager 2>/dev/null || true
-printf '%s\n' '=== GREENHOUSE JOURNAL ==='
-journalctl -u job-app-greenhouse.service -n $LogLines --no-pager 2>/dev/null || true
+for service in `$ats_services; do
+  printf '=== %s JOURNAL ===\n' "`$service"
+  journalctl -u "`$service" -n $LogLines --no-pager 2>/dev/null || true
+done
 "@
 
 $PasswordFile = Join-Path ([IO.Path]::GetTempPath()) "vps-parallel-ats-$([guid]::NewGuid().ToString('N')).txt"

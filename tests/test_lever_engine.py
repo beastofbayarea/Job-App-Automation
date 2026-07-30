@@ -7,6 +7,7 @@ import pytest
 from job_application_automation.engines.lever import (
     _lever_semantic_answer,
     _option_matches_variant,
+    _upload_cover_letter,
     _upload_resume,
     _fill_location,
     _select_option,
@@ -79,7 +80,7 @@ def test_upload_resume_mocked(tmp_path: Path) -> None:
     file_input = MagicMock()
     file_input.count.return_value = 1
     page.locator.return_value.first = file_input
-    
+
     resume_file = tmp_path / "resume.pdf"
     resume_file.write_bytes(b"content")
 
@@ -87,12 +88,58 @@ def test_upload_resume_mocked(tmp_path: Path) -> None:
     file_input.set_input_files.assert_called_with(str(resume_file))
 
 
+def test_upload_cover_letter_when_matching_file_field_exists(tmp_path: Path) -> None:
+    page = MagicMock()
+    inputs = MagicMock()
+    inputs.count.return_value = 1
+    cover_input = MagicMock()
+    cover_input.get_attribute.side_effect = lambda name: {
+        "name": "coverLetter",
+        "id": "cover-letter-upload",
+        "aria-label": "Cover Letter",
+    }.get(name)
+    inputs.nth.return_value = cover_input
+    page.locator.return_value = inputs
+    cover_letter = tmp_path / "cover_letter.pdf"
+    cover_letter.write_bytes(b"content")
+
+    with patch("job_application_automation.engines.lever._context", return_value=""):
+        assert _upload_cover_letter(page, cover_letter) is True
+    cover_input.set_input_files.assert_called_once_with(str(cover_letter))
+
+
+def test_upload_cover_letter_is_optional_when_form_has_no_matching_field(
+    tmp_path: Path,
+) -> None:
+    page = MagicMock()
+    inputs = MagicMock()
+    inputs.count.return_value = 1
+    resume_input = MagicMock()
+    resume_input.get_attribute.side_effect = lambda name: {
+        "name": "resume",
+        "id": "resume-upload-input",
+    }.get(name)
+    inputs.nth.return_value = resume_input
+    page.locator.return_value = inputs
+    cover_letter = tmp_path / "cover_letter.pdf"
+    cover_letter.write_bytes(b"content")
+
+    with patch(
+        "job_application_automation.engines.lever._context",
+        return_value="Resume",
+    ):
+        assert _upload_cover_letter(page, cover_letter) is None
+    resume_input.set_input_files.assert_not_called()
+
+
 def test_fill_location_mocked() -> None:
     page = MagicMock()
     loc_input = MagicMock()
     loc_input.input_value.return_value = "San Francisco, CA"
 
-    with patch("job_application_automation.engines.lever.first_visible", side_effect=[loc_input, None]):
+    with patch(
+        "job_application_automation.engines.lever.first_visible", side_effect=[loc_input, None]
+    ):
         assert _fill_location(page, "San Francisco, CA") is True
 
 

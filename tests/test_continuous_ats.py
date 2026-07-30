@@ -5,6 +5,8 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from job_application_automation.core import continuous_ats as worker
 
 
@@ -207,22 +209,14 @@ def test_interrupted_application_is_quarantined_while_document_stage_can_resume(
     state = {
         "version": 1,
         "jobs": {
-            "https://jobs.ashbyhq.com/example/1": {
-                "status": "application_started"
-            },
-            "https://jobs.ashbyhq.com/example/2": {
-                "status": "documents_ready"
-            },
+            "https://jobs.ashbyhq.com/example/1": {"status": "application_started"},
+            "https://jobs.ashbyhq.com/example/2": {"status": "documents_ready"},
         },
     }
 
     assert worker._reconcile_interrupted_submissions(state) == 1
-    assert state["jobs"]["https://jobs.ashbyhq.com/example/1"]["status"] == (
-        "manual_review"
-    )
-    assert state["jobs"]["https://jobs.ashbyhq.com/example/2"]["status"] == (
-        "documents_ready"
-    )
+    assert state["jobs"]["https://jobs.ashbyhq.com/example/1"]["status"] == ("manual_review")
+    assert state["jobs"]["https://jobs.ashbyhq.com/example/2"]["status"] == ("documents_ready")
 
 
 def test_eligibility_is_platform_specific_live_complete_and_deduplicated() -> None:
@@ -278,3 +272,21 @@ def test_parallel_workers_seed_distinct_provider_inputs() -> None:
 def test_sleep_between_cycles_handles_service_stop_without_traceback() -> None:
     with patch.object(worker.time, "sleep", side_effect=KeyboardInterrupt):
         assert worker._sleep_between_cycles(120, "ashby") is False
+
+
+def test_installed_lever_engine_is_accepted_without_static_provider_registry() -> None:
+    assert worker._validate_platform(" Lever ") == "lever"
+    parser = worker.build_parser("lever")
+    args = parser.parse_args(["--once"])
+
+    assert args.once is True
+    assert args.input.name == "continuous_lever_jobs.json"
+    assert args.state.name == "continuous_lever_state.json"
+
+
+def test_invalid_or_missing_engine_platform_is_rejected() -> None:
+    with patch.object(worker.importlib.util, "find_spec", return_value=None):
+        with pytest.raises(ValueError, match="engine is not installed"):
+            worker._validate_platform("futureats")
+    with pytest.raises(ValueError, match="lowercase letters and digits"):
+        worker._validate_platform("lever;stop")

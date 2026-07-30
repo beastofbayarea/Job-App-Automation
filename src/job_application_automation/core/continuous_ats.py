@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import random
+import re
 import subprocess
 import sys
 import tempfile
@@ -26,17 +28,13 @@ SHARED_INPUT = resolve_runtime_path("output/vps_generation_jobs.json")
 # Retained for import compatibility; supervised workers use provider-specific
 # input files so parallel refreshes cannot overwrite each other.
 DEFAULT_INPUT = SHARED_INPUT
-DEFAULT_SUBMISSION_LOG = resolve_runtime_path(
-    RUNTIME_CONFIG.application["submission_log_file"]
-)
+DEFAULT_SUBMISSION_LOG = resolve_runtime_path(RUNTIME_CONFIG.application["submission_log_file"])
 DEFAULT_PROFILE = resolve_runtime_path("config/candidate_profile_config.json")
-DEFAULT_EMAIL_POOL = resolve_runtime_path(
-    RUNTIME_CONFIG.application["candidate_email_pool_file"]
-)
+DEFAULT_EMAIL_POOL = resolve_runtime_path(RUNTIME_CONFIG.application["candidate_email_pool_file"])
 DEFAULT_LAUNCHER = resolve_runtime_path("src/job_automation.py")
 TERMINAL_STATUSES = frozenset({"confirmed", "failed", "manual_review"})
 RESUMABLE_STATUSES = frozenset({"preparing", "documents_ready"})
-SUPPORTED_PLATFORMS = frozenset({"ashby", "greenhouse"})
+ATS_PLATFORM_PATTERN = re.compile(r"^[a-z][a-z0-9]*$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,8 +188,12 @@ def _run_command(command: list[str], timeout_seconds: int) -> CommandOutcome:
             completed.stderr or "",
         )
     except subprocess.TimeoutExpired as exc:
-        stdout = exc.stdout.decode("utf-8", "replace") if isinstance(exc.stdout, bytes) else exc.stdout
-        stderr = exc.stderr.decode("utf-8", "replace") if isinstance(exc.stderr, bytes) else exc.stderr
+        stdout = (
+            exc.stdout.decode("utf-8", "replace") if isinstance(exc.stdout, bytes) else exc.stdout
+        )
+        stderr = (
+            exc.stderr.decode("utf-8", "replace") if isinstance(exc.stderr, bytes) else exc.stderr
+        )
         return CommandOutcome(124, stdout or "", stderr or "", timed_out=True)
     except OSError as exc:
         return CommandOutcome(127, "", str(exc))
@@ -486,9 +488,7 @@ def process_one(
     result = _read_result(result_path)
     ledger_confirmed = canonical_url in _confirmed_urls(submission_log, ats_platform)
     confirmed = (
-        application_outcome.return_code == 0
-        and _strictly_confirmed(result)
-        and ledger_confirmed
+        application_outcome.return_code == 0 and _strictly_confirmed(result) and ledger_confirmed
     )
     possibly_submitted = bool(result.get("submitted")) or application_outcome.timed_out
     status = "confirmed" if confirmed else ("manual_review" if possibly_submitted else "failed")
@@ -547,14 +547,24 @@ def _platform_output_path(ats_platform: str, suffix: str = "") -> Path:
     return resolve_runtime_path(f"output/{name}")
 
 
+def _validate_platform(ats_platform: str) -> str:
+    """Accept installed ATS engines without maintaining a second provider registry."""
+    normalized = str(ats_platform).strip().lower()
+    if not ATS_PLATFORM_PATTERN.fullmatch(normalized):
+        raise ValueError("continuous ATS platform must contain only lowercase letters and digits")
+    engine_module = f"job_application_automation.engines.{normalized}"
+    if importlib.util.find_spec(engine_module) is None:
+        raise ValueError(f"continuous ATS engine is not installed: {normalized}")
+    return normalized
+
+
 def _seed_platform_input(input_path: Path, ats_platform: str) -> int:
     """Seed a dedicated provider list from the latest shared VPS search output."""
     if input_path.exists() or not SHARED_INPUT.is_file():
         return 0
     jobs = _eligible_jobs(_load_json(SHARED_INPUT), ats_platform)
     payload = [
-        {key: value for key, value in job.items() if key != "_canonical_url"}
-        for job in jobs
+        {key: value for key, value in job.items() if key != "_canonical_url"} for job in jobs
     ]
     atomic_write_text(
         input_path,
@@ -565,8 +575,7 @@ def _seed_platform_input(input_path: Path, ats_platform: str) -> int:
 
 
 def build_parser(ats_platform: str) -> argparse.ArgumentParser:
-    if ats_platform not in SUPPORTED_PLATFORMS:
-        raise ValueError(f"unsupported continuous ATS platform: {ats_platform}")
+    ats_platform = _validate_platform(ats_platform)
     parser = argparse.ArgumentParser(
         description=(
             f"Continuously select one verified-live {ats_platform.title()} job, "
@@ -620,8 +629,14 @@ def build_parser(ats_platform: str) -> argparse.ArgumentParser:
 def main(
     argv: Sequence[str] | None = None,
     *,
-    ats_platform: str,
+    ats_platform: str | None = None,
 ) -> int:
+    if ats_platform is None:
+        platform_parser = argparse.ArgumentParser(add_help=False)
+        platform_parser.add_argument("--ats-platform", required=True)
+        platform_args, argv = platform_parser.parse_known_args(argv)
+        ats_platform = platform_args.ats_platform
+    ats_platform = _validate_platform(ats_platform)
     args = build_parser(ats_platform).parse_args(argv)
     for label, value in (
         ("sleep minimum", args.sleep_min_seconds),
@@ -704,9 +719,7 @@ def main(
                         f"exit_code={outcome.return_code} timed_out={outcome.timed_out}",
                         flush=True,
                     )
-                    cycle_status = (
-                        "refreshed" if outcome.return_code == 0 else "refresh_failed"
-                    )
+                    cycle_status = "refreshed" if outcome.return_code == 0 else "refresh_failed"
         except KeyboardInterrupt:
             print(
                 f"{ats_platform.upper()}_WORKER_STOPPED signal=keyboard_interrupt",
@@ -726,8 +739,7 @@ def main(
             return 0 if cycle_status in {"confirmed", "refreshed"} else 1
         delay = random.randint(args.sleep_min_seconds, args.sleep_max_seconds)
         print(
-            f"{ats_platform.upper()}_CYCLE_SLEEP "
-            f"seconds={delay} prior_status={cycle_status}",
+            f"{ats_platform.upper()}_CYCLE_SLEEP seconds={delay} prior_status={cycle_status}",
             flush=True,
         )
         if not _sleep_between_cycles(delay, ats_platform):
@@ -735,4 +747,4 @@ def main(
 
 
 if __name__ == "__main__":
-    raise SystemExit("Use the continuous-ashby or continuous-greenhouse command.")
+    raise SystemExit(main())

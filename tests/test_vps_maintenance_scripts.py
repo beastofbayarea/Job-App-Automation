@@ -76,22 +76,14 @@ class PowerShellMaintenanceTests(unittest.TestCase):
         self.assertIn("vps_run_status.json", script)
         self.assertIn("job-app-automation-daily-search", script)
 
-    def test_continuous_greenhouse_installer_uses_supervision_and_replaces_cron(self) -> None:
-        installer = (
-            SCRIPTS / "install_vps_continuous_greenhouse.ps1"
-        ).read_text(encoding="utf-8")
-        unit = (
-            SCRIPTS / "job-app-greenhouse.service.template"
-        ).read_text(encoding="utf-8")
+    def test_continuous_greenhouse_installer_delegates_to_generic_supervisor(self) -> None:
+        wrapper = (SCRIPTS / "install_vps_continuous_greenhouse.ps1").read_text(encoding="utf-8")
+        unit = (SCRIPTS / "job-app-continuous-ats.service.template").read_text(encoding="utf-8")
 
-        self.assertIn("-hostkey", installer)
-        self.assertIn("-pwfile", installer)
-        self.assertIn("candidate_email_pool.json", installer)
-        self.assertIn("candidate_profile_config.json", installer)
-        self.assertIn("install -m 0600 $ProfileStage", installer)
-        self.assertIn("grep -v '# $CronMarker'", installer)
-        self.assertIn('systemctl restart "$ServiceName"', installer)
-        self.assertIn("continuous-greenhouse", unit)
+        self.assertIn("install_vps_continuous_ats.ps1", wrapper)
+        self.assertIn("-AtsPlatform greenhouse", wrapper)
+        self.assertIn("job_application_automation.core.continuous_ats", unit)
+        self.assertIn("--ats-platform __ATS_PLATFORM__", unit)
         self.assertIn("Restart=always", unit)
         self.assertIn("WantedBy=multi-user.target", unit)
         self.assertIn("/usr/bin/xvfb-run", unit)

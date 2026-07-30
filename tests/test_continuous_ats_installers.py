@@ -7,39 +7,39 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 
 
-def test_ashby_installer_uses_guarded_generic_supervision() -> None:
-    wrapper = (SCRIPTS / "install_vps_continuous_ashby.ps1").read_text(
+def test_all_provider_wrappers_use_guarded_generic_supervision() -> None:
+    ashby_wrapper = (SCRIPTS / "install_vps_continuous_ashby.ps1").read_text(encoding="utf-8")
+    greenhouse_wrapper = (SCRIPTS / "install_vps_continuous_greenhouse.ps1").read_text(
         encoding="utf-8"
     )
-    installer = (SCRIPTS / "install_vps_continuous_ats.ps1").read_text(
-        encoding="utf-8"
-    )
-    unit = (SCRIPTS / "job-app-continuous-ats.service.template").read_text(
-        encoding="utf-8"
-    )
+    lever_wrapper = (SCRIPTS / "install_vps_continuous_lever.ps1").read_text(encoding="utf-8")
+    installer = (SCRIPTS / "install_vps_continuous_ats.ps1").read_text(encoding="utf-8")
+    unit = (SCRIPTS / "job-app-continuous-ats.service.template").read_text(encoding="utf-8")
 
-    assert "-AtsPlatform ashby" in wrapper
-    assert "continuous_$AtsPlatform.py" in installer
+    assert "-AtsPlatform ashby" in ashby_wrapper
+    assert "-AtsPlatform greenhouse" in greenhouse_wrapper
+    assert "-AtsPlatform lever" in lever_wrapper
+    assert "engines/$AtsPlatform.py" in installer
     assert "candidate_email_pool.json" in installer
     assert "-hostkey" in installer
     assert "-pwfile" in installer
     assert "[j]ob_automation.py apply" in installer
     assert "exit 76" in installer
-    assert "job-app-greenhouse.service" in installer
     assert "job-app-search-sync.service" in installer
-    assert 'systemctl restart "$OtherAtsService"' in installer
-    assert 'systemctl disable --now "$OtherAtsService"' not in installer
+    assert "OtherAtsService" not in installer
     assert "Restart=always" in unit
-    assert "continuous-__ATS_PLATFORM__" in unit
+    assert "job_application_automation.core.continuous_ats" in unit
+    assert "--ats-platform __ATS_PLATFORM__" in unit
     assert "/usr/bin/xvfb-run" in unit
 
 
-def test_parallel_status_probe_reports_both_services_and_redacts_email() -> None:
+def test_parallel_status_probe_discovers_all_services_and_redacts_email() -> None:
     script = (SCRIPTS / "check_vps_parallel_ats.ps1").read_text(encoding="utf-8")
 
-    assert "job-app-ashby.service job-app-greenhouse.service" in script
-    assert "continuous_ashby_state.json" in script
-    assert "continuous_greenhouse_state.json" in script
+    assert "list-unit-files 'job-app-*.service'" in script
+    assert "continuous_*_state.json" in script
+    assert "continuous_ats" in script
+    assert "continuous-lever" in script
     assert "[REDACTED]" in script
     assert "free -h" in script
     assert "Invoke-ExternalCommandWithTimeout" in script

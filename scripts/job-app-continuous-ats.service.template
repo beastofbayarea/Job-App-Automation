@@ -13,7 +13,7 @@ ExecStartPre=/usr/bin/test -x __REPO_DIR__/.venv/bin/python
 ExecStartPre=/usr/bin/test -r __REPO_DIR__/config/candidate_profile_config.json
 ExecStartPre=/usr/bin/test -r __REPO_DIR__/config/candidate_email_pool.json
 ExecStartPre=/usr/bin/test -r __REPO_DIR__/config/vertex_service_account.json
-ExecStart=/usr/bin/xvfb-run -a "--server-args=-screen 0 1280x1024x24" __REPO_DIR__/.venv/bin/python __REPO_DIR__/src/job_automation.py continuous-__ATS_PLATFORM__
+ExecStart=/usr/bin/xvfb-run -a "--server-args=-screen 0 1280x1024x24" __REPO_DIR__/.venv/bin/python -m job_application_automation.core.continuous_ats --ats-platform __ATS_PLATFORM__
 Restart=always
 RestartSec=15
 KillSignal=SIGINT

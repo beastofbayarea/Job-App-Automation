@@ -109,6 +109,32 @@ def _upload_resume(page: Page, resume: Path) -> bool:
         return False
 
 
+def _upload_cover_letter(page: Page, cover_letter: Path) -> bool | None:
+    """Upload a cover letter only when Lever exposes a matching file field."""
+    inputs = page.locator('input[type="file"]')
+    matched = False
+    for index in range(inputs.count()):
+        target = inputs.nth(index)
+        try:
+            context = " ".join(
+                (
+                    _context(target),
+                    target.get_attribute("name") or "",
+                    target.get_attribute("id") or "",
+                    target.get_attribute("aria-label") or "",
+                )
+            ).lower()
+            normalized = context.replace("_", " ").replace("-", " ")
+            if "cover" not in normalized or "letter" not in normalized:
+                continue
+            matched = True
+            target.set_input_files(str(cover_letter))
+            return True
+        except Exception:
+            continue
+    return False if matched else None
+
+
 def _fill_location(page: Page, value: str) -> bool:
     location = first_visible(page.locator('input[name="location"], input#location-input'))
     if location is None:
@@ -443,7 +469,8 @@ def _fill_standard_fields(
     profile: Mapping[str, Any],
     email: str,
     resume: Path,
-) -> dict[str, bool]:
+    cover_letter: Path | None = None,
+) -> dict[str, bool | None]:
     full_name = " ".join(
         part
         for part in (
@@ -452,7 +479,7 @@ def _fill_standard_fields(
         )
         if part
     )
-    return {
+    fields: dict[str, bool | None] = {
         "name": fill_first(page, ('input[name="name"]',), full_name),
         "email": fill_first(page, ('input[name="email"]', 'input[type="email"]'), email),
         "phone": fill_first(
@@ -474,6 +501,9 @@ def _fill_standard_fields(
         ),
         "resume": _upload_resume(page, resume),
     }
+    if cover_letter is not None:
+        fields["cover_letter"] = _upload_cover_letter(page, cover_letter)
+    return fields
 
 
 def _required_issues(page: Page) -> list[str]:
@@ -530,10 +560,13 @@ def run(
     company: str,
     role: str,
     live_submit: bool,
+    cover_letter: Path | None = None,
 ) -> dict[str, Any]:
     if not validate_ats_url(url, ATS_NAME):
         raise ValueError("URL must be an absolute Lever HTTPS URL")
     resume = validate_nonempty_file(resume, "resume")
+    if cover_letter is not None:
+        cover_letter = validate_nonempty_file(cover_letter, "cover letter")
     profile = dict(config["candidate"])
     email = resolve_candidate_email(profile, email_override)
 
@@ -570,7 +603,13 @@ def run(
             except PlaywrightTimeoutError:
                 page.wait_for_timeout(2_000)
 
-            fields = _fill_standard_fields(page, profile, email, resume)
+            fields = _fill_standard_fields(
+                page,
+                profile,
+                email,
+                resume,
+                cover_letter,
+            )
             custom = _fill_custom_questions(
                 page,
                 profile,
@@ -586,6 +625,8 @@ def run(
             missing = validate_required_fields(page, _required_issues)
             screenshot = capture_screenshot(page, screenshot_dir, company or "Lever", "prefilled")
             critical_missing = [key for key in ("name", "email", "resume") if not fields.get(key)]
+            if fields.get("cover_letter") is False:
+                critical_missing.append("cover_letter")
             if critical_missing:
                 status = "REQUIRED_FIELDS_NOT_FILLED"
                 success = False
@@ -653,6 +694,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         result = run(
             url=args.url,
             resume=Path(args.resume),
+            cover_letter=(
+                Path(args.cover_letter).expanduser().resolve() if args.cover_letter else None
+            ),
             email_override=args.email,
             config=_load_config(),
             company=args.company,

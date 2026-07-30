@@ -1,7 +1,6 @@
 # Installs or repairs one persistent, single-application ATS worker.
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("ashby", "greenhouse")]
     [string]$AtsPlatform,
     [string]$RemoteRepoPath = "/root/Job-App-Automation",
     [string]$ConfigPath = "config/vps_config.json",
@@ -9,6 +8,12 @@ param(
 )
 
 . "$PSScriptRoot\vps_script_helpers.ps1"
+
+$AtsPlatform = $AtsPlatform.Trim().ToLowerInvariant()
+if ($AtsPlatform -notmatch "^[a-z][a-z0-9]*$") {
+    Write-Error "AtsPlatform must contain only lowercase letters and digits."
+    exit 1
+}
 
 foreach ($RequiredPath in @(
     $ConfigPath,
@@ -74,11 +79,6 @@ $UnitStage = ConvertTo-PosixShellLiteral $RemoteUnitStage
 $PoolStage = ConvertTo-PosixShellLiteral $RemotePoolStage
 $ProfileStage = ConvertTo-PosixShellLiteral $RemoteProfileStage
 $CronMarker = "job-app-automation-daily-search"
-$OtherAtsService = if ($AtsPlatform -eq "ashby") {
-    "job-app-greenhouse.service"
-} else {
-    "job-app-ashby.service"
-}
 $CompetingServices = @("job-app-search-sync.service")
 $CompetingServiceNames = $CompetingServices -join " "
 $RemoteCommand = @"
@@ -86,7 +86,7 @@ set -eu
 repo=$Repo
 git -C "`$repo" pull --ff-only origin main
 test -f "`$repo/src/job_application_automation/core/continuous_ats.py"
-test -f "`$repo/src/job_application_automation/core/continuous_$AtsPlatform.py"
+test -f "`$repo/src/job_application_automation/engines/$AtsPlatform.py"
 test -f "`$repo/config/candidate_profile_config.json"
 test -f "`$repo/config/vertex_service_account.json"
 test -f "`$repo/data/base_resume.txt"
@@ -106,23 +106,22 @@ if [ -n "`$filtered" ]; then
 else
   crontab -r 2>/dev/null || true
 fi
-for attempt in `$(seq 1 120); do
-  if ! pgrep -f '[j]ob_automation.py apply' >/dev/null; then
-    break
+if systemctl is-active --quiet "$ServiceName"; then
+  for attempt in `$(seq 1 120); do
+    if ! pgrep -f '[j]ob_automation.py apply' >/dev/null; then
+      break
+    fi
+    sleep 5
+  done
+  if pgrep -f '[j]ob_automation.py apply' >/dev/null; then
+    printf '%s\n' 'An application is still active; refusing to interrupt it.' >&2
+    exit 76
   fi
-  sleep 5
-done
-if pgrep -f '[j]ob_automation.py apply' >/dev/null; then
-  printf '%s\n' 'An application is still active; refusing to interrupt it.' >&2
-  exit 76
 fi
 for service in $CompetingServiceNames; do
   systemctl disable --now "`$service" 2>/dev/null || true
 done
 systemctl daemon-reload
-if systemctl is-active --quiet "$OtherAtsService"; then
-  systemctl restart "$OtherAtsService"
-fi
 systemctl enable "$ServiceName"
 systemctl restart "$ServiceName"
 systemctl is-enabled "$ServiceName"
@@ -171,11 +170,11 @@ try {
 }
 
 if ($RemoteExitCode -ne 0) {
-    Write-Error "Continuous Greenhouse installation failed (exit code $RemoteExitCode)."
+    Write-Error "Continuous $AtsPlatform installation failed (exit code $RemoteExitCode)."
     exit $RemoteExitCode
 }
 
 Write-Host (
-    "Installed and started $ServiceName alongside $OtherAtsService. The broad " +
-    "continuous search service and replaced daily cron remain disabled."
+    "Installed and started $ServiceName without stopping or restarting other ATS " +
+    "workers. The broad continuous search service and replaced daily cron remain disabled."
 )
