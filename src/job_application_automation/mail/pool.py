@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Literal, TypeVar, overload
@@ -125,7 +126,6 @@ def generate_subaddress_email(base_email: str, company: str, tag: str | None = N
     base_username = user_part.split("+")[0]
 
     # Sanitize company name to lowercase alphanumeric
-    import re
     clean_company = re.sub(r"[^a-zA-Z0-9_]", "", company.strip().lower().replace(" ", "_"))
     if not clean_company:
         clean_company = "job_app"
