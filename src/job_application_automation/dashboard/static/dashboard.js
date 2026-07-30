@@ -10,11 +10,23 @@ let state = {
 
 document.addEventListener('DOMContentLoaded', () => {
   fetchMetrics();
-  fetchSubmissions();
-  fetchJobs();
-  fetchSection2();
-  fetchCoverageAndCache();
-  fetchVpsLog();
+
+  if (document.getElementById('submissionsTableBody')) {
+    fetchSubmissions();
+  }
+  if (document.getElementById('jobsTableBody')) {
+    fetchJobs();
+    fetchCoverageAndCache();
+  }
+  if (document.getElementById('generationQueueView')) {
+    fetchSection2();
+  }
+  if (document.getElementById('logTerminal')) {
+    fetchVpsLog();
+  }
+  if (document.getElementById('rawFileViewer')) {
+    loadRawFile();
+  }
 });
 
 async function fetchMetrics() {
@@ -23,15 +35,15 @@ async function fetchMetrics() {
     const data = await res.json();
     state.metrics = data;
     
-    document.getElementById('kpiSubmissions').textContent = data.total_submissions ?? 0;
-    document.getElementById('kpiJobsFound').textContent = data.total_jobs_found ?? 0;
-    document.getElementById('kpiGenQueue').textContent = data.generation_queue_count ?? 0;
-    document.getElementById('kpiArchives').textContent = data.archived_document_sets ?? 0;
-    document.getElementById('kpiCachedBoards').textContent = data.cached_boards_count ?? 0;
-    document.getElementById('kpiFailures').textContent = data.failure_count ?? 0;
+    if (document.getElementById('kpiSubmissions')) document.getElementById('kpiSubmissions').textContent = data.total_submissions ?? 0;
+    if (document.getElementById('kpiJobsFound')) document.getElementById('kpiJobsFound').textContent = data.total_jobs_found ?? 0;
+    if (document.getElementById('kpiGenQueue')) document.getElementById('kpiGenQueue').textContent = data.generation_queue_count ?? 0;
+    if (document.getElementById('kpiArchives')) document.getElementById('kpiArchives').textContent = data.archived_document_sets ?? 0;
+    if (document.getElementById('kpiCachedBoards')) document.getElementById('kpiCachedBoards').textContent = data.cached_boards_count ?? 0;
+    if (document.getElementById('kpiFailures')) document.getElementById('kpiFailures').textContent = data.failure_count ?? 0;
 
     // Render ATS Submissions Breakdown Subtext
-    if (data.ats_submissions) {
+    if (data.ats_submissions && document.getElementById('kpiAtsBreakdown')) {
       const gh = data.ats_submissions.greenhouse || 0;
       const ash = data.ats_submissions.ashby || 0;
       const lev = data.ats_submissions.lever || 0;
@@ -39,7 +51,7 @@ async function fetchMetrics() {
     }
 
     // Render Liveness Subtext
-    if (data.live_status_counts) {
+    if (data.live_status_counts && document.getElementById('kpiLivenessSub')) {
       const live = data.live_status_counts.live || 0;
       const unavail = data.live_status_counts.unavailable || 0;
       document.getElementById('kpiLivenessSub').textContent = `Live: ${live} | Unavailable: ${unavail}`;
@@ -48,19 +60,21 @@ async function fetchMetrics() {
     // Render Infrastructure Specs if available
     if (data.vps_info) {
       const v = data.vps_info;
-      if (v.host) document.getElementById('vpsHost').textContent = v.host;
-      if (v.hostname) document.getElementById('vpsHostname').textContent = v.hostname;
-      if (v.os) document.getElementById('vpsOs').textContent = v.os;
-      if (v.plan) document.getElementById('vpsPlan').textContent = `${v.plan} (${v.cpu_cores || 1} vCPU, ${v.memory_gb || 4}GB RAM, ${v.disk_gb || 50}GB SSD)`;
-      if (v.datacenter) document.getElementById('vpsDatacenter').textContent = v.datacenter;
-      if (v.plan_expiration_date) document.getElementById('vpsExpiry').textContent = v.plan_expiration_date;
+      if (v.host && document.getElementById('vpsHost')) document.getElementById('vpsHost').textContent = v.host;
+      if (v.hostname && document.getElementById('vpsHostname')) document.getElementById('vpsHostname').textContent = v.hostname;
+      if (v.os && document.getElementById('vpsOs')) document.getElementById('vpsOs').textContent = v.os;
+      if (v.plan && document.getElementById('vpsPlan')) document.getElementById('vpsPlan').textContent = `${v.plan} (${v.cpu_cores || 1} vCPU, ${v.memory_gb || 4}GB RAM, ${v.disk_gb || 50}GB SSD)`;
+      if (v.datacenter && document.getElementById('vpsDatacenter')) document.getElementById('vpsDatacenter').textContent = v.datacenter;
+      if (v.plan_expiration_date && document.getElementById('vpsExpiry')) document.getElementById('vpsExpiry').textContent = v.plan_expiration_date;
     }
-    if (data.hostinger_info && data.hostinger_info.owner_name) {
+    if (data.hostinger_info && data.hostinger_info.owner_name && document.getElementById('vpsOwner')) {
       document.getElementById('vpsOwner').textContent = `${data.hostinger_info.company || ''} (${data.hostinger_info.owner_name})`;
     }
 
     // Render ATS Conversion Matrix
-    renderAtsMatrix(data.attempted_by_ats, data.confirmed_by_ats);
+    if (document.getElementById('atsMatrixBody')) {
+      renderAtsMatrix(data.attempted_by_ats, data.confirmed_by_ats);
+    }
 
   } catch (err) {
     console.error('Failed to load metrics', err);
@@ -69,6 +83,7 @@ async function fetchMetrics() {
 
 function renderAtsMatrix(attempted = {}, confirmed = {}) {
   const tbody = document.getElementById('atsMatrixBody');
+  if (!tbody) return;
   const platforms = ['greenhouse', 'ashby', 'lever'];
   
   let html = '';
@@ -120,27 +135,31 @@ async function fetchCoverageAndCache() {
 
     // Coverage Summary
     const covDiv = document.getElementById('coverageMetricsSummary');
-    if (cov && cov.version) {
-      covDiv.innerHTML = `
-        <div><strong>Version:</strong> ${cov.version} | <strong>Generated:</strong> ${formatDate(cov.generated_at)}</div>
-        <div><strong>Returned Jobs:</strong> ${cov.results?.returned ?? 'N/A'}</div>
-        <div><strong>Liveness Checks:</strong> ${JSON.stringify(cov.results?.live_status_counts || {})}</div>
-        <div><strong>Discovery Stats:</strong> ${JSON.stringify(cov.discovery || {})}</div>
-      `;
-    } else {
-      covDiv.textContent = 'No search coverage diagnostics recorded in current local run.';
+    if (covDiv) {
+      if (cov && cov.version) {
+        covDiv.innerHTML = `
+          <div><strong>Version:</strong> ${cov.version} | <strong>Generated:</strong> ${formatDate(cov.generated_at)}</div>
+          <div><strong>Returned Jobs:</strong> ${cov.results?.returned ?? 'N/A'}</div>
+          <div><strong>Liveness Checks:</strong> ${JSON.stringify(cov.results?.live_status_counts || {})}</div>
+          <div><strong>Discovery Stats:</strong> ${JSON.stringify(cov.discovery || {})}</div>
+        `;
+      } else {
+        covDiv.textContent = 'No search coverage diagnostics recorded in current local run.';
+      }
     }
 
     // Cache Summary
     const cacheDiv = document.getElementById('boardCacheSummary');
-    if (cacheData && Object.keys(cacheData).length > 0) {
-      const keys = Object.keys(cacheData);
-      cacheDiv.innerHTML = `
-        <div><strong>Total Cached ATS Boards:</strong> ${keys.length} board endpoints</div>
-        <div><strong>Sample Board Tokens:</strong> ${keys.slice(0, 5).join(', ')}...</div>
-      `;
-    } else {
-      cacheDiv.textContent = 'ATS Board cache registry active on VPS.';
+    if (cacheDiv) {
+      if (cacheData && Object.keys(cacheData).length > 0) {
+        const keys = Object.keys(cacheData);
+        cacheDiv.innerHTML = `
+          <div><strong>Total Cached ATS Boards:</strong> ${keys.length} board endpoints</div>
+          <div><strong>Sample Board Tokens:</strong> ${keys.slice(0, 5).join(', ')}...</div>
+        `;
+      } else {
+        cacheDiv.textContent = 'ATS Board cache registry active on VPS.';
+      }
     }
   } catch (err) {
     console.error('Failed to load coverage/cache data', err);
@@ -163,6 +182,7 @@ async function fetchSection2() {
 
 async function fetchVpsLog() {
   const terminal = document.getElementById('logTerminal');
+  if (!terminal) return;
   try {
     const res = await fetch('/api/vps/log');
     const data = await res.json();
@@ -175,7 +195,9 @@ async function fetchVpsLog() {
 
 function filterLogs() {
   const terminal = document.getElementById('logTerminal');
-  const query = (document.getElementById('logSearch').value || '').toLowerCase();
+  if (!terminal) return;
+  const searchInput = document.getElementById('logSearch');
+  const query = (searchInput ? searchInput.value : '').toLowerCase();
   
   if (!state.fullLog) {
     terminal.textContent = 'Log is empty or file not found.';
@@ -195,7 +217,9 @@ function filterLogs() {
 
 function renderSubmissionsTable() {
   const tbody = document.getElementById('submissionsTableBody');
-  const query = (document.getElementById('sec3Search').value || '').toLowerCase();
+  if (!tbody) return;
+  const searchInput = document.getElementById('sec3Search');
+  const query = (searchInput ? searchInput.value : '').toLowerCase();
   
   if (!state.submissions || Object.keys(state.submissions).length === 0) {
     tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">No submissions recorded yet.</td></tr>';
@@ -241,7 +265,9 @@ function renderSubmissionsTable() {
 
 function renderJobsTable() {
   const tbody = document.getElementById('jobsTableBody');
-  const query = (document.getElementById('sec1Search').value || '').toLowerCase();
+  if (!tbody) return;
+  const searchInput = document.getElementById('sec1Search');
+  const query = (searchInput ? searchInput.value : '').toLowerCase();
 
   if (!state.jobs || state.jobs.length === 0) {
     tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">No jobs loaded from ai_jobs.csv.</td></tr>';
@@ -270,39 +296,43 @@ function renderJobsTable() {
       <td>${escapeHtml(item.location || 'N/A')}</td>
       <td>${escapeHtml(item.workplace_type || 'N/A')}</td>
       <td><span class="badge badge-confirmed">${escapeHtml(item.live_status || 'LIVE')}</span></td>
-      <td><a href="${escapeHtml(item.job_url || item.apply_url || '#')}" target="_blank" style="color: var(--accent-cyan); text-decoration: none;">View Listing ↗</a></td>
+      <td><a href="${escapeHtml(item.job_url || item.apply_url || '#')}" target="_blank" style="color: var(--air-cyan); text-decoration: none;">View Listing ↗</a></td>
     </tr>
   `).join('');
 }
 
 function renderSection2View() {
-  document.getElementById('generationQueueView').textContent = JSON.stringify(state.generation, null, 2);
+  const genView = document.getElementById('generationQueueView');
+  if (genView) genView.textContent = JSON.stringify(state.generation, null, 2);
   
   const archDiv = document.getElementById('archiveStateView');
-  if (state.archives && Object.keys(state.archives).length > 0) {
-    let html = '';
-    for (const [id, item] of Object.entries(state.archives)) {
-      html += `
-        <div class="archive-card">
-          <div class="archive-title">📦 ${escapeHtml(id)}</div>
-          <div style="font-size: 0.8rem; color: var(--text-muted); font-family: var(--font-mono);">
-            <div>Company: <strong>${escapeHtml(item.identity?.company || 'N/A')}</strong> | Role: <strong>${escapeHtml(item.identity?.job_title || 'N/A')}</strong></div>
-            <div>Email: ${escapeHtml(item.identity?.email_used || 'N/A')}</div>
-            <div>Fingerprint: ${escapeHtml(item.record_fingerprint || 'N/A')}</div>
+  if (archDiv) {
+    if (state.archives && Object.keys(state.archives).length > 0) {
+      let html = '';
+      for (const [id, item] of Object.entries(state.archives)) {
+        html += `
+          <div class="archive-card">
+            <div class="archive-title">📦 ${escapeHtml(id)}</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); font-family: var(--font-mono);">
+              <div>Company: <strong>${escapeHtml(item.identity?.company || 'N/A')}</strong> | Role: <strong>${escapeHtml(item.identity?.job_title || 'N/A')}</strong></div>
+              <div>Email: ${escapeHtml(item.identity?.email_used || 'N/A')}</div>
+              <div>Fingerprint: ${escapeHtml(item.record_fingerprint || 'N/A')}</div>
+            </div>
           </div>
-        </div>
-      `;
+        `;
+      }
+      archDiv.innerHTML = html;
+    } else {
+      archDiv.textContent = JSON.stringify(state.archives, null, 2);
     }
-    archDiv.innerHTML = html;
-  } else {
-    archDiv.textContent = JSON.stringify(state.archives, null, 2);
   }
 }
 
 async function loadRawFile() {
   const select = document.getElementById('rawFileSelect');
-  const filename = select.value;
   const viewer = document.getElementById('rawFileViewer');
+  if (!select || !viewer) return;
+  const filename = select.value;
   viewer.textContent = 'Loading file contents...';
 
   try {
@@ -315,24 +345,6 @@ async function loadRawFile() {
     }
   } catch (err) {
     viewer.textContent = `Error loading file: ${err.message}`;
-  }
-}
-
-function switchTab(tabId) {
-  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-  document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-
-  event.target.classList.add('active');
-  const targetContent = document.getElementById(`tab-${tabId}`);
-  if (targetContent) {
-    targetContent.classList.add('active');
-  }
-
-  if (tabId === 'raw') {
-    loadRawFile();
-  }
-  if (tabId === 'logs') {
-    fetchVpsLog();
   }
 }
 
@@ -367,24 +379,32 @@ async function triggerVpsSync() {
 
 async function fetchVpsStatus() {
   const badge = document.getElementById('vpsStatusBadge');
-  badge.textContent = 'CHECKING...';
-  badge.className = 'badge badge-ashby';
+  if (badge) {
+    badge.textContent = 'CHECKING...';
+    badge.className = 'badge badge-ashby';
+  }
 
   try {
     const res = await fetch('/api/vps/status', { method: 'POST' });
     const data = await res.json();
     if (data.status === 'success' && data.exit_code === 0) {
-      badge.textContent = 'ACTIVE & ONLINE';
-      badge.className = 'badge badge-confirmed';
+      if (badge) {
+        badge.textContent = 'ACTIVE & ONLINE';
+        badge.className = 'badge badge-confirmed';
+      }
       alert('VPS Status Check Passed cleanly!\n\n' + (data.output || '').slice(0, 300));
     } else {
-      badge.textContent = 'ERROR / TIMEOUT';
-      badge.className = 'badge badge-failed';
+      if (badge) {
+        badge.textContent = 'ERROR / TIMEOUT';
+        badge.className = 'badge badge-failed';
+      }
       alert('VPS Status Check response:\n' + (data.output || data.message || 'Error'));
     }
   } catch (err) {
-    badge.textContent = 'OFFLINE';
-    badge.className = 'badge badge-failed';
+    if (badge) {
+      badge.textContent = 'OFFLINE';
+      badge.className = 'badge badge-failed';
+    }
     alert('Could not reach VPS status endpoint.');
   }
 }

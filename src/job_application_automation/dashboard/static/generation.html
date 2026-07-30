@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Generation Queue & Archives | SkyBison Automation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Top Header Banner with SkyBison Logo -->
+  <header class="app-header">
+    <div class="brand">
+      <div class="logo-container">
+        <a href="index.html"><img src="sky_bison_logo.jpg" alt="Sky Bison Logo" class="brand-avatar"></a>
+      </div>
+      <div class="brand-text">
+        <h1 class="brand-title">SKY BISON AUTOMATION</h1>
+        <span class="brand-subtitle">Avatar Studios Job Operations Engine</span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="secondary-btn" onclick="fetchVpsStatus()">
+        <span>📡 VPS Status Check</span>
+      </button>
+      <button class="sync-btn" id="syncBtn" onclick="triggerVpsSync()">
+        <span>🌪️ Sync Reports from VPS</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- Four Elements KPI Top Grid -->
+    <section class="kpi-grid">
+      <div class="kpi-card element-air">
+        <div class="kpi-title">🌀 Air • Confirmed Submissions</div>
+        <div class="kpi-value kpi-air" id="kpiSubmissions">--</div>
+      </div>
+      <div class="kpi-card element-earth">
+        <div class="kpi-title">🪨 Earth • Generation Queue</div>
+        <div class="kpi-value kpi-earth" id="kpiGenQueue">--</div>
+      </div>
+      <div class="kpi-card element-fire">
+        <div class="kpi-title">🔥 Fire • Document Archives</div>
+        <div class="kpi-value kpi-fire" id="kpiArchives">--</div>
+      </div>
+    </section>
+
+    <!-- Site Page Navigation Links -->
+    <nav class="nav-tabs">
+      <a href="index.html" class="tab-btn">📜 Submissions & Failures Matrix</a>
+      <a href="search.html" class="tab-btn">🌊 Job Search & Coverage Details</a>
+      <a href="generation.html" class="tab-btn active">🪨 Generation Queue & Archives</a>
+      <a href="logs.html" class="tab-btn">🔥 Real-time VPS Sync Logs</a>
+      <a href="inspector.html" class="tab-btn">📁 Raw File Inspector</a>
+    </nav>
+
+    <!-- GENERATION & ARCHIVES PAGE CONTENT -->
+    <section>
+      <div class="controls-bar">
+        <input type="text" id="sec2Search" class="search-input" placeholder="Search archives and generation jobs..." oninput="renderSection2View()">
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+        <div>
+          <h3 style="margin-bottom: 1rem; color: var(--air-cyan); font-family: var(--font-cinzel);">VPS Generation Queue (`vps_generation_jobs.json`)</h3>
+          <div class="json-viewer" id="generationQueueView">Loading generation jobs...</div>
+        </div>
+        <div>
+          <h3 style="margin-bottom: 1rem; color: var(--fire-gold); font-family: var(--font-cinzel);">VPS Document Archives (`vps_document_archive_state.json`)</h3>
+          <div id="archiveStateView">Loading document archive state...</div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="dashboard.js"></script>
+</body>
+</html>

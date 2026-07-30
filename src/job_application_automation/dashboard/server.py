@@ -148,6 +148,20 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self) -> None:
+        path = self.path.split("?")[0]
+        
+        # Clean page route mappings
+        if path in {"/search", "/search/"}:
+            self.path = "/search.html"
+        elif path in {"/generation", "/generation/"}:
+            self.path = "/generation.html"
+        elif path in {"/logs", "/logs/"}:
+            self.path = "/logs.html"
+        elif path in {"/inspector", "/inspector/"}:
+            self.path = "/inspector.html"
+        elif path in {"/submissions", "/submissions/"}:
+            self.path = "/index.html"
+
         if self.path.startswith("/api/download/"):
             self._handle_file_download()
             return
