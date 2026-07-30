@@ -717,6 +717,8 @@ class BashMaintenanceTests(unittest.TestCase):
         self.assertIn('RUN_STATUS="$REPO_DIR/output/vps_run_status.json"', script)
         self.assertIn('ACCOUNT_HOME="${HOME:-$(getent passwd "$(id -u)"', script)
         self.assertNotIn("--max-attempts-per-ats 10", script)
+        self.assertIn("--ats-platform smartrecruiters", script)
+        self.assertIn("--ats-platform workable", script)
         sync_block = script[
             script.index("SYNC_FILES=(") : script.index("PRIVATE_GENERATION_OUTPUT=")
         ]

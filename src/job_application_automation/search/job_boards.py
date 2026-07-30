@@ -43,11 +43,12 @@ import sys
 import time
 import unicodedata
 from collections import deque
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
-from typing import Any, Callable, Iterable, Iterator, Sequence
+from typing import Any
 from urllib.parse import parse_qs, quote, unquote, urlparse, urlunparse
 
 import requests
@@ -300,9 +301,7 @@ LOCATION_ALIAS_MAP = {
 
 GENERIC_ATS_HOST_SUFFIXES = (
     "myworkdayjobs.com",
-    "smartrecruiters.com",
     "icims.com",
-    "workable.com",
     "jobvite.com",
     "teamtailor.com",
     "recruitee.com",
@@ -318,10 +317,13 @@ ATS_SEARCH_HOSTS = {
     ),
     "lever": ("site:jobs.lever.co", "site:jobs.eu.lever.co"),
     "ashby": ("site:jobs.ashbyhq.com",),
+    "smartrecruiters": ("site:jobs.smartrecruiters.com",),
+    "workable": ("site:apply.workable.com",),
     # Public pages for these providers are parsed through JobPosting JSON-LD.
     "web": tuple(f"site:{suffix}" for suffix in GENERIC_ATS_HOST_SUFFIXES),
 }
 SUPPORTED_ATS_PLATFORMS = tuple(ATS_SEARCH_HOSTS)
+WORKABLE_SHORT_LINK_BOARD = "apply.workable.com"
 ALL_DDGS_BACKENDS = ("auto", "duckduckgo", "bing", "brave", "google", "yahoo", "mojeek")
 DEFAULT_COVERAGE_REPORT = OUTPUT_DIR / "job_search_coverage.json"
 
@@ -1085,6 +1087,34 @@ def board_from_url(raw_url: str) -> Board | None:
                 region = "eu" if ".eu." in host else "global"
                 return Board("greenhouse", unquote(values[0]), region)
 
+    if host in {
+        "jobs.smartrecruiters.com",
+        "www.smartrecruiters.com",
+        "careers.smartrecruiters.com",
+    }:
+        lowered_parts = [part.lower() for part in parts]
+        if (
+            len(parts) >= 5
+            and lowered_parts[:2] == ["oneclick-ui", "company"]
+            and lowered_parts[3] == "publication"
+        ):
+            return Board("smartrecruiters", parts[2], "global")
+        if parts:
+            return Board("smartrecruiters", parts[0], "global")
+        return None
+
+    if host == "apply.workable.com":
+        lowered_parts = [part.lower() for part in parts]
+        if len(parts) >= 3 and lowered_parts[1] in {"j", "jobs"}:
+            return Board("workable", parts[0], "global")
+        if parts and lowered_parts[0] not in {"j", "jobs"}:
+            return Board("workable", parts[0], "global")
+        if len(parts) >= 2 and lowered_parts[0] in {"j", "jobs"}:
+            # Workable short links omit the account slug. Retain them for
+            # page-level JSON-LD parsing under a stable synthetic board.
+            return Board("workable", WORKABLE_SHORT_LINK_BOARD, "global")
+        return None
+
     if any(host == suffix or host.endswith(f".{suffix}") for suffix in GENERIC_ATS_HOST_SUFFIXES):
         # Generic public ATS pages are scraped through JSON-LD rather than a
         # provider-specific board feed. Keep the host as a stable grouping key.
@@ -1110,6 +1140,24 @@ def looks_like_job_url(url: str) -> bool:
         "job-boards.eu.greenhouse.io",
     }:
         return "jobs" in [part.lower() for part in parts] or "gh_jid" in query or "token" in query
+    if host in {"jobs.smartrecruiters.com", "www.smartrecruiters.com"}:
+        lowered_parts = [part.lower() for part in parts]
+        return len(parts) >= 2 and (
+            lowered_parts[0] != "oneclick-ui"
+            or (
+                len(parts) >= 5
+                and lowered_parts[:2] == ["oneclick-ui", "company"]
+                and lowered_parts[3] == "publication"
+            )
+        )
+    if host == "apply.workable.com":
+        lowered_parts = [part.lower() for part in parts]
+        return (
+            len(parts) >= 3
+            and lowered_parts[1] in {"j", "jobs"}
+            or len(parts) >= 2
+            and lowered_parts[0] in {"j", "jobs"}
+        )
     if any(host == suffix or host.endswith(f".{suffix}") for suffix in GENERIC_ATS_HOST_SUFFIXES):
         return len(parts) >= 2
     return False
@@ -1853,10 +1901,272 @@ def fetch_ashby_jobs(
     return normalized
 
 
+def smartrecruiters_api_base(board: Board) -> str:
+    return (
+        "https://api.smartrecruiters.com/v1/companies/"
+        f"{quote(board.token, safe='')}/postings"
+    )
+
+
+def smartrecruiters_description(value: Any) -> str:
+    sections = value.get("sections", {}) if isinstance(value, dict) else {}
+    if not isinstance(sections, dict):
+        return ""
+    return clean_whitespace(
+        " ".join(
+            strip_html(section.get("text"))
+            for section in sections.values()
+            if isinstance(section, dict) and section.get("text")
+        )
+    )
+
+
+def fetch_smartrecruiters_jobs(
+    session: requests.Session,
+    board: Board,
+    context: FetchContext,
+) -> list[Job]:
+    criteria = context.criteria
+    now = context.now
+    timeout = context.timeout
+    delay = context.delay
+    base = smartrecruiters_api_base(board)
+    page_size = 100
+    offset = 0
+    all_items: list[dict[str, Any]] = []
+
+    while True:
+        payload = get_json(
+            session,
+            base,
+            params={"limit": page_size, "offset": offset},
+            timeout=timeout,
+        )
+        if not isinstance(payload, dict):
+            raise RuntimeError(f"Unexpected SmartRecruiters response for {board.token}")
+        page = mapping_items(payload.get("content"))
+        all_items.extend(page)
+        offset += len(page)
+        try:
+            total_found = int(payload.get("totalFound", offset))
+        except (TypeError, ValueError):
+            total_found = offset
+        if not page or len(page) < page_size or offset >= total_found:
+            break
+        if delay > 0:
+            time.sleep(delay)
+
+    normalized: list[Job] = []
+    for item in all_items:
+        title = clean_whitespace(item.get("name"))
+        if not matching_terms(title, criteria.role_terms, match_mode=criteria.match_mode):
+            continue
+        if matching_terms(title, criteria.exclude_terms, match_mode=criteria.match_mode):
+            continue
+
+        item_id = clean_whitespace(item.get("id"))
+        if not item_id:
+            continue
+        detail = get_json(session, f"{base}/{quote(item_id, safe='')}", timeout=timeout)
+        if not isinstance(detail, dict):
+            LOGGER.warning(
+                "SmartRecruiters detail was not an object for %s job %s",
+                board.token,
+                item_id,
+            )
+            continue
+        if detail.get("active") is False or str(detail.get("visibility", "")).upper() not in {
+            "",
+            "PUBLIC",
+        }:
+            continue
+        if delay > 0:
+            time.sleep(delay)
+
+        description = smartrecruiters_description(detail.get("jobAd"))
+        location_value = (
+            detail.get("location") if isinstance(detail.get("location"), dict) else {}
+        )
+        location = clean_whitespace(location_value.get("fullLocation"))
+        if not location:
+            location = " | ".join(
+                dict.fromkeys(
+                    clean_whitespace(location_value.get(key))
+                    for key in ("city", "region", "country")
+                    if clean_whitespace(location_value.get(key))
+                )
+            )
+        workplace_type = (
+            "Remote"
+            if location_value.get("remote") is True
+            else "Hybrid"
+            if location_value.get("hybrid") is True
+            else ""
+        )
+        reason = criteria.matches_job(
+            title=title,
+            description=description,
+            location=location,
+            workplace_type=workplace_type,
+        )
+        if reason is None:
+            continue
+
+        posted_dt = parse_datetime(detail.get("releasedDate") or item.get("releasedDate"))
+        if not criteria.includes_posted_at(posted_dt, now=now):
+            continue
+        company = mapping_text(detail.get("company")) or prettify_slug(board.token)
+        job_url = clean_whitespace(detail.get("postingUrl"))
+        apply_url = clean_whitespace(detail.get("applyUrl")) or job_url
+        employment = mapping_text(detail.get("typeOfEmployment"), "label")
+        department = mapping_text(detail.get("department"), "label")
+        function = mapping_text(detail.get("function"), "label")
+
+        normalized.append(
+            Job(
+                platform="smartrecruiters",
+                company=company,
+                title=title,
+                posted_at=iso_or_blank(posted_dt),
+                days_old=days_old(posted_dt, now),
+                location=location,
+                workplace_type=workplace_type,
+                employment_type=employment,
+                department=department,
+                team=function,
+                salary="",
+                job_url=job_url,
+                apply_url=apply_url,
+                board_token=board.token,
+                date_source="releasedDate",
+                match_reason=reason,
+                description=description,
+                platform_job_id=item_id,
+                board_region=board.region,
+                provider_id_trusted=True,
+                live_status="listed",
+                live_checked_at=iso_or_blank(now),
+                live_check_source="smartrecruiters_public_posting_api",
+                live_check_reason="job_present_in_current_company_postings",
+                unique_id=f"smartrecruiters:{board.token}:{item_id}",
+            )
+        )
+
+    return normalized
+
+
+def workable_api_url(board: Board) -> str:
+    return (
+        "https://www.workable.com/api/accounts/"
+        f"{quote(board.token, safe='')}?details=true"
+    )
+
+
+def workable_location(item: dict[str, Any]) -> str:
+    locations: list[str] = []
+    for location in mapping_items(item.get("locations")):
+        rendered = ", ".join(
+            dict.fromkeys(
+                clean_whitespace(location.get(key))
+                for key in ("city", "region", "country")
+                if clean_whitespace(location.get(key))
+            )
+        )
+        if rendered:
+            locations.append(rendered)
+    if not locations:
+        fallback = ", ".join(
+            dict.fromkeys(
+                clean_whitespace(item.get(key))
+                for key in ("city", "state", "country")
+                if clean_whitespace(item.get(key))
+            )
+        )
+        if fallback:
+            locations.append(fallback)
+    return " | ".join(dict.fromkeys(locations))
+
+
+def fetch_workable_jobs(
+    session: requests.Session,
+    board: Board,
+    context: FetchContext,
+) -> list[Job]:
+    # A global /j/<shortcode> Workable link does not reveal the account name
+    # needed by the public jobs endpoint. The discovered page remains available
+    # to the additive JSON-LD pass.
+    if board.token == WORKABLE_SHORT_LINK_BOARD:
+        return []
+
+    payload = get_json(session, workable_api_url(board), timeout=context.timeout)
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"Unexpected Workable response for {board.token}")
+    company = clean_whitespace(payload.get("name")) or prettify_slug(board.token)
+    normalized: list[Job] = []
+
+    for item in mapping_items(payload.get("jobs")):
+        title = clean_whitespace(item.get("title"))
+        description = strip_html(item.get("description"))
+        location = workable_location(item)
+        workplace_type = "Remote" if item.get("telecommuting") is True else ""
+        reason = context.criteria.matches_job(
+            title=title,
+            description=description,
+            location=location,
+            workplace_type=workplace_type,
+        )
+        if reason is None:
+            continue
+
+        published_on = item.get("published_on")
+        posted_dt = parse_datetime(published_on or item.get("created_at"))
+        if not context.criteria.includes_posted_at(posted_dt, now=context.now):
+            continue
+        item_id = clean_whitespace(item.get("shortcode"))
+        job_url = clean_whitespace(item.get("shortlink") or item.get("url"))
+        apply_url = clean_whitespace(item.get("application_url")) or job_url
+        if not item_id or not job_url:
+            continue
+
+        normalized.append(
+            Job(
+                platform="workable",
+                company=company,
+                title=title,
+                posted_at=iso_or_blank(posted_dt),
+                days_old=days_old(posted_dt, context.now),
+                location=location,
+                workplace_type=workplace_type,
+                employment_type=clean_whitespace(item.get("employment_type")),
+                department=clean_whitespace(item.get("department")),
+                team=clean_whitespace(item.get("function")),
+                salary="",
+                job_url=job_url,
+                apply_url=apply_url,
+                board_token=board.token,
+                date_source="published_on" if published_on else "created_at",
+                match_reason=reason,
+                description=description,
+                platform_job_id=item_id,
+                board_region=board.region,
+                provider_id_trusted=True,
+                live_status="listed",
+                live_checked_at=iso_or_blank(context.now),
+                live_check_source="workable_public_account_api",
+                live_check_reason="job_present_in_current_account_response",
+                unique_id=f"workable:{board.token}:{item_id}",
+            )
+        )
+
+    return normalized
+
+
 BOARD_FETCHERS: dict[str, Callable[[requests.Session, Board, FetchContext], list[Job]]] = {
     "greenhouse": fetch_greenhouse_jobs,
     "lever": fetch_lever_jobs,
     "ashby": fetch_ashby_jobs,
+    "smartrecruiters": fetch_smartrecruiters_jobs,
+    "workable": fetch_workable_jobs,
 }
 
 
@@ -2165,6 +2475,204 @@ def verify_ashby_jobs_live(
                 )
 
 
+def verify_smartrecruiters_job_live(
+    session: requests.Session,
+    job: Job,
+    *,
+    timeout: float,
+    now: datetime,
+) -> None:
+    if not job.provider_id_trusted or not job.platform_job_id or not job.board_token:
+        set_live_status(
+            job,
+            status="unknown",
+            source="smartrecruiters_posting_api",
+            now=now,
+            reason="untrusted_or_missing_company_or_posting_id",
+        )
+        return
+    board = Board("smartrecruiters", job.board_token, job.board_region)
+    url = f"{smartrecruiters_api_base(board)}/{quote(job.platform_job_id, safe='')}"
+    response = response_or_none(session, url, timeout=timeout)
+    if response is None:
+        set_live_status(
+            job,
+            status="unknown",
+            source="smartrecruiters_posting_api",
+            now=now,
+            reason="request_failed",
+        )
+        return
+    if response.status_code in {404, 410}:
+        set_live_status(
+            job,
+            status="closed",
+            source="smartrecruiters_posting_api",
+            now=now,
+            reason=f"http_{response.status_code}",
+            http_status=response.status_code,
+            final_url=response.url,
+        )
+        return
+    if response.status_code >= 400:
+        set_live_status(
+            job,
+            status="unknown",
+            source="smartrecruiters_posting_api",
+            now=now,
+            reason=f"http_{response.status_code}",
+            http_status=response.status_code,
+            final_url=response.url,
+        )
+        return
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = None
+    if not isinstance(payload, dict) or clean_whitespace(payload.get("id")) != str(
+        job.platform_job_id
+    ):
+        set_live_status(
+            job,
+            status="unknown",
+            source="smartrecruiters_posting_api",
+            now=now,
+            reason="unexpected_posting_response",
+            http_status=response.status_code,
+            final_url=response.url,
+        )
+        return
+    if payload.get("active") is False or str(payload.get("visibility", "")).upper() not in {
+        "",
+        "PUBLIC",
+    }:
+        set_live_status(
+            job,
+            status="closed",
+            source="smartrecruiters_posting_api",
+            now=now,
+            reason="posting_not_active_or_public",
+            http_status=response.status_code,
+            final_url=response.url,
+        )
+        return
+    set_live_status(
+        job,
+        status="live",
+        source="smartrecruiters_posting_api",
+        now=now,
+        reason="active_public_posting_present",
+        http_status=response.status_code,
+        final_url=response.url,
+    )
+
+
+def verify_workable_jobs_live(
+    session: requests.Session,
+    jobs: Sequence[Job],
+    *,
+    timeout: float,
+    now: datetime,
+) -> None:
+    by_board: dict[tuple[str, str], list[Job]] = {}
+    for job in jobs:
+        if (
+            not job.provider_id_trusted
+            or not job.platform_job_id
+            or not job.board_token
+            or job.board_token == WORKABLE_SHORT_LINK_BOARD
+        ):
+            set_live_status(
+                job,
+                status="unknown",
+                source="workable_account_api",
+                now=now,
+                reason="untrusted_or_missing_account_or_shortcode",
+            )
+            continue
+        by_board.setdefault((job.board_region, job.board_token), []).append(job)
+
+    for (board_region, board_token), board_jobs in by_board.items():
+        board = Board("workable", board_token, board_region)
+        response = response_or_none(session, workable_api_url(board), timeout=timeout)
+        if response is None:
+            for job in board_jobs:
+                set_live_status(
+                    job,
+                    status="unknown",
+                    source="workable_account_api",
+                    now=now,
+                    reason="request_failed",
+                )
+            continue
+        if response.status_code in {404, 410}:
+            for job in board_jobs:
+                set_live_status(
+                    job,
+                    status="closed",
+                    source="workable_account_api",
+                    now=now,
+                    reason=f"http_{response.status_code}",
+                    http_status=response.status_code,
+                    final_url=response.url,
+                )
+            continue
+        if response.status_code >= 400:
+            for job in board_jobs:
+                set_live_status(
+                    job,
+                    status="unknown",
+                    source="workable_account_api",
+                    now=now,
+                    reason=f"http_{response.status_code}",
+                    http_status=response.status_code,
+                    final_url=response.url,
+                )
+            continue
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = None
+        if not isinstance(payload, dict):
+            for job in board_jobs:
+                set_live_status(
+                    job,
+                    status="unknown",
+                    source="workable_account_api",
+                    now=now,
+                    reason="unexpected_account_response",
+                    http_status=response.status_code,
+                    final_url=response.url,
+                )
+            continue
+        active_ids = {
+            clean_whitespace(item.get("shortcode"))
+            for item in mapping_items(payload.get("jobs"))
+            if item.get("shortcode")
+        }
+        for job in board_jobs:
+            if job.platform_job_id in active_ids:
+                set_live_status(
+                    job,
+                    status="live",
+                    source="workable_account_api",
+                    now=now,
+                    reason="job_present_in_current_account_response",
+                    http_status=response.status_code,
+                    final_url=response.url,
+                )
+            else:
+                set_live_status(
+                    job,
+                    status="closed",
+                    source="workable_account_api",
+                    now=now,
+                    reason="job_missing_from_current_account_response",
+                    http_status=response.status_code,
+                    final_url=response.url,
+                )
+
+
 def preserve_listing_status_on_page_uncertainty(
     job: Job,
     *,
@@ -2298,16 +2806,23 @@ def verify_live_jobs(
     """Perform a final tri-state liveness check after result deduplication."""
     provider_jobs = [job for job in jobs if job.provider_id_trusted]
     ashby_jobs = [job for job in provider_jobs if job.platform == "ashby"]
+    workable_jobs = [job for job in provider_jobs if job.platform == "workable"]
     if target in {"listing", "both"}:
         for job in provider_jobs:
             if job.platform == "greenhouse":
                 verify_greenhouse_job_live(session, job, timeout=timeout, now=now)
             elif job.platform == "lever":
                 verify_lever_job_live(session, job, timeout=timeout, now=now)
-            if job.platform in {"greenhouse", "lever"} and delay > 0:
+            elif job.platform == "smartrecruiters":
+                verify_smartrecruiters_job_live(session, job, timeout=timeout, now=now)
+            if job.platform in {"greenhouse", "lever", "smartrecruiters"} and delay > 0:
                 time.sleep(delay)
         if ashby_jobs:
             verify_ashby_jobs_live(session, ashby_jobs, timeout=timeout, now=now)
+            if delay > 0:
+                time.sleep(delay)
+        if workable_jobs:
+            verify_workable_jobs_live(session, workable_jobs, timeout=timeout, now=now)
             if delay > 0:
                 time.sleep(delay)
 
@@ -2560,15 +3075,16 @@ def fallback_candidate_board_keys(
         return sorted(candidates_by_board)
     if mode != "failed-feed":
         return []
-    generic_web_boards = {
+    page_fallback_boards = {
         board_key
         for board_key, candidates in candidates_by_board.items()
         if any(
-            candidate.board is not None and candidate.board.platform == "web"
+            candidate.board is not None
+            and candidate.board.platform in {"web", "smartrecruiters", "workable"}
             for candidate in candidates
         )
     }
-    return sorted(failed_boards | generic_web_boards)
+    return sorted(failed_boards | page_fallback_boards)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -2783,7 +3299,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="all",
         help=(
             "Parse discovered job pages as an additive JSON-LD source. failed-feed "
-            "also includes generic web ATS pages; all gives the highest coverage "
+            "also includes page-based ATS candidates; all gives the highest coverage "
             "(default: all)."
         ),
     )

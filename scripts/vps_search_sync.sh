@@ -250,6 +250,8 @@ python src/job_automation.py search \
   --ats-platform greenhouse \
   --ats-platform lever \
   --ats-platform ashby \
+  --ats-platform smartrecruiters \
+  --ats-platform workable \
   "${SEARCH_MODE_ARGS[@]}" \
   --verify-live \
   --private-generation-output "$PRIVATE_GENERATION_OUTPUT"

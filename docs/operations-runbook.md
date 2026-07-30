@@ -151,9 +151,10 @@ pwsh scripts\install_vps_continuous_lever.ps1
 These installations replace the marked daily cron entry with the systemd
 units `job-app-search-sync.service`, `job-app-ashby.service`,
 `job-app-greenhouse.service`, and `job-app-lever.service`. All four run in
-parallel. The search service continuously refreshes verified job discovery,
-publishes only the safe coverage/jobs/board-cache snapshot, waits five minutes,
-and repeats. It does not generate documents or submit applications.
+parallel. The search service continuously refreshes verified Greenhouse, Lever,
+Ashby, SmartRecruiters, and Workable job discovery, publishes only the safe
+coverage/jobs/board-cache snapshot, waits five minutes, and repeats. It does
+not generate documents or submit applications.
 
 Installing or repairing one provider does not stop or restart another or the
 search service. When replacing an already-active instance of that same
@@ -334,11 +335,13 @@ server or $DISPLAY".
 ### Automatic VPS application stage
 
 After publishing the safe search snapshot and completing the bounded document
-stage, the daily workflow invokes the guarded application runner. Only complete
-`live` records for Greenhouse, Lever, and Ashby with an `archived` entry in
-`output/vps_document_archive_state.json` are eligible. The runner calls the
-existing orchestrator with `--live-submit`, processes records sequentially, and
-uses `application.vps_max_attempts_per_ats` as its per-provider limit.
+stage, the explicit full daily/on-demand workflow invokes the guarded
+application runner. Only complete `live` records with an `archived` entry in
+`output/vps_document_archive_state.json` are eligible; current search sources
+include Greenhouse, Lever, Ashby, SmartRecruiters, and Workable. The runner
+calls the existing orchestrator with `--live-submit`, processes records
+sequentially, and uses `application.vps_max_attempts_per_ats` as its
+per-provider limit.
 
 `output/vps_application_state.json`,
 `output/vps_application_results/`, `output/submission_log.json`, and ATS

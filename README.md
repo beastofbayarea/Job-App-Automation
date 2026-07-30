@@ -6,7 +6,7 @@ The public entry point is `src/job_automation.py`. The implementation under `src
 
 ## Capabilities
 
-- Search Greenhouse, Lever, Ashby, and generic JSON-LD job pages without API keys. Search produces CSV results, optional JSON, a reusable board cache, and a coverage report.
+- Search Greenhouse, Lever, Ashby, SmartRecruiters, Workable, and generic JSON-LD job pages without configured API credentials. Search produces CSV results, optional JSON, a reusable board cache, and a coverage report.
 - Generate a role-specific PDF resume with Vertex AI when configured, or a rule-based fallback if AI is unavailable. Source identity, employment facts, and education are validated before rendering.
 - Generate a one-page, evidence-constrained cover letter with a JSON audit sidecar. The generator rejects invented source-claim IDs and invalid or multi-page output.
 - Generate a matching CV/cover-letter pair and store or retrieve it from private, hash-verified VPS storage using the job URL, company, title, and candidate email.
@@ -100,13 +100,15 @@ Compatibility aliases are `orchestrate` for `apply`, `archive` for `documents`, 
 
 ### Search job boards
 
-`--role-type` and `--ats-platform` are required and repeatable. Supported platforms are `greenhouse`, `lever`, `ashby`, and `web` (generic JSON-LD pages). Searches default to exhaustive board discovery, no rolling date limit, and the following locations when none is supplied: US Remote, UK, Ireland, India Remote, Delhi, Noida, France, Europe Remote, UAE, Saudi Arabia, Singapore, Australia, New Zealand, and Hong Kong.
+`--role-type` and `--ats-platform` are required and repeatable. Supported platforms are `greenhouse`, `lever`, `ashby`, `smartrecruiters`, `workable`, and `web` (generic JSON-LD pages). Searches default to exhaustive board discovery, no rolling date limit, and the following locations when none is supplied: US Remote, UK, Ireland, India Remote, Delhi, Noida, France, Europe Remote, UAE, Saudi Arabia, Singapore, Australia, New Zealand, and Hong Kong.
 
 ```powershell
 python src/job_automation.py search `
   --role-type "Product Manager" `
   --ats-platform greenhouse `
   --ats-platform lever `
+  --ats-platform smartrecruiters `
+  --ats-platform workable `
   --location "New York" `
   --verify-live `
   --require-live
@@ -368,11 +370,11 @@ before the next cycle. Systemd restarts the worker after crashes and boots.
 Ambiguous, CAPTCHA-gated, or interrupted submission attempts are quarantined
 for review and are never retried automatically.
 
-The search service continuously refreshes verified Greenhouse, Lever, and
-Ashby listings, publishes only the safe coverage/jobs/board-cache snapshot,
-waits five minutes, and repeats. It never generates documents or submits
-applications, so those boundaries remain owned by the guarded ATS workers and
-the explicit full daily/on-demand pipeline.
+The search service continuously refreshes verified Greenhouse, Lever, Ashby,
+SmartRecruiters, and Workable listings, publishes only the safe
+coverage/jobs/board-cache snapshot, waits five minutes, and repeats. It never
+generates documents or submits applications, so those boundaries remain owned
+by the guarded ATS workers and the explicit full daily/on-demand pipeline.
 
 Each successful scheduled search publishes its complete safe snapshot before
 starting private document work. The workflow then processes a bounded number of
@@ -383,14 +385,15 @@ while continuing through both new jobs and prior failures. Full job
 descriptions and document-generation state remain private on the VPS and are
 never copied to `vps-search-output`.
 
-The VPS then submits only eligible verified-live Greenhouse, Lever, and Ashby
-jobs whose document pair is already archived. Document failures remain visible
-without suppressing safe application work for other archived jobs. The runner
-processes jobs sequentially, attempts no more than the configured per-ATS limit,
-and skips every URL already present in confirmed or attempted state. A CAPTCHA,
-missing required field, timeout, engine failure, or unconfirmed attempt is
-recorded and skipped so processing can continue. Full failure details are
-written privately to
+The explicit full daily/on-demand pipeline can then submit eligible
+verified-live jobs whose document pair is already archived, including
+Greenhouse, Lever, Ashby, SmartRecruiters, and Workable results. Document
+failures remain visible without suppressing safe application work for other
+archived jobs. The runner processes jobs sequentially, attempts no more than the
+configured per-ATS limit, and skips every URL already present in confirmed or
+attempted state. A CAPTCHA, missing required field, timeout, engine failure, or
+unconfirmed attempt is recorded and skipped so processing can continue. Full
+failure details are written privately to
 `output/vps_application_failures.json` and per-job result files. Application
 results, screenshots, submission logs, and state never enter
 `vps-search-output`.

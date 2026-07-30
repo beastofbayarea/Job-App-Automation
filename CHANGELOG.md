@@ -6,6 +6,8 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Added
 
+- First-class SmartRecruiters and Workable discovery, public-feed normalization,
+  and provider-aware liveness checks in local and continuous VPS searches.
 - Operational, configuration, CLI, data-format, security, architecture, ATS-support, and troubleshooting documentation.
 - Contributor guidance for safe local development and test boundaries.
 - VPS search-sync freshness reporting, dry-run generated-PDF pruning, an

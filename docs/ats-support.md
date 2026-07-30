@@ -1,6 +1,6 @@
 # ATS support
 
-The application orchestrator supports nine ATS providers. Search has native public-board discovery for Ashby, Greenhouse, and Lever; the six phase-one providers are discovered through `web` JSON-LD pages and routed to their engine from a job-specific `job_url` or `apply_url`.
+The application orchestrator supports nine ATS providers. Search has first-class public-board discovery for Ashby, Greenhouse, Lever, SmartRecruiters, and Workable. SmartRecruiters and Workable use their public posting/account responses with additive JobPosting page parsing; the remaining phase-one providers are discovered through `web` JSON-LD pages and routed to their engine from a job-specific `job_url` or `apply_url`.
 
 For the original feasibility analysis and remaining-provider roadmap, see [ATS Automation Feasibility & RICE Analysis](ATS_AUTOMATION_FEASIBILITY_AND_RICE.md).
 
@@ -10,8 +10,8 @@ For the original feasibility analysis and remaining-provider roadmap, see [ATS A
 | Ashby | Public board/feed and page discovery | Supported | Ashby URLs can provide context for resume and cover-letter generation. |
 | Greenhouse | Public board/feed and page discovery | Supported | Use headed diagnostic runs when a provider flow needs inspection. |
 | Lever | Public board/feed and page discovery | Supported | Search pagination is controlled by `max_lever_pages`. |
-| Workable | Generic JSON-LD (`web`) | Guarded browser form | Supports standard identity, résumé, cover-letter, required-field, CAPTCHA, and confirmation gates. |
-| SmartRecruiters | Generic JSON-LD (`web`) | Guarded browser form | Stops safely when the OneClick flow presents anti-bot verification. |
+| Workable | Public account feed and page discovery | Guarded browser form | Supports standard identity, résumé, cover-letter, required-field, CAPTCHA, and confirmation gates. |
+| SmartRecruiters | Public posting feed and page discovery | Guarded browser form | Stops safely when the OneClick flow presents anti-bot verification. |
 | Recruitee | Generic JSON-LD (`web`) | Guarded browser form | Supports current dotted candidate field names and file controls. |
 | BambooHR | Generic JSON-LD (`web`) | Guarded browser form | Provider pages vary; use fill-only diagnostics before a live attempt. |
 | Breezy HR | Generic JSON-LD (`web`) | Guarded browser form | Supports current `cName`, `cEmail`, `cResume`, and cover-letter controls. |

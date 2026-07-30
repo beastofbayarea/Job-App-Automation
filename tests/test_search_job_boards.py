@@ -263,6 +263,45 @@ class SearchJobBoardsTests(unittest.TestCase):
         )
         self.assertIsNone(args.location)
 
+    def test_parser_supports_first_class_smartrecruiters_and_workable_search(self) -> None:
+        args = search.build_parser().parse_args(
+            [
+                "--role-type",
+                "Product Manager",
+                "--ats-platform",
+                "smartrecruiters",
+                "--ats-platform",
+                "workable",
+            ]
+        )
+        self.assertEqual(["smartrecruiters", "workable"], args.ats_platforms)
+
+    def test_smartrecruiters_and_workable_urls_use_provider_boards(self) -> None:
+        smartrecruiters = search.board_from_url(
+            "https://jobs.smartrecruiters.com/Example/123-product-manager"
+        )
+        workable = search.board_from_url(
+            "https://apply.workable.com/example-company/j/ABC123/"
+        )
+        workable_short = search.board_from_url("https://apply.workable.com/j/ABC123/")
+
+        self.assertEqual(search.Board("smartrecruiters", "Example"), smartrecruiters)
+        self.assertEqual(search.Board("workable", "example-company"), workable)
+        self.assertEqual(
+            search.Board("workable", "apply.workable.com"),
+            workable_short,
+        )
+        self.assertTrue(
+            search.looks_like_job_url(
+                "https://jobs.smartrecruiters.com/Example/123-product-manager"
+            )
+        )
+        self.assertTrue(
+            search.looks_like_job_url(
+                "https://apply.workable.com/example-company/j/ABC123/"
+            )
+        )
+
     def test_generic_ats_url_becomes_web_candidate(self) -> None:
         board = search.board_from_url(
             "https://example.wd1.myworkdayjobs.com/en-US/Careers/job/New-York/Product-Manager_123"
@@ -373,6 +412,44 @@ class SearchJobBoardsTests(unittest.TestCase):
         )
         self.assertEqual("live", job.live_status)
         self.assertEqual("greenhouse_job_api", job.live_check_source)
+
+    def test_smartrecruiters_job_endpoint_confirms_live_role(self) -> None:
+        job = make_job(
+            platform="smartrecruiters",
+            board_token="example",
+            platform_job_id="123",
+            provider_id_trusted=True,
+            live_status="listed",
+        )
+        response = FakeResponse(
+            payload={"id": "123", "active": True, "visibility": "PUBLIC"}
+        )
+        search.verify_smartrecruiters_job_live(
+            FakeSession(response),
+            job,
+            timeout=1,
+            now=NOW,
+        )
+        self.assertEqual("live", job.live_status)
+        self.assertEqual("smartrecruiters_posting_api", job.live_check_source)
+
+    def test_workable_account_endpoint_confirms_live_role(self) -> None:
+        job = make_job(
+            platform="workable",
+            board_token="example",
+            platform_job_id="ABC123",
+            provider_id_trusted=True,
+            live_status="listed",
+        )
+        response = FakeResponse(payload={"jobs": [{"shortcode": "ABC123"}]})
+        search.verify_workable_jobs_live(
+            FakeSession(response),
+            [job],
+            timeout=1,
+            now=NOW,
+        )
+        self.assertEqual("live", job.live_status)
+        self.assertEqual("workable_account_api", job.live_check_source)
 
     def test_ashby_missing_provider_id_is_unknown(self) -> None:
         job = make_job(
@@ -754,6 +831,85 @@ class SearchJobBoardsTests(unittest.TestCase):
         self.assertEqual("USD 120000 - 150000 per year", search.format_lever_salary(salary_dict))
         self.assertEqual("", search.format_lever_salary(None))
 
+    def test_smartrecruiters_public_feed_normalizes_matching_job(self) -> None:
+        listing = {
+            "totalFound": 1,
+            "content": [
+                {
+                    "id": "123",
+                    "name": "Product Manager",
+                    "releasedDate": "2026-07-20T00:00:00Z",
+                }
+            ],
+        }
+        detail = {
+            "id": "123",
+            "name": "Product Manager",
+            "active": True,
+            "visibility": "PUBLIC",
+            "releasedDate": "2026-07-20T00:00:00Z",
+            "company": {"name": "Example"},
+            "location": {"fullLocation": "New York", "hybrid": True},
+            "department": {"label": "Product"},
+            "typeOfEmployment": {"label": "Full-time"},
+            "postingUrl": "https://jobs.smartrecruiters.com/example/123-product-manager",
+            "applyUrl": "https://jobs.smartrecruiters.com/example/123-product-manager?oga=true",
+            "jobAd": {
+                "sections": {
+                    "jobDescription": {"text": "<p>Build an AI platform.</p>"}
+                }
+            },
+        }
+        with patch.object(search, "get_json", side_effect=[listing, detail]):
+            jobs = search.fetch_smartrecruiters_jobs(
+                FakeSession(FakeResponse()),
+                search.Board("smartrecruiters", "example"),
+                make_fetch_context(),
+            )
+
+        self.assertEqual(1, len(jobs))
+        self.assertEqual("smartrecruiters", jobs[0].platform)
+        self.assertEqual("123", jobs[0].platform_job_id)
+        self.assertTrue(jobs[0].provider_id_trusted)
+        self.assertEqual("Hybrid", jobs[0].workplace_type)
+
+    def test_workable_public_feed_normalizes_matching_job(self) -> None:
+        payload = {
+            "name": "Example",
+            "jobs": [
+                {
+                    "title": "Product Manager",
+                    "shortcode": "ABC123",
+                    "employment_type": "Full-time",
+                    "telecommuting": True,
+                    "department": "Product",
+                    "shortlink": "https://apply.workable.com/j/ABC123",
+                    "application_url": "https://apply.workable.com/j/ABC123/apply",
+                    "published_on": "2026-07-20",
+                    "locations": [
+                        {
+                            "city": "New York",
+                            "region": "New York",
+                            "country": "United States",
+                        }
+                    ],
+                    "description": "<p>Own the AI product roadmap.</p>",
+                }
+            ],
+        }
+        with patch.object(search, "get_json", return_value=payload):
+            jobs = search.fetch_workable_jobs(
+                FakeSession(FakeResponse()),
+                search.Board("workable", "example"),
+                make_fetch_context(),
+            )
+
+        self.assertEqual(1, len(jobs))
+        self.assertEqual("workable", jobs[0].platform)
+        self.assertEqual("ABC123", jobs[0].platform_job_id)
+        self.assertTrue(jobs[0].provider_id_trusted)
+        self.assertEqual("Remote", jobs[0].workplace_type)
+
     def test_restricted_urls_and_boards(self) -> None:
         self.assertTrue(search.is_restricted_url("https://jobgether.com/"))
         self.assertTrue(search.is_restricted_url("https://jobgether.com/job/123"))
@@ -797,4 +953,3 @@ class SearchJobBoardsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
