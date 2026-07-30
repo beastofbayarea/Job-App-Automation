@@ -92,6 +92,23 @@ class SubmissionLogTests(unittest.TestCase):
         self.assertIsNotNone(log.get(second_id))
         self.assertEqual(len(log.find_by_company("OpenAI")), 2)
 
+    def test_independent_process_snapshots_merge_without_lost_updates(self) -> None:
+        first = SubmissionLog()
+        second = SubmissionLog()
+        first.record(_record(company="First Company", role="First Role"))
+        second.record(_record(company="Second Company", role="Second Role"))
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "submission_log.json"
+            first.save(path)
+            second.save(path)
+
+            restored = SubmissionLog()
+            self.assertEqual(restored.load(path), 2)
+            self.assertEqual(len(restored.find_by_company("First Company")), 1)
+            self.assertEqual(len(restored.find_by_company("Second Company")), 1)
+            self.assertFalse(path.with_name("submission_log.json.lock").exists())
+
     def test_save_and_load_round_trip_preserves_entries(self) -> None:
         log = SubmissionLog()
         log.record(_record())

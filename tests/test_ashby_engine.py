@@ -1,10 +1,12 @@
 """Unit and mock integration tests for ashby.py ATS engine."""
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 import pytest
 
 from job_application_automation.engines.ashby import (
+    _attach_file,
+    _extract_cover_letter_text,
     _safe_filename_part,
     _start_date_from_offset,
     expand,
@@ -36,6 +38,48 @@ def test_extract_lowest_salary() -> None:
 def test_safe_filename_part() -> None:
     assert _safe_filename_part("Acme Corp / Tech") == "Acme_Corp_Tech"
     assert _safe_filename_part("", fallback="Fallback") == "Fallback"
+
+
+def test_attach_file_waits_for_ashby_widget_confirmation(tmp_path: Path) -> None:
+    cover_letter = tmp_path / "cover_letter.pdf"
+    cover_letter.write_bytes(b"%PDF-test")
+    page = MagicMock()
+    field = MagicMock()
+    file_input = MagicMock()
+    upload_button = MagicMock()
+    field.count.return_value = 1
+    field.inner_text.side_effect = ["", "cover_letter.pdf"]
+    field.get_by_text.return_value.first = upload_button
+    upload_button.count.return_value = 0
+
+    with patch("job_application_automation.engines.ashby.time.sleep"):
+        attached = _attach_file(
+            page,
+            field,
+            file_input,
+            cover_letter,
+            "Cover letter",
+        )
+
+    assert attached is True
+    file_input.set_input_files.assert_called_once_with(str(cover_letter))
+
+
+def test_extract_cover_letter_text_preserves_page_boundaries() -> None:
+    reader = MagicMock()
+    first_page = MagicMock()
+    second_page = MagicMock()
+    first_page.extract_text.return_value = "Opening paragraph"
+    second_page.extract_text.return_value = "Closing paragraph"
+    reader.pages = [first_page, second_page]
+
+    with patch(
+        "job_application_automation.engines.ashby.PdfReader",
+        return_value=reader,
+    ):
+        text = _extract_cover_letter_text(Path("cover_letter.pdf"))
+
+    assert text == "Opening paragraph\n\nClosing paragraph"
 
 
 def test_default_relative_start_date() -> None:

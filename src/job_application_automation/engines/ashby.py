@@ -41,7 +41,9 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, TypeVar
 
+from pypdf import PdfReader
 from playwright.sync_api import (
+    Locator,
     Page,
     TimeoutError as PlaywrightTimeout,
     expect,
@@ -1201,14 +1203,78 @@ def fill_eeo(page: Page, profile: Mapping[str, Any]) -> None:
         logger.warning(f"EEO partial failure: {e}")
 
 
+def _attach_file(
+    page: Page,
+    field: Locator,
+    file_input: Locator,
+    path: Path,
+    label: str,
+) -> bool:
+    """Attach one file and wait for Ashby's widget to confirm the upload."""
+    try:
+        existing_text = field.inner_text() if field.count() else ""
+        if path.name.lower() in existing_text.lower():
+            logger.info("%s attachment already present.", label)
+            return True
+        upload_button = field.get_by_text(
+            re.compile(r"^\s*Upload File\s*$", re.I)
+        ).first
+        used_file_chooser = False
+        if upload_button.count() and upload_button.is_visible():
+            try:
+                with page.expect_file_chooser(timeout=5000) as chooser_info:
+                    upload_button.click()
+                chooser_info.value.set_files(str(path))
+                used_file_chooser = True
+            except Exception as chooser_exc:
+                logger.debug("%s file chooser path failed: %s", label, chooser_exc)
+        if not used_file_chooser:
+            file_input.set_input_files(str(path))
+
+        for _ in range(20):
+            time.sleep(0.5)
+            field_text = field.inner_text() if field.count() else ""
+            if path.name.lower() in field_text.lower():
+                logger.info("%s uploaded and attached: %s", label, path.name)
+                return True
+        logger.warning(
+            "%s input accepted the file, but Ashby did not render an "
+            "attachment confirmation.",
+            label,
+        )
+    except Exception as exc:
+        logger.error("%s upload error: %s", label, exc)
+    return False
+
+
+def _extract_cover_letter_text(path: Path) -> str:
+    """Extract the generated letter for Ashby forms that use a text area."""
+    try:
+        return "\n\n".join(
+            text
+            for page in PdfReader(str(path)).pages
+            if (text := (page.extract_text() or "").strip())
+        ).strip()
+    except Exception as exc:
+        logger.warning("Could not extract cover-letter PDF text: %s", exc)
+        return ""
+
+
 def fill_personal_and_files(
     page: Page,
     profile: Mapping[str, Any],
     email: str,
     resume: Path,
+    cover_letter: Path | None = None,
 ) -> dict[str, bool]:
-    """Fill resume, name, email, phone, location, and LinkedIn fields; return per-field success flags used to gate submission."""
-    flags = {"name": False, "email": False, "phone": False, "resume": False}
+    """Fill identity fields and attach the prepared resume and cover letter."""
+    flags = {
+        "name": False,
+        "email": False,
+        "phone": False,
+        "resume": False,
+        "cover_letter": cover_letter is None,
+    }
 
     resume_loc = page.locator(
         'input[id="_systemfield_resume"], input[name="_systemfield_resume"]'
@@ -1231,54 +1297,44 @@ def fill_personal_and_files(
             ).lower()
             if "autofill" not in lbl and "cover" not in lbl:
                 resume_loc = finp
+                resume_field = finp.locator(
+                    "xpath=ancestor::*[contains(concat(' ', normalize-space(@class), ' '), "
+                    "' ashby-application-form-field-entry ')][1]"
+                )
                 break
 
     if resume_loc.count():
-        try:
-            existing_text = resume_field.inner_text() if resume_field.count() else ""
-            if re.search(r"\.(pdf|docx?|odt|rtf)\b", existing_text, re.I):
-                flags["resume"] = True
-                logger.info("Resume attachment already present.")
-            else:
-                upload_button = resume_field.get_by_text(
-                    re.compile(r"^\s*Upload File\s*$", re.I)
-                ).first
-                used_file_chooser = False
-                if upload_button.count() and upload_button.is_visible():
-                    try:
-                        with page.expect_file_chooser(timeout=5000) as chooser_info:
-                            upload_button.click()
-                        chooser_info.value.set_files(str(resume))
-                        used_file_chooser = True
-                    except Exception as chooser_exc:
-                        logger.debug("Resume file chooser path failed: %s", chooser_exc)
-                if not used_file_chooser:
-                    resume_loc.set_input_files(str(resume))
-                # Ashby uploads asynchronously. The native input can contain a
-                # local path before the server-side attachment is accepted, so
-                # require the field widget itself to render the filename.
-                attached = False
-                for _ in range(20):
-                    time.sleep(0.5)
-                    field_text = resume_field.inner_text() if resume_field.count() else ""
-                    if resume.name.lower() in field_text.lower():
-                        attached = True
-                        break
-                flags["resume"] = attached
-                if attached:
-                    logger.info("Resume uploaded and attached: %s", resume.name)
-                else:
-                    logger.warning(
-                        "Resume input accepted the file, but Ashby did not render "
-                        "an attachment confirmation."
-                    )
-        except Exception as e:
-            logger.error(f"Resume upload error: {e}")
+        flags["resume"] = _attach_file(
+            page,
+            resume_field,
+            resume_loc,
+            resume,
+            "Resume",
+        )
     else:
         # Some Ashby applications intentionally omit a resume field. Absence
         # is not equivalent to a failed required upload.
         flags["resume"] = True
         logger.info("This application does not request a resume upload.")
+
+    if cover_letter is not None:
+        cover_field = (
+            page.locator(".ashby-application-form-field-entry")
+            .filter(has_text=re.compile(r"\bcover\s+letter\b", re.I))
+            .first
+        )
+        cover_input = cover_field.locator('input[type="file"]').first
+        if cover_input.count():
+            flags["cover_letter"] = _attach_file(
+                page,
+                cover_field,
+                cover_input,
+                cover_letter,
+                "Cover letter",
+            )
+        else:
+            flags["cover_letter"] = True
+            logger.info("This application does not request a cover-letter upload.")
 
     fn_loc = page.locator(
         'input[id*="first" i], input[name*="first" i], input[aria-label*="First Name" i]'
@@ -1687,6 +1743,11 @@ def fill_secondary(
                 configured_essay = _configured_answer(profile, lbl)
                 val = (
                     configured_essay
+                    or (
+                        profile.get("_cover_letter_text")
+                        if "cover letter" in lbl
+                        else None
+                    )
                     or (
                         essay_dict.get("why")
                         if any(w in lbl for w in ("why", "interest", "mission", "fit", "inspire"))
@@ -2170,12 +2231,13 @@ def _fill_current_form(
     role: str,
     email: str,
     resume: Path,
+    cover_letter: Path | None = None,
 ) -> dict[str, bool]:
     """Run every fill helper once against the currently visible Ashby form step."""
     outcomes = [
         FormSectionOutcome(
             "personal_and_files",
-            fill_personal_and_files(page, profile, email, resume),
+            fill_personal_and_files(page, profile, email, resume, cover_letter),
         )
     ]
     fill_secondary(page, profile, defaults, essay, company, role)
@@ -2440,6 +2502,7 @@ def run_job(
     essay: str = "",
     live: bool = False,
     cfg: Mapping[str, Any] | None = None,
+    cover_letter_path: str = "",
 ) -> str:
     """Open the job, fill every form step, validate required fields, and submit if `live`; return the run's outcome status string."""
     if cfg is None:
@@ -2500,6 +2563,19 @@ def run_job(
         raise FileNotFoundError(f"Resume PDF file not found at: {resume_path}")
     if resume.stat().st_size == 0:
         raise ValueError(f"Resume file is empty: {resume}")
+    cover_letter = (
+        Path(cover_letter_path).expanduser().resolve()
+        if cover_letter_path
+        else None
+    )
+    if cover_letter is not None:
+        if not cover_letter.is_file():
+            raise FileNotFoundError(
+                f"Cover-letter PDF file not found at: {cover_letter_path}"
+            )
+        if cover_letter.stat().st_size == 0:
+            raise ValueError(f"Cover-letter file is empty: {cover_letter}")
+        profile["_cover_letter_text"] = _extract_cover_letter_text(cover_letter)
 
     email = resolve_candidate_email(profile)
 
@@ -2579,6 +2655,7 @@ def run_job(
                     role,
                     email,
                     resume,
+                    cover_letter,
                 )
                 ss(page, ashby_dir, comp_name, f"step{step}")
                 if not can_advance(page):
@@ -2596,6 +2673,7 @@ def run_job(
                 profile,
                 email,
                 resume,
+                cover_letter,
             )
             critical = aggregate_section_outcomes(
                 (
@@ -2611,7 +2689,9 @@ def run_job(
             ss(page, ashby_dir, comp_name, "prefilled")
 
             missing = [
-                k for k, ok in critical.items() if not ok and k in ("name", "email", "resume")
+                k
+                for k, ok in critical.items()
+                if not ok and k in ("name", "email", "resume", "cover_letter")
             ]
             if missing:
                 status = f"ABORTED_MISSING_{'_'.join(missing).upper()}"
@@ -2639,6 +2719,7 @@ def run_job(
                             profile,
                             email,
                             resume,
+                            cover_letter,
                         ),
                         fill_secondary(
                             page,
@@ -2785,6 +2866,7 @@ def main(argv: list[str] | None = None) -> int:
             final_status = run_job(
                 url=args.url,
                 resume_path=args.resume,
+                cover_letter_path=args.cover_letter,
                 company=args.company,
                 role=args.role,
                 essay=args.essay,
@@ -2804,4 +2886,3 @@ if __name__ == "__main__":
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
     raise SystemExit(main())
-

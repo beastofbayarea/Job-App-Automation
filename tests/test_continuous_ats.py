@@ -5,12 +5,16 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from job_application_automation.core import continuous_greenhouse as worker
+from job_application_automation.core import continuous_ats as worker
 
 
-def _job(url: str = "https://boards.greenhouse.io/example/jobs/123") -> dict[str, object]:
+def _job(
+    url: str = "https://jobs.ashbyhq.com/example/123",
+    *,
+    platform: str = "ashby",
+) -> dict[str, object]:
     return {
-        "platform": "greenhouse",
+        "platform": platform,
         "company": "Example",
         "title": "Product Manager",
         "description": "Build useful products.",
@@ -59,7 +63,7 @@ def test_process_one_uses_one_random_email_and_both_personalized_documents() -> 
                         {
                             "success": True,
                             "status": "SUBMITTED & CONFIRMED",
-                            "ats": "greenhouse",
+                            "ats": "ashby",
                             "submitted": True,
                             "confirmed": True,
                             "test_mode": False,
@@ -74,7 +78,7 @@ def test_process_one_uses_one_random_email_and_both_personalized_documents() -> 
                         "confirmed": {
                             "job_url": _job()["job_url"],
                             "status": "SUBMITTED & CONFIRMED",
-                            "ats": "greenhouse",
+                            "ats": "ashby",
                         }
                     }
                 ),
@@ -88,6 +92,7 @@ def test_process_one_uses_one_random_email_and_both_personalized_documents() -> 
             patch.object(worker, "_apply", side_effect=apply) as apply_call,
         ):
             status = worker.process_one(
+                ats_platform="ashby",
                 input_path=input_path,
                 profile=profile,
                 email_pool=pool,
@@ -119,6 +124,7 @@ def test_process_one_uses_one_random_email_and_both_personalized_documents() -> 
             patch.object(worker, "_apply") as no_apply,
         ):
             second_status = worker.process_one(
+                ats_platform="ashby",
                 input_path=input_path,
                 profile=profile,
                 email_pool=pool,
@@ -163,7 +169,7 @@ def test_unconfirmed_submitted_result_is_quarantined_and_never_retried() -> None
                         {
                             "success": False,
                             "status": "SUBMISSION_UNCONFIRMED",
-                            "ats": "greenhouse",
+                            "ats": "ashby",
                             "submitted": True,
                             "confirmed": False,
                             "test_mode": False,
@@ -175,6 +181,7 @@ def test_unconfirmed_submitted_result_is_quarantined_and_never_retried() -> None
             return worker.CommandOutcome(1, "", "confirmation missing")
 
         kwargs = {
+            "ats_platform": "ashby",
             "input_path": input_path,
             "profile": profile,
             "email_pool": pool,
@@ -200,40 +207,74 @@ def test_interrupted_application_is_quarantined_while_document_stage_can_resume(
     state = {
         "version": 1,
         "jobs": {
-            "https://boards.greenhouse.io/example/jobs/1": {
+            "https://jobs.ashbyhq.com/example/1": {
                 "status": "application_started"
             },
-            "https://boards.greenhouse.io/example/jobs/2": {
+            "https://jobs.ashbyhq.com/example/2": {
                 "status": "documents_ready"
             },
         },
     }
 
     assert worker._reconcile_interrupted_submissions(state) == 1
-    assert state["jobs"]["https://boards.greenhouse.io/example/jobs/1"]["status"] == (
+    assert state["jobs"]["https://jobs.ashbyhq.com/example/1"]["status"] == (
         "manual_review"
     )
-    assert state["jobs"]["https://boards.greenhouse.io/example/jobs/2"]["status"] == (
+    assert state["jobs"]["https://jobs.ashbyhq.com/example/2"]["status"] == (
         "documents_ready"
     )
 
 
-def test_eligibility_is_greenhouse_only_live_complete_and_deduplicated() -> None:
+def test_eligibility_is_platform_specific_live_complete_and_deduplicated() -> None:
     live = _job()
     jobs = worker._eligible_jobs(
         [
             live,
             dict(live),
-            _job("https://jobs.lever.co/example/1") | {"platform": "lever"},
-            _job("https://boards.greenhouse.io/example/jobs/2") | {"live_status": "closed"},
-            _job("https://boards.greenhouse.io/example/jobs/3") | {"description": ""},
-        ]
+            _job(
+                "https://boards.greenhouse.io/example/jobs/1",
+                platform="greenhouse",
+            ),
+            _job("https://jobs.ashbyhq.com/example/2") | {"live_status": "closed"},
+            _job("https://jobs.ashbyhq.com/example/3") | {"description": ""},
+        ],
+        "ashby",
     )
 
     assert len(jobs) == 1
-    assert jobs[0]["_canonical_url"] == "https://boards.greenhouse.io/example/jobs/123"
+    assert jobs[0]["_canonical_url"] == "https://jobs.ashbyhq.com/example/123"
+
+
+def test_parallel_workers_seed_distinct_provider_inputs() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        shared = root / "vps_generation_jobs.json"
+        shared.write_text(
+            json.dumps(
+                [
+                    _job(),
+                    _job(
+                        "https://boards.greenhouse.io/example/jobs/1",
+                        platform="greenhouse",
+                    ),
+                ]
+            ),
+            encoding="utf-8",
+        )
+        ashby_input = root / "continuous_ashby_jobs.json"
+        greenhouse_input = root / "continuous_greenhouse_jobs.json"
+
+        with patch.object(worker, "SHARED_INPUT", shared):
+            assert worker._seed_platform_input(ashby_input, "ashby") == 1
+            assert worker._seed_platform_input(greenhouse_input, "greenhouse") == 1
+
+        ashby_jobs = json.loads(ashby_input.read_text(encoding="utf-8"))
+        greenhouse_jobs = json.loads(greenhouse_input.read_text(encoding="utf-8"))
+        assert ashby_jobs[0]["platform"] == "ashby"
+        assert greenhouse_jobs[0]["platform"] == "greenhouse"
+        assert "_canonical_url" not in ashby_jobs[0]
 
 
 def test_sleep_between_cycles_handles_service_stop_without_traceback() -> None:
     with patch.object(worker.time, "sleep", side_effect=KeyboardInterrupt):
-        assert worker._sleep_between_cycles(120) is False
+        assert worker._sleep_between_cycles(120, "ashby") is False

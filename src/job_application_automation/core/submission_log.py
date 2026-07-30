@@ -8,8 +8,11 @@ it is not the source of truth for archive paths or document integrity.
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import threading
+import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,6 +22,8 @@ from .artifacts import read_json, write_json
 from .identity import canonical_job_url, normalize_email
 
 _SLUG_PATTERN = re.compile(r"[^a-z0-9]+")
+_LOCK_TIMEOUT_SECONDS = 30.0
+_STALE_LOCK_SECONDS = 300.0
 
 
 def _slugify(value: str) -> str:
@@ -56,6 +61,48 @@ def make_submission_id(company: str, role: str, *, applied_at: datetime | None =
     """Build the stable ``YYYYMMDD-company-role`` id used as the JSON key."""
     stamp = (applied_at or datetime.now(timezone.utc)).strftime("%Y%m%d")
     return f"{stamp}-{_slugify(company)}-{_slugify(role)}"
+
+
+@contextmanager
+def _interprocess_lock(path: Path):
+    """Serialize ledger merges across independently supervised ATS workers."""
+    lock_path = path.with_name(f"{path.name}.lock")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    deadline = time.monotonic() + _LOCK_TIMEOUT_SECONDS
+    descriptor: int | None = None
+    while descriptor is None:
+        try:
+            candidate = os.open(
+                lock_path,
+                os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+                0o600,
+            )
+            try:
+                os.write(candidate, f"{os.getpid()}\n".encode("ascii"))
+            except Exception:
+                os.close(candidate)
+                lock_path.unlink(missing_ok=True)
+                raise
+            descriptor = candidate
+        except FileExistsError:
+            try:
+                stale = time.time() - lock_path.stat().st_mtime > _STALE_LOCK_SECONDS
+            except FileNotFoundError:
+                continue
+            if stale:
+                try:
+                    lock_path.unlink()
+                except FileNotFoundError:
+                    pass
+                continue
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f"timed out waiting for submission ledger lock: {lock_path}")
+            time.sleep(0.05)
+    try:
+        yield
+    finally:
+        os.close(descriptor)
+        lock_path.unlink(missing_ok=True)
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,7 +186,7 @@ class SubmissionRecord:
 
 
 class SubmissionLog:
-    """A thread-safe, disk-backed index of submitted applications."""
+    """A thread- and process-safe, disk-backed index of submitted applications."""
 
     def __init__(self, entries: MutableMapping[str, dict[str, object]] | None = None) -> None:
         self._entries: MutableMapping[str, dict[str, object]] = (
@@ -200,7 +247,31 @@ class SubmissionLog:
         return len(valid)
 
     def save(self, path: Path) -> None:
-        """Atomically persist the log, sorted by submission id for stable diffs."""
+        """Merge and atomically persist without losing another process's entries."""
         with self._lock:
-            snapshot = dict(sorted(self._entries.items()))
-        write_json(path, snapshot, indent=2, sort_keys=False)
+            local_entries = {
+                str(key): dict(value)
+                for key, value in self._entries.items()
+                if isinstance(key, str) and isinstance(value, dict)
+            }
+        with _interprocess_lock(path):
+            disk_entries: dict[str, dict[str, object]] = {}
+            if path.exists():
+                payload = read_json(path)
+                if not isinstance(payload, dict):
+                    raise ValueError("submission log root must be an object")
+                disk_entries = {
+                    str(key): dict(value)
+                    for key, value in payload.items()
+                    if isinstance(key, str) and isinstance(value, dict)
+                }
+
+            merged = SubmissionLog(disk_entries)
+            for payload in local_entries.values():
+                merged.record(SubmissionRecord.from_payload(payload))
+            with merged._lock:
+                snapshot = dict(sorted(merged._entries.items()))
+            write_json(path, snapshot, indent=2, sort_keys=False)
+        with self._lock:
+            self._entries.clear()
+            self._entries.update(snapshot)

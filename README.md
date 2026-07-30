@@ -279,18 +279,23 @@ The installer pins the configured SSH host key, replaces only its own marked
 cron entry, installs log rotation, and creates the private archive directory
 with mode `0700`.
 
-For continuous Greenhouse processing, install the supervised one-job worker:
+Install either or both supervised one-job ATS workers:
 
 ```powershell
+pwsh scripts\install_vps_continuous_ashby.ps1
+# Or, when Greenhouse is the intended provider:
 pwsh scripts\install_vps_continuous_greenhouse.ps1
 ```
 
-The installer deploys the ignored candidate email pool, removes the older
-daily cron entry so two application workflows cannot race, and enables
-`job-app-greenhouse.service`. Each cycle randomly selects one fresh,
-verified-live Greenhouse role, chooses one configured candidate email,
-generates a matching personalized resume and cover letter, passes both files
-through the guarded orchestrator, and accepts only exact
+The installers deploy the ignored candidate email pool, remove the older daily
+cron entry, disable the broad continuous search/submission service, and enable
+`job-app-ashby.service` and/or `job-app-greenhouse.service`. The provider
+workers may run in parallel: each uses its own job list, state, documents, and
+results while cross-process locking protects the shared confirmation ledger.
+Each cycle randomly selects one fresh, verified-live role for that ATS,
+chooses one configured candidate email, generates a matching personalized
+resume and cover letter, passes both files through the guarded orchestrator,
+and accepts only exact
 `SUBMITTED & CONFIRMED` ledger evidence. It then waits a random 120-300 seconds
 before the next cycle. Systemd restarts the worker after crashes and boots.
 Ambiguous or interrupted submission attempts are quarantined for review and

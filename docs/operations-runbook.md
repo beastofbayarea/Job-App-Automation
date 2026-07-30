@@ -92,38 +92,49 @@ The default destination is `output/retrieved_documents/<archive-id>/`. Existing 
 
 ## VPS search synchronization
 
-### Persistent Greenhouse worker
+### Persistent parallel ATS workers
 
 Install the continuous worker from Windows after the VPS checkout and private
 candidate/Vertex/Gmail inputs are present:
 
 ```powershell
+pwsh scripts\install_vps_continuous_ashby.ps1
+# Alternative provider:
 pwsh scripts\install_vps_continuous_greenhouse.ps1
 ```
 
-This installation replaces the marked daily cron entry with the systemd unit
-`job-app-greenhouse.service`; the two workflows must not run concurrently.
-The ignored candidate email pool is copied to the VPS with mode `0600`. The
-service runs headed Chromium under Xvfb, starts automatically on boot, and has
-`Restart=always`.
+These installations replace the marked daily cron entry with the systemd
+units `job-app-ashby.service` and `job-app-greenhouse.service`. The two
+provider workers run in parallel, while the broad continuous search/submission
+service remains disabled. Each installer waits for active `apply` subprocesses
+before restarting an existing worker onto newly deployed code. The ignored
+candidate email pool is copied to the VPS with mode `0600`. Each service runs
+headed Chromium under its own Xvfb display, starts automatically on boot, and
+has `Restart=always`.
 
-Each cycle selects exactly one unattempted, verified-live Greenhouse record
-from `output/vps_generation_jobs.json`. It chooses a random email from the
-configured pool, generates a job-specific PDF resume and one-page cover
-letter, supplies the prepared resume to the guarded orchestrator, and uploads
-the cover letter whenever the Greenhouse form exposes that field. A result
-counts only when both the strict engine result and
+Each cycle selects exactly one unattempted, verified-live record for the
+configured ATS from `output/continuous_<ats>_jobs.json`, initially seeded from
+the latest `output/vps_generation_jobs.json`. It chooses a random email from
+the configured pool, generates a job-specific PDF resume and one-page cover
+letter, supplies both to the guarded orchestrator, and uploads the cover
+letter whenever the ATS form exposes a matching file field. A result counts
+only when both the strict engine result and
 `output/submission_log.json` contain exact `SUBMITTED & CONFIRMED` evidence.
 The worker waits a uniformly random 120-300 seconds after every cycle. When
-the list is exhausted, it refreshes verified Greenhouse search results and
+the list is exhausted, it refreshes verified results for the selected ATS and
 continues.
 
 Private state and evidence are kept in:
 
-- `output/continuous_greenhouse_state.json`
-- `output/continuous_greenhouse_results/`
-- `output/continuous_greenhouse_documents/`
+- `output/continuous_<ats>_jobs.json`
+- `output/continuous_<ats>_state.json`
+- `output/continuous_<ats>_results/`
+- `output/continuous_<ats>_documents/`
 - `output/submission_log.json`
+
+The provider-specific lists prevent parallel refreshes from overwriting each
+other. The shared submission log uses an interprocess lock and merges the
+latest on-disk records before every atomic save.
 
 The worker writes `application_started` before opening the live submission
 boundary. If the process is interrupted after that checkpoint, the next
@@ -134,11 +145,11 @@ never count as success or trigger an automatic retry.
 Inspect the service without starting another worker:
 
 ```powershell
-pwsh scripts\check_vps_automation_status.ps1 -LogLines 120
+pwsh scripts\check_vps_parallel_ats.ps1 -LogLines 120
 ```
 
-The status probe includes systemd enablement/activity, the worker process,
-private state timestamp, and recent `journalctl` output.
+The status probe includes capacity, enablement/activity for both services,
+worker processes, provider state summaries, and recent `journalctl` output.
 
 The `vps-search-output` branch is a dedicated generated-data branch with
 unrelated history. Keep it separate from `main`; use the synchronization
