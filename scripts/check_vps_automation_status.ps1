@@ -55,7 +55,7 @@ systemctl show job-app-greenhouse.service \
   --property=LoadState,UnitFileState,ActiveState,SubState,MainPID,NRestarts,ExecMainStartTimestamp \
   2>/dev/null || true
 printf '%s\n' '=== AUTOMATION PROCESSES ==='
-pgrep -af '[c]ontinuous-greenhouse|[v]ps_search_sync.sh|[s]earch_applications|[s]earch_documents|[j]ob_automation.py search' |
+pgrep -af '[c]ontinuous-greenhouse|[v]ps_search_sync.sh|[s]earch_applications|[s]earch_documents|[j]ob_automation.py (apply|search)' |
   sed -E 's/(--email )[[:graph:]]+/\1[REDACTED]/g' || true
 printf '%s\n' '=== REPOSITORY STATE ==='
 git -C "`$repo" status --short --branch

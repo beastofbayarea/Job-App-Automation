@@ -503,6 +503,7 @@ def configured_answer(
         "preferred_name": profile.get("preferred_name"),
         "phonetic_name": profile.get("phonetic_name"),
         "middle_name": profile.get("middle_name"),
+        "last_name": profile.get("last_name"),
         "legal_name": " ".join(
             part for part in (profile.get("first_name"), profile.get("last_name")) if part
         ),
@@ -520,6 +521,7 @@ def configured_answer(
         "portfolio": profile.get("website") or profile.get("portfolio"),
         "public_username": str(profile.get("twitter", "")).rsplit("/", 1)[-1],
         "location": profile.get("location"),
+        "zip_code": profile.get("zip_code"),
         "country": profile.get("country"),
         "citizenship": profile.get("citizenship") or profile.get("nationality"),
         "available_start_date": profile.get("available_start_date"),
@@ -543,6 +545,7 @@ def configured_answer(
         "language_proficiency": rules.get("language_proficiency"),
         "target_office": rules.get("target_office"),
         "application_certification": rules.get("application_certification"),
+        "interview_ai_policy": rules.get("application_certification"),
         "target_country_work_auth": rules.get("target_country_work_authorization"),
         "based_in_target_country": rules.get("based_in_target_country"),
         "international_travel": rules.get("international_travel"),
@@ -584,6 +587,7 @@ def configured_answer(
             "bachelors_degree",
             "degree",
             "application_certification",
+            "interview_ai_policy",
             "salary_expectation",
             "target_country_work_auth",
             "based_in_target_country",
@@ -621,9 +625,11 @@ def configured_answer(
             "preferred_name",
             "phonetic_name",
             "middle_name",
+            "last_name",
             "citizenship",
             "available_start_date",
             "country",
+            "zip_code",
             "location",
             "source",
         )

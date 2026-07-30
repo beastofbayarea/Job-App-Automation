@@ -62,6 +62,7 @@ class PowerShellMaintenanceTests(unittest.TestCase):
         self.assertIn("Invoke-ExternalCommandWithTimeout", script)
         self.assertIn("[v]ps_search_sync.sh", script)
         self.assertIn("[c]ontinuous-greenhouse", script)
+        self.assertIn("[j]ob_automation.py (apply|search)", script)
         self.assertIn("job-app-greenhouse.service", script)
         self.assertIn("continuous_greenhouse_state.json", script)
         self.assertIn("CONTINUOUS GREENHOUSE SUMMARY", script)

@@ -157,7 +157,7 @@
   },
   "matchers": {
     "first_name": ["first name", "given name"],
-    "last_name": ["last name", "family name", "surname"],
+    "last_name": ["last name", "preferred last name", "family name", "surname"],
     "preferred_name": ["preferred name", "nickname", "alias"],
     "legal_name": ["legal name", "full legal name"],
     "age_over_18": [
@@ -179,6 +179,7 @@
     ],
     "current_company": [
       "current company",
+      "current employer",
       "most recent company",
       "current (or most recent) company"
     ],
@@ -213,6 +214,8 @@
       "sponsorship",
       "require sponsorship",
       "need us to sponsor",
+      "sponsor an immigration case",
+      "immigration case",
       "visa sponsorship",
       "future sponsorship"
     ],
@@ -314,6 +317,10 @@
       "certify that the information",
       "information i provided in my employment application"
     ],
+    "interview_ai_policy": [
+      "ai policy for interviewers",
+      "use of ai during the interview"
+    ],
     "salary_expectation": [
       "desired base salary",
       "salary expectation",
@@ -346,6 +353,7 @@
     ],
     "source": [
       "how did you hear",
+      "where have you learned about",
       "where did you first hear",
       "where did you see or hear",
       "source"
@@ -363,9 +371,11 @@
       "gdpr",
       "privacy consent",
       "privacy",
+      "processing of personal data",
       "personal information retained",
       "pay range transparency"
     ],
+    "zip_code": ["zip code", "postal code"],
     "hispanic_latino": [
       "hispanic",
       "latino",

@@ -298,6 +298,32 @@ class ScreeningMatcherTests(unittest.TestCase):
                 )
                 self.assertEqual(answer, expected)
 
+    def test_example_profile_answers_observed_samsara_required_fields(self) -> None:
+        config = engine_shared.load_json_config(
+            ROOT / "config/candidate_profile_config.example.json"
+        )
+        cases = {
+            "AI Policy for Interviewers": "Yes",
+            "Current Employer (if applicable)": "Current Company",
+            "Preferred Last Name": "LastName",
+            "Processing of Personal Data": "Acknowledge",
+            "What is the zip code of your primary residence?": "00000",
+            "Where have you learned about Samsara? Select all that apply.": "LinkedIn",
+            "Will you now or in the future require Samsara to commence "
+            '("sponsor") an immigration case in order to employ you?': "No",
+        }
+
+        for question, expected in cases.items():
+            with self.subTest(question=question):
+                answer = engine_shared.configured_answer(
+                    question,
+                    config["candidate"],
+                    config["rules"],
+                    config["eeo_defaults"],
+                    config["field_matchers"],
+                )
+                self.assertEqual(answer, expected)
+
 
 if __name__ == "__main__":
     unittest.main()
