@@ -31,6 +31,7 @@ class RuntimeConfigTests(unittest.TestCase):
         self.assertEqual(config.browser["cdp_endpoint"], "http://localhost:9222")
         self.assertEqual(config.vertex["project_id"], "from-service-account")
         self.assertGreater(config.ashby["max_submit_attempts"], 0)
+        self.assertGreater(config.gmail["greenhouse_security_code_poll_timeout_seconds"], 30)
         self.assertGreater(config.resume["original_character_count"], 0)
         self.assertEqual(config.application["vps_max_document_jobs"], 10)
         self.assertEqual(config.application["vps_document_retry_jobs"], 2)

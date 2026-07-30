@@ -10,10 +10,12 @@ from job_application_automation.engines.greenhouse import (
     _load_candidate_evidence,
     _fill_explicit_required_consents,
     _fill_export_control_questions,
+    _fill_custom_questions,
     _fill_pre_submit_security_challenge,
     _fill_source_checkbox,
     _greenhouse_semantic_answer,
     _required_empty_fields,
+    _submit_control_enabled,
     _upload_cover_letter,
     _upload_resume,
     _parser,
@@ -23,6 +25,7 @@ from job_application_automation.engines.greenhouse import (
 
 def test_pre_submit_security_challenge_uses_newest_gmail_code_only_in_live_mode() -> None:
     page = MagicMock()
+    page.locator.return_value.count.return_value = 0
     with (
         patch(
             "job_application_automation.engines.greenhouse._security_challenge_visible",
@@ -45,6 +48,93 @@ def test_pre_submit_security_challenge_uses_newest_gmail_code_only_in_live_mode(
             live_submit=False,
         )
         fill_code.assert_called_once()
+
+
+def test_pre_submit_security_challenge_accepts_an_already_filled_code() -> None:
+    page = MagicMock()
+    inputs = MagicMock()
+    inputs.count.return_value = 8
+    inputs.nth.side_effect = [
+        MagicMock(input_value=MagicMock(return_value=character))
+        for character in "A1B2C3D4"
+    ]
+    page.locator.return_value = inputs
+    with (
+        patch(
+            "job_application_automation.engines.greenhouse._security_challenge_visible",
+            return_value=True,
+        ),
+        patch(
+            "job_application_automation.engines.greenhouse._fill_security_code_from_gmail"
+        ) as fill_code,
+    ):
+        assert _fill_pre_submit_security_challenge(
+            page,
+            "Example Company",
+            live_submit=True,
+        )
+    fill_code.assert_not_called()
+
+
+def test_submit_control_must_be_enabled_and_not_aria_disabled() -> None:
+    submit = MagicMock()
+    submit.is_enabled.return_value = True
+    submit.get_attribute.return_value = None
+    assert _submit_control_enabled(submit)
+
+    submit.get_attribute.return_value = "true"
+    assert not _submit_control_enabled(submit)
+
+    submit.is_enabled.return_value = False
+    submit.get_attribute.return_value = None
+    assert not _submit_control_enabled(submit)
+
+
+def test_custom_text_question_blurs_to_commit_greenhouse_validation_state() -> None:
+    page = MagicMock()
+    body = MagicMock()
+    body.inner_text.return_value = ""
+    controls = MagicMock()
+    controls.count.return_value = 1
+    control = MagicMock()
+    controls.nth.return_value = control
+    control.is_visible.return_value = True
+    control.get_attribute.side_effect = lambda name: {
+        "id": "country-of-birth",
+        "type": "text",
+        "name": "country_of_birth",
+        "role": "",
+        "aria-required": "true",
+    }.get(name)
+    control.evaluate.return_value = "input"
+    control.input_value.return_value = "India"
+    page.locator.side_effect = lambda selector: body if selector == "body" else controls
+
+    with (
+        patch(
+            "job_application_automation.engines.greenhouse._label_for",
+            return_value="What is your country of birth?",
+        ),
+        patch(
+            "job_application_automation.engines.greenhouse._configured_answer",
+            return_value="India",
+        ),
+    ):
+        result = _fill_custom_questions(
+            page,
+            {"country_of_birth": "India"},
+            {},
+            {},
+            {},
+            {},
+            "Example",
+            "Product Manager",
+            "",
+        )
+
+    assert result == {"What is your country of birth?": True}
+    control.fill.assert_called_once_with("India")
+    control.blur.assert_called_once()
 
 
 def test_greenhouse_semantic_answers_prevent_observed_matcher_collisions() -> None:

@@ -547,6 +547,14 @@ def _fill_custom_questions(
                 if answer:
                     control.fill(answer)
                     success = bool(control.input_value().strip())
+            if success:
+                try:
+                    # Greenhouse's React validation state is finalized on blur.
+                    # Without it, values can be visible while the submit button
+                    # still treats the controls as required and empty.
+                    control.blur()
+                except Exception:
+                    pass
             results[label] = success
         except Exception as exc:
             logger.debug("Custom question failed at index %d: %s", index, exc)
@@ -883,7 +891,12 @@ def _fill_security_code_from_gmail(
             service,
             _greenhouse_security_code_query(company),
             r"security code field on your application:\s*([A-Za-z0-9]{8})",
-            timeout_seconds=int(RUNTIME_CONFIG.gmail["verification_poll_timeout_seconds"]),
+            timeout_seconds=int(
+                RUNTIME_CONFIG.gmail.get(
+                    "greenhouse_security_code_poll_timeout_seconds",
+                    RUNTIME_CONFIG.gmail["verification_poll_timeout_seconds"],
+                )
+            ),
             sender_domains=("us.greenhouse-mail.io", "eu.greenhouse-mail.io"),
             expected_recipient="",
             excluded_message_ids=excluded_ids,
@@ -916,7 +929,20 @@ def _fill_pre_submit_security_challenge(
     """Fill Greenhouse security codes that are required before form submission."""
     if not live_submit or not _security_challenge_visible(page):
         return False
+    code_inputs = page.locator('input[id^="security-input"]')
+    if code_inputs.count() >= 8 and all(
+        code_inputs.nth(index).input_value().strip() for index in range(8)
+    ):
+        return True
     return _fill_security_code_from_gmail(page, company)
+
+
+def _submit_control_enabled(submit: Locator) -> bool:
+    """Return whether Greenhouse currently considers the form submittable."""
+    try:
+        return submit.is_enabled() and submit.get_attribute("aria-disabled") != "true"
+    except Exception:
+        return False
 
 
 def run(
@@ -1089,12 +1115,16 @@ def run(
             )
             consent = _fill_consent(page)
             consent.extend(_fill_explicit_required_consents(page))
-            _fill_pre_submit_security_challenge(
+            challenge_visible = _security_challenge_visible(page)
+            challenge_filled = _fill_pre_submit_security_challenge(
                 page,
                 company,
                 live_submit=live_submit,
             )
+            page.wait_for_timeout(300)
             missing = validate_required_fields(page, _required_empty_fields)
+            if live_submit and challenge_visible and not challenge_filled:
+                missing = sorted({*missing, "Security code"})
             prefill_screenshot = _screenshot(
                 page, screenshot_dir, company or "Greenhouse", "prefilled"
             )
@@ -1183,6 +1213,30 @@ def run(
                         "screenshot": confirmed_screenshot,
                     }
                 raise RuntimeError("submit button was not found")
+            if not _submit_control_enabled(submit):
+                disabled_missing = validate_required_fields(page, _required_empty_fields)
+                if not disabled_missing:
+                    disabled_missing = ["Submit application is disabled"]
+                disabled_screenshot = _screenshot(
+                    page,
+                    screenshot_dir,
+                    company or "Greenhouse",
+                    "submit_disabled",
+                )
+                return {
+                    "success": False,
+                    "status": "REQUIRED_FIELDS_NOT_FILLED",
+                    "ats": ATS_NAME,
+                    "submitted": False,
+                    "confirmed": False,
+                    "test_mode": False,
+                    "filled_fields": fields,
+                    "custom_questions": custom_questions,
+                    "eeo_fields": eeo_fields,
+                    "consent_fields": consent,
+                    "missing_required": disabled_missing,
+                    "screenshot": disabled_screenshot,
+                }
             verification_message_baseline = _current_greenhouse_verification_message_ids(company)
             submit.click()
             try:

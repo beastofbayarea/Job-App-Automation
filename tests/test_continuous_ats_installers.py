@@ -63,3 +63,6 @@ def test_targeted_greenhouse_retry_requires_safe_pre_submit_evidence() -> None:
     assert "trap restart_worker EXIT INT TERM" in script
     assert "--once" in script
     assert "greenhouse-targeted-retry" in script
+    assert "InspectLatest" in script
+    assert "[REDACTED_EMAIL]" in script
+    assert "latest_prefilled_screenshot=" in script

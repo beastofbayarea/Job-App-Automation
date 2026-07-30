@@ -201,7 +201,11 @@ def load_runtime_config(path: Path | None = None) -> RuntimeConfig:
 
     for key in ("credentials_file", "token_file", "verification_history_file"):
         _string(gmail, "gmail", key)
-    for key in ("verification_poll_timeout_seconds", "greenhouse_security_code_wait_ms"):
+    for key in (
+        "verification_poll_timeout_seconds",
+        "greenhouse_security_code_poll_timeout_seconds",
+        "greenhouse_security_code_wait_ms",
+    ):
         _integer(gmail, "gmail", key)
 
     return RuntimeConfig(
