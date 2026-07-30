@@ -54,6 +54,7 @@ class ContractTests(unittest.TestCase):
             ats="Greenhouse",
             url="https://boards.greenhouse.io/example/jobs/123",
             resume_path=Path("candidate.pdf"),
+            cover_letter_path=Path("cover_letter.pdf"),
             company=" Example ",
             role=" Product Manager ",
             email=" applicant@example.test ",
@@ -66,6 +67,7 @@ class ContractTests(unittest.TestCase):
 
         self.assertEqual(payload["ats"], "greenhouse")
         self.assertEqual(payload["resume"], "candidate.pdf")
+        self.assertEqual(payload["cover_letter"], "cover_letter.pdf")
         self.assertEqual(payload["mode"], "fill-only")
         self.assertEqual(request.cli_arguments()[-2:], ("--fill-only", "--headed"))
         self.assertEqual(EngineRequest.from_payload(payload), request)

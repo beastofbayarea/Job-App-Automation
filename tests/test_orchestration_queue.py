@@ -91,6 +91,24 @@ class EngineCommandContractTests(unittest.TestCase):
             ],
         )
 
+    def test_engine_command_passes_the_personalized_cover_letter(self) -> None:
+        command = orchestrator.build_engine_command(
+            orchestrator.CLI_ENTRYPOINT,
+            "https://boards.greenhouse.io/acme/jobs/123",
+            Path("candidate.pdf"),
+            "Acme",
+            "Product Manager",
+            "candidate@example.test",
+            live_submit=True,
+            cover_letter_path=Path("cover_letter.pdf"),
+        )
+
+        self.assertEqual(
+            command[command.index("--cover-letter") + 1],
+            "cover_letter.pdf",
+        )
+        self.assertIn("--live-submit", command)
+
 
 class ChildProcessRoutingTests(unittest.TestCase):
     def test_resume_generation_uses_the_unified_resume_command(self) -> None:

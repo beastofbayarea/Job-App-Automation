@@ -44,6 +44,7 @@ COMMAND_MODULES = {
     "gmail": "job_application_automation.mail.gmail_client",
     "email-pool": "job_application_automation.mail.pool_select",
     "dashboard": "job_application_automation.dashboard.server",
+    "continuous-greenhouse": "job_application_automation.core.continuous_greenhouse",
 }
 COMMAND_ALIASES = {
     "orchestrate": "apply",
@@ -70,7 +71,8 @@ def _print_usage(stream: TextIO) -> None:
         "  search      Search supported ATS job boards\n"
         "  gmail       Read, export, draft, or send Gmail messages\n"
         "  email-pool  Select configured candidate email addresses\n"
-        "  dashboard   Launch interactive web dashboard for output statistics\n\n"
+        "  dashboard   Launch interactive web dashboard for output statistics\n"
+        "  continuous-greenhouse  Run the persistent one-job Greenhouse worker\n\n"
         "Internal command:\n"
         "  engine <ashby|greenhouse|lever>  Run an ATS engine for the orchestrator\n\n"
         "Use `job_automation.py <command> --help` for command-specific help.",

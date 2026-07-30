@@ -11,6 +11,7 @@ from job_application_automation.engines.greenhouse import (
     _fill_export_control_questions,
     _fill_source_checkbox,
     _required_empty_fields,
+    _upload_cover_letter,
     _upload_resume,
     _parser,
     main,
@@ -110,6 +111,24 @@ def test_upload_resume_valid_and_invalid(tmp_path: Path) -> None:
     file_input.count.return_value = 1
     page.locator.return_value = file_input
     assert _upload_resume(page, valid_file) is True
+
+
+def test_upload_cover_letter_only_targets_the_matching_file_field(tmp_path: Path) -> None:
+    cover_letter = tmp_path / "cover_letter.pdf"
+    cover_letter.write_bytes(b"%PDF-1.4 mock content")
+    page = MagicMock()
+    inputs = MagicMock()
+    inputs.count.return_value = 2
+    resume_input = MagicMock()
+    resume_input.evaluate.return_value = "Resume upload"
+    cover_input = MagicMock()
+    cover_input.evaluate.return_value = "Cover Letter upload"
+    inputs.nth.side_effect = [resume_input, cover_input]
+    page.locator.return_value = inputs
+
+    assert _upload_cover_letter(page, cover_letter) is True
+    resume_input.set_input_files.assert_not_called()
+    cover_input.set_input_files.assert_called_once_with(str(cover_letter))
 
 
 def test_greenhouse_parser_and_main_help() -> None:

@@ -279,6 +279,23 @@ The installer pins the configured SSH host key, replaces only its own marked
 cron entry, installs log rotation, and creates the private archive directory
 with mode `0700`.
 
+For continuous Greenhouse processing, install the supervised one-job worker:
+
+```powershell
+pwsh scripts\install_vps_continuous_greenhouse.ps1
+```
+
+The installer deploys the ignored candidate email pool, removes the older
+daily cron entry so two application workflows cannot race, and enables
+`job-app-greenhouse.service`. Each cycle randomly selects one fresh,
+verified-live Greenhouse role, chooses one configured candidate email,
+generates a matching personalized resume and cover letter, passes both files
+through the guarded orchestrator, and accepts only exact
+`SUBMITTED & CONFIRMED` ledger evidence. It then waits a random 120-300 seconds
+before the next cycle. Systemd restarts the worker after crashes and boots.
+Ambiguous or interrupted submission attempts are quarantined for review and
+are never retried automatically.
+
 Each successful scheduled search publishes its complete safe snapshot before
 starting private document work. The workflow then processes a bounded number of
 tailored CV/cover-letter pairs per run (10 by default, including two reserved

@@ -61,8 +61,29 @@ class PowerShellMaintenanceTests(unittest.TestCase):
         self.assertIn("[int]$TimeoutSeconds = 30", script)
         self.assertIn("Invoke-ExternalCommandWithTimeout", script)
         self.assertIn("[v]ps_search_sync.sh", script)
+        self.assertIn("[c]ontinuous-greenhouse", script)
+        self.assertIn("job-app-greenhouse.service", script)
+        self.assertIn("continuous_greenhouse_state.json", script)
         self.assertIn("vps_run_status.json", script)
         self.assertIn("job-app-automation-daily-search", script)
+
+    def test_continuous_greenhouse_installer_uses_supervision_and_replaces_cron(self) -> None:
+        installer = (
+            SCRIPTS / "install_vps_continuous_greenhouse.ps1"
+        ).read_text(encoding="utf-8")
+        unit = (
+            SCRIPTS / "job-app-greenhouse.service.template"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("-hostkey", installer)
+        self.assertIn("-pwfile", installer)
+        self.assertIn("candidate_email_pool.json", installer)
+        self.assertIn("grep -v '# $CronMarker'", installer)
+        self.assertIn('systemctl restart "$ServiceName"', installer)
+        self.assertIn("continuous-greenhouse", unit)
+        self.assertIn("Restart=always", unit)
+        self.assertIn("WantedBy=multi-user.target", unit)
+        self.assertIn("/usr/bin/xvfb-run", unit)
 
     def test_external_command_timeout_returns_output_exit_code_and_stops_hangs(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

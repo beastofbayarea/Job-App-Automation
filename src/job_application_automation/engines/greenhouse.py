@@ -868,13 +868,13 @@ def run(
     *,
     url: str,
     resume: Path,
-    cover_letter: Path | None,
     email_override: str,
     config: Mapping[str, Any],
     company: str,
     role: str,
     headed: bool,
     live_submit: bool,
+    cover_letter: Path | None = None,
 ) -> dict[str, Any]:
     if not _valid_greenhouse_url(url):
         raise ValueError("URL must be an absolute Greenhouse HTTPS URL")
@@ -1246,11 +1246,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             result = submit_greenhouse_direct_post(
                 url=args.url,
                 resume=Path(args.resume).expanduser().resolve(),
-                cover_letter=(
-                    Path(args.cover_letter).expanduser().resolve()
-                    if args.cover_letter
-                    else None
-                ),
                 email_override=args.email,
                 config=_load_config(),
                 company=args.company,
@@ -1261,6 +1256,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             result = run(
                 url=args.url,
                 resume=Path(args.resume).expanduser().resolve(),
+                cover_letter=(
+                    Path(args.cover_letter).expanduser().resolve()
+                    if args.cover_letter
+                    else None
+                ),
                 email_override=args.email,
                 config=_load_config(),
                 company=args.company,

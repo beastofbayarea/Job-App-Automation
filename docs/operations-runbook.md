@@ -92,6 +92,54 @@ The default destination is `output/retrieved_documents/<archive-id>/`. Existing 
 
 ## VPS search synchronization
 
+### Persistent Greenhouse worker
+
+Install the continuous worker from Windows after the VPS checkout and private
+candidate/Vertex/Gmail inputs are present:
+
+```powershell
+pwsh scripts\install_vps_continuous_greenhouse.ps1
+```
+
+This installation replaces the marked daily cron entry with the systemd unit
+`job-app-greenhouse.service`; the two workflows must not run concurrently.
+The ignored candidate email pool is copied to the VPS with mode `0600`. The
+service runs headed Chromium under Xvfb, starts automatically on boot, and has
+`Restart=always`.
+
+Each cycle selects exactly one unattempted, verified-live Greenhouse record
+from `output/vps_generation_jobs.json`. It chooses a random email from the
+configured pool, generates a job-specific PDF resume and one-page cover
+letter, supplies the prepared resume to the guarded orchestrator, and uploads
+the cover letter whenever the Greenhouse form exposes that field. A result
+counts only when both the strict engine result and
+`output/submission_log.json` contain exact `SUBMITTED & CONFIRMED` evidence.
+The worker waits a uniformly random 120-300 seconds after every cycle. When
+the list is exhausted, it refreshes verified Greenhouse search results and
+continues.
+
+Private state and evidence are kept in:
+
+- `output/continuous_greenhouse_state.json`
+- `output/continuous_greenhouse_results/`
+- `output/continuous_greenhouse_documents/`
+- `output/submission_log.json`
+
+The worker writes `application_started` before opening the live submission
+boundary. If the process is interrupted after that checkpoint, the next
+start changes the attempt to `manual_review` and never retries it. Required
+field failures, CAPTCHA barriers, timeouts, and unconfirmed results likewise
+never count as success or trigger an automatic retry.
+
+Inspect the service without starting another worker:
+
+```powershell
+pwsh scripts\check_vps_automation_status.ps1 -LogLines 120
+```
+
+The status probe includes systemd enablement/activity, the worker process,
+private state timestamp, and recent `journalctl` output.
+
 The `vps-search-output` branch is a dedicated generated-data branch with
 unrelated history. Keep it separate from `main`; use the synchronization
 scripts instead of merging it.
