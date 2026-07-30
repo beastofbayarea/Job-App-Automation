@@ -326,6 +326,20 @@ class ScreeningMatcherTests(unittest.TestCase):
                 )
                 self.assertEqual(answer, expected)
 
+    def test_deep_merge(self) -> None:
+        base = {"a": 1, "b": {"c": 2, "d": 3}}
+        override = {"b": {"d": 4, "e": 5}, "f": 6}
+        merged = engine_shared.deep_merge(base, override)
+        self.assertEqual(merged, {"a": 1, "b": {"c": 2, "d": 4, "e": 5}, "f": 6})
+
+    def test_normalize_profile_config_invalid_schema(self) -> None:
+        with self.assertRaises(ValueError):
+            engine_shared.normalize_profile_config({"schema_version": 1})
+
+        with self.assertRaises(ValueError):
+            engine_shared.normalize_profile_config({"schema_version": 2, "candidate": "not a map"})
+
 
 if __name__ == "__main__":
     unittest.main()
+

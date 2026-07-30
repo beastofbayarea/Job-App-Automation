@@ -409,5 +409,30 @@ class QueueSafetyTests(unittest.TestCase):
         self.assertNotIn("..", slug)
 
 
+class AdditionalOrchestratorCoverageTests(unittest.TestCase):
+    def test_detect_ats_valid_and_invalid(self) -> None:
+        self.assertEqual(orchestrator.detect_ats("https://jobs.ashbyhq.com/company/123"), "ashby")
+        self.assertEqual(orchestrator.detect_ats("https://boards.greenhouse.io/company/jobs/123"), "greenhouse")
+        self.assertEqual(orchestrator.detect_ats("https://jobs.lever.co/company/123"), "lever")
+        self.assertIsNone(orchestrator.detect_ats("https://example.com/careers"))
+        self.assertIsNone(orchestrator.detect_ats(""))
+        self.assertIsNone(orchestrator.detect_ats(123))  # type: ignore[arg-type]
+
+    def test_process_timeout_error(self) -> None:
+        err = orchestrator.ProcessTimeoutError(30, stdout="out", stderr="err")
+        self.assertIn("30 seconds", str(err))
+        self.assertEqual(err.timeout, 30)
+        self.assertEqual(err.stdout, "out")
+        self.assertEqual(err.stderr, "err")
+
+    def test_find_header_success_and_error(self) -> None:
+        headers = ["company_name", "job_title", "url_link"]
+        self.assertEqual(orchestrator._find_header(headers, ("company", "company_name"), "company"), 0)
+        self.assertEqual(orchestrator._find_header(headers, ("title", "job_title"), "role"), 1)
+        with self.assertRaises(ValueError):
+            orchestrator._find_header(headers, ("missing",), "missing")
+
+
 if __name__ == "__main__":
     unittest.main()
+
