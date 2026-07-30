@@ -105,7 +105,7 @@ def run(
         page = session.page
 
         try:
-            page.goto(url, wait_until="networkidle", timeout=timeout)
+            page.goto(url, wait_until="domcontentloaded", timeout=timeout)
 
             apply_btn = first_visible(
                 page.locator('a:has-text("Apply Now"), button:has-text("Apply"), a:has-text("Apply")')
