@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-07-30T11:37:40Z",
+  "generated_at": "2026-07-30T11:57:57Z",
   "criteria": {
     "role_terms": [
       "Product Manager"
@@ -57,24 +57,24 @@
   },
   "cache": {
     "boards_loaded": 751,
-    "candidate_urls_loaded": 816,
+    "candidate_urls_loaded": 819,
     "boards_saved": 751,
-    "candidate_urls_saved": 816
+    "candidate_urls_saved": 819
   },
   "discovery": {
     "queries_planned": 792,
     "queries_attempted": 120,
-    "query_failures": 61,
-    "results_seen": 278,
-    "boards_discovered": 171,
-    "candidates_discovered": 107,
+    "query_failures": 63,
+    "results_seen": 267,
+    "boards_discovered": 160,
+    "candidates_discovered": 109,
     "query_log": [
       {
         "query": "site:boards.greenhouse.io \"AI\" \"Product Manager\" jobs \"US Remote\"",
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "ok:3"
+        "status": "ok:4"
       },
       {
         "query": "site:boards.greenhouse.io \"AI\" \"Product Manager\" jobs \"UK\"",
@@ -88,7 +88,7 @@
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "ok:7"
+        "status": "error: No results found."
       },
       {
         "query": "site:job-boards.greenhouse.io \"AI\" \"Product Manager\" jobs \"India Remote\"",
@@ -102,7 +102,7 @@
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "error: No results found."
+        "status": "ok:7"
       },
       {
         "query": "site:job-boards.eu.greenhouse.io \"AI\" \"Product Manager\" jobs \"Noida\"",
@@ -144,7 +144,7 @@
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "ok:7"
+        "status": "error: No results found."
       },
       {
         "query": "site:jobs.ashbyhq.com \"AI\" \"Product Manager\" jobs \"Australia\"",
@@ -186,7 +186,7 @@
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "ok:1"
+        "status": "error: No results found."
       },
       {
         "query": "site:job-boards.eu.greenhouse.io \"artificial intelligence\" \"Product Manager\" jobs \"India Remote\"",
@@ -214,7 +214,7 @@
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "error: No results found."
+        "status": "ok:7"
       },
       {
         "query": "site:jobs.eu.lever.co \"artificial intelligence\" \"Product Manager\" jobs \"Europe Remote\"",
@@ -312,7 +312,7 @@
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "error: No results found."
+        "status": "ok:6"
       },
       {
         "query": "site:jobs.ashbyhq.com \"generative AI\" \"Product Manager\" jobs \"Europe Remote\"",
@@ -368,7 +368,7 @@
         "family": "role_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "ok:7"
+        "status": "error: No results found."
       },
       {
         "query": "site:jobs.lever.co \"Product Manager\" jobs \"UK\"",
@@ -403,7 +403,7 @@
         "family": "role_location",
         "backend": "yandex",
         "region": "wt-wt",
-        "status": "ok:5"
+        "status": "error: No results found."
       },
       {
         "query": "site:boards.greenhouse.io \"Product Manager\" jobs \"France\"",
@@ -438,7 +438,7 @@
         "family": "role_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "error: No results found."
+        "status": "ok:7"
       },
       {
         "query": "site:job-boards.eu.greenhouse.io \"Product Manager\" jobs \"Australia\"",
@@ -494,7 +494,7 @@
         "family": "role_ai",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "error: No results found."
+        "status": "ok:1"
       },
       {
         "query": "site:boards.greenhouse.io \"GenAI\" \"Product Manager\" jobs",
@@ -543,7 +543,7 @@
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "ok:7"
+        "status": "error: No results found."
       },
       {
         "query": "site:job-boards.greenhouse.io \"AI\" \"Product Manager\" jobs \"Ireland\"",
@@ -599,7 +599,7 @@
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "ok:7"
+        "status": "ok:5"
       },
       {
         "query": "site:jobs.ashbyhq.com \"AI\" \"Product Manager\" jobs \"Singapore\"",
@@ -627,7 +627,7 @@
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "error: No results found."
+        "status": "ok:7"
       },
       {
         "query": "site:job-boards.greenhouse.io \"artificial intelligence\" \"Product Manager\" jobs \"US Remote\"",
@@ -655,7 +655,7 @@
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "ok:5"
+        "status": "error: No results found."
       },
       {
         "query": "site:jobs.lever.co \"artificial intelligence\" \"Product Manager\" jobs \"Delhi\"",
@@ -711,7 +711,7 @@
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "error: No results found."
+        "status": "ok:7"
       },
       {
         "query": "site:job-boards.greenhouse.io \"artificial intelligence\" \"Product Manager\" jobs \"New Zealand\"",
@@ -795,7 +795,7 @@
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "ok:1"
+        "status": "error: No results found."
       },
       {
         "query": "site:job-boards.greenhouse.io \"generative AI\" \"Product Manager\" jobs \"Singapore\"",
@@ -809,7 +809,7 @@
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "error: No results found."
+        "status": "ok:1"
       },
       {
         "query": "site:job-boards.eu.greenhouse.io \"generative AI\" \"Product Manager\" jobs \"New Zealand\"",
@@ -851,7 +851,7 @@
         "family": "role_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "ok:6"
+        "status": "error: No results found."
       },
       {
         "query": "site:jobs.ashbyhq.com \"Product Manager\" jobs \"Delhi\"",
@@ -879,7 +879,7 @@
         "family": "role_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "ok:7"
+        "status": "error: No results found."
       },
       {
         "query": "site:job-boards.greenhouse.io \"Product Manager\" jobs \"UAE\"",
@@ -914,7 +914,7 @@
   "feed_fetch": {
     "boards_checked": 751,
     "boards_succeeded": 687,
-    "jobs_from_feeds": 281,
+    "jobs_from_feeds": 280,
     "failed_boards": [
       "ashby:global:Eppo",
       "ashby:global:EvenUp",
@@ -984,7 +984,7 @@
   },
   "fallback": {
     "attempted": 100,
-    "matched": 2,
+    "matched": 3,
     "failed": 0
   },
   "results": {
