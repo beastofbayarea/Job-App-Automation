@@ -104,27 +104,23 @@ try {
         $SshPassword,
         [Text.UTF8Encoding]::new($false)
     )
-    foreach ($Transfer in @(
-        @($RenderedUnitPath, "$SshUser@${VpsHost}:$RemoteUnitStage")
-    )) {
-        $Result = Invoke-ExternalCommandWithTimeout `
-            -FilePath $PscpCmd.Source `
-            -ArgumentList @(
-                "-batch",
-                "-P",
-                $SshPort,
-                "-hostkey",
-                $SshHostKey,
-                "-pwfile",
-                $PasswordFile,
-                $Transfer[0],
-                $Transfer[1]
-            ) `
-            -TimeoutSeconds 30
-        if ($Result.ExitCode -ne 0) {
-            Write-Error "Dashboard installation upload failed (exit code $($Result.ExitCode))."
-            exit $Result.ExitCode
-        }
+    $Result = Invoke-ExternalCommandWithTimeout `
+        -FilePath $PscpCmd.Source `
+        -ArgumentList @(
+            "-batch",
+            "-P",
+            $SshPort,
+            "-hostkey",
+            $SshHostKey,
+            "-pwfile",
+            $PasswordFile,
+            $RenderedUnitPath,
+            "$SshUser@${VpsHost}:$RemoteUnitStage"
+        ) `
+        -TimeoutSeconds 30
+    if ($Result.ExitCode -ne 0) {
+        Write-Error "Dashboard installation upload failed (exit code $($Result.ExitCode))."
+        exit $Result.ExitCode
     }
     $Result = Invoke-ExternalCommandWithTimeout `
         -FilePath $PlinkCmd.Source `
