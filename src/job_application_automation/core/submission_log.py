@@ -86,6 +86,9 @@ def _interprocess_lock(path: Path):
             descriptor = candidate
         except FileExistsError:
             try:
+                # time.time() is used for filesystem mtime staleness comparison because
+                # stat().st_mtime is a wall-clock timestamp, whereas time.monotonic()
+                # below guarantees loop deadline progress unaffected by system clock shifts.
                 stale = time.time() - lock_path.stat().st_mtime > _STALE_LOCK_SECONDS
             except FileNotFoundError:
                 continue
