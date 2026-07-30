@@ -110,7 +110,7 @@ class PowerShellMaintenanceTests(unittest.TestCase):
         self.assertIn("-pwfile", script)
         self.assertLess(
             script.index('journalctl -u "$service"'),
-            script.index('systemctl stop "$service"'),
+            script.index('systemctl stop --no-block "$service"'),
         )
 
     def test_continuous_search_installer_uses_current_timeout_helper_contract(self) -> None:
