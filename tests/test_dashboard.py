@@ -1,14 +1,20 @@
 """Unit tests for VPS Output Monitor Dashboard server."""
 
+import base64
 import json
+from email.message import Message
 from unittest.mock import patch
+
+import pytest
+
 from job_application_automation.dashboard.server import (
+    DashboardRequestHandler,
     build_kpi_metrics,
     get_output_file_path,
-    load_csv_jobs,
     load_json_file,
     load_vps_config,
     load_vps_log,
+    run_dashboard_server,
 )
 
 
@@ -24,16 +30,61 @@ def test_load_json_file_missing():
     assert data == {"test": True}
 
 
-def test_load_vps_config_redaction(tmp_path):
+def test_load_vps_config_exposes_only_operational_metadata(tmp_path):
     config_file = tmp_path / "vps_config.json"
     config_file.write_text(json.dumps({
-        "vps": {"host": "1.2.3.4", "ssh_password": {"value": "secret"}}
+        "vps": {
+            "host": "1.2.3.4",
+            "hostname": "example-vps",
+            "memory_gb": 4,
+            "ssh_user": "root",
+            "ssh_password": {"value": "secret"},
+        },
+        "hostinger_account": {
+            "owner_name": "Private",
+            "phone": "555-0100",
+        },
     }), encoding="utf-8")
 
     with patch("job_application_automation.dashboard.server.CONFIG_DIR", tmp_path):
         data = load_vps_config()
-        assert data["vps"]["host"] == "1.2.3.4"
-        assert data["vps"]["ssh_password"] == "******"
+        assert data == {"vps": {"hostname": "example-vps", "memory_gb": 4}}
+
+
+def test_dashboard_basic_authentication():
+    handler = DashboardRequestHandler.__new__(DashboardRequestHandler)
+    handler.headers = Message()
+
+    with patch.dict(
+        "os.environ",
+        {
+            "JOB_APP_DASHBOARD_USERNAME": "reader",
+            "JOB_APP_DASHBOARD_PASSWORD": "secret",
+        },
+        clear=False,
+    ):
+        assert handler._is_authorized() is False
+        encoded = base64.b64encode(b"reader:secret").decode("ascii")
+        handler.headers["Authorization"] = f"Basic {encoded}"
+        assert handler._is_authorized() is True
+        handler.headers.replace_header(
+            "Authorization",
+            f"Basic {base64.b64encode(b'reader:wrong').decode('ascii')}",
+        )
+        assert handler._is_authorized() is False
+
+
+def test_dashboard_rejects_public_bind_without_credentials():
+    with patch.dict(
+        "os.environ",
+        {
+            "JOB_APP_DASHBOARD_USERNAME": "",
+            "JOB_APP_DASHBOARD_PASSWORD": "",
+        },
+        clear=False,
+    ):
+        with pytest.raises(RuntimeError, match="credentials are required"):
+            run_dashboard_server(host="0.0.0.0", port=8000, open_browser=False)
 
 
 def test_load_vps_log_missing(tmp_path):
@@ -91,8 +142,6 @@ def test_build_kpi_metrics_mocked():
 
 
 def test_dashboard_request_handler_route_mappings():
-    from job_application_automation.dashboard.server import DashboardRequestHandler
-
     handler = DashboardRequestHandler.__new__(DashboardRequestHandler)
 
     routes_to_test = [
@@ -116,4 +165,3 @@ def test_dashboard_request_handler_route_mappings():
              patch("http.server.SimpleHTTPRequestHandler.do_GET"):
             handler.do_GET()
             assert handler.path == expected_path
-

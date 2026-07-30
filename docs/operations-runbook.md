@@ -163,6 +163,32 @@ pwsh scripts\check_vps_parallel_ats.ps1 -LogLines 120
 The status probe includes capacity, enablement/activity for both services,
 worker processes, provider state summaries, and recent `journalctl` output.
 
+For a read-only inventory of everything that persists or wakes on a schedule on
+the VPS—not only the job-application workers—run:
+
+```powershell
+pwsh scripts\audit_vps_runtime.ps1
+```
+
+The audit reports running and enabled services, timers, cron entries,
+long-lived and high-resource processes, listening sockets, containers,
+job-application unit resource counters, log usage, and reboot/update status.
+It pins the configured SSH host key, redacts email addresses in command lines,
+and does not start, stop, enable, or restart workloads.
+
+Install or repair the dashboard as an authenticated loopback service behind
+the VPS's validated Nginx configuration:
+
+```powershell
+pwsh scripts\install_vps_dashboard.ps1
+```
+
+The installer creates a strong password on first use, keeps it in ignored
+`config/dashboard.env`, deploys it with mode `0600`, binds the Python server
+only to `127.0.0.1:8000`, and restarts Nginx only after `nginx -t` succeeds.
+The browser will request HTTP Basic credentials; read them from the ignored
+environment file. Never publish that file.
+
 The `vps-search-output` branch is a dedicated generated-data branch with
 unrelated history. Keep it separate from `main`; use the synchronization
 scripts instead of merging it.

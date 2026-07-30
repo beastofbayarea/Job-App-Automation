@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import csv
+import hmac
 import json
 import os
 import subprocess
@@ -17,6 +19,20 @@ STATIC_DIR = Path(__file__).parent / "static"
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 OUTPUT_DIR = PROJECT_ROOT / "output"
 CONFIG_DIR = PROJECT_ROOT / "config"
+_LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
+_PUBLIC_VPS_FIELDS = {
+    "hostname",
+    "os",
+    "plan",
+    "cpu_cores",
+    "memory_gb",
+    "disk_gb",
+    "bandwidth_tb",
+    "datacenter",
+    "backup_schedule",
+    "plan_expiration_date",
+    "auto_renewal",
+}
 
 
 def get_output_file_path(filename: str) -> Path:
@@ -54,18 +70,33 @@ def load_csv_jobs() -> list[dict[str, str]]:
 
 
 def load_vps_config() -> dict[str, Any]:
+    """Load only non-sensitive operational VPS metadata for the dashboard."""
     config_path = CONFIG_DIR / "vps_config.json"
     if not config_path.exists():
         return {}
     try:
         with open(config_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-            # Redact password
-            if "vps" in data and "ssh_password" in data["vps"]:
-                data["vps"]["ssh_password"] = "******"
-            return data
+        vps = data.get("vps", {})
+        if not isinstance(vps, dict):
+            return {}
+        return {
+            "vps": {
+                key: vps[key]
+                for key in sorted(_PUBLIC_VPS_FIELDS)
+                if key in vps
+            }
+        }
     except Exception:
         return {}
+
+
+def get_dashboard_credentials() -> tuple[str, str]:
+    """Return optional HTTP Basic credentials from the process environment."""
+    return (
+        os.environ.get("JOB_APP_DASHBOARD_USERNAME", "").strip(),
+        os.environ.get("JOB_APP_DASHBOARD_PASSWORD", ""),
+    )
 
 
 def load_vps_log(lines: int = 250) -> str:
@@ -138,16 +169,21 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
 
     def end_headers(self) -> None:
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Cache-Control", "no-store")
         super().end_headers()
 
     def do_OPTIONS(self) -> None:
-        self.send_response(200)
+        if not self._require_authorization():
+            return
+        self.send_response(204)
         self.end_headers()
 
     def do_GET(self) -> None:
+        if not self._require_authorization():
+            return
         path = self.path.split("?")[0]
         
         # Clean page route mappings
@@ -177,6 +213,8 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self) -> None:
+        if not self._require_authorization():
+            return
         if self.path == "/api/vps/sync":
             self._handle_vps_sync()
             return
@@ -184,6 +222,32 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
             self._handle_vps_status()
             return
         self.send_error(404, "Endpoint not found")
+
+    def _is_authorized(self) -> bool:
+        username, password = get_dashboard_credentials()
+        if not username or not password:
+            return True
+        header = self.headers.get("Authorization", "")
+        if not header.startswith("Basic "):
+            return False
+        try:
+            decoded = base64.b64decode(header[6:], validate=True).decode("utf-8")
+            supplied_username, supplied_password = decoded.split(":", 1)
+        except (ValueError, UnicodeDecodeError):
+            return False
+        return hmac.compare_digest(supplied_username, username) and hmac.compare_digest(
+            supplied_password,
+            password,
+        )
+
+    def _require_authorization(self) -> bool:
+        if self._is_authorized():
+            return True
+        self.send_response(401)
+        self.send_header("WWW-Authenticate", 'Basic realm="SkyBison VPS Dashboard"')
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+        return False
 
     def _send_json(self, data: Any, status: int = 200) -> None:
         payload = json.dumps(data, indent=2).encode("utf-8")
@@ -307,6 +371,11 @@ class ReuseAddrHTTPServer(HTTPServer):
 
 
 def run_dashboard_server(host: str = "127.0.0.1", port: int = 8000, open_browser: bool = True) -> None:
+    username, password = get_dashboard_credentials()
+    if host not in _LOOPBACK_HOSTS and (not username or not password):
+        raise RuntimeError(
+            "Dashboard credentials are required when binding to a non-loopback address."
+        )
     server_address = (host, port)
     httpd = ReuseAddrHTTPServer(server_address, DashboardRequestHandler)
     url = f"http://{host}:{port}/"

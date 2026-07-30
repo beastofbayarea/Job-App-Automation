@@ -2,7 +2,8 @@
 Description=Continuous VPS search, document generation, and application worker
 Wants=network-online.target
 After=network-online.target
-StartLimitIntervalSec=0
+StartLimitIntervalSec=900
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -15,6 +16,13 @@ ExecStartPre=/usr/bin/test -r __REPO_DIR__/config/vertex_service_account.json
 ExecStart=/bin/bash __REPO_DIR__/scripts/vps_continuous_search_sync.sh
 Restart=always
 RestartSec=15
+MemoryAccounting=true
+MemoryHigh=1400M
+MemoryMax=2G
+TasksMax=384
+CPUAccounting=true
+CPUWeight=75
+Nice=5
 KillSignal=SIGINT
 TimeoutStopSec=600
 SyslogIdentifier=job-app-search-sync

@@ -20,6 +20,7 @@ config/credentials.json
 config/token.json
 config/client_secret*.json
 config/vertex_service_account.json
+config/dashboard.env
 
 # Candidate PII configs (see *.example.json for templates)
 config/candidate_profile_config.json

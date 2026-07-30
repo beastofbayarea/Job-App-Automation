@@ -112,39 +112,71 @@ try {
         [Text.UTF8Encoding]::new($false)
     )
     Write-Host "Staging continuous search-sync unit to $VpsHost..."
-    Invoke-ExternalCommandWithTimeout -Command $PscpCmd.Path -Arguments @(
-        "-P", $SshPort.ToString(),
-        "-pwfile", $PasswordFile,
-        "-hostkey", $SshHostKey,
-        $RenderedUnitPath,
-        "$SshUser@${VpsHost}:$RemoteUnitStage"
-    ) -TimeoutSeconds 30 | Out-Null
+    $Transfer = Invoke-ExternalCommandWithTimeout `
+        -FilePath $PscpCmd.Source `
+        -ArgumentList @(
+            "-batch",
+            "-P",
+            $SshPort,
+            "-pwfile",
+            $PasswordFile,
+            "-hostkey",
+            $SshHostKey,
+            $RenderedUnitPath,
+            "$SshUser@${VpsHost}:$RemoteUnitStage"
+        ) `
+        -TimeoutSeconds 30
+    if ($Transfer.ExitCode -ne 0) {
+        Write-Error "Continuous search unit upload failed (exit code $($Transfer.ExitCode))."
+        exit $Transfer.ExitCode
+    }
 
     Write-Host "Staging candidate profile to $VpsHost..."
-    Invoke-ExternalCommandWithTimeout -Command $PscpCmd.Path -Arguments @(
-        "-P", $SshPort.ToString(),
-        "-pwfile", $PasswordFile,
-        "-hostkey", $SshHostKey,
-        "config/candidate_profile_config.json",
-        "$SshUser@${VpsHost}:$RemoteProfileStage"
-    ) -TimeoutSeconds 30 | Out-Null
+    $Transfer = Invoke-ExternalCommandWithTimeout `
+        -FilePath $PscpCmd.Source `
+        -ArgumentList @(
+            "-batch",
+            "-P",
+            $SshPort,
+            "-pwfile",
+            $PasswordFile,
+            "-hostkey",
+            $SshHostKey,
+            "config/candidate_profile_config.json",
+            "$SshUser@${VpsHost}:$RemoteProfileStage"
+        ) `
+        -TimeoutSeconds 30
+    if ($Transfer.ExitCode -ne 0) {
+        Write-Error "Candidate profile upload failed (exit code $($Transfer.ExitCode))."
+        exit $Transfer.ExitCode
+    }
 
     Write-Host "Installing, disabling cron, and starting $ServiceName on $VpsHost..."
-    $Result = Invoke-ExternalCommandWithTimeout -Command $PlinkCmd.Path -Arguments @(
-        "-P", $SshPort.ToString(),
-        "-pwfile", $PasswordFile,
-        "-hostkey", $SshHostKey,
-        "$SshUser@$VpsHost",
-        $RemoteCommand
-    ) -TimeoutSeconds 60
+    $Result = Invoke-ExternalCommandWithTimeout `
+        -FilePath $PlinkCmd.Source `
+        -ArgumentList @(
+            "-ssh",
+            "-batch",
+            "-P",
+            $SshPort,
+            "-pwfile",
+            $PasswordFile,
+            "-hostkey",
+            $SshHostKey,
+            "$SshUser@$VpsHost",
+            $RemoteCommand
+        ) `
+        -TimeoutSeconds 60
 
     if ($Result.ExitCode -ne 0) {
-        Write-Error "Continuous search-sync installation failed on $VpsHost:`n$($Result.StandardError)"
+        Write-Error "Continuous search-sync installation failed on $VpsHost (exit code $($Result.ExitCode))."
         exit $Result.ExitCode
     }
 
     Write-Host "Successfully installed and started $ServiceName on $VpsHost!"
-    Write-Host $Result.StandardOutput
+    foreach ($OutputLine in $Result.Output) {
+        Write-Output ([string]$OutputLine)
+    }
 } finally {
     Remove-Item -LiteralPath $RenderedUnitPath -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $PasswordFile -ErrorAction SilentlyContinue

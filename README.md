@@ -287,6 +287,18 @@ pwsh scripts\install_vps_continuous_greenhouse.ps1
 pwsh scripts\install_vps_continuous_lever.ps1
 ```
 
+Audit all persistent and scheduled VPS workloads without changing remote state:
+
+```powershell
+pwsh scripts\audit_vps_runtime.ps1
+```
+
+Repair the dashboard as an authenticated loopback service behind Nginx:
+
+```powershell
+pwsh scripts\install_vps_dashboard.ps1
+```
+
 The installers deploy the ignored candidate email pool, remove the older daily
 cron entry, disable the broad continuous search/submission service, and enable
 one independent `job-app-<ats>.service` per provider. Installing one worker

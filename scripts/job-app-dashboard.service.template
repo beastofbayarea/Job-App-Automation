@@ -1,0 +1,40 @@
+[Unit]
+Description=Authenticated VPS output monitor dashboard
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=__REPO_DIR__
+Environment=PYTHONPATH=__REPO_DIR__/src
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+EnvironmentFile=__REPO_DIR__/config/dashboard.env
+ExecStartPre=/usr/bin/test -x __REPO_DIR__/.venv/bin/python
+ExecStartPre=/usr/bin/test -r __REPO_DIR__/config/dashboard.env
+ExecStart=__REPO_DIR__/.venv/bin/python -m job_application_automation.dashboard.server --host 127.0.0.1 --port 8000 --no-browser
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+MemoryMax=192M
+TasksMax=32
+SyslogIdentifier=vps-dashboard
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

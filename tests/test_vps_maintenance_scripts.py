@@ -55,6 +55,56 @@ def git(cwd: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
 
 @unittest.skipUnless(PWSH, "PowerShell 7 is required")
 class PowerShellMaintenanceTests(unittest.TestCase):
+    def test_runtime_audit_is_read_only_and_covers_persistent_workloads(self) -> None:
+        script = (SCRIPTS / "audit_vps_runtime.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("list-units --type=service --state=running", script)
+        self.assertIn("list-unit-files --type=service --state=enabled", script)
+        self.assertIn("list-timers --all", script)
+        self.assertIn("crontab -l", script)
+        self.assertIn("LONGEST_LIVED_PROCESSES", script)
+        self.assertIn("LISTENING_SOCKETS", script)
+        self.assertIn("docker ps --no-trunc", script)
+        self.assertIn("JOB_APP_UNITS", script)
+        self.assertIn("MemoryPeak", script)
+        self.assertIn("vps-dashboard.service", script)
+        self.assertIn("APPLICATION_SERVICE_DIAGNOSTICS", script)
+        self.assertIn("nginx -t", script)
+        self.assertIn("nginx virtual-host routing", script)
+        self.assertIn("REBOOT_REQUIRED", script)
+        self.assertIn("-hostkey", script)
+        self.assertIn("-pwfile", script)
+        self.assertNotIn("systemctl restart", script)
+        self.assertNotIn("systemctl stop", script)
+        self.assertNotIn("systemctl disable", script)
+
+    def test_dashboard_installer_uses_loopback_authentication_and_restores_nginx(self) -> None:
+        installer = (SCRIPTS / "install_vps_dashboard.ps1").read_text(encoding="utf-8")
+        unit = (SCRIPTS / "job-app-dashboard.service.template").read_text(encoding="utf-8")
+
+        self.assertIn("-hostkey", installer)
+        self.assertIn("-pwfile", installer)
+        self.assertIn("RandomNumberGenerator", installer)
+        self.assertIn("config/dashboard.env", installer)
+        self.assertIn("systemctl restart vps-dashboard.service", installer)
+        self.assertIn("nginx -t", installer)
+        self.assertIn("systemctl restart nginx.service", installer)
+        self.assertIn("--host 127.0.0.1 --port 8000", unit)
+        self.assertIn("EnvironmentFile=__REPO_DIR__/config/dashboard.env", unit)
+        self.assertIn("MemoryMax=192M", unit)
+        self.assertNotIn("--host 0.0.0.0", unit)
+
+    def test_continuous_search_installer_uses_current_timeout_helper_contract(self) -> None:
+        installer = (SCRIPTS / "install_vps_continuous_search.ps1").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("-FilePath $PscpCmd.Source", installer)
+        self.assertIn("-ArgumentList @(", installer)
+        self.assertIn("$Result.Output", installer)
+        self.assertNotIn("-Command $PscpCmd.Path", installer)
+        self.assertNotIn("$Result.StandardOutput", installer)
+
     def test_status_probe_is_bounded_and_excludes_its_own_process_match(self) -> None:
         script = (SCRIPTS / "check_vps_automation_status.ps1").read_text(encoding="utf-8")
 
