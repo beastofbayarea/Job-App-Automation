@@ -132,9 +132,10 @@ def strip_markdown_formatting(value: Any) -> str:
     text = re.sub(r"(\*\*|__)(?=\S)(.+?)(?<=\S)\1", r"\2", text)
     text = re.sub(r"(?<!\w)([*_])(?=\S)(.+?)(?<=\S)\1(?!\w)", r"\2", text)
     text = re.sub(r"~~(?=\S)(.+?)(?<=\S)~~", r"\1", text)
+    # Unescape HTML entities first so encoded tags or characters are normalized.
+    text = html.unescape(text)
     # LLMs occasionally emit simple HTML formatting instead of Markdown.
     text = re.sub(r"</?(?:b|strong|i|em|u|s|code|p|br)\b[^>]*>", " ", text, flags=re.I)
-    text = html.unescape(text)
     text = re.sub(r"[ \t]{2,}", " ", text)
     text = re.sub(r"[ \t]+([,.;:!?])", r"\1", text)
     text = re.sub(r"[ \t]+\n", "\n", text)
