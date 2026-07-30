@@ -28,6 +28,7 @@ COMMAND_MODULES = {
     "google-indexing": "job_application_automation.core.google_indexing",
     "continuous-ashby": "job_application_automation.core.continuous_ashby",
     "continuous-greenhouse": "job_application_automation.core.continuous_greenhouse",
+    "continuous-lever": "job_application_automation.core.continuous_lever",
 }
 COMMAND_ALIASES = {
     "orchestrate": "apply",
@@ -63,7 +64,8 @@ def _print_usage(stream: TextIO) -> None:
         "  dashboard   Launch interactive web dashboard for output statistics\n"
         "  google-indexing  Submit a sitemap or eligible URL notifications to Google\n"
         "  continuous-ashby  Run the persistent one-job Ashby worker\n"
-        "  continuous-greenhouse  Run the persistent one-job Greenhouse worker\n\n"
+        "  continuous-greenhouse  Run the persistent one-job Greenhouse worker\n"
+        "  continuous-lever  Run the persistent one-job Lever worker\n\n"
         "Internal command:\n"
         "  engine <provider>  Run an ATS engine for the orchestrator\n\n"
         "Use `job_automation.py <command> --help` for command-specific help.",
