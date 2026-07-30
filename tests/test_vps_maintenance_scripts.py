@@ -103,8 +103,9 @@ class PowerShellMaintenanceTests(unittest.TestCase):
         self.assertIn("8080", script)
         self.assertIn("password authentication failed", script)
         self.assertIn("too many authentication failures", script)
-        self.assertIn('systemctl stop "$service"', script)
+        self.assertIn('systemctl stop --no-block "$service"', script)
         self.assertIn('systemctl disable "$service"', script)
+        self.assertIn("systemctl kill --kill-whom=all --signal=SIGKILL", script)
         self.assertIn("-hostkey", script)
         self.assertIn("-pwfile", script)
         self.assertLess(

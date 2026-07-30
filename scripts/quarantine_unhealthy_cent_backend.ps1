@@ -41,17 +41,30 @@ if (-not $PlinkCmd) {
 $RemoteCommand = @'
 set -eu
 service=cent-capital-backend.service
-if ! systemctl is-active --quiet "$service"; then
-  printf '%s\n' 'NO_ACTION: backend is not active.'
-elif ss -lnt | grep -Eq '[:.]8080[[:space:]]'; then
+if ss -lnt | grep -Eq '[:.]8080[[:space:]]'; then
   printf '%s\n' 'NO_ACTION: backend is listening on port 8080.'
 elif ! journalctl -u "$service" -n 500 --no-pager |
   grep -Eq 'password authentication failed|too many authentication failures'; then
   printf '%s\n' 'NO_ACTION: database authentication failure evidence is absent.'
   exit 3
+elif ! systemctl is-enabled --quiet "$service" &&
+  ! systemctl is-active --quiet "$service"; then
+  printf '%s\n' 'NO_ACTION: backend is already quarantined.'
 else
-  systemctl stop "$service"
   systemctl disable "$service"
+  systemctl stop --no-block "$service"
+  for attempt in $(seq 1 20); do
+    if systemctl is-active --quiet "$service" ||
+      [ "$(systemctl show "$service" --property=SubState --value)" = "stop-sigterm" ]; then
+      sleep 1
+    else
+      break
+    fi
+  done
+  if systemctl is-active --quiet "$service" ||
+    [ "$(systemctl show "$service" --property=SubState --value)" = "stop-sigterm" ]; then
+    systemctl kill --kill-whom=all --signal=SIGKILL "$service"
+  fi
   systemctl reset-failed "$service" || true
   printf '%s\n' 'QUARANTINED: stopped invalid-credential backend restart loop.'
 fi
