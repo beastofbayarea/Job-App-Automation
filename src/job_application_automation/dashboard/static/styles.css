@@ -41,6 +41,8 @@ body {
   font-family: var(--font-sans);
   min-height: 100vh;
   line-height: 1.5;
+  display: flex;
+  flex-direction: column;
 }
 
 /* App Header & SkyBison Branding */
@@ -155,6 +157,7 @@ body {
   max-width: 1440px;
   margin: 0 auto;
   padding: 2rem;
+  flex: 1;
 }
 
 /* Infrastructure Specs Panel */
@@ -558,4 +561,83 @@ body {
   font-weight: 600;
   color: var(--fire-gold);
   margin-bottom: 0.35rem;
+}
+
+/* GLOBAL SITE FOOTER STYLING */
+.app-footer {
+  background: rgba(4, 7, 13, 0.95);
+  border-top: 1px solid var(--border-color);
+  padding: 3rem 2rem 2rem;
+  margin-top: 3rem;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.footer-container {
+  max-width: 1440px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr;
+  gap: 2.5rem;
+}
+
+.footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.footer-logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--fire-gold);
+}
+
+.footer-brand-title {
+  font-family: var(--font-cinzel);
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--fire-gold);
+}
+
+.footer-desc {
+  font-size: 0.825rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+.footer-copy {
+  font-size: 0.75rem;
+  color: #64748b;
+  display: block;
+}
+
+.footer-heading {
+  font-family: var(--font-cinzel);
+  font-size: 0.9rem;
+  color: var(--air-cyan);
+  margin-bottom: 1rem;
+  letter-spacing: 0.5px;
+}
+
+.footer-links {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.footer-links a {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.85rem;
+  transition: color 0.2s ease, transform 0.2s ease;
+  display: inline-block;
+}
+
+.footer-links a:hover {
+  color: var(--air-cyan);
+  transform: translateX(3px);
 }
