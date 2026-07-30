@@ -239,9 +239,13 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
             self._send_json({"status": "error", "message": str(e)}, status=500)
 
 
+class ReuseAddrHTTPServer(HTTPServer):
+    allow_reuse_address = True
+
+
 def run_dashboard_server(host: str = "127.0.0.1", port: int = 8000, open_browser: bool = True) -> None:
     server_address = (host, port)
-    httpd = HTTPServer(server_address, DashboardRequestHandler)
+    httpd = ReuseAddrHTTPServer(server_address, DashboardRequestHandler)
     url = f"http://{host}:{port}/"
     print("\n=======================================================")
     print(f"VPS Output Monitor Dashboard running at: {url}")
