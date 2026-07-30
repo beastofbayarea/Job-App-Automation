@@ -342,24 +342,33 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
             self._send_json({"error": "Invalid filename"}, status=400)
             return
 
+        output_root = OUTPUT_DIR.resolve()
         candidates = [
             OUTPUT_DIR / filename,
             OUTPUT_DIR / "vps_reports" / filename,
         ]
 
         if not any(c.exists() for c in candidates):
-            for path in OUTPUT_DIR.rglob(filename):
+            for path in output_root.rglob(filename):
                 candidates.append(path)
                 break
 
         target_file = None
         for c in candidates:
-            if c.exists() and c.is_file():
-                target_file = c
+            try:
+                resolved = c.resolve()
+            except OSError:
+                continue
+            # Guard against directory traversal: the resolved path must stay
+            # within OUTPUT_DIR even if symlinks or unexpected paths were added.
+            if not str(resolved).startswith(str(output_root)):
+                continue
+            if resolved.exists() and resolved.is_file():
+                target_file = resolved
                 break
 
         if not target_file:
-            self._send_json({"error": f"Resume PDF not found: {filename}"}, status=404)
+            self._send_json({"error": f"File not found: {filename}"}, status=404)
             return
 
         try:
