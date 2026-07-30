@@ -6,6 +6,7 @@ import pytest
 
 from job_application_automation.engines.greenhouse import (
     _valid_greenhouse_url,
+    _fill_all_visible,
     _load_candidate_evidence,
     _fill_explicit_required_consents,
     _fill_export_control_questions,
@@ -16,6 +17,27 @@ from job_application_automation.engines.greenhouse import (
     _parser,
     main,
 )
+
+
+def test_fill_all_visible_populates_duplicate_standard_fields() -> None:
+    page = MagicMock()
+    controls = MagicMock()
+    controls.count.return_value = 3
+    first = MagicMock()
+    first.is_visible.return_value = True
+    first.input_value.return_value = "Candidate"
+    duplicate = MagicMock()
+    duplicate.is_visible.return_value = True
+    duplicate.input_value.return_value = "Candidate"
+    hidden = MagicMock()
+    hidden.is_visible.return_value = False
+    controls.nth.side_effect = [first, duplicate, hidden]
+    page.locator.return_value = controls
+
+    assert _fill_all_visible(page, ('input[name="last_name"]',), "Candidate") is True
+    first.fill.assert_called_once_with("Candidate")
+    duplicate.fill.assert_called_once_with("Candidate")
+    hidden.fill.assert_not_called()
 
 
 def test_valid_greenhouse_url() -> None:

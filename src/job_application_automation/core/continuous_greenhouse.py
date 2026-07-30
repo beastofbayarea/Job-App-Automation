@@ -201,6 +201,15 @@ def _masked_email(email: str) -> str:
     return f"{visible}{'*' * max(3, len(local) - 1)}@{domain}"
 
 
+def _sleep_between_cycles(delay: int) -> bool:
+    try:
+        time.sleep(delay)
+    except KeyboardInterrupt:
+        print("GREENHOUSE_WORKER_STOPPED signal=keyboard_interrupt", flush=True)
+        return False
+    return True
+
+
 def _job_digest(canonical_url: str) -> str:
     return hashlib.sha256(canonical_url.encode("utf-8")).hexdigest()[:20]
 
@@ -648,7 +657,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"GREENHOUSE_CYCLE_SLEEP seconds={delay} prior_status={cycle_status}",
             flush=True,
         )
-        time.sleep(delay)
+        if not _sleep_between_cycles(delay):
+            return 130
 
 
 if __name__ == "__main__":

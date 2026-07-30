@@ -232,3 +232,8 @@ def test_eligibility_is_greenhouse_only_live_complete_and_deduplicated() -> None
 
     assert len(jobs) == 1
     assert jobs[0]["_canonical_url"] == "https://boards.greenhouse.io/example/jobs/123"
+
+
+def test_sleep_between_cycles_handles_service_stop_without_traceback() -> None:
+    with patch.object(worker.time, "sleep", side_effect=KeyboardInterrupt):
+        assert worker._sleep_between_cycles(120) is False

@@ -97,6 +97,27 @@ def _valid_greenhouse_url(url: str) -> bool:
     return validate_ats_url(url, ATS_NAME)
 
 
+def _fill_all_visible(page: Page, selectors: Sequence[str], value: str) -> bool:
+    """Fill every visible duplicate of a standard Greenhouse input."""
+    if not value:
+        return False
+    matched = False
+    all_filled = True
+    for selector in selectors:
+        controls = page.locator(selector)
+        for index in range(controls.count()):
+            control = controls.nth(index)
+            try:
+                if not control.is_visible():
+                    continue
+                matched = True
+                control.fill(value)
+                all_filled = all_filled and control.input_value().strip() == value.strip()
+            except Exception:
+                all_filled = False
+    return matched and all_filled
+
+
 def _security_challenge_visible(page: Page) -> bool:
     return page.locator('input[id^="security-input"]').count() >= 8
 
@@ -594,17 +615,17 @@ def _fill_standard_fields(
     cover_letter: Path | None = None,
 ) -> dict[str, bool | None]:
     fields = {
-        "first_name": _fill(
+        "first_name": _fill_all_visible(
             page,
             ('input[name="first_name"]', 'input[id*="first_name" i]'),
             str(profile.get("first_name", "")),
         ),
-        "last_name": _fill(
+        "last_name": _fill_all_visible(
             page,
             ('input[name="last_name"]', 'input[id*="last_name" i]'),
             str(profile.get("last_name", "")),
         ),
-        "email": _fill(
+        "email": _fill_all_visible(
             page,
             ('input[name="email"]', 'input[type="email"]', 'input[id*="email" i]'),
             email,
