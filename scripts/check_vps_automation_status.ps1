@@ -51,11 +51,12 @@ uptime
 printf '%s\n' '=== AUTOMATION CRON ==='
 crontab -l 2>/dev/null | grep '# job-app-automation-daily-search' || printf '%s\n' 'MISSING'
 printf '%s\n' '=== CONTINUOUS GREENHOUSE SERVICE ==='
-systemctl is-enabled job-app-greenhouse.service 2>/dev/null || true
-systemctl is-active job-app-greenhouse.service 2>/dev/null || true
-systemctl --no-pager --full status job-app-greenhouse.service 2>/dev/null | sed -n '1,16p' || true
+systemctl show job-app-greenhouse.service \
+  --property=LoadState,UnitFileState,ActiveState,SubState,MainPID,NRestarts,ExecMainStartTimestamp \
+  2>/dev/null || true
 printf '%s\n' '=== AUTOMATION PROCESSES ==='
-pgrep -af '[c]ontinuous-greenhouse|[v]ps_search_sync.sh|[s]earch_applications|[s]earch_documents|[j]ob_automation.py search' || true
+pgrep -af '[c]ontinuous-greenhouse|[v]ps_search_sync.sh|[s]earch_applications|[s]earch_documents|[j]ob_automation.py search' |
+  sed -E 's/(--email )[[:graph:]]+/\1[REDACTED]/g' || true
 printf '%s\n' '=== REPOSITORY STATE ==='
 git -C "`$repo" status --short --branch
 git -C "`$repo" log -1 --date=iso-strict --pretty=format:'%H|%ad|%s'

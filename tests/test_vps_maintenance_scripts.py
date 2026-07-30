@@ -64,6 +64,12 @@ class PowerShellMaintenanceTests(unittest.TestCase):
         self.assertIn("[c]ontinuous-greenhouse", script)
         self.assertIn("job-app-greenhouse.service", script)
         self.assertIn("continuous_greenhouse_state.json", script)
+        self.assertIn("--email )[[:graph:]]+", script)
+        self.assertIn("[REDACTED]", script)
+        self.assertNotIn(
+            "systemctl --no-pager --full status job-app-greenhouse.service",
+            script,
+        )
         self.assertIn("vps_run_status.json", script)
         self.assertIn("job-app-automation-daily-search", script)
 
