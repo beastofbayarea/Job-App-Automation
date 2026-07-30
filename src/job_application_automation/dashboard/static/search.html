@@ -116,43 +116,8 @@
 
   <main class="container" id="mainContent">
 
-    <!-- Four Elements KPI Top Grid -->
-    <section class="kpi-grid">
-      <div class="kpi-card element-air">
-        <div class="kpi-title">🌀 Air • Confirmed Submissions</div>
-        <div class="kpi-value kpi-air" id="kpiSubmissions">--</div>
-      </div>
-      <div class="kpi-card element-water">
-        <div class="kpi-title">🌊 Water • Discovered Jobs</div>
-        <div class="kpi-value kpi-water" id="kpiJobsFound">--</div>
-      </div>
-      <div class="kpi-card element-earth">
-        <div class="kpi-title">🪨 Earth • Generation Queue</div>
-        <div class="kpi-value kpi-earth" id="kpiGenQueue">--</div>
-      </div>
-      <div class="kpi-card element-lotus">
-        <div class="kpi-title">🪷 Lotus • Board Registry</div>
-        <div class="kpi-value kpi-lotus" id="kpiCachedBoards">--</div>
-      </div>
-    </section>
-
     <!-- SEARCH & COVERAGE PAGE CONTENT -->
     <section class="section">
-      <div class="split-grid">
-        <div class="card">
-          <h3 style="color: var(--air-cyan); font-family: var(--font-display); font-size: 1.05rem; margin-bottom: 0.85rem;">Search Coverage Diagnostics (`job_search_coverage.json`)</h3>
-          <div id="coverageMetricsSummary" style="font-family: var(--font-mono); font-size: 0.85rem; line-height: 1.6;">
-            Loading coverage diagnostics...
-          </div>
-        </div>
-        <div class="card">
-          <h3 style="color: var(--water-blue); font-family: var(--font-display); font-size: 1.05rem; margin-bottom: 0.85rem;">ATS Board Cache Registry (`ats_boards_cache.json`)</h3>
-          <div id="boardCacheSummary" style="font-family: var(--font-mono); font-size: 0.85rem; line-height: 1.6;">
-            Loading board cache statistics...
-          </div>
-        </div>
-      </div>
-
       <div class="controls-bar">
         <input type="text" id="sec1Search" class="search-input" placeholder="Search jobs by Title, Company, Platform, Location..." oninput="renderJobsTable()">
       </div>

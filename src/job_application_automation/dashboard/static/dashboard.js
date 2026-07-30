@@ -16,7 +16,7 @@ let state = {
 const NAV_PAGES = [
   { slug: 'index', href: 'index.html', icon: '📜', desktopLabel: 'Submissions', drawerLabel: 'Submissions & Failures', bottomLabel: 'Matrix' },
   { slug: 'search', href: 'search.html', icon: '🌊', desktopLabel: 'Job Search', drawerLabel: 'Job Search & Coverage', bottomLabel: 'Search' },
-  { slug: 'generation', href: 'generation.html', icon: '🪨', desktopLabel: 'AI Queue', drawerLabel: 'Generation & Archives', bottomLabel: 'Queue' },
+  { slug: 'generation', href: 'generation.html', icon: '🪨', desktopLabel: 'Application Queue', drawerLabel: 'Application Queue', bottomLabel: 'Queue' },
   { slug: 'logs', href: 'logs.html', icon: '🔥', desktopLabel: 'Sync Logs', drawerLabel: 'Real-Time VPS Logs', bottomLabel: 'Logs' },
   { slug: 'inspector', href: 'inspector.html', icon: '📁', desktopLabel: 'Inspector', drawerLabel: 'Raw File Inspector', bottomLabel: 'Files' },
   { slug: 'system-status', href: 'system-status.html', icon: '🛰️', desktopLabel: 'System Status', drawerLabel: 'VPS Config & Failures', bottomLabel: 'Status' }
@@ -68,16 +68,18 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   if (document.getElementById('jobsTableBody')) {
     fetchJobs();
+  }
+  if (document.getElementById('coverageMetricsSummary')) {
     fetchCoverageAndCache();
   }
-  if (document.getElementById('generationQueueView')) {
+  if (document.getElementById('generationQueueView') || document.getElementById('archiveStateView')) {
     fetchSection2();
   }
   if (document.getElementById('structuredLogBody')) {
     fetchVpsLog();
   }
-  if (document.getElementById('rawFileViewer')) {
-    loadRawFile();
+  if (document.getElementById('inspectorSections')) {
+    renderInspectorSections();
   }
 });
 
@@ -219,12 +221,6 @@ async function fetchMetrics() {
     if (document.getElementById('kpiArchives')) document.getElementById('kpiArchives').textContent = data.archived_document_sets ?? 0;
     if (document.getElementById('kpiCachedBoards')) document.getElementById('kpiCachedBoards').textContent = data.cached_boards_count ?? 0;
     if (document.getElementById('kpiFailures')) document.getElementById('kpiFailures').textContent = data.failure_count ?? 0;
-
-    // Funnel Values
-    if (document.getElementById('funnelValWater')) document.getElementById('funnelValWater').textContent = data.total_jobs_found ?? 0;
-    if (document.getElementById('funnelValEarth')) document.getElementById('funnelValEarth').textContent = data.generation_queue_count ?? 0;
-    if (document.getElementById('funnelValAir')) document.getElementById('funnelValAir').textContent = data.total_submissions ?? 0;
-    if (document.getElementById('funnelValFire')) document.getElementById('funnelValFire').textContent = data.archived_document_sets ?? 0;
 
     // Render ATS Submissions Breakdown Subtext
     if (data.ats_submissions && document.getElementById('kpiAtsBreakdown')) {
@@ -648,33 +644,55 @@ function renderSection2View() {
   }
 }
 
-async function loadRawFile() {
-  const select = document.getElementById('rawFileSelect');
-  const viewer = document.getElementById('rawFileViewer');
-  const metaBar = document.getElementById('inspectorMetaBar');
-  if (!select || !viewer) return;
-  const filename = select.value;
-  viewer.textContent = 'Loading file contents...';
+// Static catalog of report files shown on the Inspector page, each rendered
+// as its own section (rather than a single dropdown-driven viewer).
+const RAW_FILES = [
+  { key: 'submission_log', filename: 'submission_log.json', label: 'submission_log.json (Section 3)' },
+  { key: 'vps_application_failures', filename: 'vps_application_failures.json', label: 'vps_application_failures.json (Section 3)' },
+  { key: 'vps_application_state', filename: 'vps_application_state.json', label: 'vps_application_state.json (Section 3)' },
+  { key: 'ai_jobs', filename: 'ai_jobs.csv', label: 'ai_jobs.csv (Section 1)' },
+  { key: 'job_search_coverage', filename: 'job_search_coverage.json', label: 'job_search_coverage.json (Section 1)' },
+  { key: 'ats_boards_cache', filename: 'ats_boards_cache.json', label: 'ats_boards_cache.json (Section 1)' },
+  { key: 'vps_generation_jobs', filename: 'vps_generation_jobs.json', label: 'vps_generation_jobs.json (Section 2)' },
+  { key: 'vps_document_archive_state', filename: 'vps_document_archive_state.json', label: 'vps_document_archive_state.json (Section 2)' }
+];
+
+function renderInspectorSections() {
+  const mount = document.getElementById('inspectorSections');
+  if (!mount) return;
+
+  mount.innerHTML = RAW_FILES.map((f) => `
+    <div class="card" style="margin-bottom: 1.25rem;">
+      <h3 style="margin-bottom: 0.75rem; color: var(--air-cyan); font-family: var(--font-display); font-size: 1.05rem;">📄 ${escapeHtml(f.label)}</h3>
+      <div id="inspectorMetaBar_${f.key}" class="inspector-meta-bar">
+        <span>Loading metadata...</span>
+      </div>
+      <pre class="json-viewer" id="rawFileViewer_${f.key}">Loading file contents...</pre>
+    </div>
+  `).join('');
+
+  RAW_FILES.forEach((f) => loadRawFile(f));
+}
+
+async function loadRawFile(fileEntry) {
+  const viewer = document.getElementById(`rawFileViewer_${fileEntry.key}`);
+  const metaBar = document.getElementById(`inspectorMetaBar_${fileEntry.key}`);
+  if (!viewer) return;
 
   try {
-    const res = await fetch(`/api/files/${filename}`);
+    const res = await fetch(`/api/files/${fileEntry.filename}`);
     const data = await res.json();
-    let contentStr = '';
-    if (data.content) {
-      contentStr = data.content;
-    } else {
-      contentStr = JSON.stringify(data, null, 2);
-    }
+    const contentStr = data.content ? data.content : JSON.stringify(data, null, 2);
     viewer.textContent = contentStr;
 
     if (metaBar) {
       const bytes = new Blob([contentStr]).size;
       const lineCount = contentStr.split('\n').length;
       metaBar.innerHTML = `
-        <span>📄 File: <strong>${escapeHtml(filename)}</strong></span>
+        <span>📄 File: <strong>${escapeHtml(fileEntry.filename)}</strong></span>
         <span>Size: <strong>${(bytes / 1024).toFixed(1)} KB</strong></span>
         <span>Lines: <strong>${lineCount}</strong></span>
-        <button class="secondary-btn" style="min-height: 32px; padding: 0.25rem 0.6rem; font-size: 0.75rem;" onclick="copyViewerText()">📋 Copy File Text</button>
+        <button class="secondary-btn" style="min-height: 32px; padding: 0.25rem 0.6rem; font-size: 0.75rem;" onclick="copyViewerText('${fileEntry.key}')">📋 Copy File Text</button>
       `;
     }
   } catch (err) {
@@ -682,8 +700,8 @@ async function loadRawFile() {
   }
 }
 
-function copyViewerText() {
-  const viewer = document.getElementById('rawFileViewer');
+function copyViewerText(key) {
+  const viewer = document.getElementById(`rawFileViewer_${key}`);
   if (!viewer) return;
   navigator.clipboard.writeText(viewer.textContent).then(() => {
     alert('File contents copied to clipboard!');
@@ -712,7 +730,7 @@ async function refreshDashboardData() {
     btn.innerHTML = '<span>⏳ Refreshing...</span>';
   }
 
-  const loaders = [fetchMetrics, fetchSubmissions, fetchJobs, fetchSection2, fetchVpsLog];
+  const loaders = [fetchMetrics, fetchSubmissions, fetchJobs, fetchCoverageAndCache, fetchSection2, fetchVpsLog];
   try {
     await Promise.allSettled(
       loaders.map((load) => (typeof load === 'function' ? load() : undefined)),
