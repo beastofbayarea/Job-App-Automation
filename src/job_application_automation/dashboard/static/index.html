@@ -130,65 +130,33 @@
 
   <main class="container" id="mainContent">
 
-    <!-- Interactive Automated Pipeline Funnel Banner -->
+    <!-- Interactive Automated Pipeline Funnel Banner (merged with KPI detail) -->
     <section class="pipeline-funnel-card">
       <div class="funnel-header">
         <h2 class="funnel-main-title">🚀 Automated Application Funnel Lifecycle</h2>
         <span class="badge badge-info">4-STAGE PIPELINE</span>
       </div>
-      <div class="funnel-grid">
-        <div class="funnel-step step-water" onclick="filterByFunnelStage('water')">
-          <div class="funnel-icon">🌊</div>
-          <div class="funnel-meta">
-            <span class="funnel-name">1. Discovered Jobs</span>
-            <span class="funnel-val" id="funnelValWater">--</span>
-          </div>
+      <div class="kpi-grid">
+        <div class="kpi-card element-water" onclick="filterByFunnelStage('water')" style="cursor: pointer;">
+          <div class="kpi-title">🌊 1. Water • Discovered Jobs</div>
+          <div class="kpi-value kpi-water" id="kpiJobsFound">--</div>
+          <div class="kpi-subtext" id="kpiLivenessSub">Live: -- | Unavailable: --</div>
         </div>
-        <div class="funnel-step step-earth" onclick="filterByFunnelStage('earth')">
-          <div class="funnel-icon">🪨</div>
-          <div class="funnel-meta">
-            <span class="funnel-name">2. AI Queue</span>
-            <span class="funnel-val" id="funnelValEarth">--</span>
-          </div>
+        <div class="kpi-card element-earth" onclick="filterByFunnelStage('earth')" style="cursor: pointer;">
+          <div class="kpi-title">🪨 2. Earth • Application Queue</div>
+          <div class="kpi-value kpi-earth" id="kpiGenQueue">--</div>
+          <div class="kpi-subtext">Tailored Specs Queue</div>
         </div>
-        <div class="funnel-step step-air" onclick="filterByFunnelStage('air')">
-          <div class="funnel-icon">🌀</div>
-          <div class="funnel-meta">
-            <span class="funnel-name">3. Submissions</span>
-            <span class="funnel-val" id="funnelValAir">--</span>
-          </div>
+        <div class="kpi-card element-air" onclick="filterByFunnelStage('air')" style="cursor: pointer;">
+          <div class="kpi-title">🌀 3. Air • Confirmed Submissions</div>
+          <div class="kpi-value kpi-air" id="kpiSubmissions">--</div>
+          <div class="kpi-subtext" id="kpiAtsBreakdown">Greenhouse: -- | Ashby: -- | Lever: --</div>
         </div>
-        <div class="funnel-step step-fire" onclick="filterByFunnelStage('fire')">
-          <div class="funnel-icon">🔥</div>
-          <div class="funnel-meta">
-            <span class="funnel-name">4. Archives</span>
-            <span class="funnel-val" id="funnelValFire">--</span>
-          </div>
+        <div class="kpi-card element-fire" onclick="filterByFunnelStage('fire')" style="cursor: pointer;">
+          <div class="kpi-title">🔥 4. Fire • Document Archives</div>
+          <div class="kpi-value kpi-fire" id="kpiArchives">--</div>
+          <div class="kpi-subtext">PDF Resume + Cover Letter</div>
         </div>
-      </div>
-    </section>
-
-    <!-- Four Elements KPI Top Grid -->
-    <section class="kpi-grid">
-      <div class="kpi-card element-air">
-        <div class="kpi-title">🌀 Air • Confirmed Submissions</div>
-        <div class="kpi-value kpi-air" id="kpiSubmissions">--</div>
-        <div class="kpi-subtext" id="kpiAtsBreakdown">Greenhouse: -- | Ashby: -- | Lever: --</div>
-      </div>
-      <div class="kpi-card element-water">
-        <div class="kpi-title">🌊 Water • Discovered Jobs</div>
-        <div class="kpi-value kpi-water" id="kpiJobsFound">--</div>
-        <div class="kpi-subtext" id="kpiLivenessSub">Live: -- | Unavailable: --</div>
-      </div>
-      <div class="kpi-card element-earth">
-        <div class="kpi-title">🪨 Earth • Generation Queue</div>
-        <div class="kpi-value kpi-earth" id="kpiGenQueue">--</div>
-        <div class="kpi-subtext">Tailored Specs Queue</div>
-      </div>
-      <div class="kpi-card element-fire">
-        <div class="kpi-title">🔥 Fire • Document Archives</div>
-        <div class="kpi-value kpi-fire" id="kpiArchives">--</div>
-        <div class="kpi-subtext">PDF Resume + Cover Letter</div>
       </div>
     </section>
 
