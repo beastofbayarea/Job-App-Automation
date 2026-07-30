@@ -974,15 +974,25 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ashby-engine", default=None, help="Custom Ashby engine script")
     parser.add_argument("--greenhouse-engine", default=None, help="Custom Greenhouse engine script")
     parser.add_argument("--lever-engine", default=None, help="Custom Lever engine script")
+    parser.add_argument("--workable-engine", default=None, help="Custom Workable engine script")
+    parser.add_argument(
+        "--smartrecruiters-engine", default=None, help="Custom SmartRecruiters engine script"
+    )
+    parser.add_argument("--recruitee-engine", default=None, help="Custom Recruitee engine script")
+    parser.add_argument("--bamboohr-engine", default=None, help="Custom BambooHR engine script")
+    parser.add_argument("--breezy-engine", default=None, help="Custom Breezy HR engine script")
+    parser.add_argument("--jazzhr-engine", default=None, help="Custom JazzHR engine script")
     return parser
 
 
 def _resolve_engine_paths(args: argparse.Namespace) -> dict[str, Path]:
-    raw_engines: Mapping[str, str | Path] = {
-        "ashby": args.ashby_engine or args.engine or DEFAULT_ENGINE_FILES["ashby"],
-        "greenhouse": args.greenhouse_engine or DEFAULT_ENGINE_FILES["greenhouse"],
-        "lever": args.lever_engine or DEFAULT_ENGINE_FILES["lever"],
-    }
+    raw_engines: dict[str, str | Path] = {}
+    for ats, default_path in DEFAULT_ENGINE_FILES.items():
+        attr_name = f"{ats.replace('-', '_')}_engine"
+        override = getattr(args, attr_name, None)
+        if ats == "ashby" and not override:
+            override = getattr(args, "engine", None)
+        raw_engines[ats] = override or default_path
     return {ats: resolve_engine_path(Path(path)) for ats, path in raw_engines.items()}
 
 
@@ -997,9 +1007,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             prepared_resume_path=(
                 Path(args.prepared_resume).resolve() if args.prepared_resume else None
             ),
-            cover_letter_path=(
-                Path(args.cover_letter).resolve() if args.cover_letter else None
-            ),
+            cover_letter_path=(Path(args.cover_letter).resolve() if args.cover_letter else None),
             email_override=args.email,
             config_path=Path(args.config).resolve() if args.config else None,
             results_path=results_path,

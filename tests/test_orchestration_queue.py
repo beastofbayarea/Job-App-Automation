@@ -21,6 +21,28 @@ from job_application_automation.core.contracts import EngineResult, EngineStatus
 
 
 class EngineCommandContractTests(unittest.TestCase):
+    def test_orchestrator_resolves_every_registered_engine_by_default(self) -> None:
+        args = orchestrator._build_parser().parse_args([])
+
+        engine_paths = orchestrator._resolve_engine_paths(args)
+
+        self.assertEqual(set(engine_paths), set(orchestrator.DEFAULT_ENGINE_FILES))
+        self.assertTrue(
+            all(path == orchestrator.CLI_ENTRYPOINT.resolve() for path in engine_paths.values())
+        )
+
+    def test_orchestrator_accepts_a_phase_one_engine_override(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            custom_engine = Path(temporary_directory) / "custom_workable.py"
+            custom_engine.write_text("print('custom')\n", encoding="utf-8")
+            args = orchestrator._build_parser().parse_args(
+                ["--workable-engine", str(custom_engine)]
+            )
+
+            engine_paths = orchestrator._resolve_engine_paths(args)
+
+        self.assertEqual(engine_paths["workable"], custom_engine.resolve())
+
     def test_build_engine_command_uses_typed_request_fields_and_fill_only_precedence(self) -> None:
         engine = Path("engine_ashby.py")
         command = orchestrator.build_engine_command(
