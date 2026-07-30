@@ -11,6 +11,7 @@ Copy the tracked examples before adding personal data. Local candidate data, cre
 | Vertex service account | `config/vertex_service_account.json` | `config/vertex_service_account.example.json` |
 | Gmail OAuth client and token | `config/credentials.json`, `config/token.json` | Google Cloud OAuth desktop-client credentials; token is created during authorization |
 | Private VPS document archive | `config/vps_config.json` | `config/vps_config.example.json` |
+| Optional Cent Capital reference inventory | `config/cent_capital_config.json` | `config/cent_capital_config.example.json` |
 
 ## Candidate profile
 
@@ -33,6 +34,23 @@ The `candidate` object supplies personal fields and education history. `policies
 - `gmail`: OAuth credential/token locations and verification polling settings.
 
 Paths are resolved from the project root. Keep secrets in the local files named above; never put them in runtime configuration committed to Git.
+
+## Optional Cent Capital reference inventory
+
+`config/cent_capital_config.json` is an ignored reference inventory for settings
+that belong to the separate Cent Capital application and may be useful in later
+work. It is not read by Job App Automation. The inventory groups site/contact
+metadata, social links, Contentful profiles, frontend route and sitemap policy,
+Google Cloud project metadata, intended service-account roles, indexing limits,
+RSS/IndexNow settings, deployment notes, and other service credentials.
+
+Raw Google key exports matching `config/cent-capital-*-*.json` and the imported
+frontend snapshot at `config/config.js` are also ignored. Keep their exact paths
+in `reference_sources` and `google.service_accounts` so future work can identify
+the Search Console/Indexing and Gemini accounts without treating either key as
+the Job App Automation Vertex credential. When promoting these settings into the
+owning Cent Capital repository, resolve paths relative to that repository and
+use its environment/secret-loading conventions.
 
 ## Private VPS document archive
 

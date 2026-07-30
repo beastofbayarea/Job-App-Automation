@@ -1,0 +1,219 @@
+{
+  "schema_version": 1,
+  "reference_sources": {
+    "frontend_config_snapshot": "config/config.js",
+    "search_console_indexing_service_account": "config/PROJECT_ID-INDEXING_KEY_ID.json",
+    "gemini_service_account": "config/PROJECT_ID-GEMINI_KEY_ID.json",
+    "imported_on": "YYYY-MM-DD"
+  },
+  "github": {
+    "username": "YOUR_GITHUB_USERNAME",
+    "organization": "YOUR_GITHUB_ORGANIZATION",
+    "repository": "YOUR_FRONTEND_REPOSITORY",
+    "personal_access_token": {
+      "value": "YOUR_GITHUB_TOKEN",
+      "secret": true,
+      "original_prefix": "github_pat_"
+    }
+  },
+  "application": {
+    "name": "YOUR_APPLICATION_NAME",
+    "base_url": "https://www.example.com",
+    "contact_email": "hello@example.com",
+    "support_phone": "YOUR_SUPPORT_PHONE",
+    "address": "YOUR_BUSINESS_ADDRESS",
+    "social": {
+      "twitter": "https://x.com/YOUR_ACCOUNT",
+      "linkedin": "https://www.linkedin.com/company/YOUR_COMPANY",
+      "youtube": "https://www.youtube.com/@YOUR_CHANNEL",
+      "instagram": "https://www.instagram.com/YOUR_ACCOUNT"
+    },
+    "production_api_url": "https://api.example.com",
+    "public_domain": "example.com",
+    "default_finipedia_image": "https://example.com/default-image.jpg",
+    "image_cache_hours": 24,
+    "image_cache_enabled": true,
+    "image_cache_max_size_mb": 5,
+    "image_cache_auto_cleanup": true,
+    "generate_sourcemap": false
+  },
+  "google": {
+    "oauth_client_id": "YOUR_OAUTH_CLIENT_ID",
+    "cloud_project_id": "YOUR_GOOGLE_CLOUD_PROJECT_ID",
+    "cloud_project_number": "YOUR_GOOGLE_CLOUD_PROJECT_NUMBER",
+    "cloud_location": "global",
+    "ai_model": "gemini-flash-latest",
+    "service_account_file": "config/vertex_service_account.json",
+    "service_accounts": {
+      "search_console_indexing": {
+        "name": "YOUR_INDEXING_SERVICE_ACCOUNT_NAME",
+        "email": "YOUR_INDEXING_SERVICE_ACCOUNT_EMAIL",
+        "client_id": "YOUR_INDEXING_SERVICE_ACCOUNT_CLIENT_ID",
+        "key_id": "YOUR_INDEXING_SERVICE_ACCOUNT_KEY_ID",
+        "key_file": "config/PROJECT_ID-INDEXING_KEY_ID.json",
+        "intended_use": [
+          "Google Search Console",
+          "Google Indexing API"
+        ]
+      },
+      "gemini_ai": {
+        "name": "YOUR_GEMINI_SERVICE_ACCOUNT_NAME",
+        "email": "YOUR_GEMINI_SERVICE_ACCOUNT_EMAIL",
+        "client_id": "YOUR_GEMINI_SERVICE_ACCOUNT_CLIENT_ID",
+        "key_id": "YOUR_GEMINI_SERVICE_ACCOUNT_KEY_ID",
+        "key_file": "config/PROJECT_ID-GEMINI_KEY_ID.json",
+        "intended_use": [
+          "Gemini AI features"
+        ]
+      }
+    },
+    "search_console_owner_service_account": "YOUR_GSC_OWNER_SERVICE_ACCOUNT_EMAIL",
+    "indexing_api": {
+      "endpoint": "https://indexing.googleapis.com/v3/urlNotifications:publish",
+      "scopes": [
+        "https://www.googleapis.com/auth/indexing"
+      ],
+      "daily_quota": 200,
+      "batch_size": 100
+    }
+  },
+  "aws": {
+    "ses_region": "us-east-1",
+    "smtp_username": {
+      "value": "YOUR_SMTP_USERNAME",
+      "secret": true,
+      "original_prefix": "AKIA"
+    },
+    "smtp_password": {
+      "value": "YOUR_SMTP_PASSWORD",
+      "secret": true
+    },
+    "iam_user": "YOUR_IAM_USER"
+  },
+  "contentful": {
+    "main": {
+      "space_id": "YOUR_CONTENTFUL_SPACE_ID",
+      "access_token": {
+        "value": "YOUR_CONTENTFUL_DELIVERY_TOKEN",
+        "secret": true
+      },
+      "environment": "master"
+    },
+    "finpedia": {
+      "space_id": "YOUR_FINPEDIA_SPACE_ID",
+      "access_token": {
+        "value": "YOUR_FINPEDIA_DELIVERY_TOKEN",
+        "secret": true
+      },
+      "environment": "master"
+    }
+  },
+  "third_party_services": {
+    "financial_modeling_prep_api_key": {
+      "value": "YOUR_FMP_API_KEY",
+      "secret": true
+    },
+    "alpha_vantage_api_key": {
+      "value": "YOUR_ALPHA_VANTAGE_API_KEY",
+      "secret": true
+    },
+    "plaid_client_id": {
+      "value": "YOUR_PLAID_CLIENT_ID",
+      "secret": true
+    },
+    "pexels_api_key_1": {
+      "value": "YOUR_PEXELS_API_KEY",
+      "secret": true
+    },
+    "pexels_api_key_2": {
+      "value": "YOUR_SECOND_PEXELS_API_KEY",
+      "secret": true
+    },
+    "bing_submission_key": {
+      "value": "YOUR_BING_SUBMISSION_KEY",
+      "secret": true
+    },
+    "indexnow_key": {
+      "value": "YOUR_LEGACY_INDEXNOW_KEY",
+      "secret": true
+    }
+  },
+  "cloudflare": {
+    "zone_id": "YOUR_CLOUDFLARE_ZONE_ID",
+    "account_id": "YOUR_CLOUDFLARE_ACCOUNT_ID"
+  },
+  "deployment": {
+    "transport": [
+      "SCP over SSH",
+      "SSH remote command execution"
+    ],
+    "authentication_method": "YOUR_AUTHENTICATION_METHOD",
+    "source_environment": "YOUR_SOURCE_ENVIRONMENT",
+    "remote_script": "deploy-remote-fe.sh",
+    "remote_app_directory": "/opt/your-frontend",
+    "serve_command": "serve -s . -p 3000",
+    "process_manager": "PM2"
+  },
+  "frontend": {
+    "routes": {
+      "excluded": [
+        "verify-email",
+        "forgot-password",
+        "reset-password",
+        "*",
+        "404",
+        "admin"
+      ],
+      "protected": [
+        "/dashboard",
+        "/profile"
+      ],
+      "metadata": {
+        "/": {
+          "priority": 1.0,
+          "change_frequency": "weekly"
+        },
+        "/about": {
+          "priority": 0.8,
+          "change_frequency": "monthly"
+        },
+        "default": {
+          "priority": 0.5,
+          "change_frequency": "monthly"
+        }
+      }
+    }
+  },
+  "seo": {
+    "indexnow": {
+      "key": {
+        "value": "YOUR_INDEXNOW_KEY",
+        "secret": true
+      },
+      "key_location": "https://www.example.com/YOUR_INDEXNOW_KEY.txt",
+      "endpoints": [
+        "https://api.indexnow.org/indexnow",
+        "https://www.bing.com/indexnow"
+      ]
+    },
+    "rss": {
+      "feed_url": "https://www.example.com/rss.xml",
+      "item_count": 200
+    },
+    "sitemaps": {
+      "index": "https://www.example.com/sitemap-index.xml",
+      "main": "https://www.example.com/sitemap.xml",
+      "finpedia": "https://www.example.com/sitemap-finpedia.xml"
+    }
+  },
+  "backend_environment": {
+    "jwt": {
+      "secret": "YOUR_JWT_SECRET"
+    },
+    "plaid": {
+      "client_id": "YOUR_PLAID_CLIENT_ID",
+      "production_secret": "YOUR_PLAID_PRODUCTION_SECRET",
+      "sandbox_secret_commented": "YOUR_PLAID_SANDBOX_SECRET"
+    }
+  }
+}

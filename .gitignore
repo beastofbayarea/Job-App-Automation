@@ -27,8 +27,11 @@ config/candidate_profile_config.json
 config/candidate_email_pool.json
 config/nooks_retry_email.json
 
-# Cent Capital project secrets, kept for potential reuse (API keys, service account key)
+# Cent Capital project secrets, kept for potential reuse (API keys, service account keys,
+# and the source frontend configuration snapshot)
 config/cent_capital_config.json
+config/cent-capital-*-*.json
+config/config.js
 
 # VPS credentials, split out from cent_capital_config.json for reuse across projects
 config/vps_config.json

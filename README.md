@@ -67,6 +67,7 @@ Tracked examples are safe templates. Copy and personalize them; the resulting fi
 | Vertex service account | `config/vertex_service_account.json` | `config/vertex_service_account.example.json` |
 | Gmail desktop OAuth client and token | `config/credentials.json`, `config/token.json` | Download OAuth desktop-client credentials from Google Cloud; the token is created during authorization. |
 | Private VPS archive | `config/vps_config.json` | Copy `config/vps_config.example.json`, then add a trusted host-key fingerprint and dedicated archive authentication. |
+| Optional Cent Capital reference inventory | `config/cent_capital_config.json` | Copy `config/cent_capital_config.example.json`; this ignored inventory is for future work in the separate Cent Capital application and is not loaded by Job App Automation. |
 
 The default runtime configuration resolves paths from the project root. Its Vertex `project_id` can remain `from-service-account` to read the project ID from the configured service-account file. Alternatively, use Application Default Credentials via `GOOGLE_APPLICATION_CREDENTIALS`.
 
