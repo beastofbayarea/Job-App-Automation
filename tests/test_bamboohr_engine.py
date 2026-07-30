@@ -61,3 +61,29 @@ def test_bamboohr_run_mocked(tmp_path: Path) -> None:
         assert res["ats"] == "bamboohr"
         assert res["filled_fields"]["first_name"] == "Jane"
         assert mock_session.browser.close.called
+
+
+def test_bamboohr_run_missing_profile_identity(tmp_path: Path) -> None:
+    resume_file = tmp_path / "resume.pdf"
+    resume_file.write_bytes(b"dummy pdf content")
+    config = {"candidate": {"identity": {}, "contact": {}}}
+
+    with patch("job_application_automation.engines.bamboohr.resolve_candidate_email", return_value=""):
+        with pytest.raises(ValueError, match="Missing required candidate profile identity"):
+            run(
+                url="https://example.bamboohr.com/careers/123",
+                resume=resume_file,
+                config=config,
+            )
+
+
+def test_bamboohr_run_invalid_url(tmp_path: Path) -> None:
+    resume_file = tmp_path / "resume.pdf"
+    resume_file.write_bytes(b"dummy pdf content")
+    with pytest.raises(ValueError):
+        run(
+            url="https://invalid-site.com/careers",
+            resume=resume_file,
+            config={},
+        )
+
