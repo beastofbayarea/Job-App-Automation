@@ -24,17 +24,20 @@ SPEC = BrowserFormSpec(
         'button:has-text("I\'m interested")',
     ),
     first_name_selectors=(
+        "input#first-name-input",
         'input[name="firstName"]',
         'input[name="first-name"]',
         'input[data-qa="first-name"]',
     ),
     last_name_selectors=(
+        "input#last-name-input",
         'input[name="lastName"]',
         'input[name="last-name"]',
         'input[data-qa="last-name"]',
     ),
     full_name_selectors=('input[name="full-name"]', 'input[name="name"]'),
     email_selectors=(
+        "input#email-input",
         'input[name="email"]',
         'input[type="email"]',
         'input[data-qa="email"]',
@@ -45,19 +48,30 @@ SPEC = BrowserFormSpec(
         'input[type="tel"]',
     ),
     headline_selectors=('input[name*="headline" i]', 'input[name*="title" i]'),
-    linkedin_selectors=('input[name*="linkedin" i]', 'input[data-qa="linkedin"]'),
+    linkedin_selectors=(
+        "input#linkedin-input",
+        'input[name*="linkedin" i]',
+        'input[data-qa="linkedin"]',
+    ),
     github_selectors=('input[name*="github" i]',),
-    portfolio_selectors=('input[name*="website" i]', 'input[name*="portfolio" i]'),
+    portfolio_selectors=(
+        "input#website-input",
+        'input[name*="website" i]',
+        'input[name*="portfolio" i]',
+    ),
     resume_selectors=(
         'input[type="file"][name*="resume" i]',
         'input[type="file"][id*="resume" i]',
         'input[type="file"][data-qa*="resume" i]',
+        "#file-input",
+        'input[type="file"]',
     ),
     cover_letter_file_selectors=(
         'input[type="file"][name*="cover" i]',
         'input[type="file"][id*="cover" i]',
     ),
     cover_letter_text_selectors=(
+        "textarea#hiring-manager-message-input",
         'textarea[name*="cover" i]',
         'textarea[data-qa*="cover" i]',
     ),
@@ -66,6 +80,13 @@ SPEC = BrowserFormSpec(
         'button[data-qa*="submit" i]',
     ),
     render_wait_ms=1500,
+    email_confirmation_selectors=("input#confirm-email-input",),
+    city_selectors=(
+        'input[aria-label^="City" i]',
+        'input[role="combobox"][id^="spl-form-element"]',
+    ),
+    background_cdp=True,
+    resume_parse_wait_ms=5000,
 )
 
 

@@ -35,7 +35,7 @@ from ..core.engine_shared import load_json_config
 from ..core.identity import normalize_email
 from ..core.paths import CONFIG_DIR, OUTPUT_DIR
 from ..core.runtime_config import RUNTIME_CONFIG, resolve_runtime_path
-from .ai_client import scrape_ashby_job
+from .ai_client import scrape_job
 from .career_narrative import CareerNarrative, load_career_narrative
 from .cover_letter_ai import PROMPT_TEMPLATE_VERSION, call_cover_letter_llm
 from .cover_letter_cache import CoverLetterCache, cover_letter_cache_key
@@ -96,18 +96,27 @@ def cache_key_for(job: CoverLetterJob, narrative: CareerNarrative, source: Resum
 def _normalize_letter(payload: dict[str, Any]) -> dict[str, Any]:
     paragraphs = payload.get("paragraphs", [])
 
+    def normalize_visible_text(value: object) -> str:
+        text = re.sub(
+            r"\s*\[\s*CLAIM\s+[^\]]+\]",
+            "",
+            str(value),
+            flags=re.IGNORECASE,
+        )
+        return re.sub(r"[ \t]+", " ", text).strip()
+
     def normalize_claim_id(value: object) -> str:
         claim_id = str(value).strip()
         match = re.fullmatch(r"\[?\s*CLAIM\s+(.+?)\s*\]?", claim_id, re.IGNORECASE)
         return match.group(1).strip() if match else claim_id
 
     return {
-        "salutation": str(payload.get("salutation", "")).strip(),
-        "paragraphs": [str(p).strip() for p in paragraphs if str(p).strip()]
+        "salutation": normalize_visible_text(payload.get("salutation", "")),
+        "paragraphs": [normalize_visible_text(p) for p in paragraphs if normalize_visible_text(p)]
         if isinstance(paragraphs, list)
         else [],
-        "closing": str(payload.get("closing", "")).strip(),
-        "signature": str(payload.get("signature", "")).strip(),
+        "closing": normalize_visible_text(payload.get("closing", "")),
+        "signature": normalize_visible_text(payload.get("signature", "")),
         "evidence_claim_ids": [
             normalize_claim_id(cid)
             for cid in (payload.get("evidence_claim_ids") or [])
@@ -268,7 +277,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Standalone one-page cover-letter generator")
     parser.add_argument("--company", required=True)
     parser.add_argument("--role", required=True)
-    parser.add_argument("--url", default="", help="Job URL; also used for an Ashby JD fallback")
+    parser.add_argument("--url", default="", help="Supported ATS job URL used for JD context")
     parser.add_argument("--jd-overview", default="")
     parser.add_argument("--jd-resp", default="")
     parser.add_argument("--jd-req", default="")
@@ -307,7 +316,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 2
     if not jd_text.strip() and args.url:
         try:
-            scraped = scrape_ashby_job(args.url)
+            scraped = scrape_job(args.url)
             jd_text = scraped.get("jd_text", "")
         except Exception as exc:
             print(f"[CONTEXT] Could not load job context: {exc}", file=sys.stderr)

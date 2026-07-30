@@ -7,7 +7,6 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
@@ -15,6 +14,33 @@ from job_application_automation.core import engine_shared  # noqa: E402
 
 
 class EngineSharedConfigTests(unittest.TestCase):
+    def test_background_session_creates_a_non_activated_cdp_target(self) -> None:
+        playwright = unittest.mock.MagicMock()
+        page = unittest.mock.MagicMock()
+        with (
+            unittest.mock.patch.object(
+                engine_shared,
+                "_create_background_target",
+                return_value=("about:blank#job-automation-fixed", "target-1"),
+            ) as create_target,
+            unittest.mock.patch.object(
+                engine_shared,
+                "_resolve_background_page",
+                return_value=page,
+            ),
+        ):
+            session = engine_shared.open_chrome_session(
+                playwright,
+                headless=True,
+                background=True,
+            )
+
+        self.assertIs(session.page, page)
+        self.assertFalse(session.close_browser_on_exit)
+        self.assertTrue(session.close_page_on_exit)
+        create_target.assert_called_once()
+        playwright.chromium.launch.assert_not_called()
+
     def test_schema_v2_profile_flattens_policy_groups_without_losing_fields(self) -> None:
         config = {
             "schema_version": 2,
@@ -159,6 +185,22 @@ class LocationQuestionTests(unittest.TestCase):
 
 
 class ScreeningMatcherTests(unittest.TestCase):
+    def test_without_sponsorship_question_uses_work_authorization_answer(self) -> None:
+        answer = engine_shared.configured_answer(
+            "Are you eligible to work in Canada without sponsorship?",
+            {},
+            {
+                "work_authorization": "Yes",
+                "visa_sponsorship": "No",
+            },
+            {},
+            {
+                "visa_sponsorship": ["sponsorship"],
+            },
+        )
+
+        self.assertEqual(answer, "Yes")
+
     def test_example_profile_answers_observed_greenhouse_required_fields(self) -> None:
         config = engine_shared.load_json_config(
             ROOT / "config/candidate_profile_config.example.json"
@@ -342,4 +384,3 @@ class ScreeningMatcherTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

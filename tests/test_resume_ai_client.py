@@ -6,13 +6,13 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-
+from unittest.mock import MagicMock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from job_application_automation.resume import ai_client as ai  # noqa: E402
 from job_application_automation.core.adapters import LLMSettings  # noqa: E402
+from job_application_automation.resume import ai_client as ai  # noqa: E402
 
 
 class FakeGateway:
@@ -95,6 +95,33 @@ class ResumeAIClientTests(unittest.TestCase):
         raw_markdown = "```json\n* Tailored engineer **summary**\n```"
         cleaned = ai.strip_markdown_formatting(raw_markdown)
         self.assertIn("Tailored engineer summary", cleaned)
+
+    def test_job_scraping_uses_an_isolated_headless_browser(self) -> None:
+        playwright = MagicMock()
+        browser = playwright.chromium.launch.return_value
+        browser.contexts = []
+        context = browser.new_context.return_value
+        page = context.new_page.return_value
+        page.evaluate.return_value = "Product Manager job description " * 20
+        page.locator.return_value.all.return_value = []
+        manager = MagicMock()
+        manager.__enter__.return_value = playwright
+        manager.__exit__.return_value = False
+
+        with patch.object(ai, "sync_playwright", return_value=manager):
+            result = ai.scrape_job("https://apply.workable.com/example/j/ABC123/")
+
+        self.assertEqual(result["ats"], "workable")
+        playwright.chromium.launch.assert_called_once_with(headless=True)
+        playwright.chromium.connect_over_cdp.assert_not_called()
+        page.close.assert_called_once()
+        browser.close.assert_called_once()
+
+    def test_job_scraping_rejects_a_non_job_url_before_opening_a_browser(self) -> None:
+        with patch.object(ai, "sync_playwright") as sync_playwright:
+            with self.assertRaisesRegex(ValueError, "job-specific HTTPS"):
+                ai.scrape_job("https://example.com/careers")
+        sync_playwright.assert_not_called()
 
 
 if __name__ == "__main__":

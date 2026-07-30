@@ -44,21 +44,30 @@ from urllib.parse import unquote, urlparse
 
 import openpyxl
 
+from ..mail.pool import load_email_pool
+from ..resume.cover_letter_ai import PROMPT_TEMPLATE_VERSION
+from .adapters import CommandResult, ProcessRunner, ProcessSettings
+from .artifacts import read_json as read_json_artifact
+from .artifacts import write_json as write_json_artifact
+from .contracts import EngineMode, EngineRequest, EngineResult
 from .engine_shared import (
     ATS_HOST_MARKERS as ATS_HOSTS,
-    ORCHESTRATOR_INVOCATION_ENV,
+)
+from .engine_shared import (
     ORCHESTRATOR_CONFIG_ENV,
     ORCHESTRATOR_CURRENT_TITLE_ENV,
-    RESULT_PREFIX as ENGINE_RESULT_PREFIX,
+    ORCHESTRATOR_INVOCATION_ENV,
     current_title_from_resume,
     detect_ats_job_url,
     email_from_resume,
     load_json_config,
+)
+from .engine_shared import (
+    RESULT_PREFIX as ENGINE_RESULT_PREFIX,
+)
+from .engine_shared import (
     mask_email as _mask_email,
 )
-from .adapters import CommandResult, ProcessRunner, ProcessSettings
-from .artifacts import write_json as write_json_artifact
-from .contracts import EngineMode, EngineRequest, EngineResult
 from .paths import CLI_ENTRYPOINT, CONFIG_DIR, OUTPUT_DIR, SRC_DIR, resolve_existing
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from .submission_log import SubmissionLog, SubmissionRecord
@@ -77,8 +86,12 @@ DEFAULT_RESULTS_FILE = resolve_runtime_path(RUNTIME_CONFIG.application["results_
 DEFAULT_SUBMISSION_LOG_FILE = resolve_runtime_path(
     RUNTIME_CONFIG.application["submission_log_file"]
 )
+DEFAULT_EMAIL_POOL_FILE = resolve_runtime_path(
+    RUNTIME_CONFIG.application["candidate_email_pool_file"]
+)
 DEFAULT_ENGINE_TIMEOUT_SECONDS = int(RUNTIME_CONFIG.application["engine_timeout_seconds"])
 DEFAULT_RESUME_TIMEOUT_SECONDS = int(RUNTIME_CONFIG.application["resume_timeout_seconds"])
+MIN_COVER_LETTER_BYTES = 1_000
 SCREENSHOT_EXTENSIONS = {".jpeg", ".jpg", ".png"}
 
 SUPPORTED_ATS = tuple(ATS_HOSTS)
@@ -180,10 +193,14 @@ def load_jobs_from_tracker(tracker_path: Path) -> list[JobRecord]:
             company_val = str(row[company_index]).strip() if row[company_index] else ""
             role_val = str(row[role_index]).strip() if row[role_index] else ""
             if not company_val:
-                logger.warning("Tracker row %d has empty company; defaulting to 'Company'", row_number)
+                logger.warning(
+                    "Tracker row %d has empty company; defaulting to 'Company'", row_number
+                )
                 company_val = "Company"
             if not role_val:
-                logger.warning("Tracker row %d has empty role; defaulting to 'Product Manager'", row_number)
+                logger.warning(
+                    "Tracker row %d has empty role; defaulting to 'Product Manager'", row_number
+                )
                 role_val = "Product Manager"
             jobs.append(
                 {
@@ -209,9 +226,7 @@ def job_from_url(
     ats = detect_ats(url)
     if not ats:
         supported = ", ".join(ATS_HOSTS)
-        raise ValueError(
-            f"URL must be a job-specific HTTPS URL for a supported ATS: {supported}"
-        )
+        raise ValueError(f"URL must be a job-specific HTTPS URL for a supported ATS: {supported}")
     path_parts = [unquote(part).strip() for part in urlparse(url).path.split("/") if part.strip()]
     inferred_company = path_parts[0].replace("-", " ").strip().title() if path_parts else "Company"
     final_company = company.strip() or inferred_company
@@ -388,7 +403,7 @@ def run_command(
             timeout_seconds,
             _as_text(stdout) or _as_text(exc.stdout),
             _as_text(stderr) or _as_text(exc.stderr),
-        )
+        ) from exc
 
 
 def _invalid_engine_result(detail: str = "") -> dict[str, Any]:
@@ -506,16 +521,47 @@ def cleanup_post_run_artifacts(results_path: Path) -> None:
     )
 
 
-def _personalized_resume_path(company: str, role: str, url: str) -> Path:
+def _personalized_document_stem(company: str, role: str, url: str, email: str = "") -> str:
     safe_company = "".join(
         character if character.isalnum() else "_" for character in company
     ).strip("_")
     safe_role = "".join(character if character.isalnum() else "_" for character in role).strip("_")
-    # Deterministic hash of the URL keeps the filename stable across retries
-    # of the same posting, which is what lets generate_personalized_resume()
-    # detect and reuse an already-generated resume instead of regenerating it.
-    posting_hash = hashlib.sha256(url.encode("utf-8")).hexdigest()[:12]
-    return OUTPUT_DIR / f"{safe_company}_{safe_role}_{posting_hash}_Resume.pdf"
+    identity = f"{url.strip()}|{email.strip().casefold()}"
+    posting_hash = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:12]
+    return f"{safe_company}_{safe_role}_{posting_hash}"
+
+
+def _personalized_resume_path(
+    company: str,
+    role: str,
+    url: str,
+    email: str = "",
+) -> Path:
+    """Return a stable job-and-email-specific resume path."""
+    return OUTPUT_DIR / f"{_personalized_document_stem(company, role, url, email)}_Resume.pdf"
+
+
+def _personalized_cover_letter_path(
+    company: str,
+    role: str,
+    url: str,
+    email: str,
+) -> Path:
+    """Return the matching job-and-email-specific cover-letter path."""
+    return OUTPUT_DIR / (
+        f"{_personalized_document_stem(company, role, url, email)}_Cover_Letter.pdf"
+    )
+
+
+def _cover_letter_audit_is_current(audit_path: Path) -> bool:
+    try:
+        payload = read_json_artifact(audit_path)
+    except (OSError, ValueError):
+        return False
+    return bool(
+        isinstance(payload, Mapping)
+        and payload.get("prompt_template_version") == PROMPT_TEMPLATE_VERSION
+    )
 
 
 def generate_personalized_resume(
@@ -531,7 +577,7 @@ def generate_personalized_resume(
         logger.warning("Resume generator not found: %s", generator)
         return None
 
-    output_path = _personalized_resume_path(company, role, url)
+    output_path = _personalized_resume_path(company, role, url, email)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     # The 5000-byte floor is a cheap sanity check that the existing file is a
     # real rendered PDF rather than a truncated or failed prior write.
@@ -540,11 +586,16 @@ def generate_personalized_resume(
         and output_path.exists()
         and output_path.stat().st_size > 5000
     ):
-        logger.info(
-            "Reusing existing position-specific resume for retry: %s",
-            output_path.name,
-        )
-        return output_path
+        try:
+            existing_email = email_from_resume(output_path, "").strip().casefold()
+        except ValueError:
+            existing_email = ""
+        if not email or existing_email == email.strip().casefold():
+            logger.info(
+                "Reusing existing position-specific resume for retry: %s",
+                output_path.name,
+            )
+            return output_path
     tmp_output_path = output_path.with_name(
         f".tmp_{os.getpid()}_{random.randint(1000, 9999)}_{output_path.name}"
     )
@@ -597,15 +648,131 @@ def generate_personalized_resume(
             logger.warning("Could not replace output resume file: %s", exc)
             tmp_output_path.unlink(missing_ok=True)
             return None
+    logger.warning(
+        "Resume generation failed (exit=%d): %s",
+        result.returncode,
+        (result.stderr or result.stdout)[-300:],
+    )
+    if tmp_output_path.exists():
+        tmp_output_path.unlink(missing_ok=True)
+    return None
+
+
+def generate_personalized_cover_letter(
+    company: str,
+    role: str,
+    url: str,
+    email: str,
+    profile_path: Path,
+    timeout_seconds: int,
+    process_runner: ProcessRunner | None = None,
+) -> Optional[Path]:
+    """Generate and atomically promote one validated position-specific cover letter."""
+    generator = CLI_ENTRYPOINT
+    if not generator.exists():
+        logger.warning("Cover-letter generator not found: %s", generator)
+        return None
+    output_path = _personalized_cover_letter_path(company, role, url, email)
+    audit_path = output_path.with_name(f"{output_path.stem}.audit.json")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if (
+        os.environ.get("JOB_APP_FORCE_COVER_LETTER_REGENERATION") != "1"
+        and output_path.exists()
+        and output_path.stat().st_size >= MIN_COVER_LETTER_BYTES
+        and _cover_letter_audit_is_current(audit_path)
+    ):
+        logger.info(
+            "Reusing existing position-specific cover letter for retry: %s",
+            output_path.name,
+        )
+        return output_path
+
+    tmp_output_path = output_path.with_name(
+        f".tmp_{os.getpid()}_{random.randint(1000, 9999)}_{output_path.name}"
+    )
+    tmp_audit_path = tmp_output_path.with_name(f"{tmp_output_path.stem}.audit.json")
+    command = [
+        sys.executable,
+        str(generator),
+        "cover-letter",
+        "--company",
+        company,
+        "--role",
+        role,
+        "--url",
+        url,
+        "--email",
+        email,
+        "--profile",
+        str(profile_path),
+        "--output",
+        str(tmp_output_path),
+    ]
+    try:
+        command_result = (process_runner or SubprocessRunner()).run(
+            command,
+            ProcessSettings(timeout_seconds=timeout_seconds),
+        )
+        result = ProcessResult(
+            command_result.returncode,
+            command_result.stdout,
+            command_result.stderr,
+        )
+    except ProcessTimeoutError:
+        logger.warning("Cover-letter generation timed out after %d seconds.", timeout_seconds)
+        tmp_output_path.unlink(missing_ok=True)
+        tmp_audit_path.unlink(missing_ok=True)
+        return None
+    except OSError as exc:
+        logger.warning("Could not start cover-letter generator: %s", exc)
+        tmp_output_path.unlink(missing_ok=True)
+        tmp_audit_path.unlink(missing_ok=True)
+        return None
+
+    if (
+        result.returncode == 0
+        and tmp_output_path.exists()
+        and tmp_output_path.stat().st_size >= MIN_COVER_LETTER_BYTES
+        and tmp_audit_path.is_file()
+    ):
+        try:
+            os.replace(tmp_output_path, output_path)
+            os.replace(tmp_audit_path, audit_path)
+            return output_path
+        except OSError as exc:
+            logger.warning("Could not promote cover-letter artifacts: %s", exc)
     else:
         logger.warning(
-            "Resume generation failed (exit=%d): %s",
+            "Cover-letter generation failed (exit=%d): %s",
             result.returncode,
-            (result.stderr or result.stdout)[-300:],
+            (result.stderr or result.stdout)[-500:],
         )
-        if tmp_output_path.exists():
-            tmp_output_path.unlink(missing_ok=True)
-        return None
+    tmp_output_path.unlink(missing_ok=True)
+    tmp_audit_path.unlink(missing_ok=True)
+    return None
+
+
+def _random_job_emails(
+    jobs: Sequence[JobRecord],
+    *,
+    email_override: str,
+    email_pool_path: Path,
+    prepared_resume_path: Path | None,
+    fallback_email: str,
+) -> list[str]:
+    """Choose a unique random pool address per job, preserving prepared-document identity."""
+    if email_override:
+        return [email_override] * len(jobs)
+    if prepared_resume_path is not None:
+        prepared_email = email_from_resume(prepared_resume_path, fallback_email).strip().casefold()
+        return [prepared_email] * len(jobs)
+    pool = [email.strip().casefold() for email in load_email_pool(email_pool_path)]
+    if len(pool) < len(jobs):
+        raise ValueError(
+            f"Candidate email pool has {len(pool)} addresses for {len(jobs)} jobs; "
+            "unique random assignment is required."
+        )
+    return random.sample(pool, len(jobs))
 
 
 def _validate_orchestrator_inputs(
@@ -695,6 +862,7 @@ def run_orchestrator(
     prepared_resume_path: Path | None = None,
     cover_letter_path: Path | None = None,
     email_override: str = "",
+    email_pool_path: Path = DEFAULT_EMAIL_POOL_FILE,
     submission_log_path: Path = DEFAULT_SUBMISSION_LOG_FILE,
     limit: Optional[int] = None,
     start_index: int = 0,
@@ -755,6 +923,13 @@ def run_orchestrator(
         start_index=start_index,
         limit=limit,
     )
+    job_emails = _random_job_emails(
+        jobs,
+        email_override=normalized_email_override,
+        email_pool_path=email_pool_path,
+        prepared_resume_path=prepared_resume_path,
+        fallback_email=fallback_email,
+    )
 
     logger.info(
         "Loaded %d supported jobs | mode=%s | shuffle=%s",
@@ -766,6 +941,7 @@ def run_orchestrator(
     submission_log = _load_submission_log(submission_log_path)
     results: list[dict[str, Any]] = []
     for index, job in enumerate(jobs, start=1):
+        email = job_emails[index - 1]
         ats = job["ats"]
         engine_path = engine_paths.get(ats)
         base_result = _job_result_base(job)
@@ -779,10 +955,6 @@ def run_orchestrator(
         engine_label = _engine_label(engine_path, ats)
 
         try:
-            email = normalized_email_override or email_from_resume(
-                prepared_resume_path or resume_path,
-                fallback_email,
-            )
             generated = prepared_resume_path or generate_personalized_resume(
                 job["company"],
                 job["role"],
@@ -823,11 +995,10 @@ def run_orchestrator(
         target_resume = generated
         try:
             resume_email = email_from_resume(target_resume, fallback_email).strip().lower()
-            if normalized_email_override and resume_email != normalized_email_override:
+            if resume_email != email:
                 raise ValueError(
-                    "Prepared resume email does not match the requested application email"
+                    "Personalized resume email does not match the assigned application email"
                 )
-            email = normalized_email_override or resume_email
             current_title = current_title_from_resume(target_resume)
         except Exception as exc:
             logger.error(
@@ -842,6 +1013,37 @@ def run_orchestrator(
                     "email": _mask_email(email),
                     "status": "GENERATED_RESUME_IDENTITY_INVALID",
                     "success": False,
+                },
+                results_path,
+            )
+            continue
+        target_cover_letter = cover_letter_path or generate_personalized_cover_letter(
+            job["company"],
+            job["role"],
+            job["url"],
+            email,
+            config_path,
+            resume_timeout_seconds,
+            process_runner,
+        )
+        if not target_cover_letter:
+            logger.error(
+                "Mandatory personalized cover-letter generation failed for %s; "
+                "submission will not be attempted.",
+                job["url"],
+            )
+            _append_and_persist(
+                results,
+                {
+                    **base_result,
+                    "engine": engine_label,
+                    "resume": target_resume.name,
+                    "cover_letter": "",
+                    "email": _mask_email(email),
+                    "confirmed": False,
+                    "submitted": False,
+                    "success": False,
+                    "status": "PERSONALIZED_COVER_LETTER_FAILED",
                 },
                 results_path,
             )
@@ -865,7 +1067,7 @@ def run_orchestrator(
             job["role"],
             email,
             live_submit,
-            cover_letter_path=cover_letter_path,
+            cover_letter_path=target_cover_letter,
             headed=headed,
             fill_only=fill_only,
             dry_run=dry_run,
@@ -916,7 +1118,7 @@ def run_orchestrator(
                 job=job,
                 email=email,
                 resume_path=target_resume,
-                cover_letter_path=cover_letter_path,
+                cover_letter_path=target_cover_letter,
                 status=str(outcome["status"]),
             )
         _append_and_persist(
@@ -925,7 +1127,7 @@ def run_orchestrator(
                 **base_result,
                 "engine": engine_label,
                 "resume": target_resume.name,
-                "cover_letter": cover_letter_path.name if cover_letter_path else "",
+                "cover_letter": target_cover_letter.name,
                 "email": _mask_email(email),
                 **outcome,
             },
@@ -966,7 +1168,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--email",
         default="",
-        help="Use this application email and require the prepared resume to match it",
+        help="Override random pool selection and require both personalized documents to match",
+    )
+    parser.add_argument(
+        "--email-pool",
+        default=str(DEFAULT_EMAIL_POOL_FILE),
+        help="Candidate email pool used for unique random per-job assignment",
     )
     parser.add_argument("--config", default=str(DEFAULT_CONFIG_FILE))
     parser.add_argument("--results-file", default=str(DEFAULT_RESULTS_FILE))
@@ -1031,6 +1238,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             ),
             cover_letter_path=(Path(args.cover_letter).resolve() if args.cover_letter else None),
             email_override=args.email,
+            email_pool_path=Path(args.email_pool).resolve(),
             config_path=Path(args.config).resolve() if args.config else None,
             results_path=results_path,
             submission_log_path=Path(args.submission_log_file).resolve(),

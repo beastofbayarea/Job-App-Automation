@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from job_application_automation.engines import workable
 from job_application_automation.engines import _browser_form as browser_form
+from job_application_automation.engines import workable
 
 
 def _profile() -> dict[str, object]:
@@ -18,6 +18,12 @@ def _profile() -> dict[str, object]:
             "contact": {
                 "phone": "+1 555 0100",
                 "fallback_email": "jane@example.com",
+            },
+            "address": {
+                "street_address": "1 Main Street",
+                "city": "San Francisco",
+                "zip_code": "94105",
+                "country": "United States",
             },
         }
     }
@@ -69,10 +75,17 @@ def _run_with_browser_mocks(
     apply_and_submit = [None, submit_button]
     with (
         patch.object(browser_form, "sync_playwright", return_value=nullcontext(MagicMock())),
-        patch.object(browser_form, "open_chrome_session", return_value=session),
+        patch.object(
+            browser_form,
+            "open_chrome_session",
+            return_value=session,
+        ) as open_session,
         patch.object(browser_form, "navigate_reusing_tab"),
+        patch.object(browser_form, "_dismiss_cookie_banner"),
+        patch.object(browser_form, "_closed_job_reason", return_value=""),
         patch.object(browser_form, "_first_visible_for", side_effect=apply_and_submit),
         patch.object(browser_form, "_fill_standard_fields", return_value=_successful_fill()),
+        patch.object(browser_form, "_fill_custom_questions", return_value={}),
         patch.object(browser_form, "fill_required_consent", return_value=[]),
         patch.object(
             browser_form,
@@ -99,6 +112,7 @@ def _run_with_browser_mocks(
             live_submit=live_submit,
             screenshot_dir=tmp_path,
         )
+    assert open_session.call_args.kwargs["headless"] is True
     return result, session, page
 
 
@@ -108,6 +122,25 @@ def test_candidate_fields_uses_profile_fallback_email() -> None:
     assert candidate.last_name == "Doe"
     assert candidate.email == "jane@example.com"
     assert candidate.phone == "+1 555 0100"
+    assert candidate.street_address == "1 Main Street"
+    assert candidate.city == "San Francisco"
+    assert candidate.postcode == "94105"
+    assert candidate.country == "United States"
+
+
+def test_maximum_option_ranking_rejects_no_experience_even_when_list_is_reversed() -> None:
+    assert browser_form._option_strength(
+        "Extensive experience with multi-component AI systems in production"
+    ) > browser_form._option_strength("No experience with multi-component AI systems")
+
+
+def test_smartrecruiters_uses_the_background_cdp_fallback() -> None:
+    from job_application_automation.engines import smartrecruiters
+
+    assert smartrecruiters.SPEC.background_cdp is True
+    assert smartrecruiters.SPEC.first_name_selectors[0].startswith("input#")
+    assert smartrecruiters.SPEC.cover_letter_text_selectors[0].startswith("textarea#")
+    assert workable.SPEC.background_cdp is False
 
 
 def test_load_orchestrated_config_normalizes_grouped_profile() -> None:

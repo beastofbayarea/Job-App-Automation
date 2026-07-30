@@ -9,3 +9,4 @@ PyMuPDF
 pypdf
 reportlab
 requests
+websockets>=14.0

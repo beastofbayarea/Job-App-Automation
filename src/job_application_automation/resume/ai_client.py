@@ -5,7 +5,7 @@ Resume AI Utilities (Google GenAI Edition)
 Universal LLM and document generation utilities for:
 1. Resume Content Tailoring via Google GenAI SDK
 2. Zero-Template Application Essay Synthesis via Google GenAI SDK
-3. Resume Text Extraction & Ashby Job Scraping
+3. Resume Text Extraction & Supported ATS Job Scraping
 
 ==============================================================================
 OUT-OF-THE-BOX ALTERNATE APPROACHES / ARCHITECTURAL OPTIONS:
@@ -30,8 +30,8 @@ OUT-OF-THE-BOX ALTERNATE APPROACHES / ARCHITECTURAL OPTIONS:
 
 from __future__ import annotations
 
-import json
 import html
+import json
 import logging
 import os
 import re
@@ -45,7 +45,7 @@ import pypdf
 from playwright.sync_api import sync_playwright
 
 from ..core.adapters import LLMClient, LLMSettings
-from ..core.engine_shared import validate_ats_url
+from ..core.engine_shared import detect_ats_job_url, open_chrome_session
 from ..core.runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 
 try:
@@ -106,10 +106,14 @@ _client = None
 _client_settings: VertexSettings | None = None
 LLM_MAX_ATTEMPTS = int(RUNTIME_CONFIG.vertex["max_attempts"])
 LLM_RETRY_DELAY_SECONDS = float(RUNTIME_CONFIG.vertex["retry_delay_seconds"])
-CDP_ENDPOINT = str(RUNTIME_CONFIG.browser["cdp_endpoint"])
 JOB_TEXT_LIMIT = int(RUNTIME_CONFIG.vertex["job_text_limit"])
 JOB_NAVIGATION_TIMEOUT_MS = int(RUNTIME_CONFIG.vertex["job_navigation_timeout_ms"])
 PROJECT_ID_FROM_SERVICE_ACCOUNT = "from-service-account"
+JOB_CONTEXT_BLOCK_MARKERS = (
+    "access is temporarily restricted",
+    "we detected unusual activity",
+    "automated (bot) activity",
+)
 
 
 def strip_markdown_formatting(value: Any) -> str:
@@ -341,31 +345,63 @@ def extract_resume_text(resume_path: Path) -> str:
         raise RuntimeError(f"Failed to extract resume text: {exc}") from exc
 
 
-def scrape_ashby_job(url: str) -> Dict[str, Any]:
-    """Extracts JD text and essay prompts directly from an Ashby application URL."""
-    if not validate_ats_url(url, "ashby"):
-        raise ValueError("scrape_ashby_job accepts HTTPS Ashby URLs only.")
+def scrape_job(url: str) -> Dict[str, Any]:
+    """Extract JD text and essay prompts from any supported ATS job URL."""
+    ats = detect_ats_job_url(url)
+    if not ats:
+        raise ValueError("scrape_job accepts job-specific HTTPS URLs for supported ATS providers.")
 
     with sync_playwright() as p:
-        owns_browser = False
-        owns_context = False
+        session = open_chrome_session(
+            p,
+            profile_name="document-context-cdp-profile",
+            target_url=url,
+            headless=True,
+            background=ats == "smartrecruiters",
+        )
+        page = session.page
         try:
-            browser = p.chromium.connect_over_cdp(CDP_ENDPOINT)
-            if browser.contexts:
-                context = browser.contexts[0]
-            else:
-                context = browser.new_context()
-                owns_context = True
-        except Exception:
-            logger.info("CDP session unavailable, launching headless Chromium instance...")
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context()
-            owns_browser = True
-
-        page = context.new_page()
-        try:
-            page.goto(url, wait_until="networkidle", timeout=JOB_NAVIGATION_TIMEOUT_MS)
-            body_text = page.evaluate("() => document.body.innerText || ''")
+            body_text = ""
+            context_ready = False
+            last_navigation_error: Exception | None = None
+            for attempt in range(1, 4):
+                try:
+                    page.goto(
+                        url,
+                        wait_until="domcontentloaded",
+                        timeout=JOB_NAVIGATION_TIMEOUT_MS,
+                    )
+                    page.wait_for_function(
+                        "() => (document.body?.innerText || '').trim().length >= 200",
+                        timeout=min(JOB_NAVIGATION_TIMEOUT_MS, 15_000),
+                    )
+                    body_text = str(
+                        page.evaluate("() => document.body?.innerText || ''") or ""
+                    ).strip()
+                    blocked = any(
+                        marker in body_text.casefold() for marker in JOB_CONTEXT_BLOCK_MARKERS
+                    )
+                    if len(body_text) >= 200 and not blocked:
+                        context_ready = True
+                        break
+                    if blocked:
+                        last_navigation_error = RuntimeError(
+                            "ATS provider returned an access-restriction page"
+                        )
+                except Exception as exc:
+                    last_navigation_error = exc
+                    logger.info(
+                        "ATS job-context attempt %d/3 did not become ready: %s",
+                        attempt,
+                        exc,
+                    )
+                if attempt < 3:
+                    page.wait_for_timeout(750 * attempt)
+            if not context_ready:
+                raise RuntimeError(
+                    f"ATS job page did not provide usable context after 3 attempts: "
+                    f"{last_navigation_error or 'empty response'}"
+                )
 
             questions: List[str] = []
             for text_area in page.locator("textarea:visible").all():
@@ -388,6 +424,7 @@ def scrape_ashby_job(url: str) -> Dict[str, Any]:
 
             return {
                 "url": url,
+                "ats": ats,
                 "jd_text": body_text[:JOB_TEXT_LIMIT],
                 "questions": questions,
             }
@@ -395,11 +432,15 @@ def scrape_ashby_job(url: str) -> Dict[str, Any]:
             try:
                 page.close()
             finally:
-                # Do not close a browser owned by an existing CDP session.
-                if owns_browser:
-                    browser.close()
-                elif owns_context:
-                    context.close()
+                if session.close_browser_on_exit:
+                    session.browser.close()
+
+
+def scrape_ashby_job(url: str) -> Dict[str, Any]:
+    """Backward-compatible wrapper for callers that still use the historic name."""
+    if detect_ats_job_url(url) != "ashby":
+        raise ValueError("scrape_ashby_job accepts HTTPS Ashby job URLs only.")
+    return scrape_job(url)
 
 
 # ==============================================================================
@@ -599,7 +640,9 @@ try:
     class TailoredResumeSchema(BaseModel):
         header_tagline: str = Field(default="", description="Executive summary tagline")
         skills: dict[str, list[str]] = Field(default_factory=dict, description="Grouped skills map")
-        experience: list[TailoredExperienceItem] = Field(default_factory=list, description="Tailored experience list")
+        experience: list[TailoredExperienceItem] = Field(
+            default_factory=list, description="Tailored experience list"
+        )
 
     HAS_PYDANTIC = True
 except ImportError:
@@ -624,7 +667,9 @@ def call_resume_llm_structured(
         return json.loads(_strip_json_fence(raw))
 
     target_schema = schema_cls or TailoredResumeSchema
-    logger.info("Executing constrained structured LLM decoding using schema: %s", target_schema.__name__)
+    logger.info(
+        "Executing constrained structured LLM decoding using schema: %s", target_schema.__name__
+    )
 
     raw = ask_gemini(user_prompt, system=system_prompt, temperature=0.2, json_mode=True)
     clean_json = _strip_json_fence(raw)
@@ -644,7 +689,6 @@ def cleanup_legacy_script(remove: bool = False) -> bool:
         except OSError:
             logger.warning("Unable to remove legacy script: %s", legacy_p)
     return False
-
 
 
 def generate_fallback_resume_data(

@@ -6,25 +6,24 @@ import unittest
 from contextlib import redirect_stderr
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
+
+import tempfile  # noqa: E402
 
 from job_application_automation.resume.career_narrative import (  # noqa: E402
     CareerNarrative,
     load_career_narrative,
+)
+from job_application_automation.resume.cover_letter_cache import (  # noqa: E402
+    CoverLetterCache,
+    cover_letter_cache_key,
 )
 from job_application_automation.resume.cover_letter_claims import (  # noqa: E402
     known_claim_ids,
     validate_claim_ids,
 )
 from job_application_automation.resume.cover_letter_models import CoverLetterJob  # noqa: E402
-import tempfile  # noqa: E402
-
-from job_application_automation.resume.cover_letter_cache import (  # noqa: E402
-    CoverLetterCache,
-    cover_letter_cache_key,
-)
 
 
 class CareerNarrativeTests(unittest.TestCase):
@@ -359,10 +358,12 @@ class _RecordingRenderer:
         self._page_texts = page_texts
         self.render_count = 0
         self.last_candidate = None
+        self.last_letter = None
 
     def render(self, request) -> bool:
         self.render_count += 1
         self.last_candidate = dict(request.candidate)
+        self.last_letter = dict(request.letter)
         request.output_path.parent.mkdir(parents=True, exist_ok=True)
         request.output_path.write_text("stub-pdf", encoding="utf-8")
         return True
@@ -460,8 +461,41 @@ class GenerateCoverLetterTests(unittest.TestCase):
             audit_path = output_path.with_name(output_path.stem + ".audit.json")
             audit = json_module.loads(audit_path.read_text(encoding="utf-8"))
             self.assertEqual(audit["evidence_claim_ids"], ["AWS-1"])
-            self.assertEqual(audit["prompt_template_version"], "cover-letter-v1")
+            self.assertEqual(audit["prompt_template_version"], "cover-letter-v2")
             self.assertEqual(audit["generated_at"], "2026-07-28T00:00:00+00:00")
+
+    def test_internal_claim_tags_are_not_rendered_in_visible_letter_text(self) -> None:
+        tagged_response = json_module.dumps(
+            {
+                "salutation": "Dear Hiring Team,",
+                "paragraphs": [
+                    "I shipped a measurable product [CLAIM AWS-1].",
+                    "I led the delivery [claim AWS-1] for customers.",
+                    "I would bring that experience to this role.",
+                ],
+                "closing": "Sincerely,",
+                "signature": "Shivam Singh",
+                "evidence_claim_ids": ["CLAIM AWS-1"],
+            }
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            renderer = _RecordingRenderer([])
+            result = cover_letter.generate_cover_letter(
+                CoverLetterJob(company="Example Co", role="PM", jd_text="Build things."),
+                CareerNarrative(),
+                _fake_source(),
+                Path(directory) / "letter.pdf",
+                gateway=_RecordingGateway(tagged_response),
+                renderer=renderer,
+                fitz_module=_FakeGenFitz([[" ".join(["word"] * 30) + " Shivam Singh"]]),
+                max_retries=1,
+                minimum_words=5,
+                maximum_words=100,
+            )
+
+        self.assertIsNotNone(result)
+        visible_text = " ".join(renderer.last_letter["paragraphs"])
+        self.assertNotIn("[CLAIM", visible_text.upper())
 
     def test_email_override_is_rendered_without_mutating_the_source(self) -> None:
         source = _fake_source()

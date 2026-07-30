@@ -16,6 +16,7 @@ dependencies = [
     "pypdf>=4.0.0",
     "reportlab>=4.0.0",
     "requests>=2.31.0",
+    "websockets>=14.0",
 ]
 
 [project.scripts]
@@ -59,5 +60,4 @@ ignore = ["B904", "B905"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*.py" = ["E402", "B018"]
-
 

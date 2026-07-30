@@ -11,12 +11,13 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from job_application_automation.core import orchestrator  # noqa: E402
-from job_application_automation.core import queue_runner  # noqa: E402
+from job_application_automation.core import (
+    orchestrator,  # noqa: E402
+    queue_runner,  # noqa: E402
+)
 from job_application_automation.core.contracts import EngineResult, EngineStatus  # noqa: E402
 
 
@@ -171,6 +172,64 @@ class ChildProcessRoutingTests(unittest.TestCase):
             runner.command[:9],
         )
         self.assertIn("--email", runner.command)
+
+    def test_cover_letter_generation_uses_the_unified_command_and_promotes_audit(self) -> None:
+        class CoverLetterRunner:
+            command: list[str] = []
+
+            def run(self, command: list[str], _settings: object) -> orchestrator.CommandResult:
+                self.command = command
+                output = Path(command[command.index("--output") + 1])
+                output.write_bytes(b"x" * orchestrator.MIN_COVER_LETTER_BYTES)
+                output.with_name(f"{output.stem}.audit.json").write_text(
+                    json.dumps(
+                        {
+                            "validated": True,
+                            "prompt_template_version": orchestrator.PROMPT_TEMPLATE_VERSION,
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                return orchestrator.CommandResult(returncode=0, stdout="", stderr="")
+
+        runner = CoverLetterRunner()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            profile = root / "profile.json"
+            profile.write_text("{}", encoding="utf-8")
+            with patch.object(orchestrator, "OUTPUT_DIR", root):
+                generated = orchestrator.generate_personalized_cover_letter(
+                    "Acme",
+                    "Product Manager",
+                    "https://apply.workable.com/acme/j/ABC123/",
+                    "candidate@example.test",
+                    profile,
+                    timeout_seconds=30,
+                    process_runner=runner,
+                )
+
+            self.assertIsNotNone(generated)
+            assert generated is not None
+            self.assertTrue(generated.is_file())
+            self.assertTrue(generated.with_name(f"{generated.stem}.audit.json").is_file())
+            self.assertEqual(
+                [
+                    sys.executable,
+                    str(orchestrator.CLI_ENTRYPOINT),
+                    "cover-letter",
+                    "--company",
+                    "Acme",
+                    "--role",
+                    "Product Manager",
+                    "--url",
+                    "https://apply.workable.com/acme/j/ABC123/",
+                ],
+                runner.command[:9],
+            )
+            self.assertEqual(
+                runner.command[runner.command.index("--email") + 1],
+                "candidate@example.test",
+            )
 
     def test_queue_uses_the_unified_apply_command(self) -> None:
         confirmed = {
@@ -410,9 +469,56 @@ class QueueSafetyTests(unittest.TestCase):
 
 
 class AdditionalOrchestratorCoverageTests(unittest.TestCase):
+    def test_random_job_emails_assigns_a_unique_pool_address_per_job(self) -> None:
+        jobs = [{"row_number": number} for number in range(1, 4)]
+        with tempfile.TemporaryDirectory() as directory:
+            pool = Path(directory) / "emails.json"
+            pool.write_text(
+                '["one@example.test", "two@example.test", "three@example.test"]',
+                encoding="utf-8",
+            )
+            with patch.object(
+                orchestrator.random,
+                "sample",
+                return_value=[
+                    "three@example.test",
+                    "one@example.test",
+                    "two@example.test",
+                ],
+            ) as sample:
+                selected = orchestrator._random_job_emails(
+                    jobs,  # type: ignore[arg-type]
+                    email_override="",
+                    email_pool_path=pool,
+                    prepared_resume_path=None,
+                    fallback_email="fallback@example.test",
+                )
+
+        self.assertEqual(len(selected), len(set(selected)))
+        self.assertEqual(selected[0], "three@example.test")
+        sample.assert_called_once()
+
+    def test_personalized_document_paths_include_email_identity(self) -> None:
+        first = orchestrator._personalized_resume_path(
+            "Acme",
+            "Product Manager",
+            "https://apply.workable.com/acme/j/ABC123/",
+            "first@example.test",
+        )
+        second = orchestrator._personalized_resume_path(
+            "Acme",
+            "Product Manager",
+            "https://apply.workable.com/acme/j/ABC123/",
+            "second@example.test",
+        )
+
+        self.assertNotEqual(first, second)
+
     def test_detect_ats_valid_and_invalid(self) -> None:
         self.assertEqual(orchestrator.detect_ats("https://jobs.ashbyhq.com/company/123"), "ashby")
-        self.assertEqual(orchestrator.detect_ats("https://boards.greenhouse.io/company/jobs/123"), "greenhouse")
+        self.assertEqual(
+            orchestrator.detect_ats("https://boards.greenhouse.io/company/jobs/123"), "greenhouse"
+        )
         self.assertEqual(orchestrator.detect_ats("https://jobs.lever.co/company/123"), "lever")
         self.assertIsNone(orchestrator.detect_ats("https://example.com/careers"))
         self.assertIsNone(orchestrator.detect_ats(""))
@@ -427,7 +533,9 @@ class AdditionalOrchestratorCoverageTests(unittest.TestCase):
 
     def test_find_header_success_and_error(self) -> None:
         headers = ["company_name", "job_title", "url_link"]
-        self.assertEqual(orchestrator._find_header(headers, ("company", "company_name"), "company"), 0)
+        self.assertEqual(
+            orchestrator._find_header(headers, ("company", "company_name"), "company"), 0
+        )
         self.assertEqual(orchestrator._find_header(headers, ("title", "job_title"), "role"), 1)
         with self.assertRaises(ValueError):
             orchestrator._find_header(headers, ("missing",), "missing")
@@ -435,4 +543,3 @@ class AdditionalOrchestratorCoverageTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

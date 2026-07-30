@@ -38,15 +38,17 @@ import sys
 import threading
 import time
 import traceback
-from xml.sax.saxutils import escape as xml_escape
-from pathlib import Path
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
+from xml.sax.saxutils import escape as xml_escape
 
 import fitz  # PyMuPDF remains a compatible module-level scorer patch point.
 
-from ..core.paths import OUTPUT_DIR as PROJECT_OUTPUT_DIR, SRC_DIR
+from ..core.paths import OUTPUT_DIR as PROJECT_OUTPUT_DIR
+from ..core.paths import SRC_DIR
 from ..core.runtime_config import RUNTIME_CONFIG, resolve_runtime_path
+from .ai_client import call_resume_llm, generate_fallback_resume_data, scrape_job
 from .cache import ResumeCache, cache_key
 from .rendering import CallableResumeRenderer, ResumeRenderer, render_resume
 from .scoring import policy_from_source, score_pdf
@@ -54,7 +56,6 @@ from .source import (
     ResumeSource,
     load_resume_source,
 )
-from .ai_client import call_resume_llm, generate_fallback_resume_data, scrape_ashby_job
 from .validation import (
     build_quality_feedback,
     company_matches,
@@ -413,21 +414,21 @@ def _render_pdf_with_reportlab(
     bold_keywords: Optional[Set[str]] = None,
 ) -> bool:
     """Render executive PDF with Carlito typography."""
-    from reportlab.lib.pagesizes import letter
-    from reportlab.lib.units import inch
     from reportlab.lib.colors import HexColor
-    from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_RIGHT
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.platypus import (
-        SimpleDocTemplate,
+        HRFlowable,
         Paragraph,
+        SimpleDocTemplate,
         Spacer,
         Table,
         TableStyle,
-        HRFlowable,
     )
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
 
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -905,7 +906,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--url",
         default="",
-        help="Ashby job URL used to obtain context when JD text is not supplied",
+        help="Supported ATS job URL used to obtain context when JD text is not supplied",
     )
     parser.add_argument("--location", default="")
     parser.add_argument(
@@ -934,9 +935,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     if args.url and not any((args.jd_overview, args.jd_resp, args.jd_req)):
         try:
-            scraped = scrape_ashby_job(args.url)
+            scraped = scrape_job(args.url)
             job.jd_overview = scraped.get("jd_text", "")
-            print(f"[CONTEXT] Loaded {len(job.jd_overview)} JD characters from Ashby.")
+            print(
+                f"[CONTEXT] Loaded {len(job.jd_overview)} JD characters "
+                f"from {scraped.get('ats', 'ATS')}."
+            )
         except Exception as exc:
             print(f"[CONTEXT] Could not load job context: {exc}", file=sys.stderr)
 

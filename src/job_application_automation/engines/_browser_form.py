@@ -4,29 +4,38 @@ from __future__ import annotations
 
 import argparse
 import logging
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
+from urllib.parse import urljoin
 
 from playwright.sync_api import Page, sync_playwright
 from pypdf import PdfReader
 
 from ..core.engine_shared import (
+    answer_variants,
     build_engine_parser,
     capture_screenshot,
+    configured_answer,
     confirmation_visible,
     emit_engine_result,
     fill_first,
     fill_required_consent,
     first_visible,
+    generate_essay_answer,
+    is_essay_question,
+    is_location_question,
+    load_candidate_evidence,
     load_json_config,
+    location_answer_candidates,
     navigate_reusing_tab,
     normalize_profile_config,
     open_chrome_session,
     orchestrated_config_path,
     page_has_captcha,
-    require_orchestrated_invocation,
     requested_live_mode,
+    require_orchestrated_invocation,
     resolve_candidate_email,
     validate_ats_job_url,
     validate_nonempty_file,
@@ -59,6 +68,13 @@ class BrowserFormSpec:
     cover_letter_text_selectors: tuple[str, ...]
     submit_selectors: tuple[str, ...]
     render_wait_ms: int = 0
+    email_confirmation_selectors: tuple[str, ...] = ()
+    address_selectors: tuple[str, ...] = ()
+    city_selectors: tuple[str, ...] = ()
+    postcode_selectors: tuple[str, ...] = ()
+    country_selectors: tuple[str, ...] = ()
+    background_cdp: bool = False
+    resume_parse_wait_ms: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +87,10 @@ class CandidateFields:
     linkedin: str
     github: str
     portfolio: str
+    street_address: str
+    city: str
+    postcode: str
+    country: str
 
     @property
     def full_name(self) -> str:
@@ -124,6 +144,22 @@ def candidate_fields(
         linkedin=_first_value(candidate, contact, "linkedin", "linkedin_url"),
         github=_first_value(candidate, contact, "github", "github_url"),
         portfolio=_first_value(candidate, contact, "portfolio", "website"),
+        street_address=_first_value(
+            candidate,
+            _mapping(candidate.get("address")),
+            "street_address",
+            "address_line1",
+            "line1",
+        ),
+        city=_first_value(candidate, _mapping(candidate.get("address")), "city"),
+        postcode=_first_value(
+            candidate,
+            _mapping(candidate.get("address")),
+            "zip_code",
+            "postcode",
+            "postal_code",
+        ),
+        country=_first_value(candidate, _mapping(candidate.get("address")), "country"),
     )
 
 
@@ -163,8 +199,515 @@ def _fill_cover_letter(page: Page, spec: BrowserFormSpec, path: Path) -> bool:
     return bool(text and fill_first(page, spec.cover_letter_text_selectors, text))
 
 
+def _dismiss_cookie_banner(page: Page) -> None:
+    """Dismiss common ATS cookie overlays without changing application answers."""
+    for pattern in (
+        r"decline all",
+        r"reject all",
+        r"only necessary",
+        r"accept all",
+    ):
+        try:
+            button = first_visible(page.get_by_role("button", name=re.compile(pattern, re.I)))
+            if button is not None:
+                button.click(timeout=3000)
+                page.wait_for_timeout(250)
+                return
+        except Exception:
+            continue
+
+
+def _wait_for_form(page: Page, spec: BrowserFormSpec, timeout: int) -> None:
+    """Wait until the provider's asynchronously rendered identity form is attached."""
+    selector = ", ".join(spec.first_name_selectors + spec.full_name_selectors)
+    if not selector:
+        return
+    try:
+        page.locator(selector).first.wait_for(
+            state="attached",
+            timeout=min(timeout, 15_000),
+        )
+    except Exception as exc:
+        logger.debug("%s form did not become ready: %s", spec.display_name, exc)
+
+
+def _clean_label(value: object) -> str:
+    return re.sub(r"\s+", " ", str(value or "")).strip().lstrip("* ").rstrip("* ").strip()
+
+
+def _question_label(control: Any) -> str:
+    """Resolve a question label through React/ARIA wrappers and native labels."""
+    try:
+        return _clean_label(
+            control.evaluate(
+                """element => {
+                    const clean = value => String(value || "").replace(/\\s+/g, " ").trim();
+                    const referencedText = node => {
+                        const raw = node && node.getAttribute &&
+                            node.getAttribute("aria-labelledby");
+                        if (!raw) return "";
+                        const ids = raw.split(/\\s+/).filter(Boolean).filter(
+                            id => !/^(?:radio|checkbox)_label_/i.test(id)
+                        );
+                        return clean(ids.map(id => {
+                            const target = document.getElementById(id);
+                            return target ? target.innerText : "";
+                        }).filter(Boolean).join(" "));
+                    };
+                    let node = element;
+                    for (let depth = 0; node && depth < 7; depth += 1, node = node.parentElement) {
+                        const text = referencedText(node);
+                        if (text) return text;
+                    }
+                    const labels = Array.from(element.labels || [])
+                        .map(label => clean(label.innerText))
+                        .filter(Boolean);
+                    if (labels.length) return labels.join(" ");
+                    const container = element.closest(
+                        "fieldset, [role='group'], [role='radiogroup'], " +
+                        "[data-ui], [class*='question'], [class*='field']"
+                    );
+                    if (container) {
+                        const legend = container.querySelector("legend");
+                        if (legend && clean(legend.innerText)) return clean(legend.innerText);
+                    }
+                    return clean(
+                        element.getAttribute("aria-label") ||
+                        element.getAttribute("placeholder") ||
+                        element.name ||
+                        element.id
+                    );
+                }"""
+            )
+        )
+    except Exception:
+        return ""
+
+
+def _option_label(control: Any) -> str:
+    try:
+        return _clean_label(
+            control.evaluate(
+                """element => {
+                    const clean = value => String(value || "").replace(/\\s+/g, " ").trim();
+                    const label = element.closest("label");
+                    if (label && clean(label.innerText)) return clean(label.innerText);
+                    let node = element.parentElement;
+                    for (let depth = 0; node && depth < 4; depth += 1, node = node.parentElement) {
+                        const raw = node.getAttribute && node.getAttribute("aria-labelledby");
+                        if (!raw) continue;
+                        const optionIds = raw.split(/\\s+/).filter(
+                            id => /^(?:radio|checkbox)_label_/i.test(id)
+                        );
+                        const text = clean(optionIds.map(id => {
+                            const target = document.getElementById(id);
+                            return target ? target.innerText : "";
+                        }).filter(Boolean).join(" "));
+                        if (text) return text;
+                    }
+                    return clean(element.value);
+                }"""
+            )
+        )
+    except Exception:
+        return ""
+
+
+def _normalized_option(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", value.casefold()).strip()
+
+
+def _option_matches(option: str, variants: Sequence[str]) -> bool:
+    normalized_option = _normalized_option(option)
+    for variant in variants:
+        normalized_variant = _normalized_option(str(variant))
+        if not normalized_variant:
+            continue
+        if (
+            normalized_option == normalized_variant
+            or normalized_variant in normalized_option
+            or normalized_option in normalized_variant
+        ):
+            return True
+    return False
+
+
+def _option_strength(value: str) -> tuple[int, int]:
+    """Rank experience/rating options independently of provider display order."""
+    normalized = _normalized_option(value)
+    if re.search(
+        r"\b(?:no|none|never|not)\b.{0,30}\b(?:experience|involvement|delivered|used)\b|"
+        r"\b(?:not applicable|n/?a)\b",
+        normalized,
+    ):
+        return (-10_000, 0)
+    weights = {
+        "scaled": 1_000,
+        "extensive": 950,
+        "expert": 925,
+        "significant": 900,
+        "led": 875,
+        "production": 850,
+        "advanced": 800,
+        "multiple components": 775,
+        "directly": 725,
+        "yes": 700,
+        "some": 350,
+        "basic": 200,
+    }
+    semantic = max(
+        (weight for phrase, weight in weights.items() if phrase in normalized),
+        default=0,
+    )
+    numbers = [int(number) for number in re.findall(r"\b\d+\b", normalized)]
+    return (semantic, max(numbers, default=0))
+
+
+def _select_combobox(
+    page: Page,
+    control: Any,
+    variants: Sequence[str],
+    *,
+    prefer_maximum: bool = False,
+) -> bool:
+    """Select a React combobox option, with a guarded strongest-option policy."""
+    try:
+        readonly = control.get_attribute("readonly") is not None
+        tag = control.evaluate("element => element.tagName.toLowerCase()")
+        input_control = tag in {"input", "textarea"}
+        if input_control and not readonly and variants:
+            control.fill(str(variants[0]))
+        clickable = control
+        try:
+            root = control.locator(
+                "xpath=ancestor::*[@data-input-type='select' or @role='combobox'][1]"
+            )
+            if root.count():
+                clickable = root.first
+        except Exception:
+            pass
+        clickable.click(timeout=3000)
+        page.wait_for_timeout(350)
+        listbox_id = (
+            control.get_attribute("aria-controls") or control.get_attribute("aria-owns") or ""
+        )
+        if listbox_id:
+            escaped_id = listbox_id.replace("\\", "\\\\").replace('"', '\\"')
+            options = page.locator(
+                f'[id="{escaped_id}"] [role="option"], [id="{escaped_id}"] [data-ui="option"]'
+            )
+        else:
+            options = page.locator('[role="option"]:visible, [data-ui="option"]:visible')
+        visible: list[tuple[Any, str]] = []
+        for index in range(options.count()):
+            option = options.nth(index)
+            text = _clean_label(option.inner_text())
+            if text:
+                visible.append((option, text))
+        selected = next(
+            (option for option, text in visible if _option_matches(text, variants)),
+            None,
+        )
+        if selected is None and prefer_maximum and visible:
+            selected = max(visible, key=lambda item: _option_strength(item[1]))[0]
+        if selected is not None:
+            selected.click(timeout=3000)
+            page.wait_for_timeout(200)
+            if input_control and control.input_value().strip():
+                return True
+            backing = clickable.locator("input[aria-hidden='true']")
+            if backing.count():
+                return bool(backing.first.input_value().strip())
+            return True
+        if input_control and not readonly:
+            return bool(control.input_value().strip())
+        if input_control:
+            control.press("Escape")
+    except Exception as exc:
+        logger.debug("Combobox selection failed for %r: %s", variants, exc)
+    return False
+
+
+def _select_native(control: Any, variants: Sequence[str], *, prefer_maximum: bool = False) -> bool:
+    try:
+        options = control.locator("option")
+        available = [
+            (
+                _clean_label(options.nth(index).inner_text()),
+                options.nth(index).get_attribute("value"),
+            )
+            for index in range(options.count())
+        ]
+        match = next(
+            (
+                (text, value)
+                for text, value in available
+                if text and _option_matches(text, variants)
+            ),
+            None,
+        )
+        if match is None and prefer_maximum:
+            nonempty = [(text, value) for text, value in available if text and value]
+            match = max(nonempty, key=lambda item: _option_strength(item[0])) if nonempty else None
+        if match is None:
+            return False
+        text, value = match
+        control.select_option(value=value) if value is not None else control.select_option(
+            label=text
+        )
+        return bool(control.input_value().strip())
+    except Exception:
+        return False
+
+
+def _group_controls(page: Page, control: Any, control_type: str) -> Any:
+    group = control.locator("xpath=ancestor::*[@role='group' or @role='radiogroup'][1]")
+    if group.count():
+        return group.first.locator(f'input[type="{control_type}"]')
+    name = control.get_attribute("name") or ""
+    if name:
+        escaped = name.replace("\\", "\\\\").replace('"', '\\"')
+        return page.locator(f'input[type="{control_type}"][name="{escaped}"]')
+    return control
+
+
+def _control_group_key(control: Any) -> str:
+    try:
+        return str(
+            control.evaluate(
+                """element => {
+                    const group = element.closest("[role='group'], [role='radiogroup']");
+                    if (group) {
+                        return group.getAttribute("data-ui") ||
+                            group.getAttribute("aria-labelledby") ||
+                            group.id || "";
+                    }
+                    return element.name || element.id || "";
+                }"""
+            )
+            or ""
+        )
+    except Exception:
+        return ""
+
+
+def _choose_group_options(
+    page: Page,
+    control: Any,
+    control_type: str,
+    variants: Sequence[str],
+    *,
+    select_all_positive: bool = False,
+) -> bool:
+    controls = _group_controls(page, control, control_type)
+    candidates: list[tuple[Any, str]] = [
+        (controls.nth(index), _option_label(controls.nth(index)))
+        for index in range(controls.count())
+    ]
+    if control_type == "checkbox" and select_all_positive:
+        selected = [
+            item
+            for item, label in candidates
+            if label and not re.search(r"\b(?:not|none|never|prefer not|do not)\b", label, re.I)
+        ]
+    else:
+        selected = [
+            item for item, label in candidates if label and _option_matches(label, variants)
+        ][:1]
+    if not selected:
+        return False
+    successes = 0
+    for item in selected:
+        try:
+            item.check(force=True)
+            if not item.is_checked():
+                wrapper = item.locator("xpath=ancestor::*[@role='radio' or @role='checkbox'][1]")
+                (wrapper.first if wrapper.count() else item).click(force=True, timeout=3000)
+            successes += int(item.is_checked())
+        except Exception:
+            try:
+                wrapper = item.locator("xpath=ancestor::*[@role='radio' or @role='checkbox'][1]")
+                (wrapper.first if wrapper.count() else item).click(force=True, timeout=3000)
+                successes += int(item.is_checked())
+            except Exception:
+                continue
+    return successes > 0
+
+
+def _is_professional_binary_question(label: str) -> bool:
+    return bool(
+        re.search(r"^(?:do|did|have|has|are|can|will|would)\s+you\b", label, re.I)
+        and not re.search(
+            r"gender|race|ethnic|veteran|disab|medical|health|sexual|transgender|"
+            r"accommodation|criminal|convict",
+            label,
+            re.I,
+        )
+    )
+
+
+def _fill_custom_questions(
+    page: Page,
+    config: Mapping[str, Any],
+    *,
+    company: str,
+    role: str,
+) -> dict[str, bool]:
+    """Fill configured Workable/SmartRecruiters questions across native and React controls."""
+    profile = _mapping(config.get("candidate"))
+    rules = _mapping(config.get("rules"))
+    eeo = _mapping(config.get("eeo_defaults"))
+    matchers = _mapping(config.get("field_matchers"))
+    variants = _mapping(config.get("answer_variants"))
+    candidate_evidence = load_candidate_evidence(config)
+    job_text = page.locator("body").inner_text()[:30_000]
+    results: dict[str, bool] = {}
+    handled_groups: set[str] = set()
+    standard_names = {
+        "firstname",
+        "first_name",
+        "lastname",
+        "last_name",
+        "email",
+        "phone",
+        "address",
+        "city",
+        "postcode",
+        "country",
+        "summary",
+        "cover_letter",
+    }
+    controls = page.locator(
+        "select, textarea, input:not([type='file']):not([type='hidden']):"
+        "not([type='submit']):not([type='button']), [role='combobox']"
+    )
+    for index in range(controls.count()):
+        control = controls.nth(index)
+        try:
+            tag = control.evaluate("element => element.tagName.toLowerCase()")
+            control_type = (control.get_attribute("type") or "").casefold()
+            name = (control.get_attribute("name") or "").casefold()
+            control_id = (control.get_attribute("id") or "").casefold()
+            role_name = (control.get_attribute("role") or "").casefold()
+            if name in standard_names or control_id in {
+                "first-name-input",
+                "last-name-input",
+                "email-input",
+                "confirm-email-input",
+                "linkedin-input",
+                "facebook-input",
+                "twitter-input",
+                "website-input",
+                "hiring-manager-message-input",
+            }:
+                continue
+            group_key = _control_group_key(control)
+            if control_type in {"radio", "checkbox"} and group_key:
+                if group_key in handled_groups:
+                    continue
+                handled_groups.add(group_key)
+            if (
+                control_type not in {"radio", "checkbox"}
+                and control.get_attribute("aria-hidden") == "true"
+            ):
+                continue
+            if (
+                control_type not in {"radio", "checkbox"}
+                and role_name != "combobox"
+                and not control.is_visible()
+            ):
+                continue
+            label = _question_label(control)
+            if not label:
+                continue
+            if re.search(r"(?:telephone|phone) country code", label, re.I):
+                continue
+            if re.search(r"phone number|country/region or code", label, re.I):
+                continue
+            if label.casefold() == "search" and control.get_attribute("required") is None:
+                continue
+            desired = configured_answer(
+                label,
+                profile,
+                rules,
+                eeo,
+                matchers,  # type: ignore[arg-type]
+            )
+            if re.search(r"\byears?\b.*\bexperience\b", label, re.I):
+                desired = str(rules.get("management_experience_years") or desired or "")
+            if (
+                re.search(r"\bsalary|compensation|pay expectation\b", label, re.I)
+                and not re.search(r"\d", str(desired or ""))
+                and profile.get("compensation")
+            ):
+                desired = str(profile["compensation"])
+            if not desired and re.search(r"\brefer(?:red|ral)\b", label, re.I):
+                desired = "N/A"
+            if not desired and _is_professional_binary_question(label):
+                desired = str(rules.get("experience_requirement") or "")
+            if not desired and is_essay_question(label):
+                desired = generate_essay_answer(
+                    label,
+                    job_text,
+                    company,
+                    role,
+                    candidate_evidence,
+                )
+
+            preferred = (
+                location_answer_candidates(profile)
+                if is_location_question(label)
+                else answer_variants(
+                    label,
+                    str(desired or ""),
+                    variants,  # type: ignore[arg-type]
+                )
+            )
+            maximum_policy = bool(
+                str(rules.get("experience_level_selection", "")).casefold() == "max_value"
+                and re.search(
+                    r"experience|advanced stage|performance|evaluation|multiple components|"
+                    r"proficiency|familiar",
+                    label,
+                    re.I,
+                )
+            )
+            success = False
+            if role_name == "combobox":
+                success = _select_combobox(
+                    page,
+                    control,
+                    preferred,
+                    prefer_maximum=maximum_policy,
+                )
+            elif tag == "select":
+                success = _select_native(
+                    control,
+                    preferred,
+                    prefer_maximum=maximum_policy,
+                )
+            elif control_type in {"radio", "checkbox"}:
+                success = _choose_group_options(
+                    page,
+                    control,
+                    control_type,
+                    preferred,
+                    select_all_positive=(
+                        control_type == "checkbox"
+                        and str(rules.get("interest_checkbox_selection", "")).casefold() == "all"
+                    ),
+                )
+            elif desired and tag in {"input", "textarea"}:
+                control.fill(str(desired))
+                success = bool(control.input_value().strip())
+            results[label] = success
+        except Exception as exc:
+            logger.debug("Custom question failed at index %d: %s", index, exc)
+    return results
+
+
 def _required_issues(page: Page) -> list[str]:
-    """Inspect native and visibly asterisk-marked required controls."""
+    """Inspect invalid native controls and controls explicitly marked as required."""
     try:
         return list(
             page.locator("input, select, textarea").evaluate_all(
@@ -185,9 +728,8 @@ def _required_issues(page: Page) -> list[str]:
                             (control.parentElement && control.parentElement.innerText)
                         ).slice(0, 180);
                         const required = control.required ||
-                            control.getAttribute("aria-required") === "true" ||
-                            /(^|\\s)\\*(\\s|$)/.test(context);
-                        if (!required && !control.matches(":invalid")) continue;
+                            control.getAttribute("aria-required") === "true";
+                        if (!required && control.checkValidity()) continue;
                         let missing = false;
                         if (type === "radio") {
                             const escaped = window.CSS && CSS.escape
@@ -196,7 +738,12 @@ def _required_issues(page: Page) -> list[str]:
                             missing = !control.name ||
                                 !document.querySelector(`input[type="radio"][name="${escaped}"]:checked`);
                         } else if (type === "checkbox") {
-                            missing = !control.checked;
+                            const group = control.closest("[role='group'], fieldset");
+                            const grouped = group &&
+                                group.querySelectorAll('input[type="checkbox"]').length > 1;
+                            missing = grouped
+                                ? !group.querySelector('input[type="checkbox"]:checked')
+                                : !control.checked;
                         } else if (type === "file") {
                             missing = !control.files || control.files.length === 0;
                         } else {
@@ -216,6 +763,54 @@ def _required_issues(page: Page) -> list[str]:
         return ["Required-field inspection failed"]
 
 
+def _fill_standard_value(page: Page, selectors: Sequence[str], value: str) -> bool:
+    if not value:
+        return False
+    control = _first_visible_for(page, selectors)
+    if control is None:
+        return False
+    if (control.get_attribute("role") or "").casefold() == "combobox":
+        return _select_combobox(page, control, (value,))
+    try:
+        control.fill(value)
+        return bool(control.input_value().strip())
+    except Exception:
+        return False
+
+
+def _fill_phone(page: Page, spec: BrowserFormSpec, candidate: CandidateFields) -> bool:
+    if not candidate.phone:
+        return False
+    country_code = first_visible(
+        page.locator(
+            '[role="combobox"][aria-label*="telephone country code" i], '
+            '[aria-label*="phone country code" i]'
+        )
+    )
+    if country_code is not None and candidate.country:
+        _select_combobox(page, country_code, (candidate.country,))
+    control = _first_visible_for(page, spec.phone_selectors)
+    if control is None:
+        return False
+    value = candidate.phone
+    if country_code is not None:
+        digits = re.sub(r"\D", "", value)
+        try:
+            dial_digits = re.sub(r"\D", "", country_code.inner_text())
+        except Exception:
+            dial_digits = ""
+        if value.strip().startswith("+") and dial_digits and digits.startswith(dial_digits):
+            digits = digits[len(dial_digits) :]
+        value = digits
+    try:
+        control.fill(value)
+        control.blur()
+        page.wait_for_timeout(250)
+        return bool(control.input_value().strip())
+    except Exception:
+        return False
+
+
 def _fill_standard_fields(
     page: Page,
     spec: BrowserFormSpec,
@@ -223,24 +818,50 @@ def _fill_standard_fields(
     resume: Path,
     cover_letter: Path | None,
 ) -> tuple[dict[str, bool], list[str]]:
+    resume_uploaded = _upload_first(page, spec.resume_selectors, resume)
+    if resume_uploaded and spec.resume_parse_wait_ms:
+        page.wait_for_timeout(spec.resume_parse_wait_ms)
+
     first_name = fill_first(page, spec.first_name_selectors, candidate.first_name)
     last_name = fill_first(page, spec.last_name_selectors, candidate.last_name)
     full_name = False
     if not (first_name and last_name):
         full_name = fill_first(page, spec.full_name_selectors, candidate.full_name)
     email = fill_first(page, spec.email_selectors, candidate.email)
+    email_confirmation = (
+        fill_first(page, spec.email_confirmation_selectors, candidate.email)
+        if spec.email_confirmation_selectors
+        else False
+    )
 
     filled = {
         "first_name": first_name,
         "last_name": last_name,
         "full_name": full_name,
         "email": email,
-        "phone": fill_first(page, spec.phone_selectors, candidate.phone),
+        "email_confirmation": email_confirmation,
+        "phone": _fill_phone(page, spec, candidate),
         "headline": fill_first(page, spec.headline_selectors, candidate.headline),
         "linkedin": fill_first(page, spec.linkedin_selectors, candidate.linkedin),
         "github": fill_first(page, spec.github_selectors, candidate.github),
         "portfolio": fill_first(page, spec.portfolio_selectors, candidate.portfolio),
-        "resume": _upload_first(page, spec.resume_selectors, resume),
+        "address": _fill_standard_value(
+            page,
+            spec.address_selectors,
+            candidate.street_address,
+        ),
+        "city": _fill_standard_value(page, spec.city_selectors, candidate.city),
+        "postcode": _fill_standard_value(
+            page,
+            spec.postcode_selectors,
+            candidate.postcode,
+        ),
+        "country": _fill_standard_value(
+            page,
+            spec.country_selectors,
+            candidate.country,
+        ),
+        "resume": resume_uploaded,
         "cover_letter": (
             _fill_cover_letter(page, spec, cover_letter) if cover_letter is not None else False
         ),
@@ -250,10 +871,10 @@ def _fill_standard_fields(
         missing_critical.append("candidate name")
     if not email:
         missing_critical.append("candidate email")
+    if spec.email_confirmation_selectors and not email_confirmation:
+        missing_critical.append("candidate email confirmation")
     if not filled["resume"]:
         missing_critical.append("resume")
-    if cover_letter is not None and not filled["cover_letter"]:
-        missing_critical.append("cover letter")
     return filled, missing_critical
 
 
@@ -271,8 +892,10 @@ def _result(
     captcha_present: bool,
     screenshot: str,
     preexisting_confirmation: bool = False,
+    custom_questions: Mapping[str, bool] | None = None,
+    detail: str = "",
 ) -> dict[str, Any]:
-    return {
+    payload = {
         "success": status in {"PREFILLED_ONLY", "SUBMITTED & CONFIRMED"},
         "status": status,
         "ats": spec.ats,
@@ -280,7 +903,7 @@ def _result(
         "confirmed": confirmed,
         "test_mode": not live_submit,
         "filled_fields": dict(filled_fields),
-        "custom_questions": {},
+        "custom_questions": dict(custom_questions or {}),
         "consent_fields": list(consent_fields),
         "missing_critical": list(missing_critical),
         "missing_required": list(missing_required),
@@ -288,6 +911,44 @@ def _result(
         "preexisting_confirmation": preexisting_confirmation,
         "screenshot": screenshot,
     }
+    if detail:
+        payload["detail"] = detail
+    return payload
+
+
+_CLOSED_JOB_PATTERNS = (
+    "sorry, this job has expired",
+    "sorry, this position has been filled",
+    "job is no longer available",
+    "job no longer available",
+    "position is no longer available",
+    "no longer accepting applications",
+    "this job is closed",
+)
+
+
+def _closed_job_reason(page: Page, apply_button: Any | None) -> str:
+    try:
+        body = _clean_label(page.locator("body").inner_text()).casefold()
+    except Exception:
+        body = ""
+    button_text = ""
+    if apply_button is not None:
+        try:
+            button_text = _clean_label(apply_button.inner_text()).casefold()
+        except Exception:
+            pass
+    combined = f"{button_text}\n{body}"
+    marker = next((phrase for phrase in _CLOSED_JOB_PATTERNS if phrase in combined), "")
+    if marker:
+        return marker
+    if apply_button is not None:
+        try:
+            if not apply_button.is_enabled():
+                return button_text or "apply control is disabled"
+        except Exception:
+            pass
+    return ""
 
 
 def run_browser_form_engine(
@@ -306,7 +967,6 @@ def run_browser_form_engine(
     timeout: int = 30000,
 ) -> dict[str, Any]:
     """Fill one configured provider form and submit only after all safety gates pass."""
-    del headless, role
     if not validate_ats_job_url(url, spec.ats):
         raise ValueError(f"URL is not a job-specific {spec.display_name} URL: {url}")
     resume = validate_nonempty_file(resume, "resume")
@@ -319,17 +979,48 @@ def run_browser_form_engine(
             playwright,
             profile_name=spec.profile_name,
             target_url=url,
+            headless=headless,
+            background=spec.background_cdp and headless,
         )
         page = session.page
         try:
             navigate_reusing_tab(page, url, timeout=timeout)
             if spec.render_wait_ms:
                 page.wait_for_timeout(spec.render_wait_ms)
+            _dismiss_cookie_banner(page)
 
             apply_button = _first_visible_for(page, spec.apply_selectors)
+            closed_reason = _closed_job_reason(page, apply_button)
+            if closed_reason:
+                screenshot = capture_screenshot(
+                    page,
+                    screenshot_dir,
+                    company or spec.display_name,
+                    "closed",
+                )
+                return _result(
+                    spec=spec,
+                    status="JOB_CLOSED",
+                    live_submit=live_submit,
+                    submitted=False,
+                    confirmed=False,
+                    filled_fields={},
+                    consent_fields=[],
+                    missing_critical=[],
+                    missing_required=[],
+                    captcha_present=False,
+                    screenshot=screenshot,
+                    detail=closed_reason,
+                )
             if apply_button is not None:
-                apply_button.click()
+                href = apply_button.get_attribute("href") or ""
+                if href:
+                    navigate_reusing_tab(page, urljoin(page.url, href), timeout=timeout)
+                else:
+                    apply_button.click(timeout=min(timeout, 10_000))
                 page.wait_for_timeout(max(1000, spec.render_wait_ms))
+                _wait_for_form(page, spec, timeout)
+                _dismiss_cookie_banner(page)
 
             filled, missing_critical = _fill_standard_fields(
                 page,
@@ -337,6 +1028,12 @@ def run_browser_form_engine(
                 candidate,
                 resume,
                 cover_letter,
+            )
+            custom_questions = _fill_custom_questions(
+                page,
+                config,
+                company=company or spec.display_name,
+                role=role,
             )
             consent = fill_required_consent(page)
             captcha = page_has_captcha(page)
@@ -361,6 +1058,7 @@ def run_browser_form_engine(
                     missing_required=missing_required,
                     captcha_present=captcha,
                     screenshot=screenshot,
+                    custom_questions=custom_questions,
                 )
             if not live_submit:
                 return _result(
@@ -375,6 +1073,7 @@ def run_browser_form_engine(
                     missing_required=[],
                     captcha_present=captcha,
                     screenshot=screenshot,
+                    custom_questions=custom_questions,
                 )
             if captcha:
                 return _result(
@@ -389,6 +1088,7 @@ def run_browser_form_engine(
                     missing_required=[],
                     captcha_present=True,
                     screenshot=screenshot,
+                    custom_questions=custom_questions,
                 )
 
             submit_button = _first_visible_for(page, spec.submit_selectors)
@@ -405,6 +1105,7 @@ def run_browser_form_engine(
                     missing_required=[],
                     captcha_present=False,
                     screenshot=screenshot,
+                    custom_questions=custom_questions,
                 )
 
             # Never treat success wording that was already present on the form
@@ -423,6 +1124,7 @@ def run_browser_form_engine(
                     captcha_present=False,
                     screenshot=screenshot,
                     preexisting_confirmation=True,
+                    custom_questions=custom_questions,
                 )
 
             submit_button.click()
@@ -462,8 +1164,11 @@ def run_browser_form_engine(
                 missing_required=validate_required_fields(page, _required_issues),
                 captcha_present=post_submit_captcha,
                 screenshot=screenshot,
+                custom_questions=custom_questions,
             )
         finally:
+            if getattr(session, "close_page_on_exit", False):
+                session.page.close()
             if session.close_browser_on_exit:
                 session.browser.close()
 

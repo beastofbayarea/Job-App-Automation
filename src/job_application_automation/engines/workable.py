@@ -38,6 +38,7 @@ SPEC = BrowserFormSpec(
         'input[type="file"][data-ui="resume"]',
         'input[type="file"][name*="resume" i]',
         'input[type="file"][id*="resume" i]',
+        'input[type="file"]',
     ),
     cover_letter_file_selectors=(
         'input[type="file"][data-ui*="cover" i]',
@@ -49,6 +50,11 @@ SPEC = BrowserFormSpec(
         'button[type="submit"]:has-text("Submit application")',
         'input[type="submit"][value*="Submit" i]',
     ),
+    address_selectors=('input[name="address"]', "#address"),
+    city_selectors=('input[name="city"]', "#city"),
+    postcode_selectors=('input[name="postcode"]', "#postcode"),
+    country_selectors=('input[name="country"]', "#country"),
+    render_wait_ms=1500,
 )
 
 

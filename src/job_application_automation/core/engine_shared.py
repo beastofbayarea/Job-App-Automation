@@ -33,6 +33,8 @@ import re
 import subprocess
 import sys
 import time
+import urllib.request
+import uuid
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
@@ -40,13 +42,13 @@ from typing import Any, Callable, Mapping, Optional, Sequence
 from urllib.parse import parse_qs, urlparse
 
 from playwright.sync_api import Browser, Locator, Page, Playwright
+from pypdf import PdfReader
 
 from .contracts import ENGINE_RESULT_PREFIX, EngineResult
 from .identity import normalize_email
 from .paths import DATA_DIR
 from .profile import AutomationProfile
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
-from pypdf import PdfReader
 
 logger = logging.getLogger("ATSEngineCommon")
 
@@ -98,34 +100,18 @@ ATS_HOST_MARKERS: Mapping[str, tuple[str, ...]] = {
 # being mistaken for an individual application. Greenhouse embedded and custom
 # domain forms are handled separately in ``validate_ats_job_url``.
 ATS_JOB_PATH_PATTERNS: Mapping[str, tuple[re.Pattern[str], ...]] = {
-    "ashby": (
-        re.compile(r"^/[^/]+/[^/]+(?:/application)?/?$", re.I),
-    ),
-    "greenhouse": (
-        re.compile(r"^/[^/]+/jobs/[^/]+/?$", re.I),
-    ),
-    "lever": (
-        re.compile(r"^/[^/]+/[^/]+(?:/apply)?/?$", re.I),
-    ),
-    "workable": (
-        re.compile(r"^/(?:[^/]+/)?(?:j|jobs)/[^/]+(?:/(?:apply|application))?/?$", re.I),
-    ),
+    "ashby": (re.compile(r"^/[^/]+/[^/]+(?:/application)?/?$", re.I),),
+    "greenhouse": (re.compile(r"^/[^/]+/jobs/[^/]+/?$", re.I),),
+    "lever": (re.compile(r"^/[^/]+/[^/]+(?:/apply)?/?$", re.I),),
+    "workable": (re.compile(r"^/(?:[^/]+/)?(?:j|jobs)/[^/]+(?:/(?:apply|application))?/?$", re.I),),
     "smartrecruiters": (
         re.compile(r"^/[^/]+/[^/]+/?$", re.I),
         re.compile(r"^/oneclick-ui/company/[^/]+/publication/[^/]+/?$", re.I),
     ),
-    "recruitee": (
-        re.compile(r"^/(?:o|jobs)/[^/]+(?:/(?:apply|application))?/?$", re.I),
-    ),
-    "bamboohr": (
-        re.compile(r"^/careers/\d+(?:/(?:apply|application))?/?$", re.I),
-    ),
-    "breezy": (
-        re.compile(r"^/p/[^/]+(?:/(?:apply|application))?/?$", re.I),
-    ),
-    "jazzhr": (
-        re.compile(r"^/apply/[^/]+(?:/[^/]+)?/?$", re.I),
-    ),
+    "recruitee": (re.compile(r"^/(?:o|jobs)/[^/]+(?:/(?:apply|application))?/?$", re.I),),
+    "bamboohr": (re.compile(r"^/careers/\d+(?:/(?:apply|application))?/?$", re.I),),
+    "breezy": (re.compile(r"^/p/[^/]+(?:/(?:apply|application))?/?$", re.I),),
+    "jazzhr": (re.compile(r"^/apply/[^/]+(?:/[^/]+)?/?$", re.I),),
 }
 
 
@@ -134,6 +120,7 @@ class BrowserSession:
     browser: Browser
     page: Page
     close_browser_on_exit: bool
+    close_page_on_exit: bool = False
 
 
 def deep_merge(base: Mapping[str, Any], override: Mapping[str, Any]) -> dict[str, Any]:
@@ -438,7 +425,11 @@ def first_visible(locator: Locator) -> Optional[Locator]:
 def fill_first(page: Page, selectors: Sequence[str] | str, value: str) -> bool:
     if not value:
         return False
-    selector_list = [s.strip() for s in selectors.split(",") if s.strip()] if isinstance(selectors, str) else list(selectors)
+    selector_list = (
+        [s.strip() for s in selectors.split(",") if s.strip()]
+        if isinstance(selectors, str)
+        else list(selectors)
+    )
     for selector in selector_list:
         target = first_visible(page.locator(selector))
         if target is None:
@@ -591,6 +582,13 @@ def configured_answer(
         for question_alias, answer in explicit_answers.items():
             if answer not in (None, "") and _matcher_alias_matches(text, str(question_alias)):
                 return str(answer)
+    if re.search(
+        r"\b(?:eligible|authori[sz]ed|right)\b.*\bwork\b.*\bwithout\b.*\bsponsor",
+        text,
+    ):
+        answer = rules.get("work_authorization") or rules.get("target_country_work_authorization")
+        if answer not in (None, ""):
+            return str(answer)
     if re.search(
         r"\byears?\s+of\s+.*experience\b|"
         r"\b\d+\+?\s*years?\b.*\bexperience\b",
@@ -876,6 +874,79 @@ def _new_page(browser: Browser) -> Page:
     return context.new_page()
 
 
+def _raw_browser_cdp_command(
+    endpoint: str,
+    method: str,
+    params: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    """Send one browser-level CDP command without activating a Chrome target."""
+    from websockets.sync.client import connect
+
+    version_url = f"{endpoint.rstrip('/')}/json/version"
+    with urllib.request.urlopen(version_url, timeout=5) as response:  # noqa: S310
+        version = json.load(response)
+    web_socket_url = str(version.get("webSocketDebuggerUrl", ""))
+    if not web_socket_url:
+        raise RuntimeError("Chrome CDP endpoint did not expose a browser WebSocket URL")
+    request_id = 1
+    with connect(
+        web_socket_url,
+        open_timeout=5,
+        close_timeout=2,
+    ) as socket:
+        socket.send(
+            json.dumps(
+                {
+                    "id": request_id,
+                    "method": method,
+                    "params": dict(params),
+                }
+            )
+        )
+        while True:
+            message = json.loads(socket.recv(timeout=5))
+            if message.get("id") != request_id:
+                continue
+            if message.get("error"):
+                raise RuntimeError(f"Chrome CDP command failed: {message['error']}")
+            result = message.get("result", {})
+            return result if isinstance(result, Mapping) else {}
+
+
+def _create_background_target(endpoint: str) -> tuple[str, str]:
+    marker = f"about:blank#job-automation-{uuid.uuid4().hex}"
+    result = _raw_browser_cdp_command(
+        endpoint,
+        "Target.createTarget",
+        {"url": marker, "background": True},
+    )
+    target_id = str(result.get("targetId", ""))
+    if not target_id:
+        raise RuntimeError("Chrome did not return an ID for the background target")
+    return marker, target_id
+
+
+def _close_background_target(endpoint: str, target_id: str) -> None:
+    try:
+        _raw_browser_cdp_command(
+            endpoint,
+            "Target.closeTarget",
+            {"targetId": target_id},
+        )
+    except Exception:
+        logger.debug("Could not close orphaned background Chrome target %s", target_id)
+
+
+def _resolve_background_page(browser: Browser, marker: str) -> Page:
+    for _ in range(30):
+        for context in browser.contexts:
+            for page in context.pages:
+                if page.url == marker:
+                    return page
+        time.sleep(0.1)
+    raise RuntimeError("Chrome created a background target but Playwright could not resolve it")
+
+
 def page_has_captcha(page: Page) -> bool:
     """Return whether a visible CAPTCHA is present without interacting with it."""
     try:
@@ -947,11 +1018,36 @@ def open_chrome_session(
     cdp_url: str | None = None,
     profile_name: str = "ats-cdp-profile",
     target_url: str = "",
+    headless: bool = False,
+    background: bool = False,
 ) -> BrowserSession:
+    endpoint = cdp_url or str(RUNTIME_CONFIG.browser["cdp_endpoint"])
+    if background:
+        target_id = ""
+        try:
+            marker, target_id = _create_background_target(endpoint)
+            browser = playwright.chromium.connect_over_cdp(endpoint)
+            return BrowserSession(
+                browser,
+                _resolve_background_page(browser, marker),
+                False,
+                True,
+            )
+        except Exception as exc:
+            if target_id:
+                _close_background_target(endpoint, target_id)
+            logger.info(
+                "Background Chrome session unavailable on %s; using isolated headless browser: %s",
+                endpoint,
+                exc,
+            )
+    if headless:
+        browser = playwright.chromium.launch(headless=True)
+        return BrowserSession(browser, _new_page(browser), True)
+
     # Prefer attaching to a Chrome the candidate is already logged into (via CDP) so
     # site sessions/cookies carry over; only launch a fresh, unauthenticated browser
     # when explicitly requested or when no debuggable Chrome can be found or started.
-    endpoint = cdp_url or str(RUNTIME_CONFIG.browser["cdp_endpoint"])
     force_fresh = os.environ.get("JOB_APP_FRESH_BROWSER") == "1"
     if not force_fresh:
         try:
@@ -1104,9 +1200,7 @@ def _parse_and_validate_host(url: str, ats: str) -> str:
     # Delegate to the same job-specific URL rule used by the orchestrator. This
     # also prevents company board roots from reaching a submission engine.
     if not validate_ats_job_url(url, ats):
-        raise ValueError(
-            f"URL {url!r} is not recognized as {ats.title()} job-specific URL"
-        )
+        raise ValueError(f"URL {url!r} is not recognized as {ats.title()} job-specific URL")
     return host
 
 

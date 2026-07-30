@@ -27,7 +27,6 @@ from .document_archive import (
 )
 from .paths import CONFIG_DIR, OUTPUT_DIR
 
-
 DEFAULT_PROFILE = CONFIG_DIR / "candidate_profile_config.json"
 DEFAULT_GENERATED_ROOT = OUTPUT_DIR / "application_documents"
 DEFAULT_RETRIEVED_ROOT = OUTPUT_DIR / "retrieved_documents"
@@ -237,10 +236,10 @@ def _load_job_description(args: argparse.Namespace) -> tuple[str, str, str]:
         return overview, responsibilities, requirements
 
     # Keep module import lazy so every documents --help path is credential-free.
-    from ..resume.ai_client import scrape_ashby_job
+    from ..resume.ai_client import scrape_job
 
     try:
-        scraped = scrape_ashby_job(args.url)
+        scraped = scrape_job(args.url)
     except Exception as exc:
         raise ValueError(
             "No job-description text was supplied and the URL could not be loaded as an "
@@ -279,7 +278,7 @@ def _promote_generated(stage: Path, destination: Path, *, overwrite: bool) -> No
             backup = target_directory / f".{target.name}.backup-{token}"
             os.replace(target, backup)
             backups[target] = backup
-        for name, target in zip(names, targets):
+        for name, target in zip(names, targets, strict=True):
             source = stage / name
             if not source.is_file():
                 raise OSError(f"generated artifact is missing: {source}")
@@ -333,8 +332,6 @@ def _generate(args: argparse.Namespace) -> int:
     overview, responsibilities, requirements = _load_job_description(args)
 
     # Heavy LLM/PDF imports stay below argument parsing to preserve lazy CLI help.
-    from .engine_shared import load_json_config
-    from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
     from ..resume.career_narrative import load_career_narrative
     from ..resume.cover_letter import (
         COVER_LETTER_CACHE_FILE,
@@ -344,6 +341,8 @@ def _generate(args: argparse.Namespace) -> int:
     )
     from ..resume.generate import JobInfo, generate_personalized_resume
     from ..resume.source import load_resume_source
+    from .engine_shared import load_json_config
+    from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 
     try:
         profile = load_json_config(Path(args.profile))

@@ -14,7 +14,7 @@ from .ai_client import _strip_json_fence, ask_gemini
 from .career_narrative import CareerNarrative
 from .cover_letter_models import CoverLetterJob
 
-PROMPT_TEMPLATE_VERSION = "cover-letter-v1"
+PROMPT_TEMPLATE_VERSION = "cover-letter-v2"
 TARGET_BODY_MINIMUM_WORDS = 180
 TARGET_BODY_MAXIMUM_WORDS = 260
 
@@ -50,7 +50,8 @@ EVIDENCE RULE
 Use only facts present in the supplied CANDIDATE TAGGED SOURCE. Every fact you
 reference must come from a "[CLAIM <id>]" line. Never invent a company, date,
 metric, tool, or motivation. Do not fabricate personal enthusiasm not grounded
-in the supplied narrative.
+in the supplied narrative. Put claim identifiers only in "evidence_claim_ids";
+never include "[CLAIM ...]" tags in the salutation, paragraphs, closing, or signature.
 
 LENGTH RULE
 The combined text of every entry in "paragraphs" must be between
