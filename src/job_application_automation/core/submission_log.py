@@ -102,7 +102,10 @@ def _interprocess_lock(path: Path):
         yield
     finally:
         os.close(descriptor)
-        lock_path.unlink(missing_ok=True)
+        try:
+            lock_path.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,8 +182,8 @@ class SubmissionRecord:
             status=payload.get("status"),  # type: ignore[arg-type]
             email_used=payload.get("email_used"),  # type: ignore[arg-type]
             resume_filename=payload.get("resume_filename"),  # type: ignore[arg-type]
-            cover_letter_filename=payload.get("cover_letter_filename", ""),  # type: ignore[arg-type]
-            remote_path=payload.get("remote_path", ""),  # type: ignore[arg-type]
+            cover_letter_filename=(payload.get("cover_letter_filename") or ""),  # type: ignore[arg-type]
+            remote_path=(payload.get("remote_path") or ""),  # type: ignore[arg-type]
             applied_at=datetime.fromisoformat(applied_at),
         )
 

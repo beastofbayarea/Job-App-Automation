@@ -13,6 +13,7 @@ import json
 import os
 import sys
 import webbrowser
+from datetime import datetime, timezone
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from typing import Any, Sequence
@@ -104,6 +105,108 @@ def load_vps_log(lines: int = 250) -> str:
         return f"Error reading log file: {e}"
 
 
+def archive_entries(archives: Any) -> dict[str, Any]:
+    """Return the per-job archive records regardless of file layout version.
+
+    ``vps_document_archive_state.json`` nests its records under a ``jobs`` key
+    alongside a scalar ``version``. Counting the top-level keys therefore
+    reports 2 instead of the real record count, so unwrap ``jobs`` when present
+    and otherwise treat the mapping itself as the record set.
+    """
+    if not isinstance(archives, dict):
+        return {}
+    jobs = archives.get("jobs")
+    if isinstance(jobs, dict):
+        return jobs
+    return {key: value for key, value in archives.items() if isinstance(value, dict)}
+
+
+def summarize_archive_status(entries: dict[str, Any]) -> dict[str, int]:
+    """Count archive records by their recorded terminal status."""
+    counts: dict[str, int] = {}
+    for record in entries.values():
+        if not isinstance(record, dict):
+            continue
+        status = str(record.get("status") or "unknown").lower()
+        counts[status] = counts.get(status, 0) + 1
+    return counts
+
+
+def summarize_submissions(submissions: Any) -> dict[str, Any]:
+    """Derive cumulative submission facts from the append-only submission log.
+
+    ``vps_application_failures.json`` only describes the most recent run, so the
+    per-ATS totals shown for "all time" have to come from the log itself.
+    """
+    if not isinstance(submissions, dict):
+        return {"confirmed_by_ats": {}, "by_status": {}, "latest_applied_at": ""}
+
+    confirmed_by_ats: dict[str, int] = {}
+    by_status: dict[str, int] = {}
+    latest = ""
+    for record in submissions.values():
+        if not isinstance(record, dict):
+            continue
+        status = str(record.get("status") or "unknown")
+        by_status[status] = by_status.get(status, 0) + 1
+        if "confirm" in status.lower():
+            ats = str(record.get("ats") or "unknown").lower()
+            confirmed_by_ats[ats] = confirmed_by_ats.get(ats, 0) + 1
+        applied_at = str(record.get("applied_at") or "")
+        if applied_at > latest:
+            latest = applied_at
+    return {
+        "confirmed_by_ats": confirmed_by_ats,
+        "by_status": by_status,
+        "latest_applied_at": latest,
+    }
+
+
+def summarize_coverage(coverage: Any) -> dict[str, Any]:
+    """Expose the search-run diagnostics the dashboard renders, minus bulk lists.
+
+    ``query_log`` and ``failed_boards`` are hundreds of entries long and are
+    already downloadable from the coverage endpoint, so only their sizes travel
+    with the metrics payload.
+    """
+    if not isinstance(coverage, dict):
+        return {}
+
+    def _scalars(section: str) -> dict[str, Any]:
+        data = coverage.get(section)
+        if not isinstance(data, dict):
+            return {}
+        return {k: v for k, v in data.items() if isinstance(v, (int, float, str, bool))}
+
+    discovery = _scalars("discovery")
+    feed_fetch = _scalars("feed_fetch")
+    raw_feed = coverage.get("feed_fetch")
+    if isinstance(raw_feed, dict) and isinstance(raw_feed.get("failed_boards"), list):
+        feed_fetch["failed_board_count"] = len(raw_feed["failed_boards"])
+
+    criteria = coverage.get("criteria")
+    criteria_summary: dict[str, Any] = {}
+    if isinstance(criteria, dict):
+        for key in ("role_terms", "location_terms", "platforms"):
+            value = criteria.get(key)
+            if isinstance(value, list):
+                criteria_summary[key] = value
+        for key in ("discovery_mode", "match_mode"):
+            value = criteria.get(key)
+            if isinstance(value, str):
+                criteria_summary[key] = value
+
+    return {
+        "generated_at": coverage.get("generated_at", ""),
+        "criteria": criteria_summary,
+        "cache": _scalars("cache"),
+        "discovery": discovery,
+        "feed_fetch": feed_fetch,
+        "fallback": _scalars("fallback"),
+        "results": _scalars("results"),
+    }
+
+
 def build_kpi_metrics() -> dict[str, Any]:
     submissions = load_json_file("submission_log.json", default={})
     failures_data = load_json_file("vps_application_failures.json", default={})
@@ -127,7 +230,9 @@ def build_kpi_metrics() -> dict[str, Any]:
     attempted_by_ats = failures_data.get("attempted_by_ats", {}) if isinstance(failures_data, dict) else {}
     confirmed_by_ats = failures_data.get("confirmed_by_ats", {}) if isinstance(failures_data, dict) else {}
 
-    archived_sets = len(archives) if isinstance(archives, dict) else 0
+    archive_records = archive_entries(archives)
+    archived_sets = len(archive_records)
+    archive_status_counts = summarize_archive_status(archive_records)
     gen_queue_size = len(generation_jobs) if isinstance(generation_jobs, list) else 0
 
     returned_jobs = 0
@@ -140,17 +245,29 @@ def build_kpi_metrics() -> dict[str, Any]:
 
     cached_boards_count = len(cache_data) if isinstance(cache_data, dict) else 0
 
+    submission_summary = summarize_submissions(submissions)
+    coverage_summary = summarize_coverage(coverage)
+
     return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
         "total_submissions": total_submissions,
         "failure_count": failure_count,
         "total_jobs_found": returned_jobs,
         "generation_queue_count": gen_queue_size,
         "archived_document_sets": archived_sets,
+        "archive_status_counts": archive_status_counts,
         "cached_boards_count": cached_boards_count,
         "ats_submissions": ats_counts,
+        # Per-run counters, sourced from vps_application_failures.json.
         "attempted_by_ats": attempted_by_ats,
         "confirmed_by_ats": confirmed_by_ats,
+        "run_started_at": failures_data.get("run_started_at", "") if isinstance(failures_data, dict) else "",
+        # Cumulative counters, sourced from the append-only submission log.
+        "confirmed_by_ats_all_time": submission_summary["confirmed_by_ats"],
+        "submissions_by_status": submission_summary["by_status"],
+        "latest_submission_at": submission_summary["latest_applied_at"],
         "live_status_counts": live_status_counts,
+        "coverage": coverage_summary,
         "last_failure_update": failures_data.get("updated_at", "") if isinstance(failures_data, dict) else "",
         "vps_info": vps_cfg.get("vps", {}),
         "hostinger_info": vps_cfg.get("hostinger_account", {}),
