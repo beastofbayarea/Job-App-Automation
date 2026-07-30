@@ -41,6 +41,8 @@ def test_parallel_status_probe_discovers_all_services_and_redacts_email() -> Non
     assert "continuous_*_state.json" in script
     assert "continuous_ats" in script
     assert "continuous-lever" in script
+    assert "email_selection=" in script
+    assert '"outside_pool"' in script
     assert "job-app-search-sync.service" in script
     assert "[v]ps_continuous_search_sync" in script
     assert "grep -v '[b]ash -c set -eu repo='" in script

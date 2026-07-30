@@ -185,6 +185,25 @@ class LocationQuestionTests(unittest.TestCase):
 
 
 class ScreeningMatcherTests(unittest.TestCase):
+    def test_country_of_birth_uses_dedicated_profile_value(self) -> None:
+        answer = engine_shared.configured_answer(
+            "What is your country of birth?",
+            {
+                "country": "United States",
+                "country_of_birth": "India",
+                "citizenship": "Indian",
+            },
+            {},
+            {},
+            {
+                "country": ["country of residence"],
+                "country_of_birth": ["country of birth", "birth country"],
+                "citizenship": ["citizenship"],
+            },
+        )
+
+        self.assertEqual(answer, "India")
+
     def test_without_sponsorship_question_uses_work_authorization_answer(self) -> None:
         answer = engine_shared.configured_answer(
             "Are you eligible to work in Canada without sponsorship?",

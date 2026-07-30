@@ -73,7 +73,7 @@ ps -eo pid,ppid,lstart,etime,%cpu,%mem,rss,stat,args |
   grep -v '[b]ash -c set -eu repo=' |
   sed -E 's/(--email )[[:graph:]]+/\1[REDACTED]/g' || true
 printf '%s\n' '=== PROVIDER STATE ==='
-python3 - "`$repo"/output/continuous_*_state.json <<'PY'
+python3 - "`$repo/config/candidate_email_pool.json" "`$repo"/output/continuous_*_state.json <<'PY'
 import json
 import re
 import sys
@@ -82,7 +82,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 now = datetime.now(timezone.utc)
-for raw_path in sys.argv[1:]:
+pool_path = Path(sys.argv[1])
+pool = {
+    str(email).strip().casefold()
+    for email in json.loads(pool_path.read_text(encoding="utf-8"))
+    if str(email).strip()
+}
+for raw_path in sys.argv[2:]:
     path = Path(raw_path)
     provider = path.name.removeprefix("continuous_").removesuffix("_state.json")
     if not path.is_file():
@@ -94,6 +100,27 @@ for raw_path in sys.argv[1:]:
     print(f"{provider}: status_counts=" + json.dumps(counts, sort_keys=True))
     result_counts = Counter(str(record.get("result_status", "MISSING")) for record in records)
     print(f"{provider}: result_counts=" + json.dumps(result_counts, sort_keys=True))
+    selected_emails = [
+        str(record.get("email", "")).strip().casefold()
+        for record in records
+        if str(record.get("email", "")).strip()
+    ]
+    email_counts = Counter(selected_emails)
+    print(
+        f"{provider}: email_selection="
+        + json.dumps(
+            {
+                "records_with_email": len(selected_emails),
+                "unique_selected": len(email_counts),
+                "pool_size": len(pool),
+                "outside_pool": sum(
+                    count for email, count in email_counts.items() if email not in pool
+                ),
+                "max_reuse": max(email_counts.values(), default=0),
+            },
+            sort_keys=True,
+        )
+    )
     invalid_confirmed = [
         record
         for record in records

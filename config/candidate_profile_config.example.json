@@ -52,6 +52,7 @@
     "state": "State",
     "zip_code": "00000",
     "country": "United States",
+    "country_of_birth": "Country",
     "highest_degree": "Bachelor's Degree",
     "education_history": {
       "school": "Example University",
@@ -288,6 +289,10 @@
       "what country are you based in",
       "currently located? please state the country",
       "currently located please state the country"
+    ],
+    "country_of_birth": [
+      "country of birth",
+      "birth country"
     ],
     "bachelors_degree": ["bachelor's degree", "bachelors degree", "bachelor degree"],
     "degree": ["degree", "highest level of education", "education level"],
