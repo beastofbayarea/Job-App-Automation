@@ -15,6 +15,8 @@ from .career_narrative import CareerNarrative
 from .cover_letter_models import CoverLetterJob
 
 PROMPT_TEMPLATE_VERSION = "cover-letter-v1"
+TARGET_BODY_MINIMUM_WORDS = 180
+TARGET_BODY_MAXIMUM_WORDS = 260
 
 
 def build_cover_letter_system_prompt(narrative: CareerNarrative, feedback: str = "") -> str:
@@ -49,6 +51,12 @@ Use only facts present in the supplied CANDIDATE TAGGED SOURCE. Every fact you
 reference must come from a "[CLAIM <id>]" line. Never invent a company, date,
 metric, tool, or motivation. Do not fabricate personal enthusiasm not grounded
 in the supplied narrative.
+
+LENGTH RULE
+The combined text of every entry in "paragraphs" must be between
+{TARGET_BODY_MINIMUM_WORDS} and {TARGET_BODY_MAXIMUM_WORDS} words. This range
+is strict so the rendered business letter remains one page. Prefer three
+focused paragraphs with concise sentences; never exceed the upper bound.
 
 CANDIDATE-APPROVED NARRATIVE
 {narrative_block}

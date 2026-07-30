@@ -346,9 +346,11 @@ class _RecordingGateway:
     def __init__(self, response: str) -> None:
         self._response = response
         self.call_count = 0
+        self.system_prompts: list[str] = []
 
     def generate(self, prompt, *, system, settings, json_mode=False):
         self.call_count += 1
+        self.system_prompts.append(system)
         return self._response
 
 
@@ -538,6 +540,31 @@ class GenerateCoverLetterTests(unittest.TestCase):
 
             self.assertIsNone(result)
             self.assertFalse(output_path.exists())
+
+    def test_render_validation_issues_are_sent_to_the_next_llm_attempt(self) -> None:
+        gateway = _RecordingGateway(_VALID_RESPONSE)
+        with tempfile.TemporaryDirectory() as directory:
+            result = cover_letter.generate_cover_letter(
+                CoverLetterJob(company="Example Co", role="PM", jd_text="Build things."),
+                CareerNarrative(),
+                _fake_source(),
+                Path(directory) / "letter.pdf",
+                gateway=gateway,
+                renderer=_RecordingRenderer([]),
+                fitz_module=_FakeGenFitz(
+                    [
+                        [" ".join(["word"] * 120) + " Shivam Singh"],
+                        [" ".join(["word"] * 30) + " Shivam Singh"],
+                    ]
+                ),
+                max_retries=2,
+                minimum_words=5,
+                maximum_words=100,
+            )
+
+        self.assertIsNotNone(result)
+        self.assertEqual(gateway.call_count, 2)
+        self.assertIn("Too long", gateway.system_prompts[1])
 
     def test_missing_jd_text_raises_jd_context_unavailable(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

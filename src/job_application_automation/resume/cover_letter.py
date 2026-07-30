@@ -171,17 +171,22 @@ def generate_cover_letter(
     )
     known_ids = known_claim_ids(source.experience)
     key = cache_key_for(job, narrative, source)
+    last_finish_issues: list[str] = []
 
     def _finish(letter: dict[str, Any]) -> Optional[Path]:
+        nonlocal last_finish_issues
         attempt_path = output_path.with_name(f".{output_path.stem}.attempt{output_path.suffix}")
         _remove_file(attempt_path)
         if not render_cover_letter(active_renderer, letter, candidate, attempt_path):
+            last_finish_issues = ["PDF renderer failed"]
             _remove_file(attempt_path)
             return None
-        valid, _issues = validate_cover_letter_pdf(attempt_path, policy, fitz_module=fitz_module)
+        valid, issues = validate_cover_letter_pdf(attempt_path, policy, fitz_module=fitz_module)
         if not valid:
+            last_finish_issues = list(issues)
             _remove_file(attempt_path)
             return None
+        last_finish_issues = []
         os.replace(attempt_path, output_path)
         write_json(
             _audit_path_for(output_path),
@@ -207,7 +212,11 @@ def generate_cover_letter(
                 return result
             cache.discard(key)
 
-    feedback = ""
+    feedback = (
+        "The cached render failed validation: " + "; ".join(last_finish_issues)
+        if last_finish_issues
+        else ""
+    )
     for _attempt in range(1, attempts + 1):
         try:
             payload = call_cover_letter_llm(job, narrative, source.text, feedback, gateway=gateway)
@@ -232,8 +241,19 @@ def generate_cover_letter(
         result = _finish(letter)
         if result is not None:
             return result
-        feedback = "The rendered PDF failed one-page or word-budget validation. Write fewer words."
+        feedback = (
+            "The rendered PDF failed validation: " + "; ".join(last_finish_issues)
+            if last_finish_issues
+            else "The rendered PDF failed validation."
+        )
 
+    if last_finish_issues:
+        print(
+            "[COVER LETTER VALIDATION] Exhausted retries: "
+            + "; ".join(last_finish_issues),
+            file=sys.stderr,
+            flush=True,
+        )
     return None
 
 
