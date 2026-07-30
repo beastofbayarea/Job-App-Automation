@@ -10,7 +10,8 @@ param(
 foreach ($RequiredPath in @(
     $ConfigPath,
     $ServiceTemplatePath,
-    "config/candidate_email_pool.json"
+    "config/candidate_email_pool.json",
+    "config/candidate_profile_config.json"
 )) {
     if (-not (Test-Path -LiteralPath $RequiredPath)) {
         Write-Error "Required installation input not found: $RequiredPath"
@@ -59,6 +60,7 @@ $ServiceName = "job-app-greenhouse.service"
 $Token = [guid]::NewGuid().ToString("N")
 $RemoteUnitStage = "/tmp/job-app-greenhouse-$Token.service"
 $RemotePoolStage = "/tmp/candidate-email-pool-$Token.json"
+$RemoteProfileStage = "/tmp/candidate-profile-$Token.json"
 $RenderedUnitPath = Join-Path ([IO.Path]::GetTempPath()) "job-app-greenhouse-$Token.service"
 $PasswordFile = Join-Path ([IO.Path]::GetTempPath()) "job-app-greenhouse-$Token.txt"
 $RenderedUnit = (
@@ -67,6 +69,7 @@ $RenderedUnit = (
 $Repo = ConvertTo-PosixShellLiteral $RemoteRepoPath
 $UnitStage = ConvertTo-PosixShellLiteral $RemoteUnitStage
 $PoolStage = ConvertTo-PosixShellLiteral $RemotePoolStage
+$ProfileStage = ConvertTo-PosixShellLiteral $RemoteProfileStage
 $CronMarker = "job-app-automation-daily-search"
 $RemoteCommand = @"
 set -eu
@@ -82,8 +85,9 @@ if ! command -v xvfb-run >/dev/null 2>&1; then
 fi
 install -d -m 0700 "`$repo/config" "`$repo/output"
 install -m 0600 $PoolStage "`$repo/config/candidate_email_pool.json"
+install -m 0600 $ProfileStage "`$repo/config/candidate_profile_config.json"
 install -m 0644 $UnitStage "/etc/systemd/system/$ServiceName"
-rm -f $PoolStage $UnitStage
+rm -f $PoolStage $ProfileStage $UnitStage
 current=`$(crontab -l 2>/dev/null || true)
 filtered=`$(printf '%s\n' "`$current" | grep -v '# $CronMarker' || true)
 if [ -n "`$filtered" ]; then
@@ -118,6 +122,10 @@ try {
         @{
             Local = "config/candidate_email_pool.json"
             Remote = "$SshUser@${VpsHost}:$RemotePoolStage"
+        },
+        @{
+            Local = "config/candidate_profile_config.json"
+            Remote = "$SshUser@${VpsHost}:$RemoteProfileStage"
         }
     )) {
         & $PscpCmd.Source -batch -P $SshPort -hostkey $SshHostKey -pwfile $PasswordFile `

@@ -5,7 +5,9 @@ let state = {
   coverage: {},
   generation: [],
   archives: {},
-  fullLog: ''
+  rawLog: '',
+  parsedLogs: [],
+  currentLogFilter: 'all'
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -21,7 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (document.getElementById('generationQueueView')) {
     fetchSection2();
   }
-  if (document.getElementById('logTerminal')) {
+  if (document.getElementById('structuredLogBody')) {
     fetchVpsLog();
   }
   if (document.getElementById('rawFileViewer')) {
@@ -181,38 +183,156 @@ async function fetchSection2() {
 }
 
 async function fetchVpsLog() {
-  const terminal = document.getElementById('logTerminal');
-  if (!terminal) return;
+  const container = document.getElementById('structuredLogBody');
+  if (!container) return;
+
   try {
     const res = await fetch('/api/vps/log');
     const data = await res.json();
-    state.fullLog = data.log || '';
-    filterLogs();
+    state.rawLog = data.log || '';
+    parseLogData(state.rawLog);
+    renderStructuredLogs();
   } catch (err) {
-    terminal.textContent = 'Error fetching vps_sync.log';
+    if (container) container.innerHTML = '<div style="padding: 2rem; color: var(--fire-red); text-align: center;">Failed to fetch VPS log data.</div>';
   }
 }
 
-function filterLogs() {
-  const terminal = document.getElementById('logTerminal');
-  if (!terminal) return;
-  const searchInput = document.getElementById('logSearch');
-  const query = (searchInput ? searchInput.value : '').toLowerCase();
-  
-  if (!state.fullLog) {
-    terminal.textContent = 'Log is empty or file not found.';
-    return;
-  }
-  
-  if (!query) {
-    terminal.textContent = state.fullLog;
-    terminal.scrollTop = terminal.scrollHeight;
+function parseLogData(rawText) {
+  if (!rawText) {
+    state.parsedLogs = [];
     return;
   }
 
-  const lines = state.fullLog.split('\n');
-  const matching = lines.filter(l => l.toLowerCase().includes(query));
-  terminal.textContent = matching.length > 0 ? matching.join('\n') : `No log entries matching "${query}"`;
+  const lines = rawText.split('\n').filter(l => l.trim().length > 0);
+  const parsed = [];
+
+  let countError = 0;
+  let countAi = 0;
+  let countHttp = 0;
+  let countSub = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    let timestamp = '';
+    let text = line;
+    let level = 'info';
+    let category = 'info';
+    let badgeClass = 'log-badge-info';
+    let badgeLabel = 'INFO';
+
+    // Extract Timestamp if present
+    const tsMatch = line.match(/^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}(?:,\d{3})?)/);
+    if (tsMatch) {
+      timestamp = tsMatch[1];
+      text = line.slice(tsMatch[1].length).trim();
+    } else {
+      timestamp = 'LIVE-LOG';
+    }
+
+    const lower = text.toLowerCase();
+
+    // Categorization
+    if (lower.includes('error') || lower.includes('failed') || lower.includes('retry') || lower.includes('exhausted')) {
+      level = 'error';
+      category = 'error';
+      badgeClass = 'log-badge-error';
+      badgeLabel = lower.includes('failed') ? 'FAILED' : 'WARN/ERR';
+      countError++;
+    } else if (lower.includes('score:') || lower.includes('resumeai') || lower.includes('generating tailored') || lower.includes('attempt')) {
+      level = 'ai';
+      category = 'ai';
+      badgeClass = lower.includes('score:') ? 'log-badge-score' : 'log-badge-ai';
+      badgeLabel = lower.includes('score:') ? 'SCORE' : 'AI MODEL';
+      countAi++;
+    } else if (lower.includes('http request:') || lower.includes('httpx') || lower.includes('post https:')) {
+      level = 'http';
+      category = 'http';
+      badgeClass = 'log-badge-http';
+      badgeLabel = 'HTTP 200';
+      countHttp++;
+    } else if (lower.includes('document archive') || lower.includes('submission') || lower.includes('passthrough')) {
+      level = 'sub';
+      category = 'sub';
+      badgeClass = 'log-badge-score';
+      badgeLabel = 'ARCHIVE';
+      countSub++;
+    }
+
+    parsed.push({
+      id: i,
+      timestamp,
+      level,
+      category,
+      badgeClass,
+      badgeLabel,
+      raw: line,
+      text
+    });
+  }
+
+  state.parsedLogs = parsed;
+
+  // Update KPI Stats
+  if (document.getElementById('logKpiTotal')) document.getElementById('logKpiTotal').textContent = parsed.length;
+  if (document.getElementById('logKpiAi')) document.getElementById('logKpiAi').textContent = countAi;
+  if (document.getElementById('logKpiHttp')) document.getElementById('logKpiHttp').textContent = countHttp;
+  if (document.getElementById('logKpiErrors')) document.getElementById('logKpiErrors').textContent = countError;
+
+  if (document.getElementById('pillCountError')) document.getElementById('pillCountError').textContent = countError;
+  if (document.getElementById('pillCountAi')) document.getElementById('pillCountAi').textContent = countAi;
+  if (document.getElementById('pillCountHttp')) document.getElementById('pillCountHttp').textContent = countHttp;
+  if (document.getElementById('pillCountSub')) document.getElementById('pillCountSub').textContent = countSub;
+}
+
+function setLogCategory(cat) {
+  state.currentLogFilter = cat;
+  document.querySelectorAll('.pill-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-filter') === cat);
+  });
+  renderStructuredLogs();
+}
+
+function renderStructuredLogs() {
+  const container = document.getElementById('structuredLogBody');
+  if (!container) return;
+
+  const searchInput = document.getElementById('logSearch');
+  const query = (searchInput ? searchInput.value : '').toLowerCase();
+
+  let filtered = state.parsedLogs;
+
+  // Category filter
+  if (state.currentLogFilter !== 'all') {
+    filtered = filtered.filter(item => item.category === state.currentLogFilter);
+  }
+
+  // Keyword query filter
+  if (query) {
+    filtered = filtered.filter(item => item.raw.toLowerCase().includes(query));
+  }
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div style="padding: 2.5rem; text-align: center; color: var(--text-muted);">No log entries matching current filters.</div>';
+    return;
+  }
+
+  const html = filtered.map(item => `
+    <div class="log-entry-row">
+      <span class="log-time">${escapeHtml(item.timestamp)}</span>
+      <div class="log-badge-wrapper">
+        <span class="log-badge ${item.badgeClass}">${escapeHtml(item.badgeLabel)}</span>
+      </div>
+      <span class="log-text">${escapeHtml(item.text)}</span>
+    </div>
+  `).join('');
+
+  container.innerHTML = html;
+
+  // Auto scroll if enabled
+  const autoCheck = document.getElementById('autoScrollCheck');
+  if (autoCheck && autoCheck.checked) {
+    container.scrollTop = container.scrollHeight;
+  }
 }
 
 function renderSubmissionsTable() {

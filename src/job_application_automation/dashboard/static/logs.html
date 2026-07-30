@@ -43,13 +43,63 @@
       <a href="inspector.html" class="tab-btn">📁 Raw File Inspector</a>
     </nav>
 
-    <!-- REAL-TIME LOGS PAGE CONTENT -->
-    <section>
-      <div class="controls-bar">
-        <input type="text" id="logSearch" class="search-input" placeholder="Filter log by keyword (e.g. Resume, Gemini, Error, Front)..." oninput="filterLogs()">
-        <button class="secondary-btn" onclick="fetchVpsLog()">🔄 Refresh Log</button>
+    <!-- REAL-TIME LOGS SUMMARY KPI CARDS -->
+    <section class="kpi-grid" style="margin-bottom: 1.5rem;">
+      <div class="kpi-card element-air">
+        <div class="kpi-title">📋 Total Log Entries</div>
+        <div class="kpi-value kpi-air" id="logKpiTotal">0</div>
+        <div class="kpi-subtext">Recent VPS Sync Output</div>
       </div>
-      <div class="log-terminal" id="logTerminal">Loading real-time vps_sync.log...</div>
+      <div class="kpi-card element-earth">
+        <div class="kpi-title">🤖 AI Resume Generation Calls</div>
+        <div class="kpi-value kpi-earth" id="logKpiAi">0</div>
+        <div class="kpi-subtext">Gemini Model Synthesis</div>
+      </div>
+      <div class="kpi-card element-water">
+        <div class="kpi-title">🌐 HTTP & API Requests</div>
+        <div class="kpi-value kpi-water" id="logKpiHttp">0</div>
+        <div class="kpi-subtext">Vertex AI & ATS API Calls</div>
+      </div>
+      <div class="kpi-card element-error">
+        <div class="kpi-title">⚠️ Warnings & Errors</div>
+        <div class="kpi-value kpi-rose" id="logKpiErrors">0</div>
+        <div class="kpi-subtext">Failed Operations / Retries</div>
+      </div>
+    </section>
+
+    <!-- LOG CONTROLS & FILTER PILLS -->
+    <section>
+      <div class="controls-bar" style="align-items: center; justify-content: space-between; gap: 1rem;">
+        <input type="text" id="logSearch" class="search-input" placeholder="Search log entries (e.g. Gemini, Score, Front, Addepar, Failed)..." oninput="renderStructuredLogs()">
+        
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <label style="font-size: 0.85rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem; cursor: pointer; user-select: none;">
+            <input type="checkbox" id="autoScrollCheck" checked style="accent-color: var(--air-cyan);"> Auto-scroll
+          </label>
+          <button class="secondary-btn" onclick="fetchVpsLog()">🔄 Refresh Log</button>
+        </div>
+      </div>
+
+      <!-- Category Filter Pills -->
+      <div class="log-filter-pills" style="display: flex; gap: 0.5rem; margin-bottom: 1.25rem; flex-wrap: wrap;">
+        <button class="pill-btn active" data-filter="all" onclick="setLogCategory('all')">All Logs</button>
+        <button class="pill-btn pill-error" data-filter="error" onclick="setLogCategory('error')">🔴 Errors & Warnings (<span id="pillCountError">0</span>)</button>
+        <button class="pill-btn pill-ai" data-filter="ai" onclick="setLogCategory('ai')">🤖 AI Generation (<span id="pillCountAi">0</span>)</button>
+        <button class="pill-btn pill-http" data-filter="http" onclick="setLogCategory('http')">🌐 HTTP / API Calls (<span id="pillCountHttp">0</span>)</button>
+        <button class="pill-btn pill-sub" data-filter="sub" onclick="setLogCategory('sub')">📜 Submissions & Archives (<span id="pillCountSub">0</span>)</button>
+      </div>
+
+      <!-- STRUCTURED LOG CONTAINER -->
+      <div class="log-console-container">
+        <div class="log-console-header">
+          <span>TIMESTAMP</span>
+          <span>LEVEL</span>
+          <span>MESSAGE & EVENT DETAILS</span>
+        </div>
+        <div class="log-console-body" id="structuredLogBody">
+          <div style="padding: 2rem; text-align: center; color: var(--text-muted);">Loading real-time log data...</div>
+        </div>
+      </div>
     </section>
 
   </main>

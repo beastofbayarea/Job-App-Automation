@@ -87,6 +87,8 @@ class PowerShellMaintenanceTests(unittest.TestCase):
         self.assertIn("-hostkey", installer)
         self.assertIn("-pwfile", installer)
         self.assertIn("candidate_email_pool.json", installer)
+        self.assertIn("candidate_profile_config.json", installer)
+        self.assertIn("install -m 0600 $ProfileStage", installer)
         self.assertIn("grep -v '# $CronMarker'", installer)
         self.assertIn('systemctl restart "$ServiceName"', installer)
         self.assertIn("continuous-greenhouse", unit)
