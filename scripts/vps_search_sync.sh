@@ -182,7 +182,8 @@ python src/job_automation.py search \
   --ats-platform greenhouse \
   --ats-platform lever \
   --ats-platform ashby \
-  --search-backend bing \
+  --search-backend yahoo \
+  --search-backend yandex \
   --verify-live \
   --private-generation-output "$PRIVATE_GENERATION_OUTPUT"
 
