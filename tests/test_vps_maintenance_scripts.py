@@ -94,6 +94,24 @@ class PowerShellMaintenanceTests(unittest.TestCase):
         self.assertIn("MemoryMax=192M", unit)
         self.assertNotIn("--host 0.0.0.0", unit)
 
+    def test_backend_quarantine_requires_live_failure_evidence(self) -> None:
+        script = (SCRIPTS / "quarantine_unhealthy_cent_backend.ps1").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("systemctl is-active --quiet", script)
+        self.assertIn("8080", script)
+        self.assertIn("password authentication failed", script)
+        self.assertIn("too many authentication failures", script)
+        self.assertIn('systemctl stop "$service"', script)
+        self.assertIn('systemctl disable "$service"', script)
+        self.assertIn("-hostkey", script)
+        self.assertIn("-pwfile", script)
+        self.assertLess(
+            script.index('journalctl -u "$service"'),
+            script.index('systemctl stop "$service"'),
+        )
+
     def test_continuous_search_installer_uses_current_timeout_helper_contract(self) -> None:
         installer = (SCRIPTS / "install_vps_continuous_search.ps1").read_text(
             encoding="utf-8"

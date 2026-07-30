@@ -189,6 +189,19 @@ only to `127.0.0.1:8000`, and restarts Nginx only after `nginx -t` succeeds.
 The browser will request HTTP Basic credentials; read them from the ignored
 environment file. Never publish that file.
 
+If the shared VPS's Cent Capital backend is active but not listening on port
+8080 because its journal shows rejected database credentials, quarantine that
+restart loop with:
+
+```powershell
+pwsh scripts\quarantine_unhealthy_cent_backend.ps1
+```
+
+The command refuses to act if the backend is already inactive, is listening,
+or lacks explicit database-authentication failure evidence. It does not alter
+the environment file; a future deployment must provide valid replacement
+credentials before re-enabling the backend.
+
 The `vps-search-output` branch is a dedicated generated-data branch with
 unrelated history. Keep it separate from `main`; use the synchronization
 scripts instead of merging it.
