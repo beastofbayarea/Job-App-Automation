@@ -49,3 +49,17 @@ def test_parallel_status_probe_discovers_all_services_and_redacts_email() -> Non
     assert "[REDACTED]" in script
     assert "free -h" in script
     assert "Invoke-ExternalCommandWithTimeout" in script
+
+
+def test_targeted_greenhouse_retry_requires_safe_pre_submit_evidence() -> None:
+    script = (SCRIPTS / "retry_vps_greenhouse_job.ps1").read_text(encoding="utf-8")
+
+    assert 'ValidatePattern("^\\d+$")' in script
+    assert "result.get(\"submitted\") is not False" in script
+    assert 'item.get("status") == "SUBMITTED & CONFIRMED"' in script
+    assert "target already exists in the confirmed ledger" in script
+    assert "refusing overlap" in script
+    assert "systemctl stop job-app-greenhouse.service" in script
+    assert "trap restart_worker EXIT INT TERM" in script
+    assert "--once" in script
+    assert "greenhouse-targeted-retry" in script
