@@ -11,7 +11,8 @@ Copy the tracked examples before adding personal data. Local candidate data, cre
 | Vertex service account | `config/vertex_service_account.json` | `config/vertex_service_account.example.json` |
 | Gmail OAuth client and token | `config/credentials.json`, `config/token.json` | Google Cloud OAuth desktop-client credentials; token is created during authorization |
 | Private VPS document archive | `config/vps_config.json` | `config/vps_config.example.json` |
-| Optional Cent Capital reference inventory | `config/cent_capital_config.json` | `config/cent_capital_config.example.json` |
+| Google site/indexing settings | `config/seo_config.json` | `config/seo_config.example.json` |
+| Google cloud roles and Cent Capital reference inventory | `config/cent_capital_config.json` | `config/cent_capital_config.example.json` |
 
 ## Candidate profile
 
@@ -35,13 +36,14 @@ The `candidate` object supplies personal fields and education history. `policies
 
 Paths are resolved from the project root. Keep secrets in the local files named above; never put them in runtime configuration committed to Git.
 
-## Optional Cent Capital reference inventory
+## Google submission and Cent Capital reference inventory
 
 `config/cent_capital_config.json` is an ignored reference inventory for settings
 that belong to the separate Cent Capital application and may be useful in later
-work. It is not read by Job App Automation. The inventory groups site/contact
+work. The `google-indexing` command reads only its Google project,
+`search_console_indexing` service-account role, key reference, Indexing API
+endpoint/scopes, and quota fields. The remaining inventory groups site/contact
 metadata, social links, Contentful profiles, frontend route and sitemap policy,
-Google Cloud project metadata, intended service-account roles, indexing limits,
 RSS/IndexNow settings, deployment notes, and other service credentials.
 
 Raw Google key exports matching `config/cent-capital-*-*.json` and the imported
@@ -51,6 +53,25 @@ the Search Console/Indexing and Gemini accounts without treating either key as
 the Job App Automation Vertex credential. When promoting these settings into the
 owning Cent Capital repository, resolve paths relative to that repository and
 use its environment/secret-loading conventions.
+
+`config/seo_config.json` owns the settings for this repository's published site:
+
+- `domain` and `gsc.sitemap_url` define the owned HTTPS site and sitemap.
+- `google_submission.cloud_config_file` links to the ignored cloud inventory.
+- `google_submission.search_console_property` must be the matching
+  `sc-domain:<domain>` property.
+- `google_submission.eligible_urls` contains only owned pages eligible for the
+  direct Google Indexing API. General pages remain in `indexed_urls` and are
+  covered through the sitemap.
+- `request_timeout_seconds` bounds site and Google API calls, while `report_file`
+  stores the atomic submission/status report.
+
+The loader rejects mismatched key IDs, account emails, project IDs, foreign
+hosts, untrusted endpoints, duplicate URLs, excessive batches, and missing
+Indexing API scope before authentication. The two Google uses are distinct:
+Search Console sitemap submission is appropriate for the entire site, while
+direct notifications are accepted only for `JobPosting` pages or qualifying
+livestream `BroadcastEvent` pages.
 
 ## Private VPS document archive
 

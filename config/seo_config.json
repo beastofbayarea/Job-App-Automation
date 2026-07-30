@@ -17,6 +17,13 @@
       "https://www.bing.com/indexnow"
     ]
   },
+  "google_submission": {
+    "cloud_config_file": "config/cent_capital_config.json",
+    "search_console_property": "sc-domain:skybison.cloud",
+    "eligible_urls": [],
+    "request_timeout_seconds": 30,
+    "report_file": "output/google_url_submission_report.json"
+  },
   "indexed_urls": [
     "https://skybison.cloud/",
     "https://skybison.cloud/index.html",

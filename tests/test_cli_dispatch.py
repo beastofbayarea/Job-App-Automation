@@ -119,6 +119,32 @@ class UnifiedCliDispatchTests(unittest.TestCase):
             calls,
         )
 
+    def test_google_indexing_command_dispatches_to_its_module(self) -> None:
+        calls: list[tuple[str, list[str]]] = []
+
+        def resolve_main(module_name: str):
+            def handler(arguments: list[str] | None) -> int:
+                calls.append((module_name, list(arguments or [])))
+                return 0
+
+            return handler
+
+        exit_code = cli.dispatch(
+            ["google-indexing", "sitemap", "--dry-run"],
+            resolve_main=resolve_main,
+        )
+
+        self.assertEqual(0, exit_code)
+        self.assertEqual(
+            [
+                (
+                    "job_application_automation.core.google_indexing",
+                    ["sitemap", "--dry-run"],
+                )
+            ],
+            calls,
+        )
+
     def test_documents_command_and_archive_alias_dispatch_lazily(self) -> None:
         calls: list[tuple[str, list[str]]] = []
 

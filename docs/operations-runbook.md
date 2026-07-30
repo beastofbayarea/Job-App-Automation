@@ -50,8 +50,52 @@ If submission status is uncertain, verify it with the employer account or confir
 - `output/submission_log.json`: only confirmed submissions recorded by the orchestrator.
 - `output/job_url_queue_progress.json`: latest queue checkpoint.
 - `output/ai_jobs.csv` and `output/job_search_coverage.json`: search results and coverage evidence.
+- `output/google_url_submission_report.json`: latest sitemap, URL notification, or
+  notification-status result.
 
 All persisted artifacts use an atomic replace, so a completed write is not partially visible.
+
+## Google sitemap and eligible URL submission
+
+`google-indexing` reads the published-site property from
+`config/seo_config.json` and the Search Console/Indexing service-account role
+from the ignored `config/cent_capital_config.json`. Before live use, enable the
+Google Indexing API and Search Console API in the cloud project, then add the
+exact `search_console_indexing.email` identity as a delegated owner of the
+configured Search Console property.
+
+Validate the complete configuration linkage without a Google API mutation:
+
+```powershell
+python src/job_automation.py google-indexing sitemap --dry-run
+```
+
+Submit the general site sitemap:
+
+```powershell
+python src/job_automation.py google-indexing sitemap
+```
+
+Direct URL notifications are narrower. Configure or pass only an owned page
+that contains `JobPosting` JSON-LD or a `BroadcastEvent` nested in a
+`VideoObject`. The command fetches and checks every page before authenticating,
+and validates the complete batch before sending its first notification:
+
+```powershell
+python src/job_automation.py google-indexing submit `
+  --url "https://skybison.cloud/jobs/example" `
+  --type URL_UPDATED `
+  --dry-run
+```
+
+For `URL_DELETED`, remove the page first or add `noindex`; a live `200` page
+without `noindex` is rejected. Do not place the general dashboard URLs in
+`eligible_urls`; Google supports those through the sitemap, not through its
+direct Indexing API. The default initial publish quota is 200 URL notifications
+per project per day, and this project additionally caps a single command by the
+configured `batch_size`. Do not retry ambiguous failures blindly. Inspect the
+atomic `output/google_url_submission_report.json` and query the read-only status
+operation before deciding whether another notification is appropriate.
 
 ## Private VPS document archive
 

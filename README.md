@@ -67,7 +67,7 @@ Tracked examples are safe templates. Copy and personalize them; the resulting fi
 | Vertex service account | `config/vertex_service_account.json` | `config/vertex_service_account.example.json` |
 | Gmail desktop OAuth client and token | `config/credentials.json`, `config/token.json` | Download OAuth desktop-client credentials from Google Cloud; the token is created during authorization. |
 | Private VPS archive | `config/vps_config.json` | Copy `config/vps_config.example.json`, then add a trusted host-key fingerprint and dedicated archive authentication. |
-| Optional Cent Capital reference inventory | `config/cent_capital_config.json` | Copy `config/cent_capital_config.example.json`; this ignored inventory is for future work in the separate Cent Capital application and is not loaded by Job App Automation. |
+| Google indexing and Cent Capital reference inventory | `config/seo_config.json`, `config/cent_capital_config.json` | Site/property data is tracked in `seo_config.json`; copy `config/cent_capital_config.example.json` for the ignored cloud roles, endpoint/quota settings, and key references used by `google-indexing`. |
 
 The default runtime configuration resolves paths from the project root. Its Vertex `project_id` can remain `from-service-account` to read the project ID from the configured service-account file. Alternatively, use Application Default Credentials via `GOOGLE_APPLICATION_CREDENTIALS`.
 
@@ -93,6 +93,7 @@ job-automation <command>
 | `queue` | Run a sequential URL queue | Always requests live submission |
 | `gmail` | Read/export mail or create a draft/send a message | Draft/send only with `--send-to`; confirmation unless `--yes` |
 | `email-pool` | Select configured candidate addresses | Local only |
+| `google-indexing` | Submit the sitemap or eligible page notifications to Google | Live Google API calls unless `sitemap --dry-run` or `submit --dry-run` is used |
 | `engine <provider>` | Direct Ashby, Greenhouse, or Lever diagnostic | Submission only with `--live-submit` |
 
 Compatibility aliases are `orchestrate` for `apply`, `archive` for `documents`, and `email` for `gmail`. Use `python src/job_automation.py <command> --help` for the complete, version-specific option list.
@@ -112,6 +113,40 @@ python src/job_automation.py search `
 ```
 
 Use `--posted-on YYYY-MM-DD`, or `--posted-since` with `--posted-until`, for explicit calendar filters. `--days 7` applies a rolling window. Seed known boards with `--board-url` or `--boards-file`, or scan company pages with `--career-page` or `--career-pages-file`. Results go to `output/ai_jobs.csv`; `output/job_search_coverage.json` explains discovery, feed, fallback, and live-check coverage. `--require-live` implies `--verify-live` and excludes unknown outcomes.
+
+### Submit the site to Google
+
+The general site is submitted through the Search Console Sitemaps API:
+
+```powershell
+# Validate the public/private config linkage without authenticating or mutating Google.
+python src/job_automation.py google-indexing sitemap --dry-run
+
+# Submit the configured sitemap to the configured Search Console domain property.
+python src/job_automation.py google-indexing sitemap
+```
+
+Direct Indexing API notifications are restricted to same-domain pages with
+`JobPosting` structured data or a qualifying `BroadcastEvent` nested in a
+`VideoObject`. Update requests fetch the live page and verify this requirement;
+delete requests require a `404`, `410`, or `noindex` response. General dashboard
+pages belong in the sitemap and are rejected by the direct submission command.
+
+```powershell
+python src/job_automation.py google-indexing submit `
+  --url "https://skybison.cloud/jobs/example" `
+  --type URL_UPDATED `
+  --dry-run
+
+python src/job_automation.py google-indexing status `
+  --url "https://skybison.cloud/jobs/example"
+```
+
+The service-account identity, key path, project, endpoint, scopes, and quotas
+come from the ignored `config/cent_capital_config.json` and its referenced key
+file. Site ownership, sitemap URL, eligible URL list, timeout, and report path
+come from `config/seo_config.json`. Every command atomically writes
+`output/google_url_submission_report.json` unless `--report` overrides it.
 
 ### Generate a resume
 

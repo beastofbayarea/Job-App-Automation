@@ -4,7 +4,7 @@ This project processes identity, contact, resume, employment, and application da
 
 ## Protect local secrets
 
-- Keep Google OAuth credentials, OAuth tokens, Vertex service-account keys, candidate profile data, email pools, resume sources, and generated output out of Git.
+- Keep Google OAuth credentials, OAuth tokens, Vertex/Search Console/Indexing service-account keys, candidate profile data, email pools, resume sources, and generated output out of Git.
 - Keep the VPS archive config, private key, PDFs, manifests, job metadata, and candidate emails out of Git and every publicly served directory.
 - Use the provided example JSON files as templates; do not put real values in examples, test fixtures, issues, or commit messages.
 - Limit local filesystem access and remove unused credential copies. Revoke and rotate a credential if it is exposed.

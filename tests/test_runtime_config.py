@@ -47,6 +47,10 @@ class RuntimeConfigTests(unittest.TestCase):
             resolve_runtime_path(config.application["resume_source_file"]),
             ROOT / "data" / "base_resume.txt",
         )
+        self.assertEqual(
+            resolve_runtime_path(config.application["seo_config_file"]),
+            ROOT / "config" / "seo_config.json",
+        )
 
     def test_invalid_runtime_setting_is_rejected_before_workflow_startup(self) -> None:
         document = json.loads(RUNTIME_CONFIG_FILE.read_text(encoding="utf-8"))
