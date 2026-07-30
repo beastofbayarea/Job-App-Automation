@@ -9,7 +9,7 @@ CLI
 ├── cover-letter: claims, AI generation, validation, rendering, cache
 ├── documents: paired generation, immutable manifests, pinned PuTTY transport
 ├── apply / queue: profile, runtime config, orchestration, submission log
-├── engines: Ashby, Greenhouse, Lever browser adapters
+├── engines: nine provider adapters plus guarded shared browser-form runtime
 └── mail: Gmail OAuth/messages/persistence and email-pool selection
 ```
 
@@ -28,4 +28,4 @@ The detailed component diagram is maintained in [architecture.mmd](../architectu
 
 ## Extension points
 
-Add an ATS by implementing an engine with the shared result contract, registering it in CLI/orchestration provider selection, and adding contract-level tests. Add new artifacts through `core.artifacts` rather than direct writes so they remain atomic and testable.
+Add an ATS by defining its host and job-path identity, implementing an engine with the shared result contract, registering it in CLI/orchestration provider selection, and adding selector plus safety-gate tests. Simple single-page providers should use the guarded shared browser-form runtime. Add new artifacts through `core.artifacts` rather than direct writes so they remain atomic and testable.

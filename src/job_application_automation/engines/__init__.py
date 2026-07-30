@@ -1,1 +1,1 @@
-"""Per-ATS submission engines (Ashby, Greenhouse, Lever)."""
+"""Per-ATS guarded submission engines."""

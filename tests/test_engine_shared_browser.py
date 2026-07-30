@@ -49,7 +49,7 @@ class NavigationTests(unittest.TestCase):
             )
         )
 
-    def test_matching_page_is_reloaded_with_fake_playwright_page(self) -> None:
+    def test_matching_page_is_preserved_without_reload(self) -> None:
         page = FakePage("https://boards.greenhouse.io/example/jobs/123/")
 
         navigate_reusing_tab(
@@ -58,7 +58,7 @@ class NavigationTests(unittest.TestCase):
             timeout=1234,
         )
 
-        self.assertIn(("reload", "domcontentloaded"), page.calls)
+        self.assertNotIn(("reload", "domcontentloaded"), page.calls)
         self.assertNotIn(("goto", "https://boards.greenhouse.io/example/jobs/123"), page.calls)
 
     def test_different_page_is_navigated_with_fake_playwright_page(self) -> None:

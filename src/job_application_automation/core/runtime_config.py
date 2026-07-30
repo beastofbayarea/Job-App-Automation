@@ -102,8 +102,12 @@ def load_runtime_config(path: Path | None = None) -> RuntimeConfig:
     try:
         with config_path.open("r", encoding="utf-8") as stream:
             document = json.load(stream)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"runtime config contains invalid JSON: {config_path}") from exc
+    except (OSError, json.JSONDecodeError) as exc:
+        if path is None and config_path != DEFAULT_RUNTIME_CONFIG_FILE and DEFAULT_RUNTIME_CONFIG_FILE.is_file():
+            with DEFAULT_RUNTIME_CONFIG_FILE.open("r", encoding="utf-8") as stream:
+                document = json.load(stream)
+        else:
+            raise ValueError(f"runtime config contains invalid JSON or cannot be read: {config_path}") from exc
     if not isinstance(document, Mapping):
         raise ValueError("runtime config root must be an object")
     if document.get("schema_version") != 1:
@@ -208,4 +212,7 @@ def resolve_runtime_path(value: str | Path) -> Path:
     return path if path.is_absolute() else PROJECT_ROOT / path
 
 
-RUNTIME_CONFIG = load_runtime_config()
+try:
+    RUNTIME_CONFIG = load_runtime_config()
+except Exception:
+    RUNTIME_CONFIG = load_runtime_config(DEFAULT_RUNTIME_CONFIG_FILE)

@@ -90,6 +90,30 @@ class SearchApplicationTests(unittest.TestCase):
         self.assertEqual(len(jobs), 1)
         self.assertEqual(jobs[0]["job_url"], live["job_url"])
 
+    def test_generic_search_result_is_routed_to_new_engine_from_apply_url(self) -> None:
+        job = _job(
+            "https://careers.example.test/product-manager",
+            platform="web",
+            apply_url="https://example.recruitee.com/o/product-manager",
+        )
+
+        jobs = search_applications._eligible_jobs([job])
+
+        self.assertEqual(len(jobs), 1)
+        self.assertEqual(jobs[0]["platform"], "recruitee")
+        self.assertEqual(
+            jobs[0]["_application_url"],
+            "https://example.recruitee.com/o/product-manager",
+        )
+
+    def test_declared_provider_mismatch_is_rejected(self) -> None:
+        job = _job(
+            "https://apply.workable.com/example/j/ABC123/",
+            platform="recruitee",
+        )
+
+        self.assertEqual(search_applications._eligible_jobs([job]), [])
+
     def test_confirmed_submission_log_urls_are_loaded_strictly(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "submissions.json"

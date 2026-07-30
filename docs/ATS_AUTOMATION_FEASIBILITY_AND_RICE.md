@@ -6,7 +6,9 @@ This document provides a comprehensive technical feasibility analysis, required 
 
 ## 1. Executive Summary & ATS Ecosystem Overview
 
-Currently, the platform supports **3 native ATS engines** ([Ashby](file:///c:/Users/Nagarro/Downloads/Job%20App%20Automation/src/job_application_automation/engines/ashby.py), [Greenhouse](file:///c:/Users/Nagarro/Downloads/Job%20App%20Automation/src/job_application_automation/engines/greenhouse.py), and [Lever](file:///c:/Users/Nagarro/Downloads/Job%20App%20Automation/src/job_application_automation/engines/lever.py)). While these cover a significant percentage of modern tech startups and scaleups, expanding to additional ATS platforms enables broader candidate coverage across enterprise corporations, mid-market SaaS companies, and international employers.
+The platform now supports **9 ATS engines**: the original Ashby, Greenhouse, and Lever adapters plus guarded browser-form adapters for Workable, SmartRecruiters, Recruitee, BambooHR, Breezy HR, and JazzHR. This document preserves the original prioritization analysis; its endpoint ideas and effort estimates are not claims about delivered behavior.
+
+The six phase-one engines use browser automation. Direct candidate-submission APIs described below remain design options and are not implemented. Search discovers these providers through generic JSON-LD pages rather than native provider feed adapters.
 
 Below is an analysis of **12 additional ATS platforms**, categorized by market segment and technical interaction model:
 
@@ -93,7 +95,7 @@ graph TD
 * **Changes Required**:
   1. `src/job_application_automation/core/engine_shared.py`: Add `"workable": ("workable.com", "apply.workable.com")` to `ATS_HOST_MARKERS`.
   2. `src/job_application_automation/core/job_identity.py`: Parse `https://apply.workable.com/{company}/j/{job_id}/` canonical URLs.
-  3. `src/job_application_automation/engines/workable.py` **[NEW]**: Implement hybrid submission engine (Direct REST API POST with JSON payload + Playwright fallback for custom questions). Handles standard fields (first_name, last_name, email, phone, resume upload, cover_letter, social_profiles).
+  3. `src/job_application_automation/engines/workable.py` **[IMPLEMENTED, BROWSER]**: Fill the browser form with guarded required-field, CAPTCHA, and confirmation checks. Direct REST submission is not implemented.
   4. `src/job_application_automation/cli.py`: Register `"workable"` in `ENGINE_MODULES`.
   5. `src/job_application_automation/core/orchestrator.py`: Add `"workable"` to `DEFAULT_ENGINE_FILES` and `SUPPORTED_ATS`.
   6. `src/job_application_automation/search/job_boards.py`: Add `query_workable_board` feed parser.
@@ -106,7 +108,7 @@ graph TD
 * **Changes Required**:
   1. `src/job_application_automation/core/engine_shared.py`: Add `"smartrecruiters": ("smartrecruiters.com", "jobs.smartrecruiters.com")` to `ATS_HOST_MARKERS`.
   2. `src/job_application_automation/core/job_identity.py`: Extract company ID and job posting ID from `https://jobs.smartrecruiters.com/{company}/{job_id}`.
-  3. `src/job_application_automation/engines/smartrecruiters.py` **[NEW]**: Build SmartRecruiters submission engine utilizing direct multipart API POST (supporting attachments and custom JSON answers) with Playwright fallback.
+  3. `src/job_application_automation/engines/smartrecruiters.py` **[IMPLEMENTED, BROWSER]**: Fill the OneClick browser flow and stop safely on required fields or anti-bot verification. Direct multipart API submission is not implemented.
   4. `src/job_application_automation/cli.py`: Register `"smartrecruiters"` in `ENGINE_MODULES`.
   5. `src/job_application_automation/core/orchestrator.py`: Register `"smartrecruiters"` in orchestrator.
   6. `src/job_application_automation/search/job_boards.py`: Integrate `query_smartrecruiters_board`.
@@ -117,7 +119,7 @@ graph TD
 * **Application Page**: `https://{company}.bamboohr.com/careers/{job_id}`
 * **Changes Required**:
   1. `src/job_application_automation/core/engine_shared.py`: Add `"bamboohr": ("bamboohr.com",)` to `ATS_HOST_MARKERS`.
-  2. `src/job_application_automation/engines/bamboohr.py` **[NEW]**: Create single-page Playwright engine targeting BambooHR form selectors (`#resume`, `#firstName`, `#lastName`, `#email`, `#phone`, `#coverLetter`).
+  2. `src/job_application_automation/engines/bamboohr.py` **[IMPLEMENTED, BROWSER]**: Fill known BambooHR form variants and require a successful guarded prefill before submission.
   3. `src/job_application_automation/cli.py`: Register `"bamboohr"` in `ENGINE_MODULES`.
   4. `src/job_application_automation/core/orchestrator.py`: Add `"bamboohr"` to `DEFAULT_ENGINE_FILES`.
   5. Confirmation detection: Match text phrases (`"Application Submitted!"`, `"Thank you for applying to"`).
@@ -128,7 +130,7 @@ graph TD
 * **Application Endpoint**: `POST https://{company}.recruitee.com/api/v1/offers/{offer_id}/candidates`
 * **Changes Required**:
   1. `src/job_application_automation/core/engine_shared.py`: Add `"recruitee": ("recruitee.com",)` to `ATS_HOST_MARKERS`.
-  2. `src/job_application_automation/engines/recruitee.py` **[NEW]**: Create Recruitee engine supporting both REST API submission (`multipart/form-data`) and Playwright web form filling.
+  2. `src/job_application_automation/engines/recruitee.py` **[IMPLEMENTED, BROWSER]**: Fill current Recruitee browser fields and uploads. Direct multipart API submission is not implemented.
   3. `src/job_application_automation/cli.py`: Add `"recruitee"` to `ENGINE_MODULES`.
   4. `src/job_application_automation/core/orchestrator.py`: Register `"recruitee"`.
 
@@ -138,7 +140,7 @@ graph TD
 * **Application Page**: `https://{company}.breezy.hr/p/{job_id}/apply`
 * **Changes Required**:
   1. `src/job_application_automation/core/engine_shared.py`: Add `"breezy": ("breezy.hr",)` to `ATS_HOST_MARKERS`.
-  2. `src/job_application_automation/engines/breezy.py` **[NEW]**: Playwright DOM automation engine for Breezy HR single-page form modals (`input[name="name"]`, `input[type="email"]`, file upload input `input[type="file"]`).
+  2. `src/job_application_automation/engines/breezy.py` **[IMPLEMENTED, BROWSER]**: Fill the current Breezy form controls and guard required questions before submission.
   3. `src/job_application_automation/cli.py` & `orchestrator.py`: Register `"breezy"`.
 
 ### 3.6 JazzHR (`applytojob.com`, `jazz.co`)
@@ -146,7 +148,7 @@ graph TD
 * **Domain Markers**: `("applytojob.com", "jazz.co")`
 * **Changes Required**:
   1. `src/job_application_automation/core/engine_shared.py`: Add `"jazzhr": ("applytojob.com", "jazz.co")` to `ATS_HOST_MARKERS`.
-  2. `src/job_application_automation/engines/jazzhr.py` **[NEW]**: Playwright engine targeting `#applicant_form` inputs.
+  2. `src/job_application_automation/engines/jazzhr.py` **[IMPLEMENTED, BROWSER]**: Fill current `resumator-*` controls and use the provider's anchor-based submit action.
   3. `src/job_application_automation/cli.py` & `orchestrator.py`: Register `"jazzhr"`.
 
 ### 3.7 Wellfound / AngelList Jobs (`wellfound.com`)

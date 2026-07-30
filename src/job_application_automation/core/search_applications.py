@@ -13,11 +13,12 @@ from typing import Any, Sequence
 
 from .artifacts import atomic_write_text, read_json
 from .contracts import EngineResult
+from .engine_shared import ATS_HOST_MARKERS, detect_ats_job_url
 from .identity import canonical_job_url
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 
 
-SUPPORTED_PLATFORMS = frozenset({"ashby", "greenhouse", "lever"})
+SUPPORTED_PLATFORMS = frozenset(ATS_HOST_MARKERS)
 DEFAULT_MAX_ATTEMPTS_PER_ATS = int(RUNTIME_CONFIG.application["vps_max_attempts_per_ats"])
 DEFAULT_RESULTS_DIR = resolve_runtime_path(
     RUNTIME_CONFIG.application["vps_application_results_dir"]
@@ -87,9 +88,6 @@ def _eligible_jobs(payload: Any) -> list[dict[str, Any]]:
     for value in payload:
         if not isinstance(value, dict):
             continue
-        platform = str(value.get("platform", "")).strip().lower()
-        if platform not in SUPPORTED_PLATFORMS:
-            continue
         if str(value.get("live_status", "")).strip().lower() != "live":
             continue
         if not all(
@@ -97,15 +95,31 @@ def _eligible_jobs(payload: Any) -> list[dict[str, Any]]:
             for key in ("job_url", "company", "title", "description")
         ):
             continue
+        declared_platform = str(value.get("platform", "")).strip().lower()
+        candidate_urls = [
+            str(value.get("apply_url", "")).strip(),
+            str(value.get("job_url", "")).strip(),
+        ]
+        application_url = next(
+            (candidate_url for candidate_url in candidate_urls if detect_ats_job_url(candidate_url)),
+            "",
+        )
+        platform = detect_ats_job_url(application_url) if application_url else None
+        if platform not in SUPPORTED_PLATFORMS:
+            continue
+        if declared_platform in SUPPORTED_PLATFORMS and declared_platform != platform:
+            continue
         try:
-            canonical_url = canonical_job_url(str(value["job_url"]))
+            canonical_url = canonical_job_url(application_url)
         except ValueError:
             continue
         if canonical_url in seen:
             continue
         seen.add(canonical_url)
         job = dict(value)
+        job["platform"] = platform
         job["_canonical_url"] = canonical_url
+        job["_application_url"] = application_url
         eligible.append(job)
     return eligible
 
@@ -244,7 +258,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             str(args.launcher),
             "apply",
             "--url",
-            str(job["job_url"]).strip(),
+            str(job["_application_url"]),
             "--company",
             str(job["company"]).strip(),
             "--role",

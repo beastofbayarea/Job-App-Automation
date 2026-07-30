@@ -1,6 +1,6 @@
 # Job Application Automation
 
-A local, safety-first toolkit for discovering public ATS vacancies, generating tailored PDF resumes and cover letters, privately archiving those documents on a VPS, and filling applications on Ashby, Greenhouse, and Lever. It also includes a Gmail OAuth utility and a candidate-email pool selector.
+A local, safety-first toolkit for discovering public ATS vacancies, generating tailored PDF resumes and cover letters, privately archiving those documents on a VPS, and filling applications on nine supported ATS providers. It also includes a Gmail OAuth utility and a candidate-email pool selector.
 
 The public entry point is `src/job_automation.py`. The implementation under `src/job_application_automation/` is a reusable Python package; ATS engine commands are primarily diagnostics used by the orchestrator.
 
@@ -94,7 +94,7 @@ job-automation <command>
 | `gmail` | Read/export mail or create a draft/send a message | Draft/send only with `--send-to`; confirmation unless `--yes` |
 | `email-pool` | Select configured candidate addresses | Local only |
 | `google-indexing` | Submit the sitemap or eligible page notifications to Google | Live Google API calls unless `sitemap --dry-run` or `submit --dry-run` is used |
-| `engine <provider>` | Direct Ashby, Greenhouse, or Lever diagnostic | Submission only with `--live-submit` |
+| `engine <provider>` | Internal provider adapter used by `apply` | Orchestrator invocation required |
 
 Compatibility aliases are `orchestrate` for `apply`, `archive` for `documents`, and `email` for `gmail`. Use `python src/job_automation.py <command> --help` for the complete, version-specific option list.
 
@@ -233,7 +233,7 @@ python src/job_automation.py apply `
 python src/job_automation.py apply --limit 1 --dry-run
 ```
 
-Use `--tracker`, `--resume`, `--config`, `--results-file`, and `--submission-log-file` to override defaults. `--headed` shows the browser, while `--no-shuffle` preserves tracker order. A URL run ignores `--tracker`. The orchestrator supports Ashby, Greenhouse, and Lever and always enables URL-specific resume personalization. It records workflow results in `output/orchestration_results.json` and confirmed applications in `output/submission_log.json` by default.
+Use `--tracker`, `--resume`, `--config`, `--results-file`, and `--submission-log-file` to override defaults. `--headed` shows the browser, while `--no-shuffle` preserves tracker order. A URL run ignores `--tracker`. The orchestrator supports Ashby, Greenhouse, Lever, Workable, SmartRecruiters, Recruitee, BambooHR, Breezy HR, and JazzHR and always enables URL-specific resume personalization. Company-board roots are rejected: every row must contain a job-specific URL. Workflow results are recorded in `output/orchestration_results.json`; only exact confirmed submissions are added to `output/submission_log.json`.
 
 ### Run a submission queue
 
@@ -267,12 +267,12 @@ python src/job_automation.py email-pool --count 1
 
 Gmail supports `--max-results`, `--all-mail`, `--unread`, `--query`, `--include-body`, `--classify`, CSV/JSON exports, `--redact`, plain-text or HTML bodies, drafts, and sending. Reading is the default when `--send-to` is absent. It requires local OAuth credentials and does not run in CI. The email-pool command randomly selects `--count` addresses and accepts a custom pool through `--file`.
 
-### Diagnostic engine commands
+### Diagnostic application runs
 
-The engines are normally started by `apply`. For an authorized diagnostic run, use `engine ashby`, `engine greenhouse`, or `engine lever`; each requires `--url` and `--resume` and accepts the same `--dry-run`, `--fill-only`, `--live-submit`, and `--headed` controls.
+Provider adapters are intentionally orchestrator-only. For an authorized diagnostic run, use `apply --url` so email selection, URL-specific documents, result persistence, and submission-log safeguards remain active. Use `--fill-only --headed` to inspect a form without submitting it.
 
 ```powershell
-python src/job_automation.py engine greenhouse --url "<authorized-url>" --resume ".\resume.pdf" --dry-run
+python src/job_automation.py apply --url "<authorized-url>" --fill-only --headed
 ```
 
 ### VPS synchronization and maintenance scripts
@@ -426,7 +426,7 @@ job_automation.py
       ├─ documents                  paired generation and private VPS archive
       ├─ search                     discovery, board feeds, JSON-LD, liveness, caching
       ├─ gmail / email-pool         Gmail OAuth, messages, exports, email selection
-      └─ engine <ATS>               Ashby, Greenhouse, or Lever browser engine
+      └─ engine <ATS>               guarded provider-specific browser engine
 ```
 
 See [architecture.mmd](architecture.mmd) for the detailed Mermaid diagram. `PRD.md` is a living roadmap with explicit implementation status. Files under `docs/superpowers/` are historical design and implementation records, not current command references.

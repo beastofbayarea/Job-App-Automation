@@ -1,59 +1,68 @@
-"""Breezy HR ATS application engine built on the shared engine foundation."""
+"""Guarded Breezy HR browser-form application engine."""
 
 from __future__ import annotations
 
-import argparse
-import logging
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 
-from playwright.sync_api import sync_playwright
-
-from ..core.engine_shared import (
-    build_engine_parser,
-    capture_screenshot,
-    confirmation_visible,
-    emit_engine_result,
-    fill_first,
-    fill_required_consent,
-    first_visible,
-    load_json_config,
-    open_chrome_session,
-    orchestrated_config_path,
-    page_has_captcha,
-    require_orchestrated_invocation,
-    requested_live_mode,
-    resolve_candidate_email,
-    validate_ats_url,
-    validate_nonempty_file,
-    validate_required_fields,
-)
 from ..core.paths import OUTPUT_DIR
+from ._browser_form import (
+    BrowserFormSpec,
+    engine_parser,
+    main_for_browser_form_engine,
+    run_browser_form_engine,
+)
 
 ATS_NAME = "breezy"
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
+SPEC = BrowserFormSpec(
+    ats=ATS_NAME,
+    display_name="Breezy HR",
+    profile_name="breezy-cdp-profile",
+    apply_selectors=(
+        'a:has-text("Apply for this Job")',
+        'button:has-text("Apply")',
+        'a[href$="/apply"]',
+    ),
+    first_name_selectors=('input[name="first_name"]', 'input[name="firstName"]'),
+    last_name_selectors=('input[name="last_name"]', 'input[name="lastName"]'),
+    full_name_selectors=('input[name="cName"]', 'input[name="name"]'),
+    email_selectors=(
+        'input[name="cEmail"]',
+        'input[name="email"]',
+        'input[type="email"]',
+    ),
+    phone_selectors=(
+        'input[name="cPhoneNumber"]',
+        'input[name="phone"]',
+        'input[type="tel"]',
+    ),
+    headline_selectors=('input[name*="headline" i]', 'input[name*="summary" i]'),
+    linkedin_selectors=('input[name*="linkedin" i]',),
+    github_selectors=('input[name*="github" i]',),
+    portfolio_selectors=('input[name*="website" i]', 'input[name*="portfolio" i]'),
+    resume_selectors=(
+        "input#main-attachment",
+        'input[type="file"][name="cResume"]',
+        'input[type="file"][name*="resume" i]',
+    ),
+    cover_letter_file_selectors=(
+        'input[type="file"][name*="cover" i]',
+        'input[type="file"][id*="cover" i]',
+    ),
+    cover_letter_text_selectors=('textarea[name="cCoverLetter"]',),
+    submit_selectors=(
+        'button:has-text("Submit Application")',
+        'input[type="submit"][value*="Submit" i]',
+    ),
+    render_wait_ms=1000,
 )
-logger = logging.getLogger(__name__)
-
-
-def _load_config() -> dict[str, Any]:
-    return load_json_config(orchestrated_config_path())
-
-
-def _required_issues(page: Any) -> list[str]:
-    try:
-        elements = page.locator('input:invalid, select:invalid, textarea:invalid').all()
-        return [el.inner_text().strip() or "Required field missing" for el in elements]
-    except Exception:
-        return []
 
 
 def run(
     *,
     url: str,
     resume: Path,
+    cover_letter: Path | None = None,
     email_override: Optional[str] = None,
     config: Mapping[str, Any],
     company: str = "",
@@ -63,163 +72,28 @@ def run(
     screenshot_dir: Path = OUTPUT_DIR,
     timeout: int = 30000,
 ) -> dict[str, Any]:
-    validate_ats_url(url, ATS_NAME)
-    validate_nonempty_file(resume, "resume")
-
-    candidate = config.get("candidate", {})
-    identity = candidate.get("identity", {})
-    contact = candidate.get("contact", {})
-
-    first_name = str(identity.get("first_name", "")).strip()
-    last_name = str(identity.get("last_name", "")).strip()
-    full_name = f"{first_name} {last_name}".strip()
-    email = resolve_candidate_email(config, email_override)
-    phone = str(contact.get("phone", "")).strip()
-    linkedin = str(contact.get("linkedin", "") or contact.get("linkedin_url", "")).strip()
-    github = str(contact.get("github", "") or contact.get("github_url", "")).strip()
-    portfolio = str(contact.get("portfolio", "") or contact.get("website", "")).strip()
-    headline = str(identity.get("current_title", "") or identity.get("headline", "")).strip()
-
-    if not first_name or not last_name or not email:
-        raise ValueError("Missing required candidate profile identity or email fields.")
-
-    fields = {
-        "first_name": first_name,
-        "last_name": last_name,
-        "email": email,
-        "phone": phone,
-        "linkedin": linkedin,
-        "github": github,
-        "portfolio": portfolio,
-        "headline": headline,
-        "resume": str(resume),
-    }
-
-    with sync_playwright() as playwright:
-        del headless
-        session = open_chrome_session(
-            playwright,
-            profile_name="breezy-cdp-profile",
-            target_url=url,
-        )
-        page = session.page
-
-        try:
-            try:
-                page.goto(url, wait_until="domcontentloaded", timeout=timeout)
-                # Breezy is a React SPA — wait for dynamic content to render
-                page.wait_for_timeout(2000)
-            except Exception:
-                pass
-
-            apply_btn = first_visible(
-                page.locator('a:has-text("Apply for this Job"), button:has-text("Apply"), a:has-text("Apply"), a[href*="apply"]')
-            )
-            if apply_btn:
-                try:
-                    apply_btn.click()
-                    page.wait_for_timeout(1000)
-                except Exception:
-                    pass
-
-            filled_fn = fill_first(page, 'input[name="first_name"], input[name="firstName"]', first_name)
-            filled_ln = fill_first(page, 'input[name="last_name"], input[name="lastName"]', last_name)
-            if not filled_fn or not filled_ln:
-                fill_first(page, 'input[name="name"], input[id*="name"]', full_name)
-
-            fill_first(page, 'input[name="email"], input[type="email"]', email)
-            if phone:
-                fill_first(page, 'input[name="phone"], input[type="tel"]', phone)
-            if headline:
-                fill_first(page, 'input[name*="headline"], input[name*="summary"]', headline)
-            if linkedin:
-                fill_first(page, 'input[name*="linkedin"], input[id*="linkedin"]', linkedin)
-            if github:
-                fill_first(page, 'input[name*="github"], input[id*="github"]', github)
-            if portfolio:
-                fill_first(page, 'input[name*="website"], input[name*="portfolio"]', portfolio)
-
-            file_input = page.locator('input[type="file"]').first
-            if file_input.count() > 0:
-                file_input.set_input_files(str(resume))
-
-            consent = fill_required_consent(page)
-            captcha = page_has_captcha(page)
-            missing_req = validate_required_fields(page, _required_issues)
-            screenshot = capture_screenshot(page, screenshot_dir, company or "Breezy", "prefill")
-
-            status = "PREFILLED_ONLY"
-            confirmed = False
-            submitted = False
-
-            if live_submit:
-                if captcha:
-                    status = "CAPTCHA_REQUIRED"
-                else:
-                    submit_btn = first_visible(
-                        page.locator('button[type="submit"], input[type="submit"], button:has-text("Submit Application")')
-                    )
-                    if submit_btn:
-                        submit_btn.click()
-                        page.wait_for_timeout(3000)
-                        confirmed = confirmation_visible(page)
-                        status = "SUBMITTED & CONFIRMED" if confirmed else "SUBMISSION_UNCONFIRMED"
-                        submitted = True
-                        screenshot = capture_screenshot(page, screenshot_dir, company or "Breezy", "submitted")
-
-            return {
-                "success": True if (not live_submit or confirmed) else False,
-                "status": status,
-                "ats": ATS_NAME,
-                "submitted": submitted,
-                "confirmed": confirmed,
-                "test_mode": not live_submit,
-                "filled_fields": fields,
-                "custom_questions": {},
-                "consent_fields": consent,
-                "missing_critical": [],
-                "missing_required": missing_req,
-                "captcha_present": captcha,
-                "screenshot": screenshot,
-            }
-        finally:
-            if session.close_browser_on_exit:
-                session.browser.close()
+    return run_browser_form_engine(
+        SPEC,
+        url=url,
+        resume=resume,
+        cover_letter=cover_letter,
+        email_override=email_override,
+        config=config,
+        company=company,
+        role=role,
+        live_submit=live_submit,
+        headless=headless,
+        screenshot_dir=screenshot_dir,
+        timeout=timeout,
+    )
 
 
-def _parser() -> argparse.ArgumentParser:
-    return build_engine_parser("Breezy HR application engine")
+def _parser():
+    return engine_parser(SPEC)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    args = _parser().parse_args(argv)
-    live_submit = requested_live_mode(args)
-    headless = not getattr(args, "headed", False)
-    try:
-        require_orchestrated_invocation(args.url)
-        result = run(
-            url=args.url,
-            resume=Path(args.resume),
-            email_override=args.email,
-            config=_load_config(),
-            company=args.company,
-            role=args.role,
-            live_submit=live_submit,
-            headless=headless,
-        )
-    except Exception as exc:
-        logger.exception("Breezy HR engine failed")
-        result = {
-            "success": False,
-            "status": "ENGINE_EXECUTION_ERROR",
-            "ats": ATS_NAME,
-            "submitted": False,
-            "confirmed": False,
-            "test_mode": not live_submit,
-            "error": f"{type(exc).__name__}: {exc}",
-        }
-    emit_engine_result(result)
-    return 0 if result.get("success") else 1
+    return main_for_browser_form_engine(SPEC, argv)
 
 
 if __name__ == "__main__":

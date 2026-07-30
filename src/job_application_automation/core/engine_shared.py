@@ -93,6 +93,40 @@ ATS_HOST_MARKERS: Mapping[str, tuple[str, ...]] = {
     "jazzhr": ("applytojob.com", "jazz.co"),
 }
 
+# Requiring provider-owned job path shapes prevents a company board root from
+# being mistaken for an individual application. Greenhouse embedded and custom
+# domain forms are handled separately in ``validate_ats_job_url``.
+ATS_JOB_PATH_PATTERNS: Mapping[str, tuple[re.Pattern[str], ...]] = {
+    "ashby": (
+        re.compile(r"^/[^/]+/[^/]+(?:/application)?/?$", re.I),
+    ),
+    "greenhouse": (
+        re.compile(r"^/[^/]+/jobs/[^/]+/?$", re.I),
+    ),
+    "lever": (
+        re.compile(r"^/[^/]+/[^/]+(?:/apply)?/?$", re.I),
+    ),
+    "workable": (
+        re.compile(r"^/(?:[^/]+/)?(?:j|jobs)/[^/]+(?:/(?:apply|application))?/?$", re.I),
+    ),
+    "smartrecruiters": (
+        re.compile(r"^/[^/]+/[^/]+/?$", re.I),
+        re.compile(r"^/oneclick-ui/company/[^/]+/publication/[^/]+/?$", re.I),
+    ),
+    "recruitee": (
+        re.compile(r"^/(?:o|jobs)/[^/]+(?:/(?:apply|application))?/?$", re.I),
+    ),
+    "bamboohr": (
+        re.compile(r"^/careers/\d+(?:/(?:apply|application))?/?$", re.I),
+    ),
+    "breezy": (
+        re.compile(r"^/p/[^/]+(?:/(?:apply|application))?/?$", re.I),
+    ),
+    "jazzhr": (
+        re.compile(r"^/apply/[^/]+(?:/[^/]+)?/?$", re.I),
+    ),
+}
+
 
 @dataclass
 class BrowserSession:
@@ -304,6 +338,43 @@ def validate_ats_url(url: str, ats: str) -> bool:
             any(_host_matches(host, marker) for marker in ATS_HOST_MARKERS[ats])
             or custom_greenhouse_url
         )
+    )
+
+
+def validate_ats_job_url(url: str, ats: str) -> bool:
+    """Return whether *url* identifies a job, not merely an ATS company board."""
+    if not validate_ats_url(url, ats):
+        return False
+    patterns = ATS_JOB_PATH_PATTERNS.get(ats)
+    if not patterns:
+        return True
+    try:
+        parsed = urlparse(str(url).strip())
+        path = parsed.path or "/"
+    except ValueError:
+        return False
+    if ats == "greenhouse":
+        query = parse_qs(parsed.query)
+        gh_jid = query.get("gh_jid", [])
+        embed_token = query.get("token", [])
+        if len(gh_jid) == 1 and gh_jid[0].isdigit():
+            return True
+        if (
+            path.rstrip("/").casefold() == "/embed/job_app"
+            and len(embed_token) == 1
+            and embed_token[0].isdigit()
+        ):
+            return True
+    return any(pattern.fullmatch(path) for pattern in patterns)
+
+
+def detect_ats_job_url(url: str) -> Optional[str]:
+    """Return the ATS owning a supported job-specific URL."""
+    if not isinstance(url, str) or not url.strip():
+        return None
+    return next(
+        (name for name in ATS_HOST_MARKERS if validate_ats_job_url(url, name)),
+        None,
     )
 
 
@@ -831,15 +902,14 @@ def navigate_reusing_tab(
     timeout: int,
     wait_until: str = "domcontentloaded",
 ) -> None:
-    """Refresh a matching tab; navigate only when it is not already on the target."""
+    """Preserve a matching application tab; navigate only when it differs."""
     current = _normalized_navigation_url(page.url) if page.url not in ("", "about:blank") else ""
     target = _normalized_navigation_url(url)
     if current == target:
         if page_has_captcha(page):
             raise RuntimeError("CAPTCHA_REQUIRED: existing tab was left open")
-        page.reload(wait_until=wait_until, timeout=timeout)
-    else:
-        page.goto(url, wait_until=wait_until, timeout=timeout)
+        return
+    page.goto(url, wait_until=wait_until, timeout=timeout)
 
 
 def _find_chrome_executable() -> Optional[Path]:
@@ -1011,11 +1081,12 @@ def _parse_and_validate_host(url: str, ats: str) -> str:
     if parsed.scheme.lower() != "https" or not host:
         raise ValueError("job URL must be an absolute HTTPS URL")
 
-    # Delegate to the single URL-acceptance rule the orchestrator's detect_ats()
-    # uses, so the shell validator cannot reject a URL that was already routed
-    # to this ATS (notably a custom-domain Greenhouse posting carrying gh_jid).
-    if not validate_ats_url(url, ats):
-        raise ValueError(f"URL host {host!r} is not recognized as {ats.title()}")
+    # Delegate to the same job-specific URL rule used by the orchestrator. This
+    # also prevents company board roots from reaching a submission engine.
+    if not validate_ats_job_url(url, ats):
+        raise ValueError(
+            f"URL {url!r} is not recognized as {ats.title()} job-specific URL"
+        )
     return host
 
 
@@ -1078,10 +1149,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     known, _ = probe.parse_known_args(argv)
     if not known.url:
         probe.error("the following arguments are required: --url")
-    ats = next(
-        (name for name in ATS_HOST_MARKERS if validate_ats_url(known.url, name)),
-        None,
-    )
+    ats = detect_ats_job_url(known.url)
     if ats is None:
         raise SystemExit("Could not detect a supported ATS from --url")
     return main_for_ats(ats, argv)
