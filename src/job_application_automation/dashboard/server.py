@@ -301,6 +301,8 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
             self.path = "/logs.html"
         elif path in {"/inspector", "/inspector/"}:
             self.path = "/inspector.html"
+        elif path in {"/cent-capital", "/cent-capital/", "/cent-capital.html"}:
+            self.path = "/cent-capital.html"
         elif path in {"/submissions", "/submissions/"}:
             self.path = "/index.html"
         elif path in {"/sitemap", "/sitemap/", "/sitemap.xml"}:

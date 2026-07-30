@@ -6,6 +6,7 @@ Allow: /search.html
 Allow: /generation.html
 Allow: /logs.html
 Allow: /inspector.html
+Allow: /cent-capital.html
 Allow: /sitemap.xml
 Allow: /site.webmanifest
 

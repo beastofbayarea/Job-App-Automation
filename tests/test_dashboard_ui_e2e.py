@@ -28,7 +28,7 @@ def test_dashboard_ui_index_page() -> None:
 
 @pytest.mark.enable_socket
 def test_dashboard_ui_pages_exist_and_render() -> None:
-    page_files = ["search.html", "generation.html", "logs.html", "inspector.html"]
+    page_files = ["search.html", "generation.html", "logs.html", "inspector.html", "cent-capital.html"]
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
