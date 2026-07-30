@@ -6,8 +6,10 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import os
 import random
 import re
+import signal
 import subprocess
 import sys
 import tempfile
@@ -172,29 +174,45 @@ def _reconcile_interrupted_submissions(state: dict[str, Any]) -> int:
 
 
 def _run_command(command: list[str], timeout_seconds: int) -> CommandOutcome:
+    """Run a child with bounded lifetime and descendant cleanup on both platforms."""
+    creationflags = (
+        subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+        if os.name == "nt"
+        else 0
+    )
     try:
-        completed = subprocess.run(
+        process = subprocess.Popen(
             command,
-            check=False,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=timeout_seconds,
+            creationflags=creationflags,
+            start_new_session=os.name != "nt",
         )
-        return CommandOutcome(
-            completed.returncode,
-            completed.stdout or "",
-            completed.stderr or "",
-        )
-    except subprocess.TimeoutExpired as exc:
-        stdout = (
-            exc.stdout.decode("utf-8", "replace") if isinstance(exc.stdout, bytes) else exc.stdout
-        )
-        stderr = (
-            exc.stderr.decode("utf-8", "replace") if isinstance(exc.stderr, bytes) else exc.stderr
-        )
-        return CommandOutcome(124, stdout or "", stderr or "", timed_out=True)
+        try:
+            stdout, stderr = process.communicate(timeout=timeout_seconds)
+            return CommandOutcome(process.returncode, stdout or "", stderr or "")
+        except subprocess.TimeoutExpired:
+            # Kill the whole process group so Playwright/Chromium children
+            # do not become orphans, matching the behaviour in orchestrator.py.
+            if os.name == "nt":
+                subprocess.run(
+                    ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                    capture_output=True,
+                    timeout=15,
+                )
+            else:
+                try:
+                    os.killpg(process.pid, signal.SIGTERM)
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            stdout_b, stderr_b = process.communicate()
+            return CommandOutcome(124, stdout_b or "", stderr_b or "", timed_out=True)
     except OSError as exc:
         return CommandOutcome(127, "", str(exc))
 
