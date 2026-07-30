@@ -193,6 +193,7 @@ if ((SEARCH_ONLY)); then
     --search-retries 0
     --max-fallback-pages 100
     --max-lever-pages 3
+    --live-check-target listing
     --live-check-timeout 10
   )
 fi
