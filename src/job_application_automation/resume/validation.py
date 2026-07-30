@@ -228,12 +228,19 @@ def validate_resume_data(
 
     experience = resume_data.get("experience", [])
     normalized_experience = experience if isinstance(experience, list) else []
-    all_text = " ".join(
-        str(entry.get("company", ""))
+    # Build a set of all individual words from generated company names so that
+    # short names (e.g. "AI") do not produce false positives by matching as
+    # substrings inside longer company strings (e.g. "Anthropic AI").
+    generated_companies_lower = {
+        str(entry.get("company", "")).strip().lower()
         for entry in normalized_experience
         if isinstance(entry, Mapping)
-    ).lower()
-    missing = [company for company in source_companies if company.lower() not in all_text]
+    }
+    missing = [
+        company
+        for company in source_companies
+        if company.lower() not in generated_companies_lower
+    ]
     if missing:
         issues.append(f"Missing companies: {', '.join(missing)}")
     total_bullets = sum(
