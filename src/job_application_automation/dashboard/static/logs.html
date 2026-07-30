@@ -31,30 +31,63 @@
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <a href="#mainContent" class="skip-link">Skip to main content</a>
 
-  <!-- Top Header Banner with SkyBison Logo -->
+  <!-- Top Header App Bar with Logo & Navigation -->
   <header class="app-header">
-    <div class="brand">
+    <a href="index.html" class="brand">
       <div class="logo-container">
-        <a href="index.html"><img src="sky_bison_logo.jpg" alt="SkyBison Cloud Logo" class="brand-logo"></a>
+        <img src="sky_bison_logo.jpg" alt="SkyBison Cloud Logo" class="brand-logo">
       </div>
       <div class="brand-text">
         <h1 class="brand-title">SKYBISON CLOUD</h1>
         <span class="brand-subtitle">Autonomous Job Operations Engine</span>
       </div>
-    </div>
+    </a>
+
+    <!-- Desktop Navigation Menu -->
+    <nav class="desktop-nav" aria-label="Desktop Navigation">
+      <a href="index.html" class="nav-link">📜 Submissions</a>
+      <a href="search.html" class="nav-link">🌊 Job Search</a>
+      <a href="generation.html" class="nav-link">🪨 AI Queue</a>
+      <a href="logs.html" class="nav-link active">🔥 Sync Logs</a>
+      <a href="inspector.html" class="nav-link">📁 Inspector</a>
+    </nav>
+
     <div class="header-actions">
+      <span id="vpsStatusBadge" class="badge badge-ashby" style="display: inline-flex;">CHECKING...</span>
       <button class="sync-btn" id="refreshBtn" onclick="refreshDashboardData()">
         <span>🌪️ Refresh Data</span>
+      </button>
+      <button class="hamburger-btn" id="hamburgerBtn" aria-label="Toggle Navigation Menu" aria-expanded="false">
+        <span></span>
+        <span></span>
+        <span></span>
       </button>
     </div>
   </header>
 
-  <main class="container">
+  <!-- Mobile Drawer Menu Overlay -->
+  <div class="drawer-backdrop" id="drawerBackdrop"></div>
+  <aside class="mobile-drawer" id="mobileDrawer" aria-label="Mobile Drawer Navigation">
+    <div class="drawer-header">
+      <span class="drawer-title">SKYBISON CLOUD</span>
+      <button class="drawer-close" id="drawerCloseBtn" aria-label="Close Mobile Drawer">&times;</button>
+    </div>
+    <nav class="drawer-links">
+      <a href="index.html" class="nav-link" onclick="closeMobileDrawer()">📜 Submissions & Failures</a>
+      <a href="search.html" class="nav-link" onclick="closeMobileDrawer()">🌊 Job Search & Coverage</a>
+      <a href="generation.html" class="nav-link" onclick="closeMobileDrawer()">🪨 Generation & Archives</a>
+      <a href="logs.html" class="nav-link active" onclick="closeMobileDrawer()">🔥 Real-Time VPS Logs</a>
+      <a href="inspector.html" class="nav-link" onclick="closeMobileDrawer()">📁 Raw File Inspector</a>
+    </nav>
+  </aside>
+
+  <main class="container" id="mainContent">
 
     <!-- Site Page Navigation Links -->
     <nav class="nav-tabs" aria-label="Main Navigation">
@@ -90,20 +123,21 @@
     </section>
 
     <!-- LOG CONTROLS & FILTER PILLS -->
-    <section>
-      <div class="controls-bar" style="align-items: center; justify-content: space-between; gap: 1rem;">
+    <section class="section">
+      <div class="controls-bar" style="justify-content: space-between;">
         <input type="text" id="logSearch" class="search-input" placeholder="Search log entries (e.g. Gemini, Score, Front, Addepar, Failed)..." oninput="renderStructuredLogs()">
         
-        <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <div style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
           <label style="font-size: 0.85rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem; cursor: pointer; user-select: none;">
             <input type="checkbox" id="autoScrollCheck" checked style="accent-color: var(--air-cyan);"> Auto-scroll
           </label>
           <button class="secondary-btn" onclick="fetchVpsLog()">🔄 Refresh Log</button>
+          <button class="secondary-btn" onclick="copyLogsToClipboard()">📋 Copy Logs</button>
         </div>
       </div>
 
       <!-- Category Filter Pills -->
-      <div class="log-filter-pills" style="display: flex; gap: 0.5rem; margin-bottom: 1.25rem; flex-wrap: wrap;">
+      <div class="log-filter-pills">
         <button class="pill-btn active" data-filter="all" onclick="setLogCategory('all')">All Logs</button>
         <button class="pill-btn pill-error" data-filter="error" onclick="setLogCategory('error')">🔴 Errors & Warnings (<span id="pillCountError">0</span>)</button>
         <button class="pill-btn pill-ai" data-filter="ai" onclick="setLogCategory('ai')">🤖 AI Generation (<span id="pillCountAi">0</span>)</button>

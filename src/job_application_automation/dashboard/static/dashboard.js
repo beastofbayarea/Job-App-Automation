@@ -11,6 +11,7 @@ let state = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+  setupNavigation();
   fetchMetrics();
 
   if (document.getElementById('submissionsTableBody')) {
@@ -31,9 +32,44 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// The badge reflects the only liveness signal a public read-only dashboard
-// actually has: whether the API responded on this page load. It must never
-// assert a status that has not been observed.
+/* --- Mobile Navigation Drawer Setup ------------------------------------- */
+
+function setupNavigation() {
+  const hamburgerBtn = document.getElementById('hamburgerBtn');
+  const drawer = document.getElementById('mobileDrawer');
+  const backdrop = document.getElementById('drawerBackdrop');
+  const closeBtn = document.getElementById('drawerCloseBtn');
+
+  if (hamburgerBtn && drawer && backdrop) {
+    hamburgerBtn.addEventListener('click', () => {
+      const isOpen = drawer.classList.toggle('is-open');
+      backdrop.classList.toggle('is-visible', isOpen);
+      hamburgerBtn.classList.toggle('is-open', isOpen);
+      hamburgerBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    });
+
+    if (closeBtn) {
+      closeBtn.addEventListener('click', closeMobileDrawer);
+    }
+    backdrop.addEventListener('click', closeMobileDrawer);
+  }
+}
+
+function closeMobileDrawer() {
+  const hamburgerBtn = document.getElementById('hamburgerBtn');
+  const drawer = document.getElementById('mobileDrawer');
+  const backdrop = document.getElementById('drawerBackdrop');
+
+  if (drawer) drawer.classList.remove('is-open');
+  if (backdrop) backdrop.classList.remove('is-visible');
+  if (hamburgerBtn) {
+    hamburgerBtn.classList.remove('is-open');
+    hamburgerBtn.setAttribute('aria-expanded', 'false');
+  }
+}
+
+/* --- VPS Status Badge & Metrics Fetching -------------------------------- */
+
 function setVpsStatusBadge(text, modifier) {
   const badge = document.getElementById('vpsStatusBadge');
   if (!badge) return;
@@ -148,29 +184,38 @@ async function fetchCoverageAndCache() {
     const cov = await covRes.json();
     const cacheData = await cacheRes.json();
 
-    // Coverage Summary
+    // Coverage Summary Rendering
     const covDiv = document.getElementById('coverageMetricsSummary');
     if (covDiv) {
-      if (cov && cov.version) {
+      if (cov && (cov.version || cov.generated_at)) {
         covDiv.innerHTML = `
-          <div><strong>Version:</strong> ${cov.version} | <strong>Generated:</strong> ${formatDate(cov.generated_at)}</div>
-          <div><strong>Returned Jobs:</strong> ${cov.results?.returned ?? 'N/A'}</div>
-          <div><strong>Liveness Checks:</strong> ${JSON.stringify(cov.results?.live_status_counts || {})}</div>
-          <div><strong>Discovery Stats:</strong> ${JSON.stringify(cov.discovery || {})}</div>
+          <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+            <div><span style="color: var(--text-muted);">Version:</span> <strong>${escapeHtml(cov.version || '1.0.0')}</strong></div>
+            <div><span style="color: var(--text-muted);">Generated At:</span> <span style="color: var(--air);">${formatDate(cov.generated_at)}</span></div>
+            <div><span style="color: var(--text-muted);">Returned Jobs:</span> <span class="badge badge-info">${cov.results?.returned ?? 'N/A'} listings</span></div>
+            <div><span style="color: var(--text-muted);">Live Status:</span> 
+              <span class="badge badge-ok">Live: ${cov.results?.live_status_counts?.live ?? 0}</span>
+              <span class="badge badge-warn">Unavail: ${cov.results?.live_status_counts?.unavailable ?? 0}</span>
+            </div>
+          </div>
         `;
       } else {
         covDiv.textContent = 'No search coverage diagnostics recorded in current local run.';
       }
     }
 
-    // Cache Summary
+    // Board Cache Summary Rendering
     const cacheDiv = document.getElementById('boardCacheSummary');
     if (cacheDiv) {
       if (cacheData && Object.keys(cacheData).length > 0) {
         const keys = Object.keys(cacheData);
+        const sampleTokens = keys.slice(0, 5).join(', ');
         cacheDiv.innerHTML = `
-          <div><strong>Total Cached ATS Boards:</strong> ${keys.length} board endpoints</div>
-          <div><strong>Sample Board Tokens:</strong> ${keys.slice(0, 5).join(', ')}...</div>
+          <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+            <div><span style="color: var(--text-muted);">Cached Endpoints:</span> <strong style="color: var(--water-blue);">${keys.length} ATS Boards</strong></div>
+            <div><span style="color: var(--text-muted);">Sample Board Tokens:</span> <code style="color: var(--lotus); font-size: 0.8rem;">${escapeHtml(sampleTokens)}...</code></div>
+            <div><span class="badge badge-confirmed">⚡ Fast API Cache Active</span></div>
+          </div>
         `;
       } else {
         cacheDiv.textContent = 'ATS Board cache registry active on VPS.';
@@ -206,7 +251,7 @@ async function fetchVpsLog() {
     parseLogData(state.rawLog);
     renderStructuredLogs();
   } catch (err) {
-    if (container) container.innerHTML = '<div style="padding: 2rem; color: var(--fire-red); text-align: center;">Failed to fetch VPS log data.</div>';
+    if (container) container.innerHTML = '<div style="padding: 2rem; color: var(--rose); text-align: center;">Failed to fetch VPS log data.</div>';
   }
 }
 
@@ -299,8 +344,10 @@ function parseLogData(rawText) {
 
 function setLogCategory(cat) {
   state.currentLogFilter = cat;
-  document.querySelectorAll('.pill-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.getAttribute('data-filter') === cat);
+  document.querySelectorAll('.pill-btn, .pill').forEach(btn => {
+    if (btn.getAttribute('data-filter')) {
+      btn.classList.toggle('active', btn.getAttribute('data-filter') === cat);
+    }
   });
   renderStructuredLogs();
 }
@@ -314,12 +361,10 @@ function renderStructuredLogs() {
 
   let filtered = state.parsedLogs;
 
-  // Category filter
   if (state.currentLogFilter !== 'all') {
     filtered = filtered.filter(item => item.category === state.currentLogFilter);
   }
 
-  // Keyword query filter
   if (query) {
     filtered = filtered.filter(item => item.raw.toLowerCase().includes(query));
   }
@@ -341,7 +386,6 @@ function renderStructuredLogs() {
 
   container.innerHTML = html;
 
-  // Auto scroll if enabled
   const autoCheck = document.getElementById('autoScrollCheck');
   if (autoCheck && autoCheck.checked) {
     container.scrollTop = container.scrollHeight;
@@ -436,7 +480,26 @@ function renderJobsTable() {
 
 function renderSection2View() {
   const genView = document.getElementById('generationQueueView');
-  if (genView) genView.textContent = JSON.stringify(state.generation, null, 2);
+  if (genView) {
+    if (Array.isArray(state.generation) && state.generation.length > 0) {
+      let html = '';
+      state.generation.forEach((job, idx) => {
+        html += `
+          <div class="queue-card">
+            <div class="queue-title">📋 Generation Job #${idx + 1}</div>
+            <div style="font-size: 0.82rem; color: var(--text-muted); font-family: var(--font-mono);">
+              <div>Company: <strong style="color: var(--text);">${escapeHtml(job.company || job.target_company || 'N/A')}</strong></div>
+              <div>Role: <strong>${escapeHtml(job.role || job.job_title || 'N/A')}</strong></div>
+              <div>Status: <span class="badge badge-info">${escapeHtml(job.status || 'PENDING')}</span></div>
+            </div>
+          </div>
+        `;
+      });
+      genView.innerHTML = html;
+    } else {
+      genView.textContent = JSON.stringify(state.generation, null, 2);
+    }
+  }
   
   const archDiv = document.getElementById('archiveStateView');
   if (archDiv) {
@@ -445,11 +508,11 @@ function renderSection2View() {
       for (const [id, item] of Object.entries(state.archives)) {
         html += `
           <div class="archive-card">
-            <div class="archive-title">📦 ${escapeHtml(id)}</div>
-            <div style="font-size: 0.8rem; color: var(--text-muted); font-family: var(--font-mono);">
-              <div>Company: <strong>${escapeHtml(item.identity?.company || 'N/A')}</strong> | Role: <strong>${escapeHtml(item.identity?.job_title || 'N/A')}</strong></div>
-              <div>Email: ${escapeHtml(item.identity?.email_used || 'N/A')}</div>
-              <div>Fingerprint: ${escapeHtml(item.record_fingerprint || 'N/A')}</div>
+            <div class="archive-title">📦 Archive ID: ${escapeHtml(id)}</div>
+            <div style="font-size: 0.82rem; color: var(--text-muted); font-family: var(--font-mono);">
+              <div>Company: <strong style="color: var(--text);">${escapeHtml(item.identity?.company || 'N/A')}</strong> | Role: <strong>${escapeHtml(item.identity?.job_title || 'N/A')}</strong></div>
+              <div>Candidate Email: <span style="color: var(--air);">${escapeHtml(item.identity?.email_used || 'N/A')}</span></div>
+              <div style="margin-top: 0.3rem;">Fingerprint: <code style="color: var(--lotus);">${escapeHtml(item.record_fingerprint || 'N/A')}</code></div>
             </div>
           </div>
         `;
@@ -464,6 +527,7 @@ function renderSection2View() {
 async function loadRawFile() {
   const select = document.getElementById('rawFileSelect');
   const viewer = document.getElementById('rawFileViewer');
+  const metaBar = document.getElementById('inspectorMetaBar');
   if (!select || !viewer) return;
   const filename = select.value;
   viewer.textContent = 'Loading file contents...';
@@ -471,19 +535,51 @@ async function loadRawFile() {
   try {
     const res = await fetch(`/api/files/${filename}`);
     const data = await res.json();
+    let contentStr = '';
     if (data.content) {
-      viewer.textContent = data.content;
+      contentStr = data.content;
     } else {
-      viewer.textContent = JSON.stringify(data, null, 2);
+      contentStr = JSON.stringify(data, null, 2);
+    }
+    viewer.textContent = contentStr;
+
+    if (metaBar) {
+      const bytes = new Blob([contentStr]).size;
+      const lineCount = contentStr.split('\n').length;
+      metaBar.innerHTML = `
+        <span>📄 File: <strong>${escapeHtml(filename)}</strong></span>
+        <span>Size: <strong>${(bytes / 1024).toFixed(1)} KB</strong></span>
+        <span>Lines: <strong>${lineCount}</strong></span>
+        <button class="secondary-btn" style="min-height: 32px; padding: 0.25rem 0.6rem; font-size: 0.75rem;" onclick="copyViewerText()">📋 Copy File Text</button>
+      `;
     }
   } catch (err) {
     viewer.textContent = `Error loading file: ${err.message}`;
   }
 }
 
-// Re-reads the public read-only endpoints. This does not run anything on the
-// server: report syncing is an operator task run from a shell, because this
-// dashboard is served to the public internet without authentication.
+function copyViewerText() {
+  const viewer = document.getElementById('rawFileViewer');
+  if (!viewer) return;
+  navigator.clipboard.writeText(viewer.textContent).then(() => {
+    alert('File contents copied to clipboard!');
+  }).catch(err => {
+    console.error('Failed to copy text', err);
+  });
+}
+
+function copyLogsToClipboard() {
+  if (!state.rawLog) {
+    alert('No log text available to copy.');
+    return;
+  }
+  navigator.clipboard.writeText(state.rawLog).then(() => {
+    alert('Full VPS log copied to clipboard!');
+  }).catch(err => {
+    console.error('Failed to copy logs', err);
+  });
+}
+
 async function refreshDashboardData() {
   const btn = document.getElementById('refreshBtn');
   const originalText = btn ? btn.innerHTML : '';

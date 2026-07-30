@@ -31,7 +31,7 @@
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 
   <!-- Structured Data JSON-LD -->
@@ -54,32 +54,74 @@
   </script>
 </head>
 <body>
+  <a href="#mainContent" class="skip-link">Skip to main content</a>
 
-  <!-- Top Header Banner with SkyBison Logo -->
+  <!-- Top Header App Bar with Logo & Navigation -->
   <header class="app-header">
-    <div class="brand">
+    <a href="index.html" class="brand">
       <div class="logo-container">
-        <a href="index.html"><img src="sky_bison_logo.jpg" alt="SkyBison Cloud Logo" class="brand-logo"></a>
+        <img src="sky_bison_logo.jpg" alt="SkyBison Cloud Logo" class="brand-logo">
       </div>
       <div class="brand-text">
         <h1 class="brand-title">SKYBISON CLOUD</h1>
         <span class="brand-subtitle">Autonomous Job Operations Engine</span>
       </div>
-    </div>
+    </a>
+
+    <!-- Desktop Navigation Menu -->
+    <nav class="desktop-nav" aria-label="Desktop Navigation">
+      <a href="index.html" class="nav-link active">📜 Submissions</a>
+      <a href="search.html" class="nav-link">🌊 Job Search</a>
+      <a href="generation.html" class="nav-link">🪨 AI Queue</a>
+      <a href="logs.html" class="nav-link">🔥 Sync Logs</a>
+      <a href="inspector.html" class="nav-link">📁 Inspector</a>
+    </nav>
+
     <div class="header-actions">
+      <span id="vpsStatusBadge" class="badge badge-ashby" style="display: inline-flex;">CHECKING...</span>
       <button class="sync-btn" id="refreshBtn" onclick="refreshDashboardData()">
         <span>🌪️ Refresh Data</span>
+      </button>
+      <button class="hamburger-btn" id="hamburgerBtn" aria-label="Toggle Navigation Menu" aria-expanded="false">
+        <span></span>
+        <span></span>
+        <span></span>
       </button>
     </div>
   </header>
 
-  <main class="container">
+  <!-- Mobile Drawer Menu Overlay -->
+  <div class="drawer-backdrop" id="drawerBackdrop"></div>
+  <aside class="mobile-drawer" id="mobileDrawer" aria-label="Mobile Drawer Navigation">
+    <div class="drawer-header">
+      <span class="drawer-title">SKYBISON CLOUD</span>
+      <button class="drawer-close" id="drawerCloseBtn" aria-label="Close Mobile Drawer">&times;</button>
+    </div>
+    <nav class="drawer-links">
+      <a href="index.html" class="nav-link active" onclick="closeMobileDrawer()">📜 Submissions & Failures</a>
+      <a href="search.html" class="nav-link" onclick="closeMobileDrawer()">🌊 Job Search & Coverage</a>
+      <a href="generation.html" class="nav-link" onclick="closeMobileDrawer()">🪨 Generation & Archives</a>
+      <a href="logs.html" class="nav-link" onclick="closeMobileDrawer()">🔥 Real-Time VPS Logs</a>
+      <a href="inspector.html" class="nav-link" onclick="closeMobileDrawer()">📁 Raw File Inspector</a>
+    </nav>
+  </aside>
 
-    <!-- VPS Infrastructure & Elemental Specs Panel -->
+  <main class="container" id="mainContent">
+
+    <!-- Secondary Page Tab Bar -->
+    <nav class="nav-tabs" aria-label="Main Navigation">
+      <a href="index.html" class="tab-btn active">📜 Submissions & Failures Matrix</a>
+      <a href="search.html" class="tab-btn">🌊 Job Search & Coverage Details</a>
+      <a href="generation.html" class="tab-btn">🪨 Generation Queue & Archives</a>
+      <a href="logs.html" class="tab-btn">🔥 Real-time VPS Sync Logs</a>
+      <a href="inspector.html" class="tab-btn">📁 Raw File Inspector</a>
+    </nav>
+
+    <!-- VPS Infrastructure Specs Panel -->
     <section class="infra-card">
       <div class="infra-header">
-        <h2 class="infra-title">🌀 SkyBison VPS Host Infrastructure & Elemental Specs</h2>
-        <span id="vpsStatusBadge" class="badge badge-ashby">CHECKING...</span>
+        <h2 class="infra-title">🌀 SkyBison VPS Host Infrastructure & Specs</h2>
+        <span class="badge badge-info">Ubuntu 24.04 LTS</span>
       </div>
       <div class="infra-grid">
         <div class="infra-item">
@@ -104,7 +146,7 @@
         </div>
         <div class="infra-item">
           <span class="infra-label">Daily Search Cron</span>
-          <span class="infra-val" style="color: var(--air-cyan);">0 3 * * * (03:00 UTC)</span>
+          <span class="infra-val" style="color: var(--air);">0 3 * * * (03:00 UTC)</span>
         </div>
         <div class="infra-item">
           <span class="infra-label">Plan Renewal Date</span>
@@ -151,34 +193,28 @@
       </div>
     </section>
 
-    <!-- Site Page Navigation Links -->
-    <nav class="nav-tabs" aria-label="Main Navigation">
-      <a href="index.html" class="tab-btn active">📜 Submissions & Failures Matrix</a>
-      <a href="search.html" class="tab-btn">🌊 Job Search & Coverage Details</a>
-      <a href="generation.html" class="tab-btn">🪨 Generation Queue & Archives</a>
-      <a href="logs.html" class="tab-btn">🔥 Real-time VPS Sync Logs</a>
-      <a href="inspector.html" class="tab-btn">📁 Raw File Inspector</a>
-    </nav>
-
     <!-- SUBMISSIONS PAGE CONTENT -->
-    <section>
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
-        <div class="infra-card" style="margin-bottom: 0;">
-          <h3 style="color: var(--earth-green); font-family: var(--font-cinzel); font-size: 1.05rem; margin-bottom: 0.75rem;">ATS Submission Conversion Matrix</h3>
-          <table class="data-table">
-            <thead>
-              <tr><th>ATS Engine</th><th>Attempted</th><th>Confirmed</th><th>Success Rate</th></tr>
-            </thead>
-            <tbody id="atsMatrixBody">
-              <tr><td>Greenhouse</td><td>16</td><td>16</td><td><span class="badge badge-confirmed">100%</span></td></tr>
-              <tr><td>Ashby</td><td>2</td><td>2</td><td><span class="badge badge-confirmed">100%</span></td></tr>
-              <tr><td>Lever</td><td>2</td><td>2</td><td><span class="badge badge-confirmed">100%</span></td></tr>
-            </tbody>
-          </table>
+    <section class="section">
+      <div class="split-grid">
+        <div class="card">
+          <h3 style="color: var(--earth-green); font-family: var(--font-display); font-size: 1.05rem; margin-bottom: 0.85rem;">ATS Submission Conversion Matrix</h3>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr><th>ATS Engine</th><th>Attempted</th><th>Confirmed</th><th>Success Rate</th></tr>
+              </thead>
+              <tbody id="atsMatrixBody">
+                <tr><td>Greenhouse</td><td>16</td><td>16</td><td><span class="badge badge-confirmed">100%</span></td></tr>
+                <tr><td>Ashby</td><td>2</td><td>2</td><td><span class="badge badge-confirmed">100%</span></td></tr>
+                <tr><td>Lever</td><td>2</td><td>2</td><td><span class="badge badge-confirmed">100%</span></td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div class="infra-card" style="margin-bottom: 0;">
-          <h3 style="color: var(--fire-orange); font-family: var(--font-cinzel); font-size: 1.05rem; margin-bottom: 0.75rem;">Application Failure Diagnostics</h3>
-          <div id="failureLogSummary" style="font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted);">
+
+        <div class="card">
+          <h3 style="color: var(--fire-gold); font-family: var(--font-display); font-size: 1.05rem; margin-bottom: 0.85rem;">Application Failure Diagnostics</h3>
+          <div id="failureLogSummary" style="font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted); line-height: 1.6;">
             No application failures recorded in the current run. All attempted applications passed ATS submission verification cleanly.
           </div>
         </div>
@@ -189,22 +225,24 @@
       </div>
 
       <div class="table-card">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Applied At</th>
-              <th>Company</th>
-              <th>Role / Title</th>
-              <th>ATS Engine</th>
-              <th>Candidate Email</th>
-              <th>Tailored Resume</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody id="submissionsTableBody">
-            <tr><td colspan="7" style="text-align: center; color: var(--text-muted);">Loading submissions...</td></tr>
-          </tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Applied At</th>
+                <th>Company</th>
+                <th>Role / Title</th>
+                <th>ATS Engine</th>
+                <th>Candidate Email</th>
+                <th>Tailored Resume</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="submissionsTableBody">
+              <tr><td colspan="7" style="text-align: center; color: var(--text-muted);">Loading submissions...</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
 
