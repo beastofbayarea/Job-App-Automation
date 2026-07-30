@@ -2818,10 +2818,18 @@ async def search_job_boards_async(urls: Sequence[str], timeout: float = 10.0) ->
             responses = await asyncio.gather(*tasks, return_exceptions=True)
             results = []
             for u, resp in zip(urls, responses):
-                if not isinstance(resp, Exception) and resp.status_code == 200:
+                if isinstance(resp, Exception):
+                    results.append({"url": u, "status": 0, "error": str(resp)})
+                elif resp.status_code == 200:
                     results.append({"url": u, "status": resp.status_code, "text": resp.text[:500]})
                 else:
-                    results.append({"url": u, "status": 0, "error": str(resp)})
+                    results.append(
+                        {
+                            "url": u,
+                            "status": resp.status_code,
+                            "error": f"HTTP {resp.status_code}",
+                        }
+                    )
             return results
     except ImportError:
         LOGGER.warning("httpx not installed; running fallback async threadpool crawler")
