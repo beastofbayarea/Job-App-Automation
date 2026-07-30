@@ -207,38 +207,10 @@ async function fetchMetrics() {
       document.getElementById('vpsOwner').textContent = `${data.hostinger_info.company || ''} (${data.hostinger_info.owner_name})`;
     }
 
-    // Render ATS Conversion Matrix
-    if (document.getElementById('atsMatrixBody')) {
-      renderAtsMatrix(data.attempted_by_ats, data.confirmed_by_ats);
-    }
-
   } catch (err) {
     setVpsStatusBadge('UNREACHABLE', 'badge-failed');
     console.error('Failed to load metrics', err);
   }
-}
-
-function renderAtsMatrix(attempted = {}, confirmed = {}) {
-  const tbody = document.getElementById('atsMatrixBody');
-  if (!tbody) return;
-  const platforms = ['greenhouse', 'ashby', 'lever'];
-  
-  let html = '';
-  for (const plat of platforms) {
-    const att = attempted[plat] || 0;
-    const conf = confirmed[plat] || (plat === 'greenhouse' ? 16 : 2);
-    const rate = att > 0 ? Math.round((conf / att) * 100) : 100;
-    
-    html += `
-      <tr>
-        <td style="font-weight: 600;"><span class="badge badge-${plat}">${plat.toUpperCase()}</span></td>
-        <td>${att || conf}</td>
-        <td>${conf}</td>
-        <td><span class="badge badge-confirmed">${rate}%</span></td>
-      </tr>
-    `;
-  }
-  tbody.innerHTML = html;
 }
 
 async function fetchSubmissions() {

@@ -143,16 +143,6 @@
 
   <main class="container" id="mainContent">
 
-    <!-- Secondary Page Tab Bar -->
-    <nav class="nav-tabs" aria-label="Main Navigation">
-      <a href="index.html" class="tab-btn active">📜 Submissions & Failures Matrix</a>
-      <a href="search.html" class="tab-btn">🌊 Job Search & Coverage Details</a>
-      <a href="generation.html" class="tab-btn">🪨 Generation Queue & Archives</a>
-      <a href="logs.html" class="tab-btn">🔥 Real-time VPS Sync Logs</a>
-      <a href="inspector.html" class="tab-btn">📁 Raw File Inspector</a>
-      <a href="cent-capital.html" class="tab-btn">🏛️ Cent Capital Overview</a>
-    </nav>
-
     <!-- Interactive Automated Pipeline Funnel Banner -->
     <section class="pipeline-funnel-card">
       <div class="funnel-header">
@@ -269,28 +259,10 @@
 
     <!-- SUBMISSIONS PAGE CONTENT -->
     <section class="section">
-      <div class="split-grid">
-        <div class="card">
-          <h3 style="color: var(--earth-green); font-family: var(--font-display); font-size: 1.05rem; margin-bottom: 0.85rem;">ATS Submission Conversion Matrix</h3>
-          <div class="table-scroll">
-            <table class="data-table">
-              <thead>
-                <tr><th>ATS Engine</th><th>Attempted</th><th>Confirmed</th><th>Success Rate</th></tr>
-              </thead>
-              <tbody id="atsMatrixBody">
-                <tr><td>Greenhouse</td><td>16</td><td>16</td><td><span class="badge badge-confirmed">100%</span></td></tr>
-                <tr><td>Ashby</td><td>2</td><td>2</td><td><span class="badge badge-confirmed">100%</span></td></tr>
-                <tr><td>Lever</td><td>2</td><td>2</td><td><span class="badge badge-confirmed">100%</span></td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="card">
-          <h3 style="color: var(--fire-gold); font-family: var(--font-display); font-size: 1.05rem; margin-bottom: 0.85rem;">Application Failure Diagnostics</h3>
-          <div id="failureLogSummary" style="font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted); line-height: 1.6;">
-            No application failures recorded in the current run. All attempted applications passed ATS submission verification cleanly.
-          </div>
+      <div class="card" style="margin-bottom: 1.5rem;">
+        <h3 style="color: var(--fire-gold); font-family: var(--font-display); font-size: 1.05rem; margin-bottom: 0.85rem;">Application Failure Diagnostics</h3>
+        <div id="failureLogSummary" style="font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted); line-height: 1.6;">
+          No application failures recorded in the current run. All attempted applications passed ATS submission verification cleanly.
         </div>
       </div>
 
@@ -339,6 +311,10 @@
     <a href="logs.html" class="bottom-nav-item">
       <span class="bottom-nav-icon">🔥</span>
       <span class="bottom-nav-label">Logs</span>
+    </a>
+    <a href="inspector.html" class="bottom-nav-item">
+      <span class="bottom-nav-icon">📁</span>
+      <span class="bottom-nav-label">Files</span>
     </a>
     <a href="cent-capital.html" class="bottom-nav-item">
       <span class="bottom-nav-icon">🏛️</span>

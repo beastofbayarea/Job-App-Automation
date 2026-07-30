@@ -214,7 +214,7 @@ img { max-width: 100%; height: auto; display: block; }
   .desktop-nav { display: flex; }
 }
 
-.nav-link, .tab-btn {
+.nav-link {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -228,11 +228,11 @@ img { max-width: 100%; height: auto; display: block; }
   transition: all 0.2s ease;
   white-space: nowrap;
 }
-.nav-link:hover, .tab-btn:hover {
+.nav-link:hover {
   color: var(--text);
   background: rgba(255, 255, 255, 0.06);
 }
-.nav-link.active, .nav-link.is-active, .tab-btn.active, .tab-btn.is-active {
+.nav-link.active, .nav-link.is-active {
   color: var(--air);
   background: rgba(56, 189, 248, 0.12);
   border-color: rgba(56, 189, 248, 0.3);
@@ -376,28 +376,13 @@ img { max-width: 100%; height: auto; display: block; }
   flex-direction: column;
   gap: 0.5rem;
 }
-.drawer-links .nav-link, .drawer-links .tab-btn {
+.drawer-links .nav-link {
   width: 100%;
   padding: 0.85rem 1rem;
   font-size: 0.95rem;
   border-radius: var(--radius-sm);
   min-height: 46px;
 }
-
-/* Secondary Navigation Tab Bar (Sticky Below Header) */
-.nav-tabs {
-  display: flex;
-  gap: 0.4rem;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 1.75rem;
-  overflow-x: auto;
-  scrollbar-width: thin;
-  -webkit-overflow-scrolling: touch;
-  scroll-snap-type: x proximity;
-  padding-bottom: 0.5rem;
-}
-.nav-tabs::-webkit-scrollbar { height: 4px; }
-.nav-tabs::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.2); border-radius: 4px; }
 
 /* --- Interactive Pipeline Funnel Banner -------------------------------- */
 
@@ -1106,7 +1091,7 @@ img { max-width: 100%; height: auto; display: block; }
 /* --- Print -------------------------------------------------------------- */
 
 @media print {
-  .app-header, .nav-tabs, .app-footer, .controls-bar, .log-filter-pills, .hamburger-btn, .mobile-drawer, .mobile-bottom-nav { display: none !important; }
+  .app-header, .app-footer, .controls-bar, .log-filter-pills, .hamburger-btn, .mobile-drawer, .mobile-bottom-nav { display: none !important; }
   body { background: #fff; color: #000; }
   .card, .infra-card, .table-card { border-color: #ccc; box-shadow: none; background: #fff; }
   .data-table { min-width: 0; }
