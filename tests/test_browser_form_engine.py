@@ -143,6 +143,7 @@ def test_smartrecruiters_uses_the_background_cdp_fallback() -> None:
     assert smartrecruiters.SPEC.background_cdp is True
     assert smartrecruiters.SPEC.first_name_selectors[0].startswith("input#")
     assert smartrecruiters.SPEC.cover_letter_text_selectors[0].startswith("textarea#")
+    assert 'spl-button:has-text("Submit")' in smartrecruiters.SPEC.submit_selectors
     assert workable.SPEC.background_cdp is False
 
 

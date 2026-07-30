@@ -78,6 +78,7 @@ SPEC = BrowserFormSpec(
     submit_selectors=(
         'button[type="submit"]:has-text("Submit")',
         'button[data-qa*="submit" i]',
+        'spl-button:has-text("Submit")',
     ),
     render_wait_ms=1500,
     email_confirmation_selectors=("input#confirm-email-input",),
