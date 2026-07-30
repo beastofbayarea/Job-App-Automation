@@ -82,21 +82,24 @@ class PowerShellMaintenanceTests(unittest.TestCase):
         self.assertNotIn("systemctl stop", script)
         self.assertNotIn("systemctl disable", script)
 
-    def test_dashboard_installer_uses_loopback_authentication_and_restores_nginx(self) -> None:
+    def test_dashboard_installer_provisions_public_loopback_and_restores_nginx(self) -> None:
         installer = (SCRIPTS / "install_vps_dashboard.ps1").read_text(encoding="utf-8")
         unit = (SCRIPTS / "job-app-dashboard.service.template").read_text(encoding="utf-8")
 
         self.assertIn("-hostkey", installer)
         self.assertIn("-pwfile", installer)
-        self.assertIn("RandomNumberGenerator", installer)
-        self.assertIn("config/dashboard.env", installer)
         self.assertIn("systemctl restart vps-dashboard.service", installer)
         self.assertIn("nginx -t", installer)
         self.assertIn("systemctl restart nginx.service", installer)
         self.assertIn("--host 127.0.0.1 --port 8000", unit)
-        self.assertIn("EnvironmentFile=__REPO_DIR__/config/dashboard.env", unit)
         self.assertIn("MemoryMax=192M", unit)
         self.assertNotIn("--host 0.0.0.0", unit)
+
+        # The dashboard is public: no credential is generated, shipped, or required.
+        self.assertNotIn("RandomNumberGenerator", installer)
+        self.assertNotIn("dashboard.env", installer)
+        self.assertNotIn("JOB_APP_DASHBOARD_PASSWORD", installer)
+        self.assertNotIn("dashboard.env", unit)
 
     def test_backend_quarantine_requires_live_failure_evidence(self) -> None:
         script = (SCRIPTS / "quarantine_unhealthy_cent_backend.ps1").read_text(
@@ -704,6 +707,7 @@ class BashMaintenanceTests(unittest.TestCase):
         self.assertLess(search_only_exit, documents)
         self.assertIn('--document-state "$DOCUMENT_STATE"', script)
         self.assertIn('RUN_STATUS="$REPO_DIR/output/vps_run_status.json"', script)
+        self.assertIn('ACCOUNT_HOME="${HOME:-$(getent passwd "$(id -u)"', script)
         self.assertNotIn("--max-attempts-per-ats 10", script)
         sync_block = script[
             script.index("SYNC_FILES=(") : script.index("PRIVATE_GENERATION_OUTPUT=")

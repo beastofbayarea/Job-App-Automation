@@ -62,7 +62,12 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BRANCH="vps-search-output"
 SYNC_DIR="$REPO_DIR/.sync-worktree"
 PUSH_URL="git@github.com:beastofbayarea/Job-App-Automation.git"
-DEPLOY_KEY="$HOME/.ssh/vps_search_sync"
+ACCOUNT_HOME="${HOME:-$(getent passwd "$(id -u)" | cut -d: -f6)}"
+if [ -z "$ACCOUNT_HOME" ]; then
+  echo "Unable to resolve the service account home directory." >&2
+  exit 78
+fi
+DEPLOY_KEY="$ACCOUNT_HOME/.ssh/vps_search_sync"
 SYNC_FILES=(
   "output/job_search_coverage.json"
   "output/ai_jobs.csv"
