@@ -184,6 +184,9 @@ python src/job_automation.py search \
   --ats-platform ashby \
   --search-backend yahoo \
   --search-backend yandex \
+  --max-discovery-queries 120 \
+  --results-per-query 20 \
+  --search-retries 0 \
   --verify-live \
   --private-generation-output "$PRIVATE_GENERATION_OUTPUT"
 
