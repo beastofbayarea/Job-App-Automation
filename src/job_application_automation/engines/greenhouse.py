@@ -422,6 +422,25 @@ def _load_candidate_evidence(config: Mapping[str, Any]) -> str:
     return _shared_candidate_evidence(config)
 
 
+def _greenhouse_semantic_answer(
+    label: str,
+    profile: Mapping[str, Any],
+    rules: Mapping[str, Any],
+) -> Optional[str]:
+    """Resolve observed Greenhouse wording before broader aliases can collide."""
+    normalized = " ".join(label.lower().split())
+    if "notice period" in normalized:
+        return str(rules.get("notice_period") or "").strip() or None
+    if re.search(
+        r"\bwhere\s+(?:are\s+you\s+currently|were\s+you\s+last)\s+employed\b",
+        normalized,
+    ):
+        return str(profile.get("current_company") or "").strip() or None
+    if re.search(r"\b(?:samples?\s+of\s+your\s+work|work\s+samples?)\b", normalized):
+        return str(profile.get("website") or profile.get("portfolio") or "").strip() or None
+    return None
+
+
 def _fill_custom_questions(
     page: Page,
     profile: Mapping[str, Any],
@@ -451,6 +470,9 @@ def _fill_custom_questions(
             if not label:
                 continue
             desired = _configured_answer(label, profile, rules, eeo, field_matchers)
+            semantic_answer = _greenhouse_semantic_answer(label, profile, rules)
+            if semantic_answer:
+                desired = semantic_answer
             # Language proficiency is a configured selection policy. Other
             # experience and relocation answers are resolved by field_matchers.
             language_question = bool(re.search(r"\b(language|fluen|speak\s+\w+)\b", label, re.I))
@@ -1278,9 +1300,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 url=args.url,
                 resume=Path(args.resume).expanduser().resolve(),
                 cover_letter=(
-                    Path(args.cover_letter).expanduser().resolve()
-                    if args.cover_letter
-                    else None
+                    Path(args.cover_letter).expanduser().resolve() if args.cover_letter else None
                 ),
                 email_override=args.email,
                 config=_load_config(),

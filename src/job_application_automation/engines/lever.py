@@ -217,7 +217,8 @@ def _option_matches_variant(option_label: str, variant: str) -> bool:
         "4 weeks": "30 days",
         "four weeks": "30 days",
     }
-    return duration_days.get(answer) == option
+    equivalent = duration_days.get(answer)
+    return bool(equivalent and (option == equivalent or option.startswith(f"{equivalent} ")))
 
 
 def _question_label(control: Locator) -> str:

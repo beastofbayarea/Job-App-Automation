@@ -183,8 +183,9 @@ letter whenever the ATS form exposes a matching file field. A result counts
 only when both the strict engine result and
 `output/submission_log.json` contain exact `SUBMITTED & CONFIRMED` evidence.
 The worker waits a uniformly random 120-300 seconds after every cycle. When
-the list is exhausted, it refreshes verified results for the selected ATS and
-continues.
+the list is exhausted, it first refreshes its provider list from the newest
+shared search-service snapshot, then falls back to a provider-only verified
+search if the shared snapshot contains no unattempted work.
 
 Private state and evidence are kept in:
 
@@ -202,7 +203,10 @@ The worker writes `application_started` before opening the live submission
 boundary. If the process is interrupted after that checkpoint, the next
 start changes the attempt to `manual_review` and never retries it. Required
 field failures, CAPTCHA barriers, timeouts, and unconfirmed results likewise
-never count as success or trigger an automatic retry.
+never count as success or trigger an automatic retry. Two or more CAPTCHA
+manual-review outcomes since the latest confirmation open a provider-wide
+24-hour cooldown; the worker stays supervised but does not risk another live
+submission until the cooldown expires.
 
 Inspect the service without starting another worker:
 

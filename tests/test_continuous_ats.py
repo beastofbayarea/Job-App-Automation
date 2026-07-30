@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -267,6 +268,72 @@ def test_parallel_workers_seed_distinct_provider_inputs() -> None:
         assert ashby_jobs[0]["platform"] == "ashby"
         assert greenhouse_jobs[0]["platform"] == "greenhouse"
         assert "_canonical_url" not in ashby_jobs[0]
+
+
+def test_shared_input_can_refresh_an_exhausted_provider_list() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        shared = root / "vps_generation_jobs.json"
+        provider_input = root / "continuous_greenhouse_jobs.json"
+        provider_input.write_text("[]", encoding="utf-8")
+        shared.write_text(
+            json.dumps(
+                [
+                    _job(
+                        "https://boards.greenhouse.io/example/jobs/2",
+                        platform="greenhouse",
+                    )
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        with patch.object(worker, "SHARED_INPUT", shared):
+            assert worker._seed_platform_input(provider_input, "greenhouse") == 0
+            assert (
+                worker._seed_platform_input(
+                    provider_input,
+                    "greenhouse",
+                    overwrite=True,
+                )
+                == 1
+            )
+
+        refreshed = json.loads(provider_input.read_text(encoding="utf-8"))
+        assert refreshed[0]["job_url"].endswith("/jobs/2")
+
+
+def test_captcha_circuit_opens_until_cooldown_and_resets_after_confirmation() -> None:
+    now = datetime(2026, 7, 31, 0, 0, tzinfo=UTC)
+    captcha_result = {"captcha_present": True}
+    state = {
+        "jobs": {
+            "first": {
+                "status": "manual_review",
+                "result": captcha_result,
+                "updated_at": (now - timedelta(hours=2)).isoformat(),
+            },
+            "second": {
+                "status": "manual_review",
+                "result": captcha_result,
+                "updated_at": (now - timedelta(hours=1)).isoformat(),
+            },
+        }
+    }
+
+    remaining, observed = worker._captcha_cooldown_remaining(
+        state,
+        now=now,
+        cooldown_seconds=6 * 60 * 60,
+    )
+    assert observed == 2
+    assert remaining == 5 * 60 * 60
+
+    state["jobs"]["confirmed"] = {
+        "status": "confirmed",
+        "updated_at": (now - timedelta(minutes=30)).isoformat(),
+    }
+    assert worker._captcha_cooldown_remaining(state, now=now) == (0, 0)
 
 
 def test_sleep_between_cycles_handles_service_stop_without_traceback() -> None:

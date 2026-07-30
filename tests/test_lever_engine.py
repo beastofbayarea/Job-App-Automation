@@ -53,6 +53,7 @@ def test_country_dropdown_accepts_exact_demonym_stem_only() -> None:
 
 def test_notice_period_matches_equivalent_day_option() -> None:
     assert _option_matches_variant("15 Days", "2 weeks")
+    assert _option_matches_variant("15 Days or Less", "2 weeks")
     assert not _option_matches_variant("30 Days", "2 weeks")
 
 

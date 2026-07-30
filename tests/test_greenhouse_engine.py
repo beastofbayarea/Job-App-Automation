@@ -11,12 +11,46 @@ from job_application_automation.engines.greenhouse import (
     _fill_explicit_required_consents,
     _fill_export_control_questions,
     _fill_source_checkbox,
+    _greenhouse_semantic_answer,
     _required_empty_fields,
     _upload_cover_letter,
     _upload_resume,
     _parser,
     main,
 )
+
+
+def test_greenhouse_semantic_answers_prevent_observed_matcher_collisions() -> None:
+    profile = {
+        "current_company": "Current Company",
+        "portfolio": "https://example.test/portfolio",
+    }
+    rules = {"notice_period": "2 weeks"}
+
+    assert (
+        _greenhouse_semantic_answer(
+            "What is your notice period to your current employer?",
+            profile,
+            rules,
+        )
+        == "2 weeks"
+    )
+    assert (
+        _greenhouse_semantic_answer(
+            "Where are you currently employed or where were you last employed?",
+            profile,
+            rules,
+        )
+        == "Current Company"
+    )
+    assert (
+        _greenhouse_semantic_answer(
+            "Please share some samples of your work",
+            profile,
+            rules,
+        )
+        == "https://example.test/portfolio"
+    )
 
 
 def test_fill_all_visible_populates_duplicate_standard_fields() -> None:
@@ -51,7 +85,7 @@ def test_load_candidate_evidence() -> None:
     config = {
         "candidate": {
             "evidence": ["Built high throughput API"],
-            "summary": "Senior Software Engineer"
+            "summary": "Senior Software Engineer",
         }
     }
     evidence_text = _load_candidate_evidence(config)
@@ -63,14 +97,17 @@ def test_fill_explicit_required_consents_mocked() -> None:
     page = MagicMock()
     controls = MagicMock()
     controls.count.return_value = 1
-    
+
     control = MagicMock()
     control.is_visible.return_value = True
     control.is_checked.side_effect = [False, True]
     controls.nth.return_value = control
     page.locator.return_value = controls
 
-    with patch("job_application_automation.engines.greenhouse._label_for", return_value="I agree to privacy policy"):
+    with patch(
+        "job_application_automation.engines.greenhouse._label_for",
+        return_value="I agree to privacy policy",
+    ):
         modified = _fill_explicit_required_consents(page)
         assert len(modified) == 1
         assert "I agree to privacy policy" in modified[0]
@@ -84,8 +121,13 @@ def test_fill_export_control_questions_mocked() -> None:
 
     ctrl = MagicMock()
     ctrl.is_checked.return_value = True
-    with patch("job_application_automation.engines.greenhouse._first_visible", return_value=ctrl), \
-         patch("job_application_automation.engines.greenhouse._label_for", return_value="None of the above"):
+    with (
+        patch("job_application_automation.engines.greenhouse._first_visible", return_value=ctrl),
+        patch(
+            "job_application_automation.engines.greenhouse._label_for",
+            return_value="None of the above",
+        ),
+    ):
         res = _fill_export_control_questions(page)
         assert len(res) >= 1
 
@@ -108,7 +150,7 @@ def test_required_empty_fields_mocked() -> None:
     page = MagicMock()
     controls = MagicMock()
     controls.count.return_value = 1
-    
+
     control = MagicMock()
     control.is_visible.return_value = True
     control.get_attribute.side_effect = lambda attr: "text" if attr == "type" else None
@@ -117,7 +159,9 @@ def test_required_empty_fields_mocked() -> None:
     controls.nth.return_value = control
     page.locator.return_value = controls
 
-    with patch("job_application_automation.engines.greenhouse._label_for", return_value="First Name *"):
+    with patch(
+        "job_application_automation.engines.greenhouse._label_for", return_value="First Name *"
+    ):
         empty_labels = _required_empty_fields(page)
         assert "First Name *" in empty_labels
 
@@ -156,7 +200,7 @@ def test_upload_cover_letter_only_targets_the_matching_file_field(tmp_path: Path
 def test_greenhouse_parser_and_main_help() -> None:
     parser = _parser()
     assert parser.prog is not None
-    
+
     with pytest.raises(SystemExit) as exc:
         main(["--help"])
     assert exc.value.code == 0

@@ -37,6 +37,8 @@ DEFAULT_LAUNCHER = resolve_runtime_path("src/job_automation.py")
 TERMINAL_STATUSES = frozenset({"confirmed", "failed", "manual_review"})
 RESUMABLE_STATUSES = frozenset({"preparing", "documents_ready"})
 ATS_PLATFORM_PATTERN = re.compile(r"^[a-z][a-z0-9]*$")
+DEFAULT_CAPTCHA_COOLDOWN_SECONDS = 86_400
+DEFAULT_CAPTCHA_THRESHOLD = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,9 +178,7 @@ def _reconcile_interrupted_submissions(state: dict[str, Any]) -> int:
 def _run_command(command: list[str], timeout_seconds: int) -> CommandOutcome:
     """Run a child with bounded lifetime and descendant cleanup on both platforms."""
     creationflags = (
-        subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
-        if os.name == "nt"
-        else 0
+        subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
     )
     try:
         process = subprocess.Popen(
@@ -576,9 +576,14 @@ def _validate_platform(ats_platform: str) -> str:
     return normalized
 
 
-def _seed_platform_input(input_path: Path, ats_platform: str) -> int:
-    """Seed a dedicated provider list from the latest shared VPS search output."""
-    if input_path.exists() or not SHARED_INPUT.is_file():
+def _seed_platform_input(
+    input_path: Path,
+    ats_platform: str,
+    *,
+    overwrite: bool = False,
+) -> int:
+    """Copy one provider's latest jobs from the shared search output."""
+    if (input_path.exists() and not overwrite) or not SHARED_INPUT.is_file():
         return 0
     jobs = _eligible_jobs(_load_json(SHARED_INPUT), ats_platform)
     payload = [
@@ -590,6 +595,53 @@ def _seed_platform_input(input_path: Path, ats_platform: str) -> int:
         encoding="utf-8",
     )
     return len(payload)
+
+
+def _captcha_cooldown_remaining(
+    state: Mapping[str, Any],
+    *,
+    now: datetime | None = None,
+    cooldown_seconds: int = DEFAULT_CAPTCHA_COOLDOWN_SECONDS,
+    threshold: int = DEFAULT_CAPTCHA_THRESHOLD,
+) -> tuple[int, int]:
+    """Return the remaining provider-wide CAPTCHA cooldown and observed count."""
+    if cooldown_seconds <= 0 or threshold <= 0:
+        raise ValueError("CAPTCHA cooldown and threshold must be greater than zero")
+    timestamped: list[tuple[datetime, Mapping[str, Any]]] = []
+    records = state.get("jobs", {})
+    if not isinstance(records, Mapping):
+        return 0, 0
+    for record in records.values():
+        if not isinstance(record, Mapping):
+            continue
+        raw_timestamp = str(record.get("updated_at", "")).strip()
+        if not raw_timestamp:
+            continue
+        try:
+            timestamp = datetime.fromisoformat(raw_timestamp.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=UTC)
+        timestamped.append((timestamp.astimezone(UTC), record))
+    latest_confirmation = max(
+        (timestamp for timestamp, record in timestamped if record.get("status") == "confirmed"),
+        default=None,
+    )
+    captcha_timestamps = [
+        timestamp
+        for timestamp, record in timestamped
+        if (latest_confirmation is None or timestamp > latest_confirmation)
+        and record.get("status") == "manual_review"
+        and isinstance(record.get("result"), Mapping)
+        and record["result"].get("captcha_present") is True
+    ]
+    captcha_count = len(captcha_timestamps)
+    if captcha_count < threshold:
+        return 0, captcha_count
+    current_time = (now or datetime.now(UTC)).astimezone(UTC)
+    elapsed = max(0, int((current_time - max(captcha_timestamps)).total_seconds()))
+    return max(0, cooldown_seconds - elapsed), captcha_count
 
 
 def build_parser(ats_platform: str) -> argparse.ArgumentParser:
@@ -637,6 +689,16 @@ def build_parser(ats_platform: str) -> argparse.ArgumentParser:
     parser.add_argument("--application-timeout-seconds", type=int, default=420)
     parser.add_argument("--refresh-timeout-seconds", type=int, default=3600)
     parser.add_argument(
+        "--captcha-cooldown-seconds",
+        type=int,
+        default=DEFAULT_CAPTCHA_COOLDOWN_SECONDS,
+    )
+    parser.add_argument(
+        "--captcha-threshold",
+        type=int,
+        default=DEFAULT_CAPTCHA_THRESHOLD,
+    )
+    parser.add_argument(
         "--once",
         action="store_true",
         help="Process at most one job and return; intended for diagnostics and tests",
@@ -663,6 +725,8 @@ def main(
         ("engine timeout", args.engine_timeout_seconds),
         ("application timeout", args.application_timeout_seconds),
         ("refresh timeout", args.refresh_timeout_seconds),
+        ("CAPTCHA cooldown", args.captcha_cooldown_seconds),
+        ("CAPTCHA threshold", args.captcha_threshold),
     ):
         if value <= 0:
             raise SystemExit(f"{label} must be greater than zero")
@@ -694,7 +758,20 @@ def main(
 
     while True:
         try:
-            if not args.input.is_file():
+            current_state = _load_state(args.state, ats_platform)
+            cooldown_remaining, captcha_count = _captcha_cooldown_remaining(
+                current_state,
+                cooldown_seconds=args.captcha_cooldown_seconds,
+                threshold=args.captcha_threshold,
+            )
+            if cooldown_remaining:
+                print(
+                    f"{ats_platform.upper()}_CAPTCHA_CIRCUIT_OPEN "
+                    f"observed={captcha_count} cooldown_remaining={cooldown_remaining}",
+                    flush=True,
+                )
+                cycle_status = "captcha_cooldown"
+            elif not args.input.is_file():
                 outcome = _refresh_jobs(
                     ats_platform=ats_platform,
                     launcher=args.launcher,
@@ -726,18 +803,44 @@ def main(
                     application_timeout_seconds=args.application_timeout_seconds,
                 )
                 if cycle_status == "no_work":
-                    outcome = _refresh_jobs(
-                        ats_platform=ats_platform,
-                        launcher=args.launcher,
-                        input_path=args.input,
-                        timeout_seconds=args.refresh_timeout_seconds,
+                    shared_count = _seed_platform_input(
+                        args.input,
+                        ats_platform,
+                        overwrite=True,
                     )
-                    print(
-                        f"{ats_platform.upper()}_REFRESH_FINISHED "
-                        f"exit_code={outcome.return_code} timed_out={outcome.timed_out}",
-                        flush=True,
-                    )
-                    cycle_status = "refreshed" if outcome.return_code == 0 else "refresh_failed"
+                    if shared_count:
+                        print(
+                            f"{ats_platform.upper()}_INPUT_REFRESHED_FROM_SHARED "
+                            f"count={shared_count}",
+                            flush=True,
+                        )
+                        cycle_status = process_one(
+                            ats_platform=ats_platform,
+                            input_path=args.input,
+                            profile=args.profile,
+                            email_pool=args.email_pool,
+                            launcher=args.launcher,
+                            state_path=args.state,
+                            results_dir=args.results_dir,
+                            documents_dir=args.documents_dir,
+                            submission_log=args.submission_log,
+                            document_timeout_seconds=args.document_timeout_seconds,
+                            engine_timeout_seconds=args.engine_timeout_seconds,
+                            application_timeout_seconds=args.application_timeout_seconds,
+                        )
+                    if cycle_status == "no_work":
+                        outcome = _refresh_jobs(
+                            ats_platform=ats_platform,
+                            launcher=args.launcher,
+                            input_path=args.input,
+                            timeout_seconds=args.refresh_timeout_seconds,
+                        )
+                        print(
+                            f"{ats_platform.upper()}_REFRESH_FINISHED "
+                            f"exit_code={outcome.return_code} timed_out={outcome.timed_out}",
+                            flush=True,
+                        )
+                        cycle_status = "refreshed" if outcome.return_code == 0 else "refresh_failed"
         except KeyboardInterrupt:
             print(
                 f"{ats_platform.upper()}_WORKER_STOPPED signal=keyboard_interrupt",
