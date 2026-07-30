@@ -174,6 +174,12 @@ finish_run() {
   exit "$exit_code"
 }
 
+interrupt_run() {
+  exit "$1"
+}
+
+trap 'interrupt_run 130' INT
+trap 'interrupt_run 143' TERM
 trap finish_run EXIT
 set_stage "search"
 
