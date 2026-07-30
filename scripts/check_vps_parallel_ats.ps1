@@ -65,6 +65,7 @@ else
 fi
 printf '%s\n' '=== ATS PROCESSES ==='
 pgrep -af '[c]ontinuous-(ashby|greenhouse|lever)|[c]ontinuous_ats|[j]ob_automation.py apply' |
+  grep -v '[b]ash -c set -eu repo=' |
   sed -E 's/(--email )[[:graph:]]+/\1[REDACTED]/g' || true
 printf '%s\n' '=== PROVIDER STATE ==='
 python3 - "`$repo"/output/continuous_*_state.json <<'PY'

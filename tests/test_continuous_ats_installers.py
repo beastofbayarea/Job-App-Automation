@@ -40,6 +40,7 @@ def test_parallel_status_probe_discovers_all_services_and_redacts_email() -> Non
     assert "continuous_*_state.json" in script
     assert "continuous_ats" in script
     assert "continuous-lever" in script
+    assert "grep -v '[b]ash -c set -eu repo='" in script
     assert "[REDACTED]" in script
     assert "free -h" in script
     assert "Invoke-ExternalCommandWithTimeout" in script
