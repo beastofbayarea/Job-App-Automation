@@ -33,8 +33,6 @@ def _slugify(value: str) -> str:
     return slug
 
 
-
-
 def _require_url(value: object, field_name: str) -> str:
     url = _require_string(value, field_name)
     try:
@@ -92,7 +90,9 @@ def _interprocess_lock(path: Path):
                     pass
                 continue
             if time.monotonic() >= deadline:
-                raise TimeoutError(f"timed out waiting for submission ledger lock: {lock_path}")
+                raise TimeoutError(
+                    f"timed out waiting for submission ledger lock: {lock_path}"
+                ) from None
             time.sleep(0.05)
     try:
         yield
@@ -230,6 +230,20 @@ class SubmissionLog:
                 for submission_id, entry in self._entries.items()
                 if str(entry.get("company", "")).strip().lower() == needle
             }
+
+    def find_by_job_url(self, job_url: str) -> dict[str, dict[str, object]]:
+        """Return entries for the canonical job URL, ignoring tracking parameters."""
+        needle = canonical_job_url(job_url)
+        with self._lock:
+            matches: dict[str, dict[str, object]] = {}
+            for submission_id, entry in self._entries.items():
+                try:
+                    entry_url = canonical_job_url(str(entry.get("job_url", "")))
+                except ValueError:
+                    continue
+                if entry_url == needle:
+                    matches[submission_id] = dict(entry)
+            return matches
 
     def load(self, path: Path) -> int:
         """Merge entries from an existing JSON log and return their count."""

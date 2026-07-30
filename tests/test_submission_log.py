@@ -75,6 +75,20 @@ class SubmissionLogTests(unittest.TestCase):
         matches = log.find_by_company("openai")
         self.assertEqual(len(matches), 1)
 
+    def test_find_by_job_url_uses_canonical_url_and_ignores_invalid_entries(self) -> None:
+        log = SubmissionLog(
+            {
+                "invalid": {"job_url": "not-a-url"},
+                "confirmed": _record().to_payload(),
+            }
+        )
+
+        matches = log.find_by_job_url(
+            "https://jobs.ashbyhq.com/openai/example?utm_source=campaign#apply"
+        )
+
+        self.assertEqual(set(matches), {"confirmed"})
+
     def test_distinct_same_day_company_role_records_do_not_overwrite(self) -> None:
         log = SubmissionLog()
         first_id = log.record(_record())

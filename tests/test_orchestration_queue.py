@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -19,6 +19,10 @@ from job_application_automation.core import (
     queue_runner,  # noqa: E402
 )
 from job_application_automation.core.contracts import EngineResult, EngineStatus  # noqa: E402
+from job_application_automation.core.submission_log import (  # noqa: E402
+    SubmissionLog,
+    SubmissionRecord,
+)
 
 
 class EngineCommandContractTests(unittest.TestCase):
@@ -378,6 +382,66 @@ class QueueSafetyTests(unittest.TestCase):
         self.assertFalse(orchestrator._is_confirmed_submission(prefilled))
         self.assertFalse(orchestrator._is_confirmed_submission({**confirmed, "test_mode": True}))
         self.assertFalse(orchestrator._is_confirmed_submission({"status": "SUBMITTED & CONFIRMED"}))
+
+    def test_live_orchestrator_skips_a_url_already_confirmed_in_the_ledger(self) -> None:
+        job_url = "https://apply.workable.com/acme/j/ABC123/"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            resume = root / "base.pdf"
+            resume.write_bytes(b"x" * 5001)
+            profile = root / "profile.json"
+            profile.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 2,
+                        "candidate": {
+                            "identity": {"first_name": "Jane", "last_name": "Doe"},
+                            "contact": {"fallback_email": "fallback@example.test"},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            pool = root / "emails.json"
+            pool.write_text('["candidate@example.test"]', encoding="utf-8")
+            ledger = SubmissionLog()
+            ledger.record(
+                SubmissionRecord(
+                    company="Acme",
+                    role="Product Manager",
+                    job_url=job_url,
+                    ats="workable",
+                    status="SUBMITTED & CONFIRMED",
+                    email_used="candidate@example.test",
+                    resume_filename="personalized.pdf",
+                )
+            )
+            ledger_path = root / "submission_log.json"
+            ledger.save(ledger_path)
+            engine = root / "engine.py"
+            engine.write_text("raise RuntimeError('must not run')\n", encoding="utf-8")
+            runner = MagicMock()
+
+            results = orchestrator.run_orchestrator(
+                {"workable": engine},
+                None,
+                resume,
+                profile,
+                root / "results.json",
+                email_pool_path=pool,
+                submission_log_path=ledger_path,
+                live_submit=True,
+                shuffle=False,
+                process_runner=runner,
+                direct_url=job_url,
+                direct_company="Acme",
+                direct_role="Product Manager",
+            )
+
+        self.assertEqual(results[0]["status"], "ALREADY_SUBMITTED")
+        self.assertTrue(results[0]["confirmed"])
+        self.assertFalse(results[0]["submitted"])
+        runner.run.assert_not_called()
 
     def test_queue_rejects_invalid_indexes_and_timeouts_before_starting(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

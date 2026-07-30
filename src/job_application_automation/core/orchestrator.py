@@ -945,6 +945,39 @@ def run_orchestrator(
         ats = job["ats"]
         engine_path = engine_paths.get(ats)
         base_result = _job_result_base(job)
+        previous_submissions = submission_log.find_by_job_url(job["url"]) if live_submit else {}
+        if previous_submissions:
+            latest = max(
+                previous_submissions.values(),
+                key=lambda entry: str(entry.get("applied_at", "")),
+            )
+            logger.info(
+                "[%d/%d] row=%s ats=%s company=%s role=%s already confirmed; skipping",
+                index,
+                len(jobs),
+                job["row_number"],
+                ats,
+                job["company"],
+                job["role"],
+            )
+            _append_and_persist(
+                results,
+                {
+                    **base_result,
+                    "engine": _engine_label(engine_path, ats) if engine_path else "",
+                    "resume": str(latest.get("resume_filename", "")),
+                    "cover_letter": str(latest.get("cover_letter_filename", "")),
+                    "email": _mask_email(str(latest.get("email_used", ""))),
+                    "status": "ALREADY_SUBMITTED",
+                    "success": True,
+                    "submitted": False,
+                    "confirmed": True,
+                    "test_mode": False,
+                    "already_submitted": True,
+                },
+                results_path,
+            )
+            continue
         if not engine_path or not engine_path.is_file():
             _append_and_persist(
                 results,
