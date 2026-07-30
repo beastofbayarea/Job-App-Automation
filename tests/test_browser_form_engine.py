@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import nullcontext
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -86,6 +87,8 @@ def _run_with_browser_mocks(
         patch.object(browser_form, "_first_visible_for", side_effect=apply_and_submit),
         patch.object(browser_form, "_fill_standard_fields", return_value=_successful_fill()),
         patch.object(browser_form, "_fill_custom_questions", return_value={}),
+        patch.object(browser_form, "_stabilize_email_fields"),
+        patch.object(browser_form, "_repair_forbidden_text_characters", return_value=[]),
         patch.object(browser_form, "fill_required_consent", return_value=[]),
         patch.object(
             browser_form,
@@ -141,6 +144,65 @@ def test_smartrecruiters_uses_the_background_cdp_fallback() -> None:
     assert smartrecruiters.SPEC.first_name_selectors[0].startswith("input#")
     assert smartrecruiters.SPEC.cover_letter_text_selectors[0].startswith("textarea#")
     assert workable.SPEC.background_cdp is False
+
+
+def test_stabilize_email_fields_refills_confirmation_after_dynamic_rerender() -> None:
+    page = MagicMock()
+    email = MagicMock()
+    confirmation = MagicMock()
+    email.input_value.return_value = "jane@example.com"
+    confirmation.input_value.return_value = "jane@example.com"
+    filled = {"email": False, "email_confirmation": False}
+    spec = replace(
+        workable.SPEC,
+        email_confirmation_selectors=("#confirm-email",),
+    )
+    with patch.object(
+        browser_form,
+        "_first_visible_for",
+        side_effect=[email, confirmation],
+    ):
+        browser_form._stabilize_email_fields(
+            page,
+            spec,
+            browser_form.CandidateFields(
+                first_name="Jane",
+                last_name="Doe",
+                email="jane@example.com",
+                phone="",
+                headline="",
+                linkedin="",
+                github="",
+                portfolio="",
+                street_address="",
+                city="",
+                postcode="",
+                country="",
+            ),
+            filled,
+        )
+    email.fill.assert_called_once_with("jane@example.com")
+    confirmation.fill.assert_called_once_with("jane@example.com")
+    email.blur.assert_called_once()
+    confirmation.blur.assert_called_once()
+    assert filled == {"email": True, "email_confirmation": True}
+
+
+def test_repair_forbidden_text_characters_replaces_reported_semicolon() -> None:
+    page = MagicMock()
+    control = MagicMock()
+    control.is_visible.return_value = True
+    control.input_value.return_value = "A strong fit; ready to contribute."
+    control.get_attribute.side_effect = lambda name: (
+        "hiring-manager-message-input" if name == "id" else ""
+    )
+    page.locator.return_value.count.return_value = 1
+    page.locator.return_value.nth.return_value = control
+    with patch.object(browser_form, "_forbidden_characters", return_value={";"}):
+        repaired = browser_form._repair_forbidden_text_characters(page)
+    control.fill.assert_called_once_with("A strong fit, ready to contribute.")
+    control.blur.assert_called_once()
+    assert repaired == ["hiring-manager-message-input"]
 
 
 def test_load_orchestrated_config_normalizes_grouped_profile() -> None:

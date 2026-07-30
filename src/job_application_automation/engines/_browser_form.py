@@ -199,6 +199,103 @@ def _fill_cover_letter(page: Page, spec: BrowserFormSpec, path: Path) -> bool:
     return bool(text and fill_first(page, spec.cover_letter_text_selectors, text))
 
 
+def _fill_and_blur(page: Page, selectors: Sequence[str], value: str) -> bool:
+    """Fill a React-managed text control and force its validation lifecycle."""
+    if not value:
+        return False
+    control = _first_visible_for(page, selectors)
+    if control is None:
+        return False
+    try:
+        control.fill(value)
+        control.blur()
+        page.wait_for_timeout(250)
+        return control.input_value().strip() == value.strip()
+    except Exception:
+        return False
+
+
+def _stabilize_email_fields(
+    page: Page,
+    spec: BrowserFormSpec,
+    candidate: CandidateFields,
+    filled: dict[str, bool],
+) -> None:
+    """Refill identity email fields after provider-side dynamic rerenders."""
+    filled["email"] = _fill_and_blur(page, spec.email_selectors, candidate.email)
+    if spec.email_confirmation_selectors:
+        filled["email_confirmation"] = _fill_and_blur(
+            page,
+            spec.email_confirmation_selectors,
+            candidate.email,
+        )
+
+
+def _forbidden_characters(control: Any) -> set[str]:
+    """Read a provider's inline forbidden-character error for one text control."""
+    try:
+        context = str(
+            control.evaluate(
+                """element => {
+                    const describedBy = String(
+                        element.getAttribute("aria-describedby") || ""
+                    ).split(/\\s+/).filter(Boolean);
+                    const described = describedBy.map(id => {
+                        const node = document.getElementById(id);
+                        return node ? node.innerText : "";
+                    }).filter(Boolean).join("\\n");
+                    if (/cannot contain.+characters?\\s*:/i.test(described)) {
+                        return described;
+                    }
+                    let node = element.parentElement;
+                    for (let depth = 0; node && depth < 6; depth += 1, node = node.parentElement) {
+                        const text = String(node.innerText || "");
+                        if (/cannot contain.+characters?\\s*:/i.test(text)) return text;
+                    }
+                    return "";
+                }"""
+            )
+        )
+    except Exception:
+        return set()
+    match = re.search(
+        r"cannot contain(?:\s+the)?(?:\s+following)?\s+characters?\s*:\s*([^\r\n]+)",
+        context,
+        re.I,
+    )
+    if not match:
+        return set()
+    tokens = re.findall(r"[^\w\s,]+", match.group(1))
+    return {character for token in tokens for character in token}
+
+
+def _repair_forbidden_text_characters(page: Page) -> list[str]:
+    """Repair inline character-policy errors without weakening final validation."""
+    repaired: list[str] = []
+    controls = page.locator("input:not([type='file']), textarea")
+    for index in range(controls.count()):
+        control = controls.nth(index)
+        try:
+            if not control.is_visible():
+                continue
+            forbidden = _forbidden_characters(control)
+            value = control.input_value()
+            if not forbidden or not any(character in value for character in forbidden):
+                continue
+            replacement = value
+            for character in forbidden:
+                replacement = replacement.replace(character, "," if character == ";" else " ")
+            replacement = re.sub(r"[ \t]+", " ", replacement)
+            control.fill(replacement)
+            control.blur()
+            repaired.append(control.get_attribute("id") or control.get_attribute("name") or "text")
+        except Exception:
+            continue
+    if repaired:
+        page.wait_for_timeout(500)
+    return repaired
+
+
 def _dismiss_cookie_banner(page: Page) -> None:
     """Dismiss common ATS cookie overlays without changing application answers."""
     for pattern in (
@@ -754,6 +851,25 @@ def _required_issues(page: Page) -> list[str]:
                             issues.push(context || control.name || control.id || "Required field missing");
                         }
                     }
+                    const errorSelectors = [
+                        "[role='alert']",
+                        "[aria-live='assertive']",
+                        ".MuiFormHelperText-root.Mui-error",
+                        "[class*='error-message']",
+                        "[class*='errorMessage']",
+                        "[class*='field-error']"
+                    ].join(",");
+                    for (const error of document.querySelectorAll(errorSelectors)) {
+                        const style = window.getComputedStyle(error);
+                        const visible = style.display !== "none" &&
+                            style.visibility !== "hidden" &&
+                            (error.getClientRects().length > 0);
+                        const text = clean(error.innerText).slice(0, 180);
+                        if (visible && text &&
+                            /required|provide|invalid|cannot contain|must (?:be|have|contain)/i.test(text)) {
+                            issues.push(text);
+                        }
+                    }
                     return Array.from(new Set(issues));
                 }"""
             )
@@ -1036,6 +1152,13 @@ def run_browser_form_engine(
                 role=role,
             )
             consent = fill_required_consent(page)
+            # Resume parsing, address selection, and custom React controls can
+            # rerender the identity block. Refill email fields only after those
+            # dynamic interactions, blur them to trigger validation, and repair
+            # provider-reported text character restrictions before gating submit.
+            _stabilize_email_fields(page, spec, candidate, filled)
+            _repair_forbidden_text_characters(page)
+            consent = sorted(set(consent + fill_required_consent(page)))
             captcha = page_has_captcha(page)
             missing_required = validate_required_fields(page, _required_issues)
             screenshot = capture_screenshot(
