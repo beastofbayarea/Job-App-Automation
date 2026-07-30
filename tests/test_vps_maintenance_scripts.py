@@ -76,6 +76,21 @@ class PowerShellMaintenanceTests(unittest.TestCase):
         self.assertIn("vps_run_status.json", script)
         self.assertIn("job-app-automation-daily-search", script)
 
+    def test_continuous_search_installer_uses_supervision_and_replaces_cron(self) -> None:
+        installer = (SCRIPTS / "install_vps_continuous_search.ps1").read_text(encoding="utf-8")
+        unit = (SCRIPTS / "job-app-search-sync.service.template").read_text(encoding="utf-8")
+        runner = (SCRIPTS / "vps_continuous_search_sync.sh").read_text(encoding="utf-8")
+
+        self.assertIn("-hostkey", installer)
+        self.assertIn("-pwfile", installer)
+        self.assertIn("candidate_profile_config.json", installer)
+        self.assertIn("grep -v '# $CronMarker'", installer)
+        self.assertIn('systemctl restart "$ServiceName"', installer)
+        self.assertIn("vps_continuous_search_sync.sh", unit)
+        self.assertIn("Restart=always", unit)
+        self.assertIn("WantedBy=multi-user.target", unit)
+        self.assertIn("vps_search_sync.sh", runner)
+
     def test_continuous_greenhouse_installer_delegates_to_generic_supervisor(self) -> None:
         wrapper = (SCRIPTS / "install_vps_continuous_greenhouse.ps1").read_text(encoding="utf-8")
         unit = (SCRIPTS / "job-app-continuous-ats.service.template").read_text(encoding="utf-8")

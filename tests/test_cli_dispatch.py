@@ -87,10 +87,10 @@ class UnifiedCliDispatchTests(unittest.TestCase):
 
         output = StringIO()
         self.assertEqual(0, cli.dispatch(["engine", "--help"], stdout=output, stderr=errors))
-        self.assertIn("engine <ashby|greenhouse|lever>", output.getvalue())
+        self.assertIn("Supported providers:", output.getvalue())
 
         errors = StringIO()
-        self.assertEqual(2, cli.dispatch(["engine", "workday"], stderr=errors))
+        self.assertEqual(2, cli.dispatch(["engine", "unsupported_ats"], stderr=errors))
         self.assertIn("unknown engine", errors.getvalue())
 
     def test_cover_letter_command_dispatches_to_its_module(self) -> None:

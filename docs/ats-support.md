@@ -2,6 +2,9 @@
 
 The application orchestrator supports Ashby, Greenhouse, and Lever. Search also supports their public board feeds plus `web` for generic JSON-LD job pages.
 
+For a full technical feasibility analysis, architectural requirements, and RICE prioritization for adding 12 additional ATS platforms (Workable, SmartRecruiters, BambooHR, Workday, etc.), see [ATS Automation Feasibility & RICE Analysis](file:///c:/Users/Nagarro/Downloads/Job%20App%20Automation/docs/ATS_AUTOMATION_FEASIBILITY_AND_RICE.md).
+
+
 | Provider | Search | Application | Notes |
 | --- | --- | --- | --- |
 | Ashby | Public board/feed and page discovery | Supported | Ashby URLs can provide context for resume and cover-letter generation. |

@@ -1,0 +1,14 @@
+# SkyBison Cloud Robots Instructions
+User-agent: *
+Allow: /
+Allow: /index.html
+Allow: /search.html
+Allow: /generation.html
+Allow: /logs.html
+Allow: /inspector.html
+Allow: /sitemap.xml
+Allow: /site.webmanifest
+
+Disallow: /api/download/
+
+Sitemap: https://skybison.cloud/sitemap.xml

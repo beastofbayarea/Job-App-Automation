@@ -754,6 +754,47 @@ class SearchJobBoardsTests(unittest.TestCase):
         self.assertEqual("USD 120000 - 150000 per year", search.format_lever_salary(salary_dict))
         self.assertEqual("", search.format_lever_salary(None))
 
+    def test_restricted_urls_and_boards(self) -> None:
+        self.assertTrue(search.is_restricted_url("https://jobgether.com/"))
+        self.assertTrue(search.is_restricted_url("https://jobgether.com/job/123"))
+        self.assertTrue(search.is_restricted_url("https://jobs.lever.co/jobgether"))
+        self.assertTrue(search.is_restricted_url("https://jobs.lever.co/jobgether/123-456"))
+        self.assertTrue(search.is_restricted_url("https://jobs.eu.lever.co/jobgether"))
+        self.assertTrue(search.is_restricted_url("https://jobtogether.com/role/xyz"))
+
+        self.assertFalse(search.is_restricted_url("https://jobs.lever.co/stripe/123"))
+        self.assertFalse(search.is_restricted_url("https://boards.greenhouse.io/openai/jobs/456"))
+
+        self.assertTrue(search.is_restricted_board(search.Board("lever", "jobgether")))
+        self.assertTrue(search.is_restricted_board(search.Board("web", "jobgether.com")))
+        self.assertFalse(search.is_restricted_board(search.Board("lever", "stripe")))
+
+        restricted_job = make_job(
+            job_url="https://jobs.lever.co/jobgether/abc",
+            board_token="jobgether",
+            platform="lever",
+        )
+        self.assertTrue(search.is_restricted_job(restricted_job))
+
+        self.assertIsNone(search.board_from_url("https://jobgether.com/"))
+        self.assertIsNone(search.board_from_url("https://jobs.lever.co/jobgether"))
+
+    def test_load_logged_job_urls(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_path = Path(tmpdir) / "submission_log.json"
+            log_path.write_text(
+                json.dumps({
+                    "sub1": {
+                        "job_url": "https://boards.greenhouse.io/acme/jobs/999",
+                        "status": "SUBMITTED & CONFIRMED"
+                    }
+                }),
+                encoding="utf-8"
+            )
+            logged = search.load_logged_job_urls([log_path])
+            self.assertIn("https://boards.greenhouse.io/acme/jobs/999", logged)
+
 
 if __name__ == "__main__":
     unittest.main()
+

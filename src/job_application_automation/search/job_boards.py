@@ -61,7 +61,7 @@ from . import liveness as _search_liveness
 from . import models as _search_models
 from . import serialization as _search_serialization
 from . import terms as _search_terms
-from ..core.artifacts import atomic_write_text, write_json as atomic_write_json
+from ..core.artifacts import atomic_write_text, read_json, write_json as atomic_write_json
 from ..core.paths import OUTPUT_DIR
 
 try:
@@ -936,8 +936,122 @@ def discovery_url_key(url: str) -> str:
     return urlunparse((parsed.scheme.lower(), parsed.netloc.lower(), path, "", parsed.query, ""))
 
 
+
+RESTRICTED_URL_PATTERNS = (
+    "jobgether.com",
+    "jobtogether.com",
+    "jobs.lever.co/jobgether",
+    "jobs.eu.lever.co/jobgether",
+    "jobs.lever.co/jobtogether",
+    "jobs.eu.lever.co/jobtogether",
+)
+
+RESTRICTED_BOARD_KEYS = {
+    ("lever", "jobgether"),
+    ("lever", "jobtogether"),
+    ("web", "jobgether.com"),
+    ("web", "jobtogether.com"),
+    ("web", "www.jobgether.com"),
+    ("web", "www.jobtogether.com"),
+}
+
+
+def is_restricted_url(url: str) -> bool:
+    """Check if a URL points to a restricted domain/board such as jobgether or jobtogether."""
+    if not url:
+        return False
+    clean_url = unwrap_search_url(url).strip()
+    url_lower = clean_url.lower()
+
+    for pattern in RESTRICTED_URL_PATTERNS:
+        if pattern in url_lower:
+            return True
+
+    try:
+        parsed = urlparse(clean_url)
+        host = parsed.netloc.lower().split(":", 1)[0]
+        if "jobgether" in host or "jobtogether" in host:
+            return True
+        if host in {"jobs.lever.co", "jobs.eu.lever.co"}:
+            parts = [unquote(p).lower() for p in parsed.path.split("/") if p]
+            if parts and parts[0] in {"jobgether", "jobtogether"}:
+                return True
+    except Exception:
+        pass
+
+    return False
+
+
+def is_restricted_board(board: Board | None) -> bool:
+    """Check if a board matches restricted ATS platform/tokens."""
+    if board is None:
+        return False
+    platform = board.platform.lower()
+    token = board.token.lower()
+    if (platform, token) in RESTRICTED_BOARD_KEYS:
+        return True
+    if token in {"jobgether", "jobtogether", "jobgether.com", "jobtogether.com"}:
+        return True
+    if "jobgether" in token or "jobtogether" in token:
+        return True
+    return False
+
+
+def is_restricted_job(job: Job) -> bool:
+    """Check if a job record comes from or points to a restricted provider/board/url."""
+    if is_restricted_url(job.job_url) or is_restricted_url(job.apply_url):
+        return True
+    if is_restricted_board(Board(job.platform, job.board_token)):
+        return True
+    company_lower = job.company.strip().lower()
+    if company_lower in {"jobgether", "jobtogether"} or "jobgether" in company_lower or "jobtogether" in company_lower:
+        return True
+    return False
+
+
+def load_logged_job_urls(log_paths: Sequence[Path]) -> set[str]:
+    """Load canonical job URLs that have already been searched and logged/submitted."""
+    urls: set[str] = set()
+    for path in log_paths:
+        if not path or not path.exists():
+            continue
+        try:
+            payload = read_json(path)
+        except Exception:
+            continue
+        if isinstance(payload, dict):
+            raw_entries = payload.get("jobs", payload)
+            if isinstance(raw_entries, dict):
+                entries = list(raw_entries.values())
+            elif isinstance(raw_entries, (list, tuple, set)):
+                entries = list(raw_entries)
+            else:
+                entries = []
+            for entry in entries:
+                if isinstance(entry, dict):
+                    job_url = entry.get("job_url") or entry.get("url")
+                    if isinstance(job_url, str) and job_url.strip():
+                        try:
+                            urls.add(canonical_url(job_url))
+                        except Exception:
+                            urls.add(job_url.strip().lower())
+        elif isinstance(payload, list):
+            for entry in payload:
+                if isinstance(entry, dict):
+                    job_url = entry.get("job_url") or entry.get("url")
+                    if isinstance(job_url, str) and job_url.strip():
+                        try:
+                            urls.add(canonical_url(job_url))
+                        except Exception:
+                            urls.add(job_url.strip().lower())
+    return urls
+
+
+
 def board_from_url(raw_url: str) -> Board | None:
     """Identify the ATS platform, board token, and region encoded in a URL, if any."""
+    if is_restricted_url(raw_url):
+        return None
     url = unwrap_search_url(raw_url)
     parsed = urlparse(url)
     host = parsed.netloc.lower().split(":", 1)[0]
@@ -1016,7 +1130,7 @@ def add_candidate(
     candidate: SearchCandidate,
 ) -> bool:
     """Merge a candidate by its discovery URL and retain all discovery provenance."""
-    if candidate.board is None:
+    if candidate.board is None or is_restricted_board(candidate.board) or is_restricted_url(candidate.url):
         return False
     bucket = candidates_by_board.setdefault(candidate.board.key, [])
     for existing in bucket:
@@ -1049,7 +1163,7 @@ def merge_candidates(
 
 def load_discovery_cache(path: Path) -> DiscoveryCache:
     """Load legacy/current cache data through the reusable cache boundary."""
-    return _search_cache.load_discovery_cache(
+    cache = _search_cache.load_discovery_cache(
         path,
         make_cache=DiscoveryCache,
         decode=lambda payload: _search_cache.decode_discovery_cache(
@@ -1062,6 +1176,14 @@ def load_discovery_cache(path: Path) -> DiscoveryCache:
         ),
         on_error=lambda exc: LOGGER.warning("Could not read discovery cache %s: %s", path, exc),
     )
+    cache.boards = {board for board in cache.boards if not is_restricted_board(board)}
+    purged_candidates: dict[str, list[SearchCandidate]] = {}
+    for key, candidates in cache.candidates_by_board.items():
+        valid = [c for c in candidates if not is_restricted_url(c.url) and not is_restricted_board(c.board)]
+        if valid:
+            purged_candidates[key] = valid
+    cache.candidates_by_board = purged_candidates
+    return cache
 
 
 def save_discovery_cache(path: Path, cache: DiscoveryCache) -> None:
@@ -1744,6 +1866,8 @@ def fetch_board_jobs(
     context: FetchContext,
 ) -> list[Job]:
     """Dispatch typed adapter inputs without fragile provider-specific kwargs."""
+    if is_restricted_board(board):
+        return []
     fetcher = BOARD_FETCHERS.get(board.platform)
     if fetcher is not None:
         return fetcher(session, board, context)
@@ -2722,6 +2846,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Do not write the coverage report.",
     )
     parser.add_argument(
+        "--submission-log",
+        action="append",
+        type=Path,
+        default=[],
+        help="Path to submission log(s) or application state JSON to exclude logged jobs.",
+    )
+    parser.add_argument(
+        "--no-exclude-logged",
+        dest="exclude_logged",
+        action="store_false",
+        default=True,
+        help="Do not exclude jobs that have already been searched and logged.",
+    )
+    parser.add_argument(
         "--cache",
         type=Path,
         default=OUTPUT_DIR / "ats_boards_cache.json",
@@ -3138,19 +3276,32 @@ def main(argv: Sequence[str] | None = None) -> int:
         max_lever_pages=args.max_lever_pages,
     )
 
+    default_logs = [
+        OUTPUT_DIR / "submission_log.json",
+        OUTPUT_DIR / "vps_application_state.json",
+    ]
+    submission_log_paths = getattr(args, "submission_log", None) or default_logs
+    logged_urls = load_logged_job_urls(submission_log_paths) if getattr(args, "exclude_logged", True) else set()
+
     for board in sorted(boards, key=lambda item: (item.platform, item.token.lower())):
+        if is_restricted_board(board):
+            continue
         LOGGER.info("Fetching %s board: %s", board.platform, board.token)
         fetch_stats["boards_checked"] += 1
         try:
             board_jobs = fetch_board_jobs(session, board, fetch_context)
-            collected.extend(board_jobs)
+            valid_board_jobs = [
+                job for job in board_jobs
+                if not is_restricted_job(job) and (not logged_urls or canonical_url(job.job_url) not in logged_urls)
+            ]
+            collected.extend(valid_board_jobs)
             fetch_stats["boards_succeeded"] += 1
-            fetch_stats["jobs_from_feeds"] += len(board_jobs)
+            fetch_stats["jobs_from_feeds"] += len(valid_board_jobs)
             catalog.board_status[board.key] = {
                 **catalog.board_status.get(board.key, {}),
                 "last_checked_at": iso_or_blank(now),
                 "last_success_at": iso_or_blank(now),
-                "last_job_count": len(board_jobs),
+                "last_job_count": len(valid_board_jobs),
                 "last_error": "",
             }
         except Exception as exc:
@@ -3174,6 +3325,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     fallback_stats = {"attempted": 0, "matched": 0, "failed": 0}
     seen_fallback_urls: set[str] = set()
     for candidate in iter_candidates_round_robin(candidates_by_board, candidate_board_keys):
+        if is_restricted_url(candidate.url) or is_restricted_board(candidate.board):
+            continue
         normalized_url = discovery_url_key(candidate.url)
         if normalized_url in seen_fallback_urls:
             continue
@@ -3189,15 +3342,22 @@ def main(argv: Sequence[str] | None = None) -> int:
                 now=now,
                 criteria=criteria,
             )
-            collected.extend(page_jobs)
-            fallback_stats["matched"] += len(page_jobs)
+            valid_page_jobs = [
+                job for job in page_jobs
+                if not is_restricted_job(job) and (not logged_urls or canonical_url(job.job_url) not in logged_urls)
+            ]
+            collected.extend(valid_page_jobs)
+            fallback_stats["matched"] += len(valid_page_jobs)
         except Exception as exc:
             fallback_stats["failed"] += 1
             LOGGER.warning("Fallback page failed for %s: %s", candidate.url, exc)
         if args.delay > 0:
             time.sleep(args.delay)
 
-    jobs = deduplicate_jobs(collected)
+    jobs = [
+        job for job in deduplicate_jobs(collected)
+        if not is_restricted_job(job) and (not logged_urls or canonical_url(job.job_url) not in logged_urls)
+    ]
     deduplicated_count = len(jobs)
     if args.require_live:
         args.verify_live = True

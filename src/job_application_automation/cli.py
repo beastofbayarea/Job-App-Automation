@@ -3,25 +3,6 @@
 The implementation package owns every workflow.  This module keeps command
 selection lightweight and lazy so ``--help`` does not instantiate browser,
 Gmail, or LLM dependencies.
-
-==============================================================================
-OUT-OF-THE-BOX ALTERNATE APPROACHES / ARCHITECTURAL OPTIONS:
-1. Dynamic Plugin-Based Entrypoint Discovery (Typer / Click + Python Entry Points):
-   - Instead of maintaining hardcoded dictionaries (COMMAND_MODULES), register
-     commands via standard Python entry_points (`job_automation.commands`).
-   - Benefit: Enables third-party extensions (e.g., Workday or Lever-specific
-     custom plugins) without mutating core code.
-
-2. High-Performance Client-Daemon IPC Architecture (gRPC / FastAPI + Unix Sockets):
-   - Replace one-off script executions (which incur interpreter startup overhead,
-     import delays, and browser re-initialization) with a background daemon process.
-   - The CLI becomes a thin client forwarding RPC requests to a pre-warmed daemon
-     managing persistent Playwright browser pools and cached LLM credentials.
-
-3. Interactive Terminal User Interface (TUI) Dashboard (Textual / Urwid):
-   - Implement an interactive TUI for command dispatch, live progress visualization
-     of batch queue execution, application status Kanban view, and interactive form debuggers.
-==============================================================================
 """
 
 from __future__ import annotations
@@ -57,6 +38,12 @@ ENGINE_MODULES = {
     "ashby": "job_application_automation.engines.ashby",
     "greenhouse": "job_application_automation.engines.greenhouse",
     "lever": "job_application_automation.engines.lever",
+    "workable": "job_application_automation.engines.workable",
+    "smartrecruiters": "job_application_automation.engines.smartrecruiters",
+    "recruitee": "job_application_automation.engines.recruitee",
+    "bamboohr": "job_application_automation.engines.bamboohr",
+    "breezy": "job_application_automation.engines.breezy",
+    "jazzhr": "job_application_automation.engines.jazzhr",
 }
 
 
@@ -76,7 +63,7 @@ def _print_usage(stream: TextIO) -> None:
         "  continuous-ashby  Run the persistent one-job Ashby worker\n"
         "  continuous-greenhouse  Run the persistent one-job Greenhouse worker\n\n"
         "Internal command:\n"
-        "  engine <ashby|greenhouse|lever>  Run an ATS engine for the orchestrator\n\n"
+        "  engine <provider>  Run an ATS engine for the orchestrator\n\n"
         "Use `job_automation.py <command> --help` for command-specific help.",
         file=stream,
     )
@@ -84,7 +71,8 @@ def _print_usage(stream: TextIO) -> None:
 
 def _print_engine_usage(stream: TextIO) -> None:
     print(
-        "Usage: job_automation.py engine <ashby|greenhouse|lever> [arguments]\n\n"
+        "Usage: job_automation.py engine <provider> [arguments]\n\n"
+        "Supported providers: ashby, greenhouse, lever, workable, smartrecruiters, recruitee, bamboohr, breezy, jazzhr.\n"
         "The application workflow invokes engines internally. For direct diagnostic help, "
         "use `job_automation.py engine <provider> --help`.",
         file=stream,
@@ -122,7 +110,8 @@ def dispatch(
     command = COMMAND_ALIASES.get(command, command)
     if command == "engine":
         if not arguments:
-            print("engine requires one of: ashby, greenhouse, lever", file=errors)
+            choices = ", ".join(sorted(ENGINE_MODULES))
+            print(f"engine requires one of: {choices}", file=errors)
             return 2
         if arguments[0] in {"-h", "--help"}:
             _print_engine_usage(output)

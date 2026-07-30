@@ -88,3 +88,32 @@ def test_build_kpi_metrics_mocked():
         assert metrics["archived_document_sets"] == 1
         assert metrics["ats_submissions"] == {"greenhouse": 1}
         assert metrics["vps_info"]["host"] == "2.24.28.180"
+
+
+def test_dashboard_request_handler_route_mappings():
+    from job_application_automation.dashboard.server import DashboardRequestHandler
+
+    handler = DashboardRequestHandler.__new__(DashboardRequestHandler)
+
+    routes_to_test = [
+        ("/sitemap", "/sitemap.xml"),
+        ("/sitemap.xml", "/sitemap.xml"),
+        ("/robots", "/robots.txt"),
+        ("/robots.txt", "/robots.txt"),
+        ("/manifest", "/site.webmanifest"),
+        ("/site.webmanifest", "/site.webmanifest"),
+        ("/search", "/search.html"),
+        ("/generation", "/generation.html"),
+        ("/logs", "/logs.html"),
+        ("/inspector", "/inspector.html"),
+        ("/submissions", "/index.html"),
+    ]
+
+    for req_path, expected_path in routes_to_test:
+        handler.path = req_path
+        with patch.object(DashboardRequestHandler, "_handle_api_get"), \
+             patch.object(DashboardRequestHandler, "_handle_file_download"), \
+             patch("http.server.SimpleHTTPRequestHandler.do_GET"):
+            handler.do_GET()
+            assert handler.path == expected_path
+

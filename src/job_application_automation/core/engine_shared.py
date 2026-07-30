@@ -85,6 +85,12 @@ ATS_HOST_MARKERS: Mapping[str, tuple[str, ...]] = {
     "ashby": ("ashbyhq.com",),
     "greenhouse": ("greenhouse.io",),
     "lever": ("lever.co",),
+    "workable": ("workable.com", "apply.workable.com"),
+    "smartrecruiters": ("smartrecruiters.com", "jobs.smartrecruiters.com"),
+    "recruitee": ("recruitee.com",),
+    "bamboohr": ("bamboohr.com",),
+    "breezy": ("breezy.hr",),
+    "jazzhr": ("applytojob.com", "jazz.co"),
 }
 
 

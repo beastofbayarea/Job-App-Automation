@@ -161,6 +161,12 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
             self.path = "/inspector.html"
         elif path in {"/submissions", "/submissions/"}:
             self.path = "/index.html"
+        elif path in {"/sitemap", "/sitemap/", "/sitemap.xml"}:
+            self.path = "/sitemap.xml"
+        elif path in {"/robots", "/robots.txt"}:
+            self.path = "/robots.txt"
+        elif path in {"/manifest", "/manifest.json", "/site.webmanifest"}:
+            self.path = "/site.webmanifest"
 
         if self.path.startswith("/api/download/"):
             self._handle_file_download()

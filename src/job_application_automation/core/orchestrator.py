@@ -87,6 +87,12 @@ DEFAULT_ENGINE_FILES: Mapping[str, Path] = {
     "ashby": CLI_ENTRYPOINT,
     "greenhouse": CLI_ENTRYPOINT,
     "lever": CLI_ENTRYPOINT,
+    "workable": CLI_ENTRYPOINT,
+    "smartrecruiters": CLI_ENTRYPOINT,
+    "recruitee": CLI_ENTRYPOINT,
+    "bamboohr": CLI_ENTRYPOINT,
+    "breezy": CLI_ENTRYPOINT,
+    "jazzhr": CLI_ENTRYPOINT,
 }
 
 

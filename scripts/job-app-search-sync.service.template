@@ -1,0 +1,25 @@
+[Unit]
+Description=Continuous VPS search, document generation, and application worker
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=__REPO_DIR__
+Environment=PYTHONPATH=__REPO_DIR__/src
+Environment=PYTHONUNBUFFERED=1
+ExecStartPre=/usr/bin/test -x __REPO_DIR__/.venv/bin/python
+ExecStartPre=/usr/bin/test -r __REPO_DIR__/config/candidate_profile_config.json
+ExecStartPre=/usr/bin/test -r __REPO_DIR__/config/vertex_service_account.json
+ExecStart=/bin/bash __REPO_DIR__/scripts/vps_continuous_search_sync.sh
+Restart=always
+RestartSec=15
+KillSignal=SIGINT
+TimeoutStopSec=600
+SyslogIdentifier=job-app-search-sync
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
