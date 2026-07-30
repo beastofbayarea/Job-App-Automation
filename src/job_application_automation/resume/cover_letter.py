@@ -247,10 +247,10 @@ def generate_cover_letter(
             else "The rendered PDF failed validation."
         )
 
-    if last_finish_issues:
+    failure_detail = "; ".join(last_finish_issues) if last_finish_issues else feedback
+    if failure_detail:
         print(
-            "[COVER LETTER VALIDATION] Exhausted retries: "
-            + "; ".join(last_finish_issues),
+            "[COVER LETTER VALIDATION] Exhausted retries: " + failure_detail,
             file=sys.stderr,
             flush=True,
         )

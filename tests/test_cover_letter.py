@@ -490,7 +490,7 @@ class GenerateCoverLetterTests(unittest.TestCase):
         bad_response = json_module.dumps(
             {
                 "salutation": "Dear Team,",
-                "paragraphs": ["A paragraph.", "Another paragraph."],
+                "paragraphs": ["A paragraph.", "Another paragraph.", "A final paragraph."],
                 "closing": "Sincerely,",
                 "signature": "Shivam Singh",
                 "evidence_claim_ids": ["MADE-UP-9"],
@@ -499,24 +499,27 @@ class GenerateCoverLetterTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             output_path = Path(directory) / "letter.pdf"
             renderer = _RecordingRenderer([])
+            stderr = io.StringIO()
 
-            result = cover_letter.generate_cover_letter(
-                CoverLetterJob(company="Example Co", role="PM", jd_text="Build things."),
-                CareerNarrative(),
-                _fake_source(),
-                output_path,
-                gateway=_RecordingGateway(bad_response),
-                renderer=renderer,
-                fitz_module=_FakeGenFitz([]),
-                cache=CoverLetterCache(),
-                max_retries=1,
-                minimum_words=5,
-                maximum_words=100,
-            )
+            with redirect_stderr(stderr):
+                result = cover_letter.generate_cover_letter(
+                    CoverLetterJob(company="Example Co", role="PM", jd_text="Build things."),
+                    CareerNarrative(),
+                    _fake_source(),
+                    output_path,
+                    gateway=_RecordingGateway(bad_response),
+                    renderer=renderer,
+                    fitz_module=_FakeGenFitz([]),
+                    cache=CoverLetterCache(),
+                    max_retries=1,
+                    minimum_words=5,
+                    maximum_words=100,
+                )
 
             self.assertIsNone(result)
             self.assertFalse(output_path.exists())
             self.assertEqual(renderer.render_count, 0)
+            self.assertIn("MADE-UP-9", stderr.getvalue())
 
     def test_a_two_page_render_is_never_promoted_to_the_output_path(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
