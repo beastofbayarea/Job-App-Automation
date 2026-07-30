@@ -328,11 +328,13 @@
       "compensation expectation",
       "compensation expectations",
       "expected monthly base salary",
+      "expected annual salary",
       "expected salary",
       "desired compensation"
     ],
     "current_salary": [
       "current salary",
+      "current annual salary",
       "current monthly base salary",
       "current compensation"
     ],

@@ -286,6 +286,8 @@ class ScreeningMatcherTests(unittest.TestCase):
         cases = {
             "Would you need us to sponsor a work visa?": "No",
             "Pay range transparency": "Acknowledge",
+            "Current Annual Salary (with Currency)": "Prefer not to disclose",
+            "Expected Annual Salary (with Currency)": "Negotiable",
         }
         for question, expected in cases.items():
             with self.subTest(question=question):
