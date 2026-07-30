@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import logging
 import os
 import sys
 import webbrowser
@@ -17,6 +18,8 @@ from datetime import datetime, timezone
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from typing import Any, Sequence
+
+logger = logging.getLogger("DashboardServer")
 
 STATIC_DIR = Path(__file__).parent / "static"
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -52,7 +55,8 @@ def load_json_file(filename: str, default: Any = None) -> Any:
     try:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to load JSON file %s: %s", path, exc)
         return default if default is not None else {}
 
 
@@ -66,8 +70,8 @@ def load_csv_jobs() -> list[dict[str, str]]:
             reader = csv.DictReader(f)
             for row in reader:
                 jobs.append(dict(row))
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Failed to load CSV jobs from %s: %s", path, exc)
     return jobs
 
 
@@ -89,7 +93,8 @@ def load_vps_config() -> dict[str, Any]:
                 if key in vps
             }
         }
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to load VPS config from %s: %s", config_path, exc)
         return {}
 
 
