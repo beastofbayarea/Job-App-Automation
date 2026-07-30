@@ -115,6 +115,21 @@ class PowerShellMaintenanceTests(unittest.TestCase):
             script.index('systemctl stop --no-block "$service"'),
         )
 
+    def test_memory_guard_is_bounded_idempotent_and_preserves_existing_paths(self) -> None:
+        script = (SCRIPTS / "install_vps_memory_guard.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("[ValidateRange(512, 4096)]", script)
+        self.assertIn("swapon --noheadings --show=NAME", script)
+        self.assertIn("Insufficient disk headroom", script)
+        self.assertIn("Refusing to overwrite non-swap path", script)
+        self.assertIn("chmod 0600", script)
+        self.assertIn("mkswap", script)
+        self.assertIn("/swapfile none swap sw 0 0", script)
+        self.assertIn("vm.swappiness=10", script)
+        self.assertIn("99-job-app-memory.conf", script)
+        self.assertIn("-hostkey", script)
+        self.assertIn("-pwfile", script)
+
     def test_continuous_search_installer_uses_current_timeout_helper_contract(self) -> None:
         installer = (SCRIPTS / "install_vps_continuous_search.ps1").read_text(
             encoding="utf-8"

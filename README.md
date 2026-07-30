@@ -299,6 +299,12 @@ Repair the dashboard as an authenticated loopback service behind Nginx:
 pwsh scripts\install_vps_dashboard.ps1
 ```
 
+Add bounded swap headroom for the parallel browser workers:
+
+```powershell
+pwsh scripts\install_vps_memory_guard.ps1
+```
+
 The installers deploy the ignored candidate email pool, remove the older daily
 cron entry, disable the broad continuous search/submission service, and enable
 one independent `job-app-<ats>.service` per provider. Installing one worker

@@ -202,6 +202,18 @@ or lacks explicit database-authentication failure evidence. It does not alter
 the environment file; a future deployment must provide valid replacement
 credentials before re-enabling the backend.
 
+For a low-memory VPS running multiple headed browser workers, install bounded
+swap headroom once:
+
+```powershell
+pwsh scripts\install_vps_memory_guard.ps1
+```
+
+The idempotent guard creates a 2 GiB `/swapfile` only when no swap is active,
+requires at least 1 GiB of disk headroom beyond the requested swap, refuses to
+overwrite an unrelated `/swapfile`, persists the mount in `/etc/fstab`, and
+sets `vm.swappiness=10`. Use `-SwapSizeMiB` to select 512–4096 MiB.
+
 The `vps-search-output` branch is a dedicated generated-data branch with
 unrelated history. Keep it separate from `main`; use the synchronization
 scripts instead of merging it.
