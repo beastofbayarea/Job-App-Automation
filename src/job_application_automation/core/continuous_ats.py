@@ -267,8 +267,8 @@ def _diagnostics(outcome: CommandOutcome) -> dict[str, Any]:
     return {
         "exit_code": outcome.return_code,
         "timed_out": outcome.timed_out,
-        "stdout_tail": outcome.stdout[-20000:],
-        "stderr_tail": outcome.stderr[-20000:],
+        "stdout_tail": outcome.stdout[-2000:],
+        "stderr_tail": outcome.stderr[-2000:],
     }
 
 
