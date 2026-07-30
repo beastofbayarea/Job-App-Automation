@@ -188,6 +188,15 @@ for raw_path in sys.argv[1:]:
                 )
                 if key in record
             }
+            result = record.get("result")
+            if isinstance(result, dict):
+                missing = result.get("missing_required")
+                if isinstance(missing, list) and missing:
+                    summary["missing_required"] = [
+                        str(field).strip()[:160] for field in missing[:8]
+                    ]
+                if "captcha_present" in result:
+                    summary["captcha_present"] = result.get("captcha_present")
             print(f"{provider}: recent=" + json.dumps(summary, sort_keys=True))
 PY
 printf '%s\n' '=== CONFIRMED SUBMISSION LEDGER ==='

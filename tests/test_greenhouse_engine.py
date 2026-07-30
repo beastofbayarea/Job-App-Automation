@@ -10,6 +10,7 @@ from job_application_automation.engines.greenhouse import (
     _load_candidate_evidence,
     _fill_explicit_required_consents,
     _fill_export_control_questions,
+    _fill_pre_submit_security_challenge,
     _fill_source_checkbox,
     _greenhouse_semantic_answer,
     _required_empty_fields,
@@ -18,6 +19,32 @@ from job_application_automation.engines.greenhouse import (
     _parser,
     main,
 )
+
+
+def test_pre_submit_security_challenge_uses_newest_gmail_code_only_in_live_mode() -> None:
+    page = MagicMock()
+    with (
+        patch(
+            "job_application_automation.engines.greenhouse._security_challenge_visible",
+            return_value=True,
+        ),
+        patch(
+            "job_application_automation.engines.greenhouse._fill_security_code_from_gmail",
+            return_value=True,
+        ) as fill_code,
+    ):
+        assert _fill_pre_submit_security_challenge(
+            page,
+            "Example Company",
+            live_submit=True,
+        )
+        fill_code.assert_called_once_with(page, "Example Company")
+        assert not _fill_pre_submit_security_challenge(
+            page,
+            "Example Company",
+            live_submit=False,
+        )
+        fill_code.assert_called_once()
 
 
 def test_greenhouse_semantic_answers_prevent_observed_matcher_collisions() -> None:

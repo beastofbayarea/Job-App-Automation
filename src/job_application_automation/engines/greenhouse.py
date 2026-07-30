@@ -907,6 +907,18 @@ def _fill_security_code_from_gmail(
         return False
 
 
+def _fill_pre_submit_security_challenge(
+    page: Page,
+    company: str,
+    *,
+    live_submit: bool,
+) -> bool:
+    """Fill Greenhouse security codes that are required before form submission."""
+    if not live_submit or not _security_challenge_visible(page):
+        return False
+    return _fill_security_code_from_gmail(page, company)
+
+
 def run(
     *,
     url: str,
@@ -1077,6 +1089,11 @@ def run(
             )
             consent = _fill_consent(page)
             consent.extend(_fill_explicit_required_consents(page))
+            _fill_pre_submit_security_challenge(
+                page,
+                company,
+                live_submit=live_submit,
+            )
             missing = validate_required_fields(page, _required_empty_fields)
             prefill_screenshot = _screenshot(
                 page, screenshot_dir, company or "Greenhouse", "prefilled"
