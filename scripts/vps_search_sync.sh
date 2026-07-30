@@ -80,6 +80,13 @@ APPLICATION_RESULTS="$REPO_DIR/output/vps_application_results"
 APPLICATION_FAILURES="$REPO_DIR/output/vps_application_failures.json"
 SUBMISSION_LOG="$REPO_DIR/output/submission_log.json"
 RUN_STATUS="$REPO_DIR/output/vps_run_status.json"
+INFRA_STATUS="$REPO_DIR/output/vps_infra_status.json"
+INFRA_SERVICES=(
+  "job-app-ashby"
+  "job-app-greenhouse"
+  "job-app-lever"
+  "job-app-search-sync"
+)
 
 # Cron and an on-demand trigger must never update the search artifacts or sync
 # worktree concurrently. Keep the file descriptor open for the entire run.
@@ -178,9 +185,49 @@ interrupt_run() {
   exit "$1"
 }
 
+# Snapshot of the continuous systemd workers this project runs, independent
+# of this run's own search/apply stages. Written unconditionally (best
+# effort) so the public dashboard can show which engines are actually live
+# without the dashboard server itself ever SSHing into the VPS.
+write_infra_status() {
+  local active_services=()
+  local service
+  for service in "${INFRA_SERVICES[@]}"; do
+    if systemctl is-active --quiet "$service" 2>/dev/null; then
+      active_services+=("$service")
+    fi
+  done
+  local uptime_text
+  uptime_text="$(uptime -p 2>/dev/null || echo "")"
+  python - "$INFRA_STATUS" "$uptime_text" "${active_services[@]}" <<'PY'
+import json
+import os
+import sys
+from datetime import UTC, datetime
+from pathlib import Path
+
+status_path, uptime_text, *active_services = sys.argv[1:]
+path = Path(status_path)
+path.parent.mkdir(parents=True, exist_ok=True)
+payload = {
+    "version": 1,
+    "generated_at": datetime.now(UTC).isoformat(),
+    "active_services": active_services,
+    "uptime": uptime_text,
+}
+temporary = path.with_name(f"{path.name}.tmp.{os.getpid()}")
+temporary.write_text(
+    json.dumps(payload, indent=2, sort_keys=True) + "\n",
+    encoding="utf-8",
+)
+os.replace(temporary, path)
+PY
+}
+
 trap 'interrupt_run 130' INT
 trap 'interrupt_run 143' TERM
 trap finish_run EXIT
+write_infra_status || echo "Unable to write VPS infra status snapshot." >&2
 set_stage "search"
 
 SEARCH_MODE_ARGS=()

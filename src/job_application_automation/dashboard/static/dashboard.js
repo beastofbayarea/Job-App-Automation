@@ -255,6 +255,24 @@ async function fetchMetrics() {
       document.getElementById('vpsOwner').textContent = `${data.hostinger_info.company || ''} (${data.hostinger_info.owner_name})`;
     }
 
+    // Render live continuous-worker facts, pulled from the VPS's own
+    // snapshot file rather than a live SSH check (the dashboard server never
+    // shells into the VPS itself).
+    if (data.vps_infra) {
+      const infra = data.vps_infra;
+      const servicesEl = document.getElementById('vpsActiveEngines');
+      if (servicesEl) {
+        const services = Array.isArray(infra.active_services) ? infra.active_services : [];
+        servicesEl.textContent = services.length
+          ? `${services.length} running: ${services.join(', ')}`
+          : 'No snapshot yet';
+      }
+      const uptimeEl = document.getElementById('vpsUptime');
+      if (uptimeEl) {
+        uptimeEl.textContent = infra.uptime || '--';
+      }
+    }
+
   } catch (err) {
     setVpsStatusBadge('UNREACHABLE', 'badge-failed');
     console.error('Failed to load metrics', err);

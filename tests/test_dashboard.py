@@ -131,6 +131,32 @@ def test_build_kpi_metrics_mocked():
         assert metrics["archived_document_sets"] == 1
         assert metrics["ats_submissions"] == {"greenhouse": 1}
         assert metrics["vps_info"]["host"] == "2.24.28.180"
+        assert metrics["vps_infra"] == {}
+
+
+def test_build_kpi_metrics_includes_vps_infra_snapshot_when_present():
+    sample_infra = {
+        "version": 1,
+        "generated_at": "2026-07-31T02:00:00+00:00",
+        "active_services": ["job-app-ashby", "job-app-greenhouse", "job-app-lever", "job-app-search-sync"],
+        "uptime": "up 15 hours, 42 minutes",
+    }
+
+    with patch("job_application_automation.dashboard.server.load_json_file") as mock_load, \
+         patch("job_application_automation.dashboard.server.load_csv_jobs") as mock_csv, \
+         patch("job_application_automation.dashboard.server.load_vps_config") as mock_cfg:
+
+        def mock_loader(fname, default=None):
+            if fname == "vps_infra_status.json":
+                return sample_infra
+            return default if default is not None else {}
+
+        mock_load.side_effect = mock_loader
+        mock_csv.return_value = []
+        mock_cfg.return_value = {}
+
+        metrics = build_kpi_metrics()
+        assert metrics["vps_infra"] == sample_infra
 
 
 def test_dashboard_request_handler_route_mappings():

@@ -45,7 +45,8 @@ if (-not $PscpCmd) {
 
 $ReportNames = @(
     "submission_log.json",
-    "vps_application_failures.json"
+    "vps_application_failures.json",
+    "vps_infra_status.json"
 )
 $DestinationPath = [IO.Path]::GetFullPath($Destination)
 foreach ($Name in $ReportNames) {

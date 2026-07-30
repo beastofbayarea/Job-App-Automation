@@ -219,6 +219,7 @@ def build_kpi_metrics() -> dict[str, Any]:
     generation_jobs = load_json_file("vps_generation_jobs.json", default=[])
     archives = load_json_file("vps_document_archive_state.json", default={})
     cache_data = load_json_file("ats_boards_cache.json", default={})
+    infra_status = load_json_file("vps_infra_status.json", default={})
     jobs = load_csv_jobs()
     vps_cfg = load_vps_config()
 
@@ -276,6 +277,7 @@ def build_kpi_metrics() -> dict[str, Any]:
         "last_failure_update": failures_data.get("updated_at", "") if isinstance(failures_data, dict) else "",
         "vps_info": vps_cfg.get("vps", {}),
         "hostinger_info": vps_cfg.get("hostinger_account", {}),
+        "vps_infra": infra_status if isinstance(infra_status, dict) else {},
     }
 
 
