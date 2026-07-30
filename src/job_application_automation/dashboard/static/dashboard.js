@@ -31,10 +31,22 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+// The badge reflects the only liveness signal a public read-only dashboard
+// actually has: whether the API responded on this page load. It must never
+// assert a status that has not been observed.
+function setVpsStatusBadge(text, modifier) {
+  const badge = document.getElementById('vpsStatusBadge');
+  if (!badge) return;
+  badge.textContent = text;
+  badge.className = `badge ${modifier}`;
+}
+
 async function fetchMetrics() {
   try {
     const res = await fetch('/api/metrics');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
+    setVpsStatusBadge('ACTIVE & ONLINE', 'badge-confirmed');
     state.metrics = data;
     
     if (document.getElementById('kpiSubmissions')) document.getElementById('kpiSubmissions').textContent = data.total_submissions ?? 0;
@@ -79,6 +91,7 @@ async function fetchMetrics() {
     }
 
   } catch (err) {
+    setVpsStatusBadge('UNREACHABLE', 'badge-failed');
     console.error('Failed to load metrics', err);
   }
 }
