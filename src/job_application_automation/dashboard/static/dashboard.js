@@ -19,7 +19,7 @@ const NAV_PAGES = [
   { slug: 'generation', href: 'generation.html', icon: '🪨', desktopLabel: 'AI Queue', drawerLabel: 'Generation & Archives', bottomLabel: 'Queue' },
   { slug: 'logs', href: 'logs.html', icon: '🔥', desktopLabel: 'Sync Logs', drawerLabel: 'Real-Time VPS Logs', bottomLabel: 'Logs' },
   { slug: 'inspector', href: 'inspector.html', icon: '📁', desktopLabel: 'Inspector', drawerLabel: 'Raw File Inspector', bottomLabel: 'Files' },
-  { slug: 'cent-capital', href: 'cent-capital.html', icon: '🏛️', desktopLabel: 'Cent Capital', drawerLabel: 'Cent Capital (cent.capital)', bottomLabel: 'Cent' }
+  { slug: 'system-status', href: 'system-status.html', icon: '🛰️', desktopLabel: 'System Status', drawerLabel: 'VPS Config & Failures', bottomLabel: 'Status' }
 ];
 
 // Each page keeps its own <nav>/<aside> chrome (hamburger button, drawer
