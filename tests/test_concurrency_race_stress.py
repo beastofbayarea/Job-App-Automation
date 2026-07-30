@@ -28,27 +28,26 @@ def test_concurrent_atomic_write_json_stress(tmp_path: Path) -> None:
 
 def test_concurrent_submission_log_append_stress(tmp_path: Path) -> None:
     log_file = tmp_path / "submission_log.json"
-    log = SubmissionLog(log_file)
 
     def append_worker(index: int) -> None:
+        log = SubmissionLog()
         record = SubmissionRecord(
-            url=f"https://example.com/job/{index}",
+            job_url=f"https://example.com/job/{index}",
             ats="greenhouse",
             company="Acme",
-            role="AI Engineer",
-            applied_at=f"2026-07-30T10:00:{index:02d}Z",
+            role=f"AI Engineer {index}",
             status="PREFILLED_ONLY",
-            confirmation_method="form",
-            screenshot="",
-            error_message="",
-            test_mode=True,
+            email_used="candidate@example.test",
+            resume_filename="resume.pdf",
         )
         log.record(record)
+        log.save(log_file)
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         futures = [executor.submit(append_worker, i) for i in range(5)]
         for f in futures:
             f.result()
 
-    records = log.load()
-    assert len(records) == 5
+    final_log = SubmissionLog()
+    count = final_log.load(log_file)
+    assert count == 5
