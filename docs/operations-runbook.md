@@ -98,21 +98,27 @@ Install the continuous worker from Windows after the VPS checkout and private
 candidate/Vertex/Gmail inputs are present:
 
 ```powershell
+pwsh scripts\install_vps_continuous_search.ps1
 pwsh scripts\install_vps_continuous_ashby.ps1
 pwsh scripts\install_vps_continuous_greenhouse.ps1
 pwsh scripts\install_vps_continuous_lever.ps1
 ```
 
 These installations replace the marked daily cron entry with the systemd
-units `job-app-ashby.service`, `job-app-greenhouse.service`, and
-`job-app-lever.service`. All provider workers run in parallel, while the broad
-continuous search/submission service remains disabled. Installing or repairing
-one provider does not stop or restart another. When replacing an already-active
-instance of that same provider, the installer waits for active `apply`
-subprocesses before restarting it onto newly deployed code. The ignored
-candidate email pool is copied to the VPS with mode `0600`. Each service runs
-headed Chromium under its own Xvfb display, starts automatically on boot, and
-has `Restart=always`.
+units `job-app-search-sync.service`, `job-app-ashby.service`,
+`job-app-greenhouse.service`, and `job-app-lever.service`. All four run in
+parallel. The search service continuously refreshes verified job discovery,
+publishes only the safe coverage/jobs/board-cache snapshot, waits five minutes,
+and repeats. It does not generate documents or submit applications.
+
+Installing or repairing one provider does not stop or restart another or the
+search service. When replacing an already-active instance of that same
+provider, the installer waits for active `apply` subprocesses before restarting
+it onto newly deployed code. The ignored candidate email pool is copied to the
+VPS with mode `0600`. Each provider service runs headed Chromium under its own
+Xvfb display, starts automatically on boot, and has `Restart=always`. The
+search-only service does not launch a browser and runs with lower CPU, memory,
+I/O, and process limits so submission workers retain priority.
 
 Future ATS engines use the same provider-neutral unit without changes to the
 supervisor:
@@ -160,8 +166,9 @@ Inspect the service without starting another worker:
 pwsh scripts\check_vps_parallel_ats.ps1 -LogLines 120
 ```
 
-The status probe includes capacity, enablement/activity for both services,
-worker processes, provider state summaries, and recent `journalctl` output.
+The status probe includes capacity, enablement/activity for search and every
+ATS service, worker processes, provider state summaries, and recent
+`journalctl` output.
 
 For a read-only inventory of everything that persists or wakes on a schedule on
 the VPS—not only the job-application workers—run:
@@ -296,6 +303,8 @@ The cron entry and an on-demand trigger both run
 `scripts/vps_search_sync.sh`. That script uses a nonblocking lock and exits
 without starting when another sync is active. It also refuses to publish unless
 the search produced coverage, jobs, and board-cache artifacts for that run.
+The continuous service invokes the same script with `--search-only`, which
+exits after publication and never enters document or application stages.
 
 From Windows, trigger a reviewed out-of-cycle run with the confirmed absolute
 POSIX clone path:

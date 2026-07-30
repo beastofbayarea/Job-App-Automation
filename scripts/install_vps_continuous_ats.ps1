@@ -79,8 +79,6 @@ $UnitStage = ConvertTo-PosixShellLiteral $RemoteUnitStage
 $PoolStage = ConvertTo-PosixShellLiteral $RemotePoolStage
 $ProfileStage = ConvertTo-PosixShellLiteral $RemoteProfileStage
 $CronMarker = "job-app-automation-daily-search"
-$CompetingServices = @("job-app-search-sync.service")
-$CompetingServiceNames = $CompetingServices -join " "
 $RemoteCommand = @"
 set -eu
 repo=$Repo
@@ -118,9 +116,6 @@ if systemctl is-active --quiet "$ServiceName"; then
     exit 76
   fi
 fi
-for service in $CompetingServiceNames; do
-  systemctl disable --now "`$service" 2>/dev/null || true
-done
 systemctl daemon-reload
 systemctl enable "$ServiceName"
 systemctl restart "$ServiceName"
@@ -176,5 +171,5 @@ if ($RemoteExitCode -ne 0) {
 
 Write-Host (
     "Installed and started $ServiceName without stopping or restarting other ATS " +
-    "workers. The broad continuous search service and replaced daily cron remain disabled."
+    "workers or the continuous job-search service. The replaced daily cron remains disabled."
 )

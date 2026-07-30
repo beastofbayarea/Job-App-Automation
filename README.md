@@ -287,6 +287,12 @@ pwsh scripts\install_vps_continuous_greenhouse.ps1
 pwsh scripts\install_vps_continuous_lever.ps1
 ```
 
+Install the independent continuous job-discovery and safe-publication service:
+
+```powershell
+pwsh scripts\install_vps_continuous_search.ps1
+```
+
 Audit all persistent and scheduled VPS workloads without changing remote state:
 
 ```powershell
@@ -306,10 +312,10 @@ pwsh scripts\install_vps_memory_guard.ps1
 ```
 
 The installers deploy the ignored candidate email pool, remove the older daily
-cron entry, disable the broad continuous search/submission service, and enable
-one independent `job-app-<ats>.service` per provider. Installing one worker
-does not stop or restart another. Ashby, Greenhouse, and Lever therefore run
-in parallel, and a future installed ATS engine can use the same supervisor:
+cron entry, and enable one independent `job-app-<ats>.service` per provider.
+Installing one worker does not stop or restart another or the search service.
+Ashby, Greenhouse, Lever, and continuous job discovery therefore run in
+parallel, and a future installed ATS engine can use the same supervisor:
 
 ```powershell
 pwsh scripts\install_vps_continuous_ats.ps1 -AtsPlatform providername
@@ -325,6 +331,12 @@ and accepts only exact
 before the next cycle. Systemd restarts the worker after crashes and boots.
 Ambiguous, CAPTCHA-gated, or interrupted submission attempts are quarantined
 for review and are never retried automatically.
+
+The search service continuously refreshes verified Greenhouse, Lever, and
+Ashby listings, publishes only the safe coverage/jobs/board-cache snapshot,
+waits five minutes, and repeats. It never generates documents or submits
+applications, so those boundaries remain owned by the guarded ATS workers and
+the explicit full daily/on-demand pipeline.
 
 Each successful scheduled search publishes its complete safe snapshot before
 starting private document work. The workflow then processes a bounded number of

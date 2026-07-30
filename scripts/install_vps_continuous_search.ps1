@@ -1,4 +1,4 @@
-# Installs or repairs the continuous search, document generation, and application worker service.
+# Installs or repairs the continuous job-discovery and safe-publication service.
 param(
     [string]$RemoteRepoPath = "/root/Job-App-Automation",
     [string]$ConfigPath = "config/vps_config.json",
@@ -9,9 +9,7 @@ param(
 
 foreach ($RequiredPath in @(
     $ConfigPath,
-    $ServiceTemplatePath,
-    "config/candidate_profile_config.json",
-    "config/vertex_service_account.json"
+    $ServiceTemplatePath
 )) {
     if (-not (Test-Path -LiteralPath $RequiredPath)) {
         Write-Error "Required installation input not found: $RequiredPath"
@@ -59,7 +57,6 @@ if (-not $PlinkCmd -or -not $PscpCmd) {
 $ServiceName = "job-app-search-sync.service"
 $Token = [guid]::NewGuid().ToString("N")
 $RemoteUnitStage = "/tmp/job-app-search-sync-$Token.service"
-$RemoteProfileStage = "/tmp/candidate-profile-$Token.json"
 $RenderedUnitPath = Join-Path ([IO.Path]::GetTempPath()) "job-app-search-sync-$Token.service"
 $PasswordFile = Join-Path ([IO.Path]::GetTempPath()) "job-app-search-sync-$Token.txt"
 $RenderedUnit = (
@@ -67,7 +64,6 @@ $RenderedUnit = (
 ).Replace("__REPO_DIR__", $RemoteRepoPath)
 $Repo = ConvertTo-PosixShellLiteral $RemoteRepoPath
 $UnitStage = ConvertTo-PosixShellLiteral $RemoteUnitStage
-$ProfileStage = ConvertTo-PosixShellLiteral $RemoteProfileStage
 $CronMarker = "job-app-automation-daily-search"
 
 $RemoteCommand = @"
@@ -76,17 +72,9 @@ repo=$Repo
 git -C "`$repo" pull --ff-only origin main
 test -f "`$repo/scripts/vps_search_sync.sh"
 test -f "`$repo/scripts/vps_continuous_search_sync.sh"
-test -f "`$repo/config/candidate_profile_config.json"
-test -f "`$repo/config/vertex_service_account.json"
-test -f "`$repo/data/base_resume.txt"
-if ! command -v xvfb-run >/dev/null 2>&1; then
-  apt-get update -qq
-  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq xvfb
-fi
-install -d -m 0700 "`$repo/config" "`$repo/output"
-install -m 0600 $ProfileStage "`$repo/config/candidate_profile_config.json"
+install -d -m 0700 "`$repo/output"
 install -m 0644 $UnitStage "/etc/systemd/system/$ServiceName"
-rm -f $ProfileStage $UnitStage
+rm -f $UnitStage
 current=`$(crontab -l 2>/dev/null || true)
 filtered=`$(printf '%s\n' "`$current" | grep -v '# $CronMarker' || true)
 if [ -n "`$filtered" ]; then
@@ -128,26 +116,6 @@ try {
         -TimeoutSeconds 30
     if ($Transfer.ExitCode -ne 0) {
         Write-Error "Continuous search unit upload failed (exit code $($Transfer.ExitCode))."
-        exit $Transfer.ExitCode
-    }
-
-    Write-Host "Staging candidate profile to $VpsHost..."
-    $Transfer = Invoke-ExternalCommandWithTimeout `
-        -FilePath $PscpCmd.Source `
-        -ArgumentList @(
-            "-batch",
-            "-P",
-            $SshPort,
-            "-pwfile",
-            $PasswordFile,
-            "-hostkey",
-            $SshHostKey,
-            "config/candidate_profile_config.json",
-            "$SshUser@${VpsHost}:$RemoteProfileStage"
-        ) `
-        -TimeoutSeconds 30
-    if ($Transfer.ExitCode -ne 0) {
-        Write-Error "Candidate profile upload failed (exit code $($Transfer.ExitCode))."
         exit $Transfer.ExitCode
     }
 

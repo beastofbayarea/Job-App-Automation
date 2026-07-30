@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Continuous VPS search, document generation, and application runner.
-# Executes search & sync in an endless loop under systemd supervision.
+# Continuous VPS job-discovery and safe-publication runner.
+# Document generation and applications remain owned by separate workflows.
 
 set -euo pipefail
 
@@ -14,7 +14,7 @@ printf 'Starting continuous VPS search sync worker at %s\n' "$(date -u +%Y-%m-%d
 while true; do
   printf '=== Beginning VPS search sync cycle at %s ===\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-  if bash "$REPO_DIR/scripts/vps_search_sync.sh"; then
+  if bash "$REPO_DIR/scripts/vps_search_sync.sh" --search-only; then
     printf 'VPS search sync cycle completed successfully at %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   else
     printf 'VPS search sync cycle finished with exit status %s at %s\n' "$?" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"

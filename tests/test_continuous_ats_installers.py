@@ -25,7 +25,8 @@ def test_all_provider_wrappers_use_guarded_generic_supervision() -> None:
     assert "-pwfile" in installer
     assert "[j]ob_automation.py apply" in installer
     assert "exit 76" in installer
-    assert "job-app-search-sync.service" in installer
+    assert "disable --now" not in installer
+    assert "continuous job-search service" in installer
     assert "OtherAtsService" not in installer
     assert "Restart=always" in unit
     assert "job_application_automation.core.continuous_ats" in unit
@@ -40,6 +41,8 @@ def test_parallel_status_probe_discovers_all_services_and_redacts_email() -> Non
     assert "continuous_*_state.json" in script
     assert "continuous_ats" in script
     assert "continuous-lever" in script
+    assert "job-app-search-sync.service" in script
+    assert "[v]ps_continuous_search_sync" in script
     assert "grep -v '[b]ash -c set -eu repo='" in script
     assert "[REDACTED]" in script
     assert "free -h" in script

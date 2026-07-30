@@ -1,5 +1,5 @@
 [Unit]
-Description=Continuous VPS search, document generation, and application worker
+Description=Continuous VPS job discovery and safe search-output publication
 Wants=network-online.target
 After=network-online.target
 StartLimitIntervalSec=900
@@ -11,20 +11,20 @@ WorkingDirectory=__REPO_DIR__
 Environment=PYTHONPATH=__REPO_DIR__/src
 Environment=PYTHONUNBUFFERED=1
 ExecStartPre=/usr/bin/test -x __REPO_DIR__/.venv/bin/python
-ExecStartPre=/usr/bin/test -r __REPO_DIR__/config/candidate_profile_config.json
-ExecStartPre=/usr/bin/test -r __REPO_DIR__/config/vertex_service_account.json
 ExecStart=/bin/bash __REPO_DIR__/scripts/vps_continuous_search_sync.sh
 Restart=always
 RestartSec=15
 MemoryAccounting=true
-MemoryHigh=1400M
-MemoryMax=2G
-TasksMax=384
+MemoryHigh=700M
+MemoryMax=1G
+TasksMax=128
 CPUAccounting=true
-CPUWeight=75
-Nice=5
+CPUWeight=50
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6
 KillSignal=SIGINT
-TimeoutStopSec=600
+TimeoutStopSec=120
 SyslogIdentifier=job-app-search-sync
 StandardOutput=journal
 StandardError=journal

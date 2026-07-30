@@ -1,4 +1,4 @@
-# Reads every continuous ATS service without starting or stopping work.
+# Reads every continuous ATS service and the search service without changing work.
 param(
     [string]$RemoteRepoPath = "/root/Job-App-Automation",
     [string]$ConfigPath = "config/vps_config.json",
@@ -45,6 +45,10 @@ printf '%s\n' '=== VPS CAPACITY ==='
 date --iso-8601=seconds
 uptime
 free -h
+printf '%s\n' '=== CONTINUOUS SEARCH SERVICE ==='
+systemctl show job-app-search-sync.service \
+  --property=Id,LoadState,UnitFileState,ActiveState,SubState,MainPID,NRestarts,ExecMainStartTimestamp \
+  2>/dev/null || true
 printf '%s\n' '=== PARALLEL ATS SERVICES ==='
 ats_services=`$(systemctl list-unit-files 'job-app-*.service' --no-legend --no-pager |
   awk '{print `$1}' |
@@ -63,8 +67,8 @@ if [ -n "`$ats_services" ]; then
 else
   printf '%s\n' 'No continuous ATS services installed.'
 fi
-printf '%s\n' '=== ATS PROCESSES ==='
-pgrep -af '[c]ontinuous-(ashby|greenhouse|lever)|[c]ontinuous_ats|[j]ob_automation.py apply' |
+printf '%s\n' '=== SEARCH AND ATS PROCESSES ==='
+pgrep -af '[v]ps_continuous_search_sync|[v]ps_search_sync.sh|[c]ontinuous-(ashby|greenhouse|lever)|[c]ontinuous_ats|[j]ob_automation.py (apply|search)' |
   grep -v '[b]ash -c set -eu repo=' |
   sed -E 's/(--email )[[:graph:]]+/\1[REDACTED]/g' || true
 printf '%s\n' '=== PROVIDER STATE ==='

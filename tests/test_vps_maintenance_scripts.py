@@ -184,13 +184,16 @@ class PowerShellMaintenanceTests(unittest.TestCase):
 
         self.assertIn("-hostkey", installer)
         self.assertIn("-pwfile", installer)
-        self.assertIn("candidate_profile_config.json", installer)
         self.assertIn("grep -v '# $CronMarker'", installer)
         self.assertIn('systemctl restart "$ServiceName"', installer)
+        self.assertNotIn("candidate_profile_config.json", installer)
+        self.assertNotIn("xvfb", installer.lower())
         self.assertIn("vps_continuous_search_sync.sh", unit)
+        self.assertIn("MemoryMax=1G", unit)
+        self.assertNotIn("candidate_profile_config.json", unit)
         self.assertIn("Restart=always", unit)
         self.assertIn("WantedBy=multi-user.target", unit)
-        self.assertIn("vps_search_sync.sh", runner)
+        self.assertIn('vps_search_sync.sh" --search-only', runner)
 
     def test_continuous_greenhouse_installer_delegates_to_generic_supervisor(self) -> None:
         wrapper = (SCRIPTS / "install_vps_continuous_greenhouse.ps1").read_text(encoding="utf-8")
@@ -696,6 +699,9 @@ class BashMaintenanceTests(unittest.TestCase):
         self.assertLess(publication, documents)
         self.assertLess(documents, application)
         self.assertLess(publication, application)
+        search_only_exit = script.index("VPS_SEARCH_ONLY_COMPLETE")
+        self.assertLess(publication, search_only_exit)
+        self.assertLess(search_only_exit, documents)
         self.assertIn('--document-state "$DOCUMENT_STATE"', script)
         self.assertIn('RUN_STATUS="$REPO_DIR/output/vps_run_status.json"', script)
         self.assertNotIn("--max-attempts-per-ats 10", script)
@@ -763,8 +769,91 @@ printf 'title\\n' > output/ai_jobs.csv
             # the re-exec reached the script's real logic rather than short-circuiting.
             self.assertEqual(result.returncode, 66)
 
+    @unittest.skipUnless(shutil.which("flock"), "flock is required")
+    def test_search_only_publishes_without_xvfb_documents_or_applications(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            repository = Path(temporary_directory)
+            (repository / "scripts").mkdir()
+            shutil.copy2(SCRIPTS / "vps_search_sync.sh", repository / "scripts")
+            (repository / ".venv" / "bin").mkdir(parents=True)
+            (repository / ".venv" / "bin" / "activate").write_text("", encoding="utf-8")
+            fake_bin = repository / "fake-bin"
+            fake_bin.mkdir()
+
+            fake_python = fake_bin / "python"
+            fake_python.write_text(
+                """#!/usr/bin/env bash
+if [[ "${1:-}" == "src/job_automation.py" ]]; then
+  mkdir -p output
+  printf '{}\\n' > output/job_search_coverage.json
+  printf 'title\\n' > output/ai_jobs.csv
+  printf '{}\\n' > output/ats_boards_cache.json
+  exit 0
+fi
+if [[ "${1:-}" == "-m" ]]; then
+  touch private-stage-invoked
+  exit 97
+fi
+exit 0
+""",
+                encoding="utf-8",
+            )
+            fake_python.chmod(0o755)
+
+            fake_git = fake_bin / "git"
+            fake_git.write_text(
+                """#!/usr/bin/env bash
+if [[ "$1" == "rev-parse" && "$2" == "--git-path" ]]; then
+  printf '%s/.git/%s\\n' "$PWD" "$3"
+elif [[ "$1" == "rev-parse" && "$2" == "HEAD" ]]; then
+  printf '0123456789012345678901234567890123456789\\n'
+elif [[ "$1" == "worktree" && "$2" == "add" ]]; then
+  mkdir -p "$3"
+elif [[ "$1" == "diff" ]]; then
+  exit 0
+fi
+exit 0
+""",
+                encoding="utf-8",
+            )
+            fake_git.chmod(0o755)
+
+            fake_xvfb = fake_bin / "xvfb-run"
+            fake_xvfb.write_text(
+                "#!/usr/bin/env bash\ntouch xvfb-run-invoked\nexit 98\n",
+                encoding="utf-8",
+            )
+            fake_xvfb.chmod(0o755)
+
+            git(repository, "init")
+            environment = os.environ.copy()
+            environment.pop("DISPLAY", None)
+            environment["PATH"] = str(fake_bin) + os.pathsep + environment["PATH"]
+
+            result = run(
+                [
+                    BASH,
+                    str(repository / "scripts" / "vps_search_sync.sh"),
+                    "--search-only",
+                ],
+                cwd=repository,
+                env=environment,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("VPS_SEARCH_ONLY_COMPLETE", result.stdout)
+            self.assertFalse((repository / "xvfb-run-invoked").exists())
+            self.assertFalse((repository / "private-stage-invoked").exists())
+            self.assertTrue(
+                (repository / ".sync-worktree" / "output" / "ai_jobs.csv").is_file()
+            )
+
     def test_shell_scripts_parse_and_logrotate_template_renders(self) -> None:
-        for name in ("vps_search_sync.sh", "install_vps_logrotate.sh"):
+        for name in (
+            "vps_search_sync.sh",
+            "vps_continuous_search_sync.sh",
+            "install_vps_logrotate.sh",
+        ):
             result = run([BASH, "-n", f"scripts/{name}"], cwd=ROOT)
             self.assertEqual(result.returncode, 0, result.stderr)
 

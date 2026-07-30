@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# Runs on the Hostinger VPS via cron. Executes the search workflow against the
-# live repo checkout, then publishes only the search output files (no resumes,
-# no PII) to a dedicated branch that the local machine pulls from.
+# Runs on the Hostinger VPS via cron or systemd. Executes the search workflow
+# against the live repo checkout, then publishes only the search output files
+# (no resumes, no PII) to a dedicated branch that the local machine pulls from.
+# By default it then runs the private document and guarded application stages.
+# --search-only exits successfully after safe publication so continuous
+# discovery can coexist with provider-specific application workers.
 #
 # The vps-search-output branch already exists on origin (created once, ahead
 # of time, from a scratch clone) with an initial output/job_search_coverage.json
@@ -25,13 +28,33 @@
 
 set -euo pipefail
 
+SEARCH_ONLY=0
+case "${1:-}" in
+  "")
+    ;;
+  --search-only)
+    SEARCH_ONLY=1
+    shift
+    ;;
+  *)
+    printf 'Unknown argument: %s\nUsage: %s [--search-only]\n' "$1" "$0" >&2
+    exit 64
+    ;;
+esac
+if (($# > 0)); then
+  printf 'Unexpected argument: %s\nUsage: %s [--search-only]\n' "$1" "$0" >&2
+  exit 64
+fi
+
 # The application stage launches headed Chrome (never Playwright's headless
 # mode, since ATS anti-bot checks can fingerprint headless browsers) even
 # though this host has no physical display. Re-exec the whole run under a
 # virtual X server so those browser launches succeed instead of crashing with
-# "Missing X server or $DISPLAY". No-op when a real DISPLAY is already set or
-# Xvfb isn't installed, so this stays safe on desktops and in test sandboxes.
-if [ -z "${DISPLAY:-}" ] && command -v xvfb-run >/dev/null 2>&1; then
+# "Missing X server or $DISPLAY". Search-only mode does not launch an
+# application browser, so it deliberately avoids the extra Xvfb process.
+if ((SEARCH_ONLY == 0)) &&
+  [ -z "${DISPLAY:-}" ] &&
+  command -v xvfb-run >/dev/null 2>&1; then
   exec xvfb-run -a --server-args="-screen 0 1280x1024x24" "$0" "$@"
 fi
 
@@ -190,6 +213,12 @@ else
 fi
 
 cd "$REPO_DIR"
+if ((SEARCH_ONLY)); then
+  CURRENT_STAGE="finalizing"
+  printf 'VPS_SEARCH_ONLY_COMPLETE at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  exit 0
+fi
+
 set_stage "documents"
 DOCUMENT_EXIT=0
 PYTHONPATH="$REPO_DIR/src${PYTHONPATH:+:$PYTHONPATH}" \
