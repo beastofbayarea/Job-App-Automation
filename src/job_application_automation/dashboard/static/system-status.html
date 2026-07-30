@@ -3,30 +3,30 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
+
   <!-- SEO Primary Meta Tags -->
-  <title>SkyBison Cloud Engine | ATS Submissions Matrix & Automation</title>
-  <meta name="description" content="SkyBison Automated Job Application Engine - Real-time tracking of confirmed ATS job submissions, candidate metrics, and failure diagnostics powered by SkyBison Cloud AI.">
-  <meta name="keywords" content="Job Application Automation, ATS Engine, Greenhouse, Ashby, Lever, AI Resume Tailoring, SkyBison Cloud, Shivam Singh, Cent Capital">
+  <title>SkyBison System Status | VPS Config, Failures & Cache</title>
+  <meta name="description" content="SkyBison VPS host infrastructure specs, application failure diagnostics, and cached ATS board endpoint registry.">
+  <meta name="keywords" content="VPS Infrastructure, Failure Diagnostics, Board Cache, SkyBison Cloud, Shivam Singh, Cent Capital">
   <meta name="author" content="Shivam Singh (Cent Capital)">
   <meta name="robots" content="index, follow">
-  <link rel="canonical" href="https://skybison.cloud/">
+  <link rel="canonical" href="https://skybison.cloud/system-status">
   <link rel="manifest" href="site.webmanifest">
   <link rel="icon" href="sky_bison_logo.jpg" type="image/jpeg">
   <link rel="sitemap" type="application/xml" title="Sitemap" href="sitemap.xml">
 
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://skybison.cloud/">
-  <meta property="og:title" content="SkyBison Cloud Engine | ATS Submissions Matrix">
-  <meta property="og:description" content="Real-time tracking of confirmed ATS job submissions, candidate metrics, and failure diagnostics.">
+  <meta property="og:url" content="https://skybison.cloud/system-status">
+  <meta property="og:title" content="SkyBison System Status | VPS Config, Failures & Cache">
+  <meta property="og:description" content="VPS host infrastructure specs, application failure diagnostics, and cached ATS board endpoint registry.">
   <meta property="og:image" content="https://skybison.cloud/sky_bison_logo.jpg">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:url" content="https://skybison.cloud/">
-  <meta name="twitter:title" content="SkyBison Cloud Engine | ATS Submissions Matrix">
-  <meta name="twitter:description" content="Real-time tracking of confirmed ATS job submissions, candidate metrics, and failure diagnostics.">
+  <meta name="twitter:url" content="https://skybison.cloud/system-status">
+  <meta name="twitter:title" content="SkyBison System Status | VPS Config, Failures & Cache">
+  <meta name="twitter:description" content="VPS host infrastructure specs, application failure diagnostics, and cached ATS board endpoint registry.">
   <meta name="twitter:image" content="https://skybison.cloud/sky_bison_logo.jpg">
 
   <!-- Google Fonts Preload & Non-Blocking Stylesheets -->
@@ -36,28 +36,19 @@
   <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;800&display=swap"></noscript>
   <link rel="stylesheet" href="styles.css">
 
-  <!-- Structured Data JSON-LD (SoftwareApplication, Person, BreadcrumbList) -->
+  <!-- Structured Data JSON-LD (TechArticle & BreadcrumbList) -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@graph": [
       {
-        "@type": "SoftwareApplication",
-        "name": "SkyBison Cloud Engine",
-        "url": "https://skybison.cloud",
-        "applicationCategory": "BusinessApplication",
-        "operatingSystem": "Ubuntu 24.04 LTS (VPS Host 2.24.28.180)",
-        "description": "Autonomous ATS job application submission, search coverage, and AI resume tailoring engine for Greenhouse, Ashby, and Lever.",
+        "@type": "TechArticle",
+        "headline": "SkyBison System Status: VPS Config, Failures & Cache",
+        "url": "https://skybison.cloud/system-status",
+        "description": "VPS host infrastructure specs, application failure diagnostics, and cached ATS board endpoint registry.",
         "author": {
           "@type": "Person",
-          "name": "Shivam Singh",
-          "email": "shivamsi@umich.edu",
-          "url": "https://shivam040200.github.io/",
-          "sameAs": [
-            "https://cent.capital/",
-            "https://www.linkedin.com/in/shivam-singh-58231522a/",
-            "https://github.com/shivam040200"
-          ]
+          "name": "Shivam Singh"
         }
       },
       {
@@ -66,8 +57,14 @@
           {
             "@type": "ListItem",
             "position": 1,
-            "name": "Submissions Matrix",
+            "name": "Home",
             "item": "https://skybison.cloud/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "System Status",
+            "item": "https://skybison.cloud/system-status"
           }
         ]
       }
@@ -91,7 +88,7 @@
     </a>
 
     <!-- Desktop Navigation Menu (rendered by dashboard.js from NAV_PAGES) -->
-    <nav class="desktop-nav" id="desktopNav" aria-label="Desktop Navigation" data-active="index"></nav>
+    <nav class="desktop-nav" id="desktopNav" aria-label="Desktop Navigation" data-active="system-status"></nav>
 
     <div class="header-actions">
       <span id="vpsStatusBadge" class="badge badge-ashby" style="display: inline-flex;">CHECKING...</span>
@@ -113,109 +110,81 @@
       <span class="drawer-title">SKYBISON CLOUD</span>
       <button class="drawer-close" id="drawerCloseBtn" aria-label="Close Mobile Drawer">&times;</button>
     </div>
-    <nav class="drawer-links" id="drawerLinks" data-active="index"></nav>
-  </aside>
-
-  <!-- Job Detail Slide-Out Overlay Drawer -->
-  <div class="drawer-backdrop" id="jobDetailBackdrop"></div>
-  <aside class="job-detail-drawer" id="jobDetailDrawer" aria-label="Job Submission Details">
-    <div class="detail-drawer-header">
-      <span class="detail-drawer-title">Submission Details</span>
-      <button class="drawer-close" onclick="closeJobDetail()">&times;</button>
-    </div>
-    <div id="jobDetailContent">
-      <div style="color: var(--text-muted);">Select a submission to inspect full details.</div>
-    </div>
+    <nav class="drawer-links" id="drawerLinks" data-active="system-status"></nav>
   </aside>
 
   <main class="container" id="mainContent">
 
-    <!-- Interactive Automated Pipeline Funnel Banner -->
-    <section class="pipeline-funnel-card">
-      <div class="funnel-header">
-        <h2 class="funnel-main-title">🚀 Automated Application Funnel Lifecycle</h2>
-        <span class="badge badge-info">4-STAGE PIPELINE</span>
+    <!-- VPS Infrastructure Specs Panel -->
+    <section class="infra-card">
+      <div class="infra-header">
+        <h2 class="infra-title">🌀 SkyBison VPS Host Infrastructure & Specs</h2>
+        <span class="badge badge-info">Ubuntu 24.04 LTS</span>
       </div>
-      <div class="funnel-grid">
-        <div class="funnel-step step-water" onclick="filterByFunnelStage('water')">
-          <div class="funnel-icon">🌊</div>
-          <div class="funnel-meta">
-            <span class="funnel-name">1. Discovered Jobs</span>
-            <span class="funnel-val" id="funnelValWater">--</span>
-          </div>
+      <div class="infra-grid">
+        <div class="infra-item">
+          <span class="infra-label">VPS Host IP</span>
+          <span class="infra-val" id="vpsHost">2.24.28.180</span>
         </div>
-        <div class="funnel-step step-earth" onclick="filterByFunnelStage('earth')">
-          <div class="funnel-icon">🪨</div>
-          <div class="funnel-meta">
-            <span class="funnel-name">2. AI Queue</span>
-            <span class="funnel-val" id="funnelValEarth">--</span>
-          </div>
+        <div class="infra-item">
+          <span class="infra-label">Hostname</span>
+          <span class="infra-val" id="vpsHostname">srv1576573.hstgr.cloud</span>
         </div>
-        <div class="funnel-step step-air" onclick="filterByFunnelStage('air')">
-          <div class="funnel-icon">🌀</div>
-          <div class="funnel-meta">
-            <span class="funnel-name">3. Submissions</span>
-            <span class="funnel-val" id="funnelValAir">--</span>
-          </div>
+        <div class="infra-item">
+          <span class="infra-label">OS Environment</span>
+          <span class="infra-val" id="vpsOs">Ubuntu 24.04 LTS</span>
         </div>
-        <div class="funnel-step step-fire" onclick="filterByFunnelStage('fire')">
-          <div class="funnel-icon">🔥</div>
-          <div class="funnel-meta">
-            <span class="funnel-name">4. Archives</span>
-            <span class="funnel-val" id="funnelValFire">--</span>
-          </div>
+        <div class="infra-item">
+          <span class="infra-label">Plan & Resources</span>
+          <span class="infra-val" id="vpsPlan">KVM 1 (1 vCPU, 4GB RAM, 50GB SSD)</span>
+        </div>
+        <div class="infra-item">
+          <span class="infra-label">Datacenter</span>
+          <span class="infra-val" id="vpsDatacenter">US Boston 2</span>
+        </div>
+        <div class="infra-item">
+          <span class="infra-label">Daily Search Cron</span>
+          <span class="infra-val" style="color: var(--air);">0 3 * * * (03:00 UTC)</span>
+        </div>
+        <div class="infra-item">
+          <span class="infra-label">Active Engines</span>
+          <span class="infra-val" id="vpsActiveEngines">No snapshot yet</span>
+        </div>
+        <div class="infra-item">
+          <span class="infra-label">Host Uptime</span>
+          <span class="infra-val" id="vpsUptime">--</span>
+        </div>
+        <div class="infra-item">
+          <span class="infra-label">Plan Renewal Date</span>
+          <span class="infra-val" id="vpsExpiry">2027-04-10</span>
+        </div>
+        <div class="infra-item">
+          <span class="infra-label">Account Owner</span>
+          <span class="infra-val" id="vpsOwner">Cent Capital (Shivam Singh)</span>
         </div>
       </div>
     </section>
 
-    <!-- Four Elements KPI Top Grid -->
+    <!-- Failures & Cache KPI Grid -->
     <section class="kpi-grid">
-      <div class="kpi-card element-air">
-        <div class="kpi-title">🌀 Air • Confirmed Submissions</div>
-        <div class="kpi-value kpi-air" id="kpiSubmissions">--</div>
-        <div class="kpi-subtext" id="kpiAtsBreakdown">Greenhouse: -- | Ashby: -- | Lever: --</div>
+      <div class="kpi-card element-lotus">
+        <div class="kpi-title">🪷 Lotus • Board Registry</div>
+        <div class="kpi-value kpi-lotus" id="kpiCachedBoards">--</div>
+        <div class="kpi-subtext">Cached Board Endpoints</div>
       </div>
-      <div class="kpi-card element-water">
-        <div class="kpi-title">🌊 Water • Discovered Jobs</div>
-        <div class="kpi-value kpi-water" id="kpiJobsFound">--</div>
-        <div class="kpi-subtext" id="kpiLivenessSub">Live: -- | Unavailable: --</div>
-      </div>
-      <div class="kpi-card element-earth">
-        <div class="kpi-title">🪨 Earth • Generation Queue</div>
-        <div class="kpi-value kpi-earth" id="kpiGenQueue">--</div>
-        <div class="kpi-subtext">Tailored Specs Queue</div>
-      </div>
-      <div class="kpi-card element-fire">
-        <div class="kpi-title">🔥 Fire • Document Archives</div>
-        <div class="kpi-value kpi-fire" id="kpiArchives">--</div>
-        <div class="kpi-subtext">PDF Resume + Cover Letter</div>
+      <div class="kpi-card element-error">
+        <div class="kpi-title">⚡ Failure Log Count</div>
+        <div class="kpi-value kpi-rose" id="kpiFailures">--</div>
+        <div class="kpi-subtext">0% Failure Rate</div>
       </div>
     </section>
 
-    <!-- SUBMISSIONS PAGE CONTENT -->
+    <!-- Failure Diagnostics -->
     <section class="section">
-      <div class="controls-bar">
-        <input type="text" id="sec3Search" class="search-input" placeholder="Search submissions by Company, Role, Status, Email, or ATS..." oninput="renderSubmissionsTable()">
-      </div>
-
-      <div class="table-card">
-        <div class="table-scroll">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Applied At</th>
-                <th>Company</th>
-                <th>Role / Title</th>
-                <th>ATS Engine</th>
-                <th>Candidate Email</th>
-                <th>Tailored Resume</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody id="submissionsTableBody">
-              <tr><td colspan="7" style="text-align: center; color: var(--text-muted);">Loading submissions...</td></tr>
-            </tbody>
-          </table>
+      <div class="card">
+        <h3 style="color: var(--fire-gold); font-family: var(--font-display); font-size: 1.05rem; margin-bottom: 0.85rem;">Application Failure Diagnostics</h3>
+        <div id="failureLogSummary" style="font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted); line-height: 1.6;">
+          No application failures recorded in the current run. All attempted applications passed ATS submission verification cleanly.
         </div>
       </div>
     </section>
@@ -223,7 +192,7 @@
   </main>
 
   <!-- Mobile Bottom Command Bar (< 768px), rendered by dashboard.js from NAV_PAGES -->
-  <nav class="mobile-bottom-nav" id="bottomNav" aria-label="Mobile Bottom Command Bar" data-active="index"></nav>
+  <nav class="mobile-bottom-nav" id="bottomNav" aria-label="Mobile Bottom Command Bar" data-active="system-status"></nav>
 
   <!-- Site Global Footer with Candidate & Config Links -->
   <footer class="app-footer">
