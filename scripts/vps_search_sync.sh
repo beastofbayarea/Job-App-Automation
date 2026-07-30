@@ -183,16 +183,26 @@ trap 'interrupt_run 143' TERM
 trap finish_run EXIT
 set_stage "search"
 
+SEARCH_MODE_ARGS=()
+if ((SEARCH_ONLY)); then
+  SEARCH_MODE_ARGS=(
+    --search-backend yahoo
+    --search-backend yandex
+    --max-discovery-queries 120
+    --results-per-query 20
+    --search-retries 0
+    --max-fallback-pages 100
+    --max-lever-pages 3
+    --live-check-timeout 10
+  )
+fi
+
 python src/job_automation.py search \
   --role-type "Product Manager" \
   --ats-platform greenhouse \
   --ats-platform lever \
   --ats-platform ashby \
-  --search-backend yahoo \
-  --search-backend yandex \
-  --max-discovery-queries 120 \
-  --results-per-query 20 \
-  --search-retries 0 \
+  "${SEARCH_MODE_ARGS[@]}" \
   --verify-live \
   --private-generation-output "$PRIVATE_GENERATION_OUTPUT"
 
