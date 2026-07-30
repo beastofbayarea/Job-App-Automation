@@ -100,6 +100,8 @@ class PowerShellMaintenanceTests(unittest.TestCase):
         )
 
         self.assertIn("systemctl is-active --quiet", script)
+        self.assertIn("--property=UnitFileState --value", script)
+        self.assertIn('--property=ActiveState --value', script)
         self.assertIn("8080", script)
         self.assertIn("password authentication failed", script)
         self.assertIn("too many authentication failures", script)

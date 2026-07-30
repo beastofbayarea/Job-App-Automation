@@ -41,14 +41,15 @@ if (-not $PlinkCmd) {
 $RemoteCommand = @'
 set -eu
 service=cent-capital-backend.service
+unit_file_state=$(systemctl show "$service" --property=UnitFileState --value)
+active_state=$(systemctl show "$service" --property=ActiveState --value)
 if ss -lnt | grep -Eq '[:.]8080[[:space:]]'; then
   printf '%s\n' 'NO_ACTION: backend is listening on port 8080.'
 elif ! journalctl -u "$service" -n 500 --no-pager |
   grep -Eq 'password authentication failed|too many authentication failures'; then
   printf '%s\n' 'NO_ACTION: database authentication failure evidence is absent.'
   exit 3
-elif ! systemctl is-enabled --quiet "$service" &&
-  ! systemctl is-active --quiet "$service"; then
+elif [ "$unit_file_state" = "disabled" ] && [ "$active_state" = "inactive" ]; then
   printf '%s\n' 'NO_ACTION: backend is already quarantined.'
 else
   systemctl disable "$service"
