@@ -16,7 +16,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Mapping, MutableMapping
+from collections.abc import Mapping, MutableMapping
 
 from .artifacts import read_json, write_json
 from .identity import canonical_job_url, normalize_email, _require_string
@@ -164,7 +164,7 @@ class SubmissionRecord:
         }
 
     @classmethod
-    def from_payload(cls, payload: Mapping[str, object]) -> "SubmissionRecord":
+    def from_payload(cls, payload: Mapping[str, object]) -> SubmissionRecord:
         if not isinstance(payload, Mapping):
             raise ValueError("submission record must be an object")
         applied_at = payload.get("applied_at")
@@ -206,7 +206,7 @@ class SubmissionLog:
                     (
                         f"{submission.job_url}\0{submission.email_used}\0"
                         f"{submission.applied_at.isoformat()}"
-                    ).encode("utf-8")
+                    ).encode()
                 ).hexdigest()[:12]
                 submission_id = f"{base_id}-{discriminator}"
                 suffix = 2

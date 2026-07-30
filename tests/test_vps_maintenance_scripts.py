@@ -102,13 +102,11 @@ class PowerShellMaintenanceTests(unittest.TestCase):
         self.assertNotIn("dashboard.env", unit)
 
     def test_backend_quarantine_requires_live_failure_evidence(self) -> None:
-        script = (SCRIPTS / "quarantine_unhealthy_cent_backend.ps1").read_text(
-            encoding="utf-8"
-        )
+        script = (SCRIPTS / "quarantine_unhealthy_cent_backend.ps1").read_text(encoding="utf-8")
 
         self.assertIn("systemctl is-active --quiet", script)
         self.assertIn("--property=UnitFileState --value", script)
-        self.assertIn('--property=ActiveState --value', script)
+        self.assertIn("--property=ActiveState --value", script)
         self.assertIn("8080", script)
         self.assertIn("password authentication failed", script)
         self.assertIn("too many authentication failures", script)
@@ -149,9 +147,7 @@ class PowerShellMaintenanceTests(unittest.TestCase):
         self.assertNotIn("git -C $Repo pull origin main", script)
 
     def test_continuous_search_installer_uses_current_timeout_helper_contract(self) -> None:
-        installer = (SCRIPTS / "install_vps_continuous_search.ps1").read_text(
-            encoding="utf-8"
-        )
+        installer = (SCRIPTS / "install_vps_continuous_search.ps1").read_text(encoding="utf-8")
 
         self.assertIn("-FilePath $PscpCmd.Source", installer)
         self.assertIn("-ArgumentList @(", installer)
@@ -476,9 +472,7 @@ exit 0
                 {"failure_count": 0, "failures": []},
             )
             self.assertEqual(
-                json.loads(
-                    (destination / "vps_infra_status.json").read_text(encoding="utf-8")
-                ),
+                json.loads((destination / "vps_infra_status.json").read_text(encoding="utf-8")),
                 {"active_services": [], "uptime": "up 1 day"},
             )
             captures = [
@@ -858,9 +852,7 @@ exit 0
             self.assertIn("VPS_SEARCH_ONLY_COMPLETE", result.stdout)
             self.assertFalse((repository / "xvfb-run-invoked").exists())
             self.assertFalse((repository / "private-stage-invoked").exists())
-            self.assertTrue(
-                (repository / ".sync-worktree" / "output" / "ai_jobs.csv").is_file()
-            )
+            self.assertTrue((repository / ".sync-worktree" / "output" / "ai_jobs.csv").is_file())
 
     def test_shell_scripts_parse_and_logrotate_template_renders(self) -> None:
         for name in (

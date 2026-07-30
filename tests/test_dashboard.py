@@ -30,19 +30,24 @@ def test_load_json_file_missing():
 
 def test_load_vps_config_exposes_only_operational_metadata(tmp_path):
     config_file = tmp_path / "vps_config.json"
-    config_file.write_text(json.dumps({
-        "vps": {
-            "host": "1.2.3.4",
-            "hostname": "example-vps",
-            "memory_gb": 4,
-            "ssh_user": "root",
-            "ssh_password": {"value": "secret"},
-        },
-        "hostinger_account": {
-            "owner_name": "Private",
-            "phone": "555-0100",
-        },
-    }), encoding="utf-8")
+    config_file.write_text(
+        json.dumps(
+            {
+                "vps": {
+                    "host": "1.2.3.4",
+                    "hostname": "example-vps",
+                    "memory_gb": 4,
+                    "ssh_user": "root",
+                    "ssh_password": {"value": "secret"},
+                },
+                "hostinger_account": {
+                    "owner_name": "Private",
+                    "phone": "555-0100",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
 
     with patch("job_application_automation.dashboard.server.CONFIG_DIR", tmp_path):
         data = load_vps_config()
@@ -105,10 +110,12 @@ def test_build_kpi_metrics_mocked():
     sample_gen = [{"job": 1}, {"job": 2}]
     sample_arch = {"ja1_123": {}}
 
-    with patch("job_application_automation.dashboard.server.load_json_file") as mock_load, \
-         patch("job_application_automation.dashboard.server.load_csv_jobs") as mock_csv, \
-         patch("job_application_automation.dashboard.server.load_vps_config") as mock_cfg:
-        
+    with (
+        patch("job_application_automation.dashboard.server.load_json_file") as mock_load,
+        patch("job_application_automation.dashboard.server.load_csv_jobs") as mock_csv,
+        patch("job_application_automation.dashboard.server.load_vps_config") as mock_cfg,
+    ):
+
         def mock_loader(fname, default=None):
             if fname == "submission_log.json":
                 return sample_subs
@@ -138,13 +145,20 @@ def test_build_kpi_metrics_includes_vps_infra_snapshot_when_present():
     sample_infra = {
         "version": 1,
         "generated_at": "2026-07-31T02:00:00+00:00",
-        "active_services": ["job-app-ashby", "job-app-greenhouse", "job-app-lever", "job-app-search-sync"],
+        "active_services": [
+            "job-app-ashby",
+            "job-app-greenhouse",
+            "job-app-lever",
+            "job-app-search-sync",
+        ],
         "uptime": "up 15 hours, 42 minutes",
     }
 
-    with patch("job_application_automation.dashboard.server.load_json_file") as mock_load, \
-         patch("job_application_automation.dashboard.server.load_csv_jobs") as mock_csv, \
-         patch("job_application_automation.dashboard.server.load_vps_config") as mock_cfg:
+    with (
+        patch("job_application_automation.dashboard.server.load_json_file") as mock_load,
+        patch("job_application_automation.dashboard.server.load_csv_jobs") as mock_csv,
+        patch("job_application_automation.dashboard.server.load_vps_config") as mock_cfg,
+    ):
 
         def mock_loader(fname, default=None):
             if fname == "vps_infra_status.json":
@@ -178,8 +192,10 @@ def test_dashboard_request_handler_route_mappings():
 
     for req_path, expected_path in routes_to_test:
         handler.path = req_path
-        with patch.object(DashboardRequestHandler, "_handle_api_get"), \
-             patch.object(DashboardRequestHandler, "_handle_file_download"), \
-             patch("http.server.SimpleHTTPRequestHandler.do_GET"):
+        with (
+            patch.object(DashboardRequestHandler, "_handle_api_get"),
+            patch.object(DashboardRequestHandler, "_handle_file_download"),
+            patch("http.server.SimpleHTTPRequestHandler.do_GET"),
+        ):
             handler.do_GET()
             assert handler.path == expected_path

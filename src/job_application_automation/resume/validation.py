@@ -8,7 +8,8 @@ workflow while tests exercise its data rules using small in-memory fixtures.
 from __future__ import annotations
 
 from collections.abc import MutableMapping
-from typing import Any, Mapping, Sequence
+from typing import Any
+from collections.abc import Mapping, Sequence
 
 
 def company_matches(llm_name: str, source_name: str) -> bool:
@@ -237,9 +238,7 @@ def validate_resume_data(
         if isinstance(entry, Mapping)
     }
     missing = [
-        company
-        for company in source_companies
-        if company.lower() not in generated_companies_lower
+        company for company in source_companies if company.lower() not in generated_companies_lower
     ]
     if missing:
         issues.append(f"Missing companies: {', '.join(missing)}")

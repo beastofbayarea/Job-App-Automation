@@ -8,7 +8,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Sequence
+from collections.abc import Sequence
 from urllib.parse import unquote, urlparse
 
 from .artifacts import read_json, write_json

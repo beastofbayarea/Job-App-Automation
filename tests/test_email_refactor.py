@@ -58,7 +58,7 @@ class _FakeRequest:
 
 
 class _FakeCredentials:
-    instance: "_FakeCredentials | None" = None
+    instance: _FakeCredentials | None = None
 
     def __init__(self) -> None:
         self.valid = False
@@ -67,7 +67,7 @@ class _FakeCredentials:
         self.refreshed = False
 
     @classmethod
-    def from_authorized_user_file(cls, _path: str, _scopes: list[str]) -> "_FakeCredentials":
+    def from_authorized_user_file(cls, _path: str, _scopes: list[str]) -> _FakeCredentials:
         cls.instance = cls()
         return cls.instance
 
@@ -81,7 +81,7 @@ class _FakeCredentials:
 
 class _UnusedFlow:
     @classmethod
-    def from_client_secrets_file(cls, *_args: object, **_kwargs: object) -> "_UnusedFlow":
+    def from_client_secrets_file(cls, *_args: object, **_kwargs: object) -> _UnusedFlow:
         raise AssertionError("refreshable credentials must not launch OAuth")
 
 
@@ -99,7 +99,7 @@ class _ReauthFlow:
     ran_local_server = False
 
     @classmethod
-    def from_client_secrets_file(cls, *_args: object, **_kwargs: object) -> "_ReauthFlow":
+    def from_client_secrets_file(cls, *_args: object, **_kwargs: object) -> _ReauthFlow:
         return cls()
 
     def run_local_server(self, *, port: int) -> _FakeFreshCredentials:

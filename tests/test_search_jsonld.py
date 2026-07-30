@@ -49,6 +49,9 @@ def test_jsonld_location_and_salary() -> None:
     assert "San Francisco, CA" in loc
     assert "Remote" in loc
 
-    salary_obj = {"currency": "USD", "value": {"minValue": 120000, "maxValue": 150000, "unitText": "YEAR"}}
+    salary_obj = {
+        "currency": "USD",
+        "value": {"minValue": 120000, "maxValue": 150000, "unitText": "YEAR"},
+    }
     sal = jsonld_salary(salary_obj)
     assert isinstance(sal, str)

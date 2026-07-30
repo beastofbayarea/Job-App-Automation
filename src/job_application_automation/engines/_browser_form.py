@@ -7,7 +7,8 @@ import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any
+from collections.abc import Mapping, Sequence
 from urllib.parse import urljoin
 
 from playwright.sync_api import Page, sync_playwright
@@ -117,7 +118,7 @@ def _first_value(
 
 def candidate_fields(
     config: Mapping[str, Any],
-    email_override: Optional[str],
+    email_override: str | None,
 ) -> CandidateFields:
     """Read both normalized flat keys and the source configuration groups."""
     candidate = _mapping(config.get("candidate"))
@@ -1226,7 +1227,7 @@ def run_browser_form_engine(
     url: str,
     resume: Path,
     cover_letter: Path | None = None,
-    email_override: Optional[str] = None,
+    email_override: str | None = None,
     config: Mapping[str, Any],
     company: str = "",
     role: str = "",
@@ -1491,7 +1492,7 @@ def load_orchestrated_config() -> dict[str, Any]:
 
 def main_for_browser_form_engine(
     spec: BrowserFormSpec,
-    argv: Optional[Sequence[str]] = None,
+    argv: Sequence[str] | None = None,
 ) -> int:
     args = engine_parser(spec).parse_args(argv)
     live_submit = requested_live_mode(args)

@@ -17,7 +17,8 @@ import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any
+from collections.abc import Callable, Mapping, Sequence
 
 from .artifacts import atomic_write_text, read_json
 from .contracts import EngineResult

@@ -37,7 +37,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
-from typing import Callable, Iterator, Mapping, Protocol, Sequence
+from typing import Protocol
+from collections.abc import Callable, Iterator, Mapping, Sequence
 
 from .adapters import CommandResult, ProcessRunner, ProcessSettings
 from .artifacts import write_json
@@ -195,7 +196,7 @@ class ArchiveKey:
 
     @property
     def archive_id(self) -> str:
-        identity = f"{self.canonical_url}\0{self.email_key}".encode("utf-8")
+        identity = f"{self.canonical_url}\0{self.email_key}".encode()
         return f"ja1_{hashlib.sha256(identity).hexdigest()}"
 
     def identity_payload(self) -> dict[str, str]:
@@ -255,7 +256,7 @@ class ArchivedDocument:
         }
 
     @classmethod
-    def from_payload(cls, payload: object, expected_kind: str) -> "ArchivedDocument":
+    def from_payload(cls, payload: object, expected_kind: str) -> ArchivedDocument:
         if not isinstance(payload, Mapping):
             raise ValueError(f"{expected_kind} document metadata must be an object")
         if payload.get("kind") != expected_kind:
@@ -334,7 +335,7 @@ class ArchiveManifest:
         }
 
     @classmethod
-    def from_payload(cls, payload: object) -> "ArchiveManifest":
+    def from_payload(cls, payload: object) -> ArchiveManifest:
         if not isinstance(payload, Mapping):
             raise ValueError("archive manifest root must be an object")
         if payload.get("schema_version") != ARCHIVE_SCHEMA_VERSION:
@@ -572,10 +573,11 @@ def load_vps_archive_config(
         raise ValueError(f"VPS config not found: {config_path}") from exc
     except json.JSONDecodeError as exc:
         raise ValueError(f"VPS config is not valid JSON: {config_path}") from exc
-    if not isinstance(document, Mapping) or not isinstance(document.get("vps"), Mapping):
+    if not isinstance(document, Mapping):
         raise ValueError("VPS config must contain a vps object")
-    vps = document["vps"]
-    assert isinstance(vps, Mapping)
+    vps = document.get("vps")
+    if not isinstance(vps, Mapping):
+        raise ValueError("VPS config must contain a vps object")
 
     private_key_value = _optional_text(vps, "archive_private_key_file")
     private_key: Path | None = None

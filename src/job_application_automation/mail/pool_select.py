@@ -7,7 +7,8 @@ import argparse
 import random
 import sys
 from pathlib import Path
-from typing import Literal, Optional, Sequence, overload
+from typing import Literal, overload
+from collections.abc import Sequence
 
 from job_application_automation.mail.pool import (
     load_email_pool as _load_email_pool_impl,
@@ -67,7 +68,7 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     file_path = Path(args.file).expanduser()
     if not file_path.is_absolute():

@@ -196,7 +196,8 @@ def retry(
             logger.warning("%s failed (%d/%d): %s", label, i, attempts, exc)
             if i < attempts:
                 time.sleep(base_delay * i)
-    assert last_error is not None
+    if last_error is None:
+        raise RuntimeError(f"{label} exhausted retries without recording an error")
     raise last_error
 
 
@@ -1216,9 +1217,7 @@ def _attach_file(
         if path.name.lower() in existing_text.lower():
             logger.info("%s attachment already present.", label)
             return True
-        upload_button = field.get_by_text(
-            re.compile(r"^\s*Upload File\s*$", re.I)
-        ).first
+        upload_button = field.get_by_text(re.compile(r"^\s*Upload File\s*$", re.I)).first
         used_file_chooser = False
         if upload_button.count() and upload_button.is_visible():
             try:
@@ -1238,8 +1237,7 @@ def _attach_file(
                 logger.info("%s uploaded and attached: %s", label, path.name)
                 return True
         logger.warning(
-            "%s input accepted the file, but Ashby did not render an "
-            "attachment confirmation.",
+            "%s input accepted the file, but Ashby did not render an attachment confirmation.",
             label,
         )
     except Exception as exc:
@@ -1743,11 +1741,7 @@ def fill_secondary(
                 configured_essay = _configured_answer(profile, lbl)
                 val = (
                     configured_essay
-                    or (
-                        profile.get("_cover_letter_text")
-                        if "cover letter" in lbl
-                        else None
-                    )
+                    or (profile.get("_cover_letter_text") if "cover letter" in lbl else None)
                     or (
                         essay_dict.get("why")
                         if any(w in lbl for w in ("why", "interest", "mission", "fit", "inspire"))
@@ -2563,16 +2557,10 @@ def run_job(
         raise FileNotFoundError(f"Resume PDF file not found at: {resume_path}")
     if resume.stat().st_size == 0:
         raise ValueError(f"Resume file is empty: {resume}")
-    cover_letter = (
-        Path(cover_letter_path).expanduser().resolve()
-        if cover_letter_path
-        else None
-    )
+    cover_letter = Path(cover_letter_path).expanduser().resolve() if cover_letter_path else None
     if cover_letter is not None:
         if not cover_letter.is_file():
-            raise FileNotFoundError(
-                f"Cover-letter PDF file not found at: {cover_letter_path}"
-            )
+            raise FileNotFoundError(f"Cover-letter PDF file not found at: {cover_letter_path}")
         if cover_letter.stat().st_size == 0:
             raise ValueError(f"Cover-letter file is empty: {cover_letter}")
         profile["_cover_letter_text"] = _extract_cover_letter_text(cover_letter)
@@ -2761,7 +2749,6 @@ def run_job(
         return status
 
 
-
 def submit_ashby_graphql_direct(
     url: str,
     resume_path: Path,
@@ -2782,7 +2769,11 @@ def submit_ashby_graphql_direct(
     logger.info("Executing direct Ashby GraphQL API submission for: %s", url)
 
     candidate = cfg.get("candidate", {})
-    email = candidate.get("email_override") or candidate.get("fallback_email") or "applicant@example.com"
+    email = (
+        candidate.get("email_override")
+        or candidate.get("fallback_email")
+        or "applicant@example.com"
+    )
     first_name = candidate.get("first_name", "Applicant")
     last_name = candidate.get("last_name", "Candidate")
 
@@ -2801,7 +2792,9 @@ def submit_ashby_graphql_direct(
     }
 
     if not live:
-        logger.info("[DIRECT API - FILL ONLY] Form prefilled successfully via GraphQL mutation payload.")
+        logger.info(
+            "[DIRECT API - FILL ONLY] Form prefilled successfully via GraphQL mutation payload."
+        )
         return "PREFILLED_ONLY"
 
     try:
@@ -2813,7 +2806,9 @@ def submit_ashby_graphql_direct(
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-            if resp.status == 200 and data.get("data", {}).get("submitApplicationForm", {}).get("success"):
+            if resp.status == 200 and data.get("data", {}).get("submitApplicationForm", {}).get(
+                "success"
+            ):
                 return "SUBMITTED & CONFIRMED"
     except Exception as exc:
         logger.warning("Direct GraphQL API attempt failed (%s), status check completed.", exc)

@@ -22,7 +22,8 @@ import argparse
 import logging
 import re
 from pathlib import Path
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any
+from collections.abc import Mapping, Sequence
 from urllib.parse import parse_qs, urlencode, urlparse
 
 from playwright.sync_api import Locator, Page
@@ -426,7 +427,7 @@ def _greenhouse_semantic_answer(
     label: str,
     profile: Mapping[str, Any],
     rules: Mapping[str, Any],
-) -> Optional[str]:
+) -> str | None:
     """Resolve observed Greenhouse wording before broader aliases can collide."""
     normalized = " ".join(label.lower().split())
     if "notice period" in normalized:
@@ -870,7 +871,7 @@ def _fill_security_code_from_gmail(
     page: Page,
     company: str,
     *,
-    excluded_message_ids: Optional[set[str]] = None,
+    excluded_message_ids: set[str] | None = None,
 ) -> bool:
     """Read the five newest matching emails and fill Greenhouse's 8-box code."""
     code_inputs = page.locator('input[id^="security-input"]')
@@ -1303,8 +1304,8 @@ def run(
 def submit_greenhouse_direct_post(
     url: str,
     resume: Path,
-    email_override: Optional[str] = None,
-    config: Optional[Mapping[str, Any]] = None,
+    email_override: str | None = None,
+    config: Mapping[str, Any] | None = None,
     company: str = "",
     role: str = "",
     live_submit: bool = False,
@@ -1348,7 +1349,7 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     live_submit = requested_live_mode(args)
     try:

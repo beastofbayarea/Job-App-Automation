@@ -938,7 +938,6 @@ def discovery_url_key(url: str) -> str:
     return urlunparse((parsed.scheme.lower(), parsed.netloc.lower(), path, "", parsed.query, ""))
 
 
-
 RESTRICTED_URL_PATTERNS = (
     "jobgether.com",
     "jobtogether.com",
@@ -1006,7 +1005,11 @@ def is_restricted_job(job: Job) -> bool:
     if is_restricted_board(Board(job.platform, job.board_token)):
         return True
     company_lower = job.company.strip().lower()
-    if company_lower in {"jobgether", "jobtogether"} or "jobgether" in company_lower or "jobtogether" in company_lower:
+    if (
+        company_lower in {"jobgether", "jobtogether"}
+        or "jobgether" in company_lower
+        or "jobtogether" in company_lower
+    ):
         return True
     return False
 
@@ -1047,7 +1050,6 @@ def load_logged_job_urls(log_paths: Sequence[Path]) -> set[str]:
                         except Exception:
                             urls.add(job_url.strip().lower())
     return urls
-
 
 
 def board_from_url(raw_url: str) -> Board | None:
@@ -1178,7 +1180,11 @@ def add_candidate(
     candidate: SearchCandidate,
 ) -> bool:
     """Merge a candidate by its discovery URL and retain all discovery provenance."""
-    if candidate.board is None or is_restricted_board(candidate.board) or is_restricted_url(candidate.url):
+    if (
+        candidate.board is None
+        or is_restricted_board(candidate.board)
+        or is_restricted_url(candidate.url)
+    ):
         return False
     bucket = candidates_by_board.setdefault(candidate.board.key, [])
     for existing in bucket:
@@ -1227,7 +1233,11 @@ def load_discovery_cache(path: Path) -> DiscoveryCache:
     cache.boards = {board for board in cache.boards if not is_restricted_board(board)}
     purged_candidates: dict[str, list[SearchCandidate]] = {}
     for key, candidates in cache.candidates_by_board.items():
-        valid = [c for c in candidates if not is_restricted_url(c.url) and not is_restricted_board(c.board)]
+        valid = [
+            c
+            for c in candidates
+            if not is_restricted_url(c.url) and not is_restricted_board(c.board)
+        ]
         if valid:
             purged_candidates[key] = valid
     cache.candidates_by_board = purged_candidates
@@ -1902,10 +1912,7 @@ def fetch_ashby_jobs(
 
 
 def smartrecruiters_api_base(board: Board) -> str:
-    return (
-        "https://api.smartrecruiters.com/v1/companies/"
-        f"{quote(board.token, safe='')}/postings"
-    )
+    return f"https://api.smartrecruiters.com/v1/companies/{quote(board.token, safe='')}/postings"
 
 
 def smartrecruiters_description(value: Any) -> str:
@@ -1984,9 +1991,7 @@ def fetch_smartrecruiters_jobs(
             time.sleep(delay)
 
         description = smartrecruiters_description(detail.get("jobAd"))
-        location_value = (
-            detail.get("location") if isinstance(detail.get("location"), dict) else {}
-        )
+        location_value = detail.get("location") if isinstance(detail.get("location"), dict) else {}
         location = clean_whitespace(location_value.get("fullLocation"))
         if not location:
             location = " | ".join(
@@ -2056,10 +2061,7 @@ def fetch_smartrecruiters_jobs(
 
 
 def workable_api_url(board: Board) -> str:
-    return (
-        "https://www.workable.com/api/accounts/"
-        f"{quote(board.token, safe='')}?details=true"
-    )
+    return f"https://www.workable.com/api/accounts/{quote(board.token, safe='')}?details=true"
 
 
 def workable_location(item: dict[str, Any]) -> str:
@@ -2967,7 +2969,8 @@ def deduplicate_jobs(jobs: Iterable[Job]) -> list[Job]:
         else:
             job_index = matching_indices[0]
             existing = result[job_index]
-            assert existing is not None
+            if existing is None:
+                raise RuntimeError("job identity index referenced a removed record")
             merged = merge_job_records(existing, job)
             result[job_index] = merged
             # Merge any previously separate records connected by this record's
@@ -2983,7 +2986,8 @@ def deduplicate_jobs(jobs: Iterable[Job]) -> list[Job]:
                     if index == duplicate_index:
                         identity_index[key] = job_index
         resolved_job = result[job_index]
-        assert resolved_job is not None
+        if resolved_job is None:
+            raise RuntimeError("job deduplication produced an empty canonical record")
         for identity in [*identities, *job_identity_keys(resolved_job)]:
             identity_index[identity] = job_index
     return [job for job in result if job is not None]
@@ -3458,15 +3462,19 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-async def search_job_boards_async(urls: Sequence[str], timeout: float = 10.0) -> list[dict[str, Any]]:
+async def search_job_boards_async(
+    urls: Sequence[str], timeout: float = 10.0
+) -> list[dict[str, Any]]:
     """Alternate capability: Asyncio HTTP/2 multiplexed search feed crawler.
 
     Concurrently fetches public ATS board feeds in parallel using asyncio and httpx/aiohttp.
     Preserves default synchronous search workflow unless explicitly requested.
     """
     import asyncio
+
     try:
         import httpx
+
         async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
             tasks = [client.get(u) for u in urls]
             responses = await asyncio.gather(*tasks, return_exceptions=True)
@@ -3488,16 +3496,22 @@ async def search_job_boards_async(urls: Sequence[str], timeout: float = 10.0) ->
     except ImportError:
         LOGGER.warning("httpx not installed; running fallback async threadpool crawler")
         loop = asyncio.get_running_loop()
+
         def _fetch_sync(u: str) -> dict[str, Any]:
             import urllib.request
+
             try:
                 with urllib.request.urlopen(u, timeout=timeout) as r:
-                    return {"url": u, "status": r.status, "text": r.read().decode("utf-8", "ignore")[:500]}
+                    return {
+                        "url": u,
+                        "status": r.status,
+                        "text": r.read().decode("utf-8", "ignore")[:500],
+                    }
             except Exception as e:
                 return {"url": u, "status": 0, "error": str(e)}
+
         tasks = [loop.run_in_executor(None, _fetch_sync, u) for u in urls]
         return await asyncio.gather(*tasks)
-
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -3797,7 +3811,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         OUTPUT_DIR / "vps_application_state.json",
     ]
     submission_log_paths = getattr(args, "submission_log", None) or default_logs
-    logged_urls = load_logged_job_urls(submission_log_paths) if getattr(args, "exclude_logged", True) else set()
+    logged_urls = (
+        load_logged_job_urls(submission_log_paths)
+        if getattr(args, "exclude_logged", True)
+        else set()
+    )
 
     for board in sorted(boards, key=lambda item: (item.platform, item.token.lower())):
         if is_restricted_board(board):
@@ -3807,8 +3825,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         try:
             board_jobs = fetch_board_jobs(session, board, fetch_context)
             valid_board_jobs = [
-                job for job in board_jobs
-                if not is_restricted_job(job) and (not logged_urls or canonical_url(job.job_url) not in logged_urls)
+                job
+                for job in board_jobs
+                if not is_restricted_job(job)
+                and (not logged_urls or canonical_url(job.job_url) not in logged_urls)
             ]
             collected.extend(valid_board_jobs)
             fetch_stats["boards_succeeded"] += 1
@@ -3859,8 +3879,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 criteria=criteria,
             )
             valid_page_jobs = [
-                job for job in page_jobs
-                if not is_restricted_job(job) and (not logged_urls or canonical_url(job.job_url) not in logged_urls)
+                job
+                for job in page_jobs
+                if not is_restricted_job(job)
+                and (not logged_urls or canonical_url(job.job_url) not in logged_urls)
             ]
             collected.extend(valid_page_jobs)
             fallback_stats["matched"] += len(valid_page_jobs)
@@ -3871,8 +3893,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             time.sleep(args.delay)
 
     jobs = [
-        job for job in deduplicate_jobs(collected)
-        if not is_restricted_job(job) and (not logged_urls or canonical_url(job.job_url) not in logged_urls)
+        job
+        for job in deduplicate_jobs(collected)
+        if not is_restricted_job(job)
+        and (not logged_urls or canonical_url(job.job_url) not in logged_urls)
     ]
     deduplicated_count = len(jobs)
     if args.require_live:

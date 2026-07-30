@@ -10,7 +10,7 @@ import shutil
 import sys
 import tempfile
 from pathlib import Path
-from typing import Sequence
+from collections.abc import Sequence
 
 from .document_archive import (
     COVER_LETTER_STORED_NAME,

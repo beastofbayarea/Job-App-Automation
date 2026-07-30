@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Mapping
+from typing import Any
+from collections.abc import Iterable, Mapping
 
 
 _SELECTED_CHOICE_CLASS = re.compile(r"(?:^|[_\-\s])(active|selected)(?:[_\-\s]|$)")

@@ -8,7 +8,7 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from typing import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 
 
 def _target_path(path: str | Path) -> Path:

@@ -110,7 +110,8 @@ import sys
 import time
 from email.message import EmailMessage
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
+from collections.abc import Sequence
 
 from job_application_automation.mail.gmail_messages import (
     EmailRecord,

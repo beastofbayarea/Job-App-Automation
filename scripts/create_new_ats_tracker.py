@@ -8,19 +8,35 @@ TRACKER_PATH = DATA_DIR / "new_ats_product_management_jobs.xlsx"
 
 ROLES = [
     # Workable
-    ("YouTrip", "Product Manager (Marketing & Operations Platforms)", "https://apply.workable.com/youtrip/"),
+    (
+        "YouTrip",
+        "Product Manager (Marketing & Operations Platforms)",
+        "https://apply.workable.com/youtrip/",
+    ),
     ("NoGood", "Product Manager (Goodie AI)", "https://apply.workable.com/nogood/"),
     ("Fuku", "Product Manager (AI-Powered Workflows)", "https://apply.workable.com/fuku/"),
     # SmartRecruiters
-    ("Scalable Capital", "Product Manager - AI Platform", "https://jobs.smartrecruiters.com/ScalableGmbH/"),
+    (
+        "Scalable Capital",
+        "Product Manager - AI Platform",
+        "https://jobs.smartrecruiters.com/ScalableGmbH/",
+    ),
     ("Vitol", "GenAI Product Manager", "https://jobs.smartrecruiters.com/Vitol/"),
     ("Grab", "Lead Product Manager, Deliveries", "https://jobs.smartrecruiters.com/Grab/"),
     # Recruitee
     ("Aikido Security", "Product Manager (Enterprise)", "https://aikidosecurity.recruitee.com/"),
     ("Bitfinex", "Product Manager (Trading & Wallets)", "https://bitfinex.recruitee.com/"),
-    ("Better Collective", "Product Manager, Partnerships", "https://bettercollective.recruitee.com/"),
+    (
+        "Better Collective",
+        "Product Manager, Partnerships",
+        "https://bettercollective.recruitee.com/",
+    ),
     # BambooHR
-    ("BambooHR", "Product Manager II - HRIS Compensation", "https://bamboohr.bamboohr.com/careers/"),
+    (
+        "BambooHR",
+        "Product Manager II - HRIS Compensation",
+        "https://bamboohr.bamboohr.com/careers/",
+    ),
     ("BambooHR", "Product Manager II - HRIS Training", "https://bamboohr.bamboohr.com/careers/"),
     ("BambooHR", "Product Manager - Core Data Platform", "https://bamboohr.bamboohr.com/careers/"),
     # Breezy HR
@@ -29,8 +45,16 @@ ROLES = [
     ("Nexo", "Product Manager (FinTech / Crypto)", "https://nexo.breezy.hr/"),
     # JazzHR
     ("Codekeeper", "Product Manager (Security & UX)", "https://codekeeper.applytojob.com/apply/"),
-    ("Instinct Science", "Product Manager (Veterinary Software)", "https://instinctscience.applytojob.com/apply/"),
-    ("Wealth Access", "Product Manager (Wealth Management Tech)", "https://wealthaccess.applytojob.com/apply/"),
+    (
+        "Instinct Science",
+        "Product Manager (Veterinary Software)",
+        "https://instinctscience.applytojob.com/apply/",
+    ),
+    (
+        "Wealth Access",
+        "Product Manager (Wealth Management Tech)",
+        "https://wealthaccess.applytojob.com/apply/",
+    ),
 ]
 
 

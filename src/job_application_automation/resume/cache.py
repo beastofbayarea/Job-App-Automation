@@ -11,7 +11,8 @@ import copy
 import hashlib
 import threading
 from pathlib import Path
-from typing import Any, Mapping, MutableMapping, Protocol
+from typing import Any, Protocol
+from collections.abc import Mapping, MutableMapping
 
 from ..core.artifacts import read_json, write_json
 

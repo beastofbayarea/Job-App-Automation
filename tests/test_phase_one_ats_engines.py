@@ -88,12 +88,14 @@ def test_extract_workable_ids_only_accepts_job_paths() -> None:
     assert workable._extract_workable_ids(
         "https://apply.workable.com/example-company/j/ABC123XYZ/"
     ) == ("example-company", "ABC123XYZ")
-    assert workable._extract_workable_ids(
-        "https://apply.workable.com/j/ABC123XYZ/apply"
-    ) == (None, "ABC123XYZ")
-    assert workable._extract_workable_ids(
-        "https://apply.workable.com/example-company/"
-    ) == (None, None)
+    assert workable._extract_workable_ids("https://apply.workable.com/j/ABC123XYZ/apply") == (
+        None,
+        "ABC123XYZ",
+    )
+    assert workable._extract_workable_ids("https://apply.workable.com/example-company/") == (
+        None,
+        None,
+    )
 
 
 @pytest.mark.parametrize(("module", "ats", "url"), ENGINES)

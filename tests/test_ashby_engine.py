@@ -84,6 +84,7 @@ def test_extract_cover_letter_text_preserves_page_boundaries() -> None:
 
 def test_default_relative_start_date() -> None:
     from datetime import date
+
     base = date(2026, 8, 1)
     res = _start_date_from_offset(offset_days=10, base_date=base)
     assert res == "2026-08-11"
@@ -122,10 +123,17 @@ def test_retry_success_and_failure() -> None:
 
 def test_load_config_valid_and_missing(tmp_path: Path) -> None:
     cfg_file = tmp_path / "config.json"
-    cfg_file.write_text('{"schema_version": 2, "candidate": {"first_name": "Alice"}}', encoding="utf-8")
+    cfg_file.write_text(
+        '{"schema_version": 2, "candidate": {"first_name": "Alice"}}', encoding="utf-8"
+    )
 
     with patch("job_application_automation.engines.ashby.load_json_config") as mock_ljc:
-        mock_ljc.return_value = {"candidate": {"first_name": "Alice"}, "defaults": {}, "paths": {}, "company_overrides": {}}
+        mock_ljc.return_value = {
+            "candidate": {"first_name": "Alice"},
+            "defaults": {},
+            "paths": {},
+            "company_overrides": {},
+        }
         cfg = load_config(cfg_file)
         assert cfg["candidate"]["first_name"] == "Alice"
 
@@ -136,6 +144,7 @@ def test_load_config_valid_and_missing(tmp_path: Path) -> None:
 
 def test_signal_handler() -> None:
     import job_application_automation.engines.ashby as ashby_mod
+
     ashby_mod._shutdown = False
     signal_handler(15, None)
     assert ashby_mod._shutdown is True

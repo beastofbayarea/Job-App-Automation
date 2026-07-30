@@ -13,7 +13,9 @@ from job_application_automation.mail.pool_select import (
 
 def test_get_random_email_single_and_multiple(tmp_path: Path) -> None:
     pool_file = tmp_path / "email_pool.json"
-    pool_file.write_text('["user1@example.com", "user2@example.com", "user3@example.com"]', encoding="utf-8")
+    pool_file.write_text(
+        '["user1@example.com", "user2@example.com", "user3@example.com"]', encoding="utf-8"
+    )
 
     single = get_random_email(pool_file, count=1)
     assert isinstance(single, str)

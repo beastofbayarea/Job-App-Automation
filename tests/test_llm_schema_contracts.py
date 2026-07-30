@@ -1,23 +1,28 @@
 from __future__ import annotations
 
 import json
-from job_application_automation.resume.cover_letter_claims import known_claim_ids, validate_claim_ids
+from job_application_automation.resume.cover_letter_claims import (
+    known_claim_ids,
+    validate_claim_ids,
+)
 
 
-MOCK_LLM_RESUME_RESPONSE = json.dumps({
-    "professional_summary": "Experienced AI Engineer specializing in Python, PyTorch, and NLP.",
-    "skills": ["Python", "PyTorch", "Playwright", "FastAPI", "Docker"],
-    "experience": [
-        {
-            "company": "Acme Corp",
-            "title": "Senior AI Engineer",
-            "bullets": [
-                "Built automated web extraction pipelines using Playwright.",
-                "Trained transformer models resulting in 25% efficiency gains."
-            ]
-        }
-    ]
-})
+MOCK_LLM_RESUME_RESPONSE = json.dumps(
+    {
+        "professional_summary": "Experienced AI Engineer specializing in Python, PyTorch, and NLP.",
+        "skills": ["Python", "PyTorch", "Playwright", "FastAPI", "Docker"],
+        "experience": [
+            {
+                "company": "Acme Corp",
+                "title": "Senior AI Engineer",
+                "bullets": [
+                    "Built automated web extraction pipelines using Playwright.",
+                    "Trained transformer models resulting in 25% efficiency gains.",
+                ],
+            }
+        ],
+    }
+)
 
 
 def test_llm_resume_response_schema_validation() -> None:
@@ -30,9 +35,7 @@ def test_llm_resume_response_schema_validation() -> None:
 
 
 def test_claim_id_verification_against_profile() -> None:
-    experience = [
-        {"company": "Acme Corp", "claims": [{"id": "CLAIM_1"}, {"id": "CLAIM_2"}]}
-    ]
+    experience = [{"company": "Acme Corp", "claims": [{"id": "CLAIM_1"}, {"id": "CLAIM_2"}]}]
     known = known_claim_ids(experience)
     assert known == {"CLAIM_1", "CLAIM_2"}
 

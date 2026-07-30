@@ -8,7 +8,7 @@ import unittest
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Mapping
+from collections.abc import Mapping
 from unittest.mock import patch
 
 

@@ -8,7 +8,12 @@ from job_application_automation.engines.ashby_sections import normalize_question
 
 
 def random_string(length: int = 20) -> str:
-    chars = string.ascii_letters + string.digits + string.punctuation + " \t\n\u00a0\u2022\u20ac\u00a3\u20b9\u4e2d\u6587\u062f\u0628\u064a"
+    chars = (
+        string.ascii_letters
+        + string.digits
+        + string.punctuation
+        + " \t\n\u00a0\u2022\u20ac\u00a3\u20b9\u4e2d\u6587\u062f\u0628\u064a"
+    )
     return "".join(random.choice(chars) for _ in range(length))
 
 

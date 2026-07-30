@@ -10,7 +10,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 
 def _frozen_mapping(value: object, field_name: str) -> Mapping[str, Any]:
@@ -40,7 +41,7 @@ class AutomationProfile:
     document: Mapping[str, Any]
 
     @classmethod
-    def from_runtime_mapping(cls, config: Mapping[str, Any]) -> "AutomationProfile":
+    def from_runtime_mapping(cls, config: Mapping[str, Any]) -> AutomationProfile:
         """Freeze a normalized config while retaining unknown top-level fields."""
         if not isinstance(config, Mapping):
             raise ValueError("profile config must be an object")

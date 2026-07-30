@@ -55,8 +55,7 @@ def test_pre_submit_security_challenge_accepts_an_already_filled_code() -> None:
     inputs = MagicMock()
     inputs.count.return_value = 8
     inputs.nth.side_effect = [
-        MagicMock(input_value=MagicMock(return_value=character))
-        for character in "A1B2C3D4"
+        MagicMock(input_value=MagicMock(return_value=character)) for character in "A1B2C3D4"
     ]
     page.locator.return_value = inputs
     with (

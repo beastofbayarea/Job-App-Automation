@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Sequence
+from collections.abc import Sequence
 import pytest
 
 
@@ -81,7 +81,9 @@ def test_command_result_invalid() -> None:
 
 
 def test_llm_settings_valid() -> None:
-    llm = LLMSettings(model="  gemini-pro  ", temperature=0.7, max_attempts=5, retry_delay_seconds=1.5)
+    llm = LLMSettings(
+        model="  gemini-pro  ", temperature=0.7, max_attempts=5, retry_delay_seconds=1.5
+    )
     assert llm.model == "gemini-pro"
     assert llm.temperature == 0.7
     assert llm.max_attempts == 5

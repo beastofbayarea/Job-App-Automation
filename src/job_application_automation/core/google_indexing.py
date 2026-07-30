@@ -29,9 +29,7 @@ DEFAULT_SEO_CONFIG = resolve_runtime_path(RUNTIME_CONFIG.application["seo_config
 DEFAULT_CLOUD_CONFIG = CONFIG_DIR / "cent_capital_config.json"
 INDEXING_SCOPE = "https://www.googleapis.com/auth/indexing"
 SEARCH_CONSOLE_SCOPE = "https://www.googleapis.com/auth/webmasters"
-INDEXING_PUBLISH_ENDPOINT = (
-    "https://indexing.googleapis.com/v3/urlNotifications:publish"
-)
+INDEXING_PUBLISH_ENDPOINT = "https://indexing.googleapis.com/v3/urlNotifications:publish"
 INDEXING_METADATA_ENDPOINT = "https://indexing.googleapis.com/v3/urlNotifications/metadata"
 SEARCH_CONSOLE_SITEMAPS_ENDPOINT = "https://www.googleapis.com/webmasters/v3/sites"
 SUPPORTED_NOTIFICATION_TYPES = frozenset({"URL_UPDATED", "URL_DELETED"})
@@ -84,9 +82,7 @@ class _StructuredDataParser(HTMLParser):
             "robots",
             "googlebot",
         }:
-            directives = {
-                item.strip().lower() for item in attributes.get("content", "").split(",")
-            }
+            directives = {item.strip().lower() for item in attributes.get("content", "").split(",")}
             if "noindex" in directives:
                 self.robots_noindex = True
 
@@ -218,8 +214,7 @@ def load_google_submission_config(
         "SEO config google_submission.eligible_urls",
     )
     eligible_urls = tuple(
-        _validate_domain_url(url, domain, "configured eligible URL")
-        for url in eligible_urls
+        _validate_domain_url(url, domain, "configured eligible URL") for url in eligible_urls
     )
     report_value = (
         str(report_override)
@@ -435,7 +430,9 @@ def _authorized_session(config: GoogleSubmissionConfig, scopes: Sequence[str]) -
     except (OSError, ValueError) as exc:
         raise GoogleSubmissionError("Could not load Google service-account credentials") from exc
     if credentials.service_account_email != config.service_account_email:
-        raise GoogleSubmissionError("Loaded Google credential identity does not match configuration")
+        raise GoogleSubmissionError(
+            "Loaded Google credential identity does not match configuration"
+        )
     return AuthorizedSession(credentials)
 
 
@@ -671,14 +668,10 @@ def _run_submit(args: argparse.Namespace, config: GoogleSubmissionConfig) -> int
     if len(set(urls)) != len(urls):
         raise ValueError("submission URLs cannot contain duplicates")
 
-    validations = [
-        validate_url_notification(config, url, args.notification_type) for url in urls
-    ]
+    validations = [validate_url_notification(config, url, args.notification_type) for url in urls]
     payload = _base_report(config, "submit", dry_run=args.dry_run)
     if args.dry_run:
-        payload["results"] = [
-            {**validation, "status": "validated"} for validation in validations
-        ]
+        payload["results"] = [{**validation, "status": "validated"} for validation in validations]
         _write_and_print(config, payload)
         return 0
 

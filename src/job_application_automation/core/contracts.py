@@ -9,11 +9,14 @@ Google SDKs, or subprocess implementations.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Mapping, Protocol, Sequence, runtime_checkable
+from typing import Protocol, runtime_checkable
 from urllib.parse import urlparse
+
+from .identity import _require_string
 
 
 ENGINE_RESULT_PREFIX = "ENGINE_RESULT_JSON:"
@@ -32,7 +35,7 @@ class EngineMode(str, Enum):
         return f"--{self.value}"
 
     @classmethod
-    def parse(cls, value: object) -> "EngineMode":
+    def parse(cls, value: object) -> EngineMode:
         """Parse a serialized mode and reject ambiguous values."""
         if isinstance(value, cls):
             return value
@@ -65,15 +68,12 @@ class EngineStatus(str, Enum):
     FAILED = "FAILED"
 
     @classmethod
-    def from_value(cls, value: str) -> "EngineStatus | None":
+    def from_value(cls, value: str) -> EngineStatus | None:
         """Return a canonical status when *value* is known, otherwise None."""
         try:
             return cls(value)
         except ValueError:
             return None
-
-
-from .identity import _require_string
 
 
 def _require_bool(value: object, field_name: str) -> bool:
@@ -163,7 +163,7 @@ class EngineRequest:
         return payload
 
     @classmethod
-    def from_payload(cls, payload: Mapping[str, object]) -> "EngineRequest":
+    def from_payload(cls, payload: Mapping[str, object]) -> EngineRequest:
         """Construct a request from a JSON-decoded mapping."""
         if not isinstance(payload, Mapping):
             raise ValueError("engine request must be an object")
@@ -319,7 +319,7 @@ class EngineResult:
         return f"{ENGINE_RESULT_PREFIX}{json.dumps(self.to_payload(), sort_keys=True)}"
 
     @classmethod
-    def from_payload(cls, payload: Mapping[str, object]) -> "EngineResult":
+    def from_payload(cls, payload: Mapping[str, object]) -> EngineResult:
         """Parse and validate the established engine-result JSON object."""
         if not isinstance(payload, Mapping):
             raise ValueError("engine result must be an object")
@@ -338,7 +338,7 @@ class EngineResult:
         )
 
     @classmethod
-    def from_wire_line(cls, line: str) -> "EngineResult":
+    def from_wire_line(cls, line: str) -> EngineResult:
         """Parse one ``ENGINE_RESULT_JSON:`` line emitted by an engine."""
         if not isinstance(line, str) or not line.startswith(ENGINE_RESULT_PREFIX):
             raise ValueError("line does not start with ENGINE_RESULT_JSON:")

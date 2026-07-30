@@ -23,7 +23,8 @@ import logging
 import re
 from datetime import date
 from pathlib import Path
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any
+from collections.abc import Mapping, Sequence
 from urllib.parse import urlparse
 
 from playwright.sync_api import Locator, Page
@@ -254,7 +255,7 @@ def _lever_semantic_answer(
     label: str,
     profile: Mapping[str, Any],
     rules: Mapping[str, Any],
-) -> Optional[str]:
+) -> str | None:
     """Resolve common Lever questions whose labels are too terse for shared matchers."""
     normalized = " ".join(label.lower().split())
     language_match = re.fullmatch(r"(?:preferred\s+)?language\s*(\d+)", normalized)
@@ -687,7 +688,7 @@ def _parser() -> argparse.ArgumentParser:
     return build_engine_parser("Lever application automation engine")
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     live_submit = requested_live_mode(args)
     try:

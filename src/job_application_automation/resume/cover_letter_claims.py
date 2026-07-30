@@ -6,7 +6,8 @@ An LLM-returned ``evidence_claim_ids`` entry is trustworthy only if it names a
 
 from __future__ import annotations
 
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
+from collections.abc import Iterable, Mapping, Sequence
 
 
 def known_claim_ids(experience: Sequence[Mapping[str, Any]]) -> set[str]:

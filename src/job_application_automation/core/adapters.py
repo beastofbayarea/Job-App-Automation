@@ -9,7 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
-from typing import Mapping, Protocol, Sequence, runtime_checkable
+from typing import Protocol, runtime_checkable
+from collections.abc import Mapping, Sequence
 
 
 def _immutable_environment(value: Mapping[str, str]) -> Mapping[str, str]:

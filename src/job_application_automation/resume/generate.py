@@ -40,7 +40,8 @@ import time
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
+from typing import Any
+from collections.abc import Mapping, Sequence
 from xml.sax.saxutils import escape as xml_escape
 
 import fitz  # PyMuPDF remains a compatible module-level scorer patch point.
@@ -78,7 +79,7 @@ FONT_DIRS = [
 ]
 
 
-def _find_font(*names: str) -> Optional[Path]:
+def _find_font(*names: str) -> Path | None:
     for directory in FONT_DIRS:
         for name in names:
             candidate = directory / name
@@ -164,7 +165,7 @@ PERSISTENT_CACHE_ENABLED = (
 
 
 # ---- Caching ----
-_llm_cache: Dict[str, dict] = {}
+_llm_cache: dict[str, dict] = {}
 _resume_cache = ResumeCache(_llm_cache, lock=_cache_lock)
 
 
@@ -173,7 +174,7 @@ def _cache_key(job: JobInfo) -> str:
     return cache_key(job)
 
 
-def _get_cached(job: JobInfo) -> Optional[dict]:
+def _get_cached(job: JobInfo) -> dict | None:
     return _resume_cache.get(job)
 
 
@@ -203,12 +204,12 @@ def _save_disk_cache() -> None:
         logger.warning("Could not persist resume cache %s: %s", cf, exc)
 
 
-def _generate_fallback_resume_data(job: JobInfo) -> Dict[str, Any]:
+def _generate_fallback_resume_data(job: JobInfo) -> dict[str, Any]:
     _ensure_resume_source()
     return generate_fallback_resume_data(job, ORIGINAL_EXPERIENCE, ORIGINAL_EDUCATION)
 
 
-def _call_llm(job: JobInfo, feedback: str = "") -> Optional[Dict[str, Any]]:
+def _call_llm(job: JobInfo, feedback: str = "") -> dict[str, Any] | None:
     """Delegate the LLM call to the shared resume AI utilities."""
     _ensure_resume_source()
     return call_resume_llm(
@@ -228,22 +229,22 @@ def _company_match(llm_name: str, orig_name: str) -> bool:
     return company_matches(llm_name, orig_name)
 
 
-def _normalize_experience(resume_data: Dict[str, Any]) -> Dict[str, Any]:
+def _normalize_experience(resume_data: dict[str, Any]) -> dict[str, Any]:
     """Backward-compatible facade for pure LLM-payload normalization."""
     normalize_experience(resume_data)
     return resume_data
 
 
 def _enforce_candidate_identity(
-    resume_data: Dict[str, Any],
+    resume_data: dict[str, Any],
     email_override: str = "",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     _ensure_resume_source()
     enforce_candidate_identity(resume_data, SOURCE_CANDIDATE, email_override)
     return resume_data
 
 
-def _repair_experience(resume_data: Dict[str, Any]) -> Dict[str, Any]:
+def _repair_experience(resume_data: dict[str, Any]) -> dict[str, Any]:
     """If LLM dropped companies, add them back using full original entries."""
     _ensure_resume_source()
     _, missing_names = repair_missing_experience(resume_data, ORIGINAL_EXPERIENCE)
@@ -254,21 +255,21 @@ def _repair_experience(resume_data: Dict[str, Any]) -> Dict[str, Any]:
     return resume_data
 
 
-def _enforce_source_invariants(resume_data: Dict[str, Any]) -> Dict[str, Any]:
+def _enforce_source_invariants(resume_data: dict[str, Any]) -> dict[str, Any]:
     """Canonicalize immutable employment facts and restore chronological order."""
     _ensure_resume_source()
     enforce_source_invariants(resume_data, ORIGINAL_EXPERIENCE)
     return resume_data
 
 
-def _repair_education(resume_data: Dict[str, Any]) -> Dict[str, Any]:
+def _repair_education(resume_data: dict[str, Any]) -> dict[str, Any]:
     """Always restore immutable education facts from the tagged source."""
     _ensure_resume_source()
     restore_source_education(resume_data, ORIGINAL_EDUCATION)
     return resume_data
 
 
-def _ensure_min_bullets(resume_data: Dict[str, Any]) -> Dict[str, Any]:
+def _ensure_min_bullets(resume_data: dict[str, Any]) -> dict[str, Any]:
     """
     Ensures minimum capacity (14+ bullets) by appending COMPLETE natural bullets
     from original career data if an experience entry is under-populated.
@@ -285,7 +286,7 @@ def _ensure_min_bullets(resume_data: Dict[str, Any]) -> Dict[str, Any]:
     return resume_data
 
 
-def _validate_llm_data(resume_data: Mapping[str, Any]) -> List[str]:
+def _validate_llm_data(resume_data: Mapping[str, Any]) -> list[str]:
     """Validate structure prior to rendering."""
     _ensure_resume_source()
     return validate_resume_data(resume_data, ORIGINAL_COMPANIES)
@@ -296,7 +297,7 @@ def _validate_llm_data(resume_data: Mapping[str, Any]) -> List[str]:
 # ============================================================================
 
 
-def _build_keyword_set(job: JobInfo) -> Set[str]:
+def _build_keyword_set(job: JobInfo) -> set[str]:
     """Build a keyword set from JD for programmatic highlighting."""
     keywords = set()
     if job.keywords:
@@ -323,7 +324,7 @@ def _build_keyword_set(job: JobInfo) -> Set[str]:
 
 def _bold_keywords_in_text(
     text: str,
-    keywords: Optional[Set[str]],
+    keywords: set[str] | None,
     bold_metrics: bool = True,
 ) -> str:
     """
@@ -340,9 +341,9 @@ def _bold_keywords_in_text(
     # Split out already-bolded spans so keyword/metric patterns below only scan
     # plain text and never re-match (or nest tags) inside an existing <b>...</b>.
     tokens = re.split(r"(<b>.*?</b>)", text, flags=re.IGNORECASE | re.DOTALL)
-    processed_tokens: List[str] = []
+    processed_tokens: list[str] = []
 
-    patterns: List[re.Pattern[str]] = []
+    patterns: list[re.Pattern[str]] = []
     if keywords:
         sorted_kws = sorted(keywords, key=len, reverse=True)
         for kw in sorted_kws:
@@ -411,7 +412,7 @@ def _bold_keywords_in_text(
 def _render_pdf_with_reportlab(
     resume: Mapping[str, Any],
     output_path: Path,
-    bold_keywords: Optional[Set[str]] = None,
+    bold_keywords: set[str] | None = None,
 ) -> bool:
     """Render executive PDF with Carlito typography."""
     from reportlab.lib.colors import HexColor
@@ -681,7 +682,7 @@ _default_pdf_renderer = CallableResumeRenderer(_render_pdf_with_reportlab)
 def render_pdf(
     resume: Mapping[str, Any],
     output_path: Path,
-    bold_keywords: Optional[Set[str]] = None,
+    bold_keywords: set[str] | None = None,
     *,
     renderer: ResumeRenderer | None = None,
 ) -> bool:
@@ -699,7 +700,7 @@ def render_pdf(
 # ============================================================================
 
 
-def _score_pdf(pdf_path: str) -> Tuple[int, List[str]]:
+def _score_pdf(pdf_path: str) -> tuple[int, list[str]]:
     """Backward-compatible facade for the reusable PDF scoring policy."""
     _ensure_resume_source()
     return score_pdf(
@@ -718,7 +719,7 @@ def _score_pdf(pdf_path: str) -> Tuple[int, List[str]]:
 # ============================================================================
 
 
-def _build_feedback(issues: List[str]) -> str:
+def _build_feedback(issues: list[str]) -> str:
     """Convert scoring issues into actionable LLM prompt feedback."""
     _ensure_resume_source()
     return build_quality_feedback(issues, ORIGINAL_COMPANIES)
@@ -736,7 +737,7 @@ def _generate_with_retries(
     job: JobInfo,
     output_path: Path,
     email_override: str = "",
-) -> Optional[Path]:
+) -> Path | None:
     """Generate resume with iterative prompt quality loop."""
     feedback = ""
     best_score = 0
@@ -856,7 +857,7 @@ def generate_personalized_resume(
     job: JobInfo,
     output_path: Path,
     email_override: str = "",
-) -> Optional[Path]:
+) -> Path | None:
     """Full pipeline: AI -> normalize -> repair -> render -> score -> retry."""
     _ensure_resume_source()
     _load_disk_cache()
@@ -918,7 +919,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     args = _build_argument_parser().parse_args(argv)
     if args.email and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", args.email.strip()):
         print("Invalid --email value.", file=sys.stderr)

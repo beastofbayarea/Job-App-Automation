@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any
+from collections.abc import Mapping, Sequence
 
 from ..core.paths import OUTPUT_DIR
 from ._browser_form import (
@@ -58,7 +59,7 @@ def run(
     url: str,
     resume: Path,
     cover_letter: Path | None = None,
-    email_override: Optional[str] = None,
+    email_override: str | None = None,
     config: Mapping[str, Any],
     company: str = "",
     role: str = "",
@@ -87,7 +88,7 @@ def _parser():
     return engine_parser(SPEC)
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     return main_for_browser_form_engine(SPEC, argv)
 
 

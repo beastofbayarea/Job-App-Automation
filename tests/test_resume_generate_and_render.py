@@ -95,7 +95,10 @@ def test_cover_letter_pdf_render(tmp_path: Path) -> None:
     out_pdf = tmp_path / "cover_letter.pdf"
     letter_data = {
         "salutation": "Dear Hiring Manager,",
-        "paragraphs": ["I am writing to express my interest in this position.", "My experience aligns well."],
+        "paragraphs": [
+            "I am writing to express my interest in this position.",
+            "My experience aligns well.",
+        ],
         "closing": "Sincerely,",
         "signature": "Jane Doe",
     }

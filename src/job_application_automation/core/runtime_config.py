@@ -12,7 +12,8 @@ from importlib import resources
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from .paths import CONFIG_DIR, PROJECT_ROOT
 
@@ -112,11 +113,17 @@ def load_runtime_config(path: Path | None = None) -> RuntimeConfig:
         with config_path.open("r", encoding="utf-8") as stream:
             document = json.load(stream)
     except (OSError, json.JSONDecodeError) as exc:
-        if path is None and config_path != DEFAULT_RUNTIME_CONFIG_FILE and DEFAULT_RUNTIME_CONFIG_FILE.is_file():
+        if (
+            path is None
+            and config_path != DEFAULT_RUNTIME_CONFIG_FILE
+            and DEFAULT_RUNTIME_CONFIG_FILE.is_file()
+        ):
             with DEFAULT_RUNTIME_CONFIG_FILE.open("r", encoding="utf-8") as stream:
                 document = json.load(stream)
         else:
-            raise ValueError(f"runtime config contains invalid JSON or cannot be read: {config_path}") from exc
+            raise ValueError(
+                f"runtime config contains invalid JSON or cannot be read: {config_path}"
+            ) from exc
     if not isinstance(document, Mapping):
         raise ValueError("runtime config root must be an object")
     if document.get("schema_version") != 1:

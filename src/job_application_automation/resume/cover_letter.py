@@ -27,7 +27,8 @@ import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Optional, Sequence
+from typing import Any
+from collections.abc import Callable, Sequence
 
 from ..core.adapters import LLMClient
 from ..core.artifacts import write_json
@@ -161,7 +162,7 @@ def generate_cover_letter(
     max_retries: int | None = None,
     minimum_words: int | None = None,
     maximum_words: int | None = None,
-) -> Optional[Path]:
+) -> Path | None:
     """Generate one validated, one-page cover letter PDF plus its audit sidecar.
 
     Returns the output path on success or ``None`` after every attempt fails.
@@ -189,7 +190,7 @@ def generate_cover_letter(
     key = cache_key_for(job, narrative, source)
     last_finish_issues: list[str] = []
 
-    def _finish(letter: dict[str, Any]) -> Optional[Path]:
+    def _finish(letter: dict[str, Any]) -> Path | None:
         nonlocal last_finish_issues
         attempt_path = output_path.with_name(f".{output_path.stem}.attempt{output_path.suffix}")
         _remove_file(attempt_path)
@@ -292,7 +293,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     args = _build_argument_parser().parse_args(argv)
     if args.email:
         try:

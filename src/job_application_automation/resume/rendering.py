@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Mapping, Protocol, Set, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
+from collections.abc import Callable, Mapping
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,7 +37,7 @@ class CallableResumeRenderer:
 
     def __init__(
         self,
-        callback: Callable[[Mapping[str, Any], Path, Set[str] | None], bool],
+        callback: Callable[[Mapping[str, Any], Path, set[str] | None], bool],
     ) -> None:
         self._callback = callback
 
@@ -49,7 +50,7 @@ def render_resume(
     renderer: ResumeRenderer,
     resume: Mapping[str, Any],
     output_path: Path,
-    bold_keywords: Set[str] | None = None,
+    bold_keywords: set[str] | None = None,
 ) -> bool:
     """Create a validated render request and delegate it to a renderer port."""
     return bool(

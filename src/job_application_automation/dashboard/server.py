@@ -17,7 +17,8 @@ import webbrowser
 from datetime import datetime, timezone
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
+from collections.abc import Sequence
 
 logger = logging.getLogger("DashboardServer")
 
@@ -53,7 +54,7 @@ def load_json_file(filename: str, default: Any = None) -> Any:
     if not path.exists():
         return default if default is not None else {}
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)
     except Exception as exc:
         logger.warning("Failed to load JSON file %s: %s", path, exc)
@@ -66,7 +67,7 @@ def load_csv_jobs() -> list[dict[str, str]]:
         return []
     jobs = []
     try:
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
+        with open(path, encoding="utf-8", errors="replace") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 jobs.append(dict(row))
@@ -81,18 +82,12 @@ def load_vps_config() -> dict[str, Any]:
     if not config_path.exists():
         return {}
     try:
-        with open(config_path, "r", encoding="utf-8") as f:
+        with open(config_path, encoding="utf-8") as f:
             data = json.load(f)
         vps = data.get("vps", {})
         if not isinstance(vps, dict):
             return {}
-        return {
-            "vps": {
-                key: vps[key]
-                for key in sorted(_PUBLIC_VPS_FIELDS)
-                if key in vps
-            }
-        }
+        return {"vps": {key: vps[key] for key in sorted(_PUBLIC_VPS_FIELDS) if key in vps}}
     except Exception as exc:
         logger.warning("Failed to load VPS config from %s: %s", config_path, exc)
         return {}
@@ -103,7 +98,7 @@ def load_vps_log(lines: int = 250) -> str:
     if not log_path.exists():
         return "vps_sync.log not found."
     try:
-        with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+        with open(log_path, encoding="utf-8", errors="replace") as f:
             all_lines = f.readlines()
             return "".join(all_lines[-lines:])
     except Exception as e:
@@ -233,8 +228,12 @@ def build_kpi_metrics() -> dict[str, Any]:
                 ats = sub.get("ats", "unknown").lower()
                 ats_counts[ats] = ats_counts.get(ats, 0) + 1
 
-    attempted_by_ats = failures_data.get("attempted_by_ats", {}) if isinstance(failures_data, dict) else {}
-    confirmed_by_ats = failures_data.get("confirmed_by_ats", {}) if isinstance(failures_data, dict) else {}
+    attempted_by_ats = (
+        failures_data.get("attempted_by_ats", {}) if isinstance(failures_data, dict) else {}
+    )
+    confirmed_by_ats = (
+        failures_data.get("confirmed_by_ats", {}) if isinstance(failures_data, dict) else {}
+    )
 
     archive_records = archive_entries(archives)
     archived_sets = len(archive_records)
@@ -267,14 +266,18 @@ def build_kpi_metrics() -> dict[str, Any]:
         # Per-run counters, sourced from vps_application_failures.json.
         "attempted_by_ats": attempted_by_ats,
         "confirmed_by_ats": confirmed_by_ats,
-        "run_started_at": failures_data.get("run_started_at", "") if isinstance(failures_data, dict) else "",
+        "run_started_at": failures_data.get("run_started_at", "")
+        if isinstance(failures_data, dict)
+        else "",
         # Cumulative counters, sourced from the append-only submission log.
         "confirmed_by_ats_all_time": submission_summary["confirmed_by_ats"],
         "submissions_by_status": submission_summary["by_status"],
         "latest_submission_at": submission_summary["latest_applied_at"],
         "live_status_counts": live_status_counts,
         "coverage": coverage_summary,
-        "last_failure_update": failures_data.get("updated_at", "") if isinstance(failures_data, dict) else "",
+        "last_failure_update": failures_data.get("updated_at", "")
+        if isinstance(failures_data, dict)
+        else "",
         "vps_info": vps_cfg.get("vps", {}),
         "hostinger_info": vps_cfg.get("hostinger_account", {}),
         "vps_infra": infra_status if isinstance(infra_status, dict) else {},
@@ -298,7 +301,7 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = self.path.split("?")[0]
-        
+
         # Clean page route mappings
         if path in {"/search", "/search/"}:
             self.path = "/search.html"
@@ -382,7 +385,11 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
             with open(target_file, "rb") as f:
                 data = f.read()
 
-            content_type = "application/pdf" if filename.lower().endswith(".pdf") else "application/octet-stream"
+            content_type = (
+                "application/pdf"
+                if filename.lower().endswith(".pdf")
+                else "application/octet-stream"
+            )
             self.send_response(200)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
@@ -421,9 +428,11 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
             file_path = get_output_file_path(filename)
             if file_path.exists():
                 try:
-                    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                    with open(file_path, encoding="utf-8", errors="replace") as f:
                         content = f.read()
-                    self._send_json({"filename": filename, "path": str(file_path), "content": content})
+                    self._send_json(
+                        {"filename": filename, "path": str(file_path), "content": content}
+                    )
                 except Exception as e:
                     self._send_json({"error": str(e)}, status=500)
             else:
@@ -436,7 +445,9 @@ class ReuseAddrHTTPServer(HTTPServer):
     allow_reuse_address = True
 
 
-def run_dashboard_server(host: str = "127.0.0.1", port: int = 8000, open_browser: bool = True) -> None:
+def run_dashboard_server(
+    host: str = "127.0.0.1", port: int = 8000, open_browser: bool = True
+) -> None:
     server_address = (host, port)
     httpd = ReuseAddrHTTPServer(server_address, DashboardRequestHandler)
     url = f"http://{host}:{port}/"
@@ -460,9 +471,13 @@ def run_dashboard_server(host: str = "127.0.0.1", port: int = 8000, open_browser
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Launch VPS Output Monitor Dashboard")
-    parser.add_argument("--host", default="127.0.0.1", help="Host address to bind (default: 127.0.0.1)")
+    parser.add_argument(
+        "--host", default="127.0.0.1", help="Host address to bind (default: 127.0.0.1)"
+    )
     parser.add_argument("--port", type=int, default=8000, help="Port to listen on (default: 8000)")
-    parser.add_argument("--no-browser", action="store_true", help="Do not auto-open browser on startup")
+    parser.add_argument(
+        "--no-browser", action="store_true", help="Do not auto-open browser on startup"
+    )
 
     args = parser.parse_args(argv)
     run_dashboard_server(host=args.host, port=args.port, open_browser=not args.no_browser)

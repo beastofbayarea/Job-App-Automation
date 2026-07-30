@@ -55,7 +55,7 @@ def test_targeted_greenhouse_retry_requires_safe_pre_submit_evidence() -> None:
     script = (SCRIPTS / "retry_vps_greenhouse_job.ps1").read_text(encoding="utf-8")
 
     assert 'ValidatePattern("^\\d+$")' in script
-    assert "result.get(\"submitted\") is not False" in script
+    assert 'result.get("submitted") is not False' in script
     assert 'item.get("status") == "SUBMITTED & CONFIRMED"' in script
     assert "target already exists in the confirmed ledger" in script
     assert "refusing overlap" in script

@@ -10,7 +10,8 @@ from __future__ import annotations
 import html
 import re
 from html.parser import HTMLParser
-from typing import Any, Callable, Iterator, Sequence
+from typing import Any
+from collections.abc import Callable, Iterator, Sequence
 from urllib.parse import urljoin, urlparse
 
 

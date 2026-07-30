@@ -38,7 +38,8 @@ import uuid
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any, Callable, Mapping, Optional, Sequence
+from typing import Any
+from collections.abc import Callable, Mapping, Sequence
 from urllib.parse import parse_qs, urlparse
 
 from playwright.sync_api import Browser, Locator, Page, Playwright
@@ -204,7 +205,7 @@ def normalize_profile_config(config: Mapping[str, Any]) -> dict[str, Any]:
 def load_json_config(
     path: Path,
     *,
-    defaults: Optional[Mapping[str, Any]] = None,
+    defaults: Mapping[str, Any] | None = None,
     required_candidate_fields: Sequence[str] = ("first_name", "last_name"),
 ) -> dict[str, Any]:
     config_path = path.expanduser().resolve()
@@ -370,7 +371,7 @@ def validate_ats_job_url(url: str, ats: str) -> bool:
     return any(pattern.fullmatch(path) for pattern in patterns)
 
 
-def detect_ats_job_url(url: str) -> Optional[str]:
+def detect_ats_job_url(url: str) -> str | None:
     """Return the ATS owning a supported job-specific URL."""
     if not isinstance(url, str) or not url.strip():
         return None
@@ -411,7 +412,7 @@ def mask_email(email: str) -> str:
     return f"{visible}{'*' * max(1, len(local) - len(visible))}@{domain}"
 
 
-def first_visible(locator: Locator) -> Optional[Locator]:
+def first_visible(locator: Locator) -> Locator | None:
     for index in range(locator.count()):
         candidate = locator.nth(index)
         try:
@@ -472,7 +473,7 @@ def fill_labeled(page: Page, label_pattern: str, value: str) -> bool:
 def answer_variants(
     label: str,
     desired: str,
-    configured_variants: Optional[Mapping[str, Sequence[str]]] = None,
+    configured_variants: Mapping[str, Sequence[str]] | None = None,
 ) -> tuple[str, ...]:
     variants = [desired]
     normalized = desired.strip().lower()
@@ -574,8 +575,8 @@ def configured_answer(
     profile: Mapping[str, Any],
     rules: Mapping[str, Any],
     eeo: Mapping[str, Any],
-    field_matchers: Optional[Mapping[str, Sequence[str]]] = None,
-) -> Optional[str]:
+    field_matchers: Mapping[str, Sequence[str]] | None = None,
+) -> str | None:
     text = label.lower()
     explicit_answers = profile.get("screening_answers", {})
     if isinstance(explicit_answers, Mapping):
@@ -992,10 +993,10 @@ def _normalized_navigation_url(value: str) -> str:
     return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}{path}"
 
 
-def _reusable_page(browser: Browser, target_url: str) -> Optional[Page]:
+def _reusable_page(browser: Browser, target_url: str) -> Page | None:
     """Reuse an existing tab for the same application, excluding CAPTCHA tabs."""
     target = _normalized_navigation_url(target_url)
-    blank: Optional[Page] = None
+    blank: Page | None = None
     for context in browser.contexts:
         for page in context.pages:
             if page.is_closed():
@@ -1028,7 +1029,7 @@ def navigate_reusing_tab(
     page.goto(url, wait_until=wait_until, timeout=timeout)
 
 
-def _find_chrome_executable() -> Optional[Path]:
+def _find_chrome_executable() -> Path | None:
     candidates = (
         Path(os.environ.get("PROGRAMFILES", "")) / "Google/Chrome/Application/chrome.exe",
         Path(os.environ.get("PROGRAMFILES(X86)", "")) / "Google/Chrome/Application/chrome.exe",
@@ -1155,7 +1156,7 @@ def engine_result(
     *,
     ats: str,
     is_live: bool,
-    extra: Optional[Mapping[str, Any]] = None,
+    extra: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a contract-validated engine result without changing its wire shape."""
     confirmed = status == "SUBMITTED & CONFIRMED"
@@ -1252,7 +1253,7 @@ def _requested_mode(args: argparse.Namespace) -> str:
     return "dry-run"
 
 
-def main_for_ats(ats: str, argv: Optional[Sequence[str]] = None) -> int:
+def main_for_ats(ats: str, argv: Sequence[str] | None = None) -> int:
     """Validate an ATS engine invocation and emit the standard result record."""
     if ats not in ATS_HOST_MARKERS:
         raise ValueError(f"unsupported ATS: {ats}")
@@ -1279,7 +1280,7 @@ def main_for_ats(ats: str, argv: Optional[Sequence[str]] = None) -> int:
     return 0
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     """Run the generic shell validator by detecting the ATS from --url."""
     probe = argparse.ArgumentParser(
         description="Validate an ATS engine invocation without opening a browser."

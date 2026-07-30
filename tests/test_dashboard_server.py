@@ -16,7 +16,10 @@ from job_application_automation.dashboard.server import (
 
 
 def test_archive_entries_and_summarize() -> None:
-    raw_with_jobs = {"version": 1, "jobs": {"j1": {"status": "archived"}, "j2": {"status": "failed"}}}
+    raw_with_jobs = {
+        "version": 1,
+        "jobs": {"j1": {"status": "archived"}, "j2": {"status": "failed"}},
+    }
     entries = archive_entries(raw_with_jobs)
     assert len(entries) == 2
     summary = summarize_archive_status(entries)
@@ -32,13 +35,21 @@ def test_archive_entries_and_summarize() -> None:
 
 def test_summarize_submissions() -> None:
     subs = {
-        "1": {"status": "Confirmed by ATS", "ats": "greenhouse", "applied_at": "2026-07-01T10:00:00Z"},
+        "1": {
+            "status": "Confirmed by ATS",
+            "ats": "greenhouse",
+            "applied_at": "2026-07-01T10:00:00Z",
+        },
         "2": {"status": "Failed", "ats": "ashby", "applied_at": "2026-07-02T10:00:00Z"},
     }
     res = summarize_submissions(subs)
     assert res["confirmed_by_ats"] == {"greenhouse": 1}
     assert res["latest_applied_at"] == "2026-07-02T10:00:00Z"
-    assert summarize_submissions([]) == {"confirmed_by_ats": {}, "by_status": {}, "latest_applied_at": ""}
+    assert summarize_submissions([]) == {
+        "confirmed_by_ats": {},
+        "by_status": {},
+        "latest_applied_at": "",
+    }
 
 
 def test_summarize_coverage() -> None:

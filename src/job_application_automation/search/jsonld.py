@@ -11,7 +11,8 @@ import html
 import json
 import re
 from html.parser import HTMLParser
-from typing import Any, Callable, Iterable, Iterator
+from typing import Any
+from collections.abc import Callable, Iterable, Iterator
 
 
 class TextExtractor(HTMLParser):

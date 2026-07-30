@@ -35,6 +35,7 @@ def test_ashby_direct_graphql_live_failure(tmp_path, monkeypatch):
         raise RuntimeError("Network error")
 
     import urllib.request
+
     monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
 
     status = submit_ashby_graphql_direct(
@@ -47,4 +48,3 @@ def test_ashby_direct_graphql_live_failure(tmp_path, monkeypatch):
     )
 
     assert status == "FAILED: DIRECT_GRAPHQL_API_ERROR"
-

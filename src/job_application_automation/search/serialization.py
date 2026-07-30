@@ -5,7 +5,8 @@ from __future__ import annotations
 import csv
 import io
 import json
-from typing import Any, Iterable, Sequence
+from typing import Any
+from collections.abc import Iterable, Sequence
 
 
 def job_rows(jobs: Iterable[Any]) -> list[dict[str, Any]]:

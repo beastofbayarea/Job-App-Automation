@@ -132,4 +132,3 @@ def generate_subaddress_email(base_email: str, company: str, tag: str | None = N
 
     sub_tag = f"{clean_company}_{tag.strip().lower()}" if tag else clean_company
     return f"{base_username}+{sub_tag}@{domain_part}"
-

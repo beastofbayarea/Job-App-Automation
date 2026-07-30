@@ -8,7 +8,8 @@ discarded on a bot-blocked page" rule independently testable.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Iterable, Sequence
+from typing import Any
+from collections.abc import Callable, Iterable, Sequence
 
 
 @dataclass(frozen=True)

@@ -9,7 +9,8 @@ import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
+from collections.abc import Sequence
 
 from .artifacts import atomic_write_text, read_json
 from .contracts import EngineResult
@@ -101,7 +102,11 @@ def _eligible_jobs(payload: Any) -> list[dict[str, Any]]:
             str(value.get("job_url", "")).strip(),
         ]
         application_url = next(
-            (candidate_url for candidate_url in candidate_urls if detect_ats_job_url(candidate_url)),
+            (
+                candidate_url
+                for candidate_url in candidate_urls
+                if detect_ats_job_url(candidate_url)
+            ),
             "",
         )
         platform = detect_ats_job_url(application_url) if application_url else None

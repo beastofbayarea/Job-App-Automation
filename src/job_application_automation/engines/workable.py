@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any
+from collections.abc import Mapping, Sequence
 from urllib.parse import urlparse
 
 from ..core.paths import OUTPUT_DIR
@@ -58,7 +59,7 @@ SPEC = BrowserFormSpec(
 )
 
 
-def _extract_workable_ids(url: str) -> tuple[Optional[str], Optional[str]]:
+def _extract_workable_ids(url: str) -> tuple[str | None, str | None]:
     """Extract ``(company_shortcode, job_shortcode)`` from a Workable job URL."""
     parts = [part for part in urlparse(url).path.strip("/").split("/") if part]
     if len(parts) >= 3 and parts[1].casefold() in {"j", "jobs"}:
@@ -73,7 +74,7 @@ def run(
     url: str,
     resume: Path,
     cover_letter: Path | None = None,
-    email_override: Optional[str] = None,
+    email_override: str | None = None,
     config: Mapping[str, Any],
     company: str = "",
     role: str = "",
@@ -102,7 +103,7 @@ def _parser():
     return engine_parser(SPEC)
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     return main_for_browser_form_engine(SPEC, argv)
 
 

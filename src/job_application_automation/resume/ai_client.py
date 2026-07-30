@@ -39,7 +39,8 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any
+from collections.abc import Mapping, Sequence
 
 import pypdf
 from playwright.sync_api import sync_playwright
@@ -332,7 +333,7 @@ def extract_resume_text(resume_path: Path) -> str:
         raise FileNotFoundError(f"Resume PDF not found: {resume_path}")
     try:
         reader = pypdf.PdfReader(str(resume_path))
-        full_text: List[str] = []
+        full_text: list[str] = []
         for page in reader.pages:
             txt = page.extract_text()
             if txt:
@@ -345,7 +346,7 @@ def extract_resume_text(resume_path: Path) -> str:
         raise RuntimeError(f"Failed to extract resume text: {exc}") from exc
 
 
-def scrape_job(url: str) -> Dict[str, Any]:
+def scrape_job(url: str) -> dict[str, Any]:
     """Extract JD text and essay prompts from any supported ATS job URL."""
     ats = detect_ats_job_url(url)
     if not ats:
@@ -403,7 +404,7 @@ def scrape_job(url: str) -> Dict[str, Any]:
                     f"{last_navigation_error or 'empty response'}"
                 )
 
-            questions: List[str] = []
+            questions: list[str] = []
             for text_area in page.locator("textarea:visible").all():
                 try:
                     # Ashby doesn't reliably associate <label> with essay textareas, so
@@ -436,7 +437,7 @@ def scrape_job(url: str) -> Dict[str, Any]:
                     session.browser.close()
 
 
-def scrape_ashby_job(url: str) -> Dict[str, Any]:
+def scrape_ashby_job(url: str) -> dict[str, Any]:
     """Backward-compatible wrapper for callers that still use the historic name."""
     if detect_ats_job_url(url) != "ashby":
         raise ValueError("scrape_ashby_job accepts HTTPS Ashby job URLs only.")
@@ -541,7 +542,7 @@ def call_resume_llm(
     job: Any,
     feedback: str = "",
     base_resume_text: str = "",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Invokes Gemini LLM to synthesize tailored resume payload. Throws RuntimeError if call or parse fails."""
     comp = getattr(job, "company", "Target Company")
     r_title = getattr(job, "role_title", "Target Role")
@@ -693,9 +694,9 @@ def cleanup_legacy_script(remove: bool = False) -> bool:
 
 def generate_fallback_resume_data(
     job: Any,
-    original_experience: Optional[Sequence[Mapping[str, Any]]] = None,
-    original_education: Optional[Sequence[Mapping[str, Any]]] = None,
-) -> Dict[str, Any]:
+    original_experience: Sequence[Mapping[str, Any]] | None = None,
+    original_education: Sequence[Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
     """Return a conservative, source-backed payload when LLM generation is unavailable."""
     role = getattr(job, "role_title", "") or "Target Role"
     keywords = getattr(job, "keywords", "") or ""

@@ -35,7 +35,7 @@ def test_extract_ats_urls_from_html() -> None:
         <a href="/invalid-link">Invalid</a>
     </div>
     """
-    
+
     def dummy_url_key(url: str) -> str:
         if "greenhouse" in url or "lever" in url:
             return url

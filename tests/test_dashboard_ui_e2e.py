@@ -6,7 +6,13 @@ from playwright.sync_api import sync_playwright
 
 pytestmark = pytest.mark.allow_hosts(["127.0.0.1", "localhost", "::1"])
 
-DASHBOARD_STATIC_DIR = Path(__file__).resolve().parents[1] / "src" / "job_application_automation" / "dashboard" / "static"
+DASHBOARD_STATIC_DIR = (
+    Path(__file__).resolve().parents[1]
+    / "src"
+    / "job_application_automation"
+    / "dashboard"
+    / "static"
+)
 
 
 @pytest.mark.enable_socket
@@ -20,7 +26,13 @@ def test_dashboard_ui_index_page() -> None:
         page.goto(index_html.as_uri())
 
         title = page.title()
-        assert "VPS" in title or "Dashboard" in title or "Monitor" in title or "Submissions" in title or True
+        assert (
+            "VPS" in title
+            or "Dashboard" in title
+            or "Monitor" in title
+            or "Submissions" in title
+            or True
+        )
         assert page.locator("body").is_visible()
 
         browser.close()
@@ -28,7 +40,13 @@ def test_dashboard_ui_index_page() -> None:
 
 @pytest.mark.enable_socket
 def test_dashboard_ui_pages_exist_and_render() -> None:
-    page_files = ["search.html", "generation.html", "logs.html", "inspector.html", "cent-capital.html"]
+    page_files = [
+        "search.html",
+        "generation.html",
+        "logs.html",
+        "inspector.html",
+        "cent-capital.html",
+    ]
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)

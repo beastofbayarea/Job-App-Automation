@@ -12,7 +12,7 @@ def test_pdf_visual_layout_and_margins(tmp_path: Path) -> None:
         "paragraphs": [
             "I am writing to express my strong interest in the AI Engineer position.",
             "With extensive experience in Python, PyTorch, and Playwright automation, I have built reliable systems.",
-            "Thank you for considering my application. I look forward to hearing from you."
+            "Thank you for considering my application. I look forward to hearing from you.",
         ],
         "closing": "Sincerely,",
         "signature": "Jane Doe",

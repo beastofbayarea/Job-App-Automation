@@ -39,7 +39,8 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Optional, Sequence, TypedDict
+from typing import Any, TypedDict
+from collections.abc import Mapping, Sequence
 from urllib.parse import unquote, urlparse
 
 import openpyxl
@@ -148,7 +149,7 @@ class SubprocessRunner:
         )
 
 
-def detect_ats(url: str) -> Optional[str]:
+def detect_ats(url: str) -> str | None:
     """Return the supported ATS for a job-specific HTTPS URL, or None."""
     return detect_ats_job_url(url)
 
@@ -362,7 +363,7 @@ def run_command(
     cmd: Sequence[str],
     timeout_seconds: int,
     *,
-    env: Optional[Mapping[str, str]] = None,
+    env: Mapping[str, str] | None = None,
 ) -> ProcessResult:
     """Run a child with bounded lifetime and descendant cleanup."""
     if timeout_seconds <= 0:
@@ -571,7 +572,7 @@ def generate_personalized_resume(
     timeout_seconds: int,
     email: str = "",
     process_runner: ProcessRunner | None = None,
-) -> Optional[Path]:
+) -> Path | None:
     generator = CLI_ENTRYPOINT
     if not generator.exists():
         logger.warning("Resume generator not found: %s", generator)
@@ -666,7 +667,7 @@ def generate_personalized_cover_letter(
     profile_path: Path,
     timeout_seconds: int,
     process_runner: ProcessRunner | None = None,
-) -> Optional[Path]:
+) -> Path | None:
     """Generate and atomically promote one validated position-specific cover letter."""
     generator = CLI_ENTRYPOINT
     if not generator.exists():
@@ -777,12 +778,12 @@ def _random_job_emails(
 
 def _validate_orchestrator_inputs(
     *,
-    tracker_path: Optional[Path],
+    tracker_path: Path | None,
     require_tracker: bool,
     resume_path: Path,
     prepared_resume_path: Path | None,
     cover_letter_path: Path | None,
-    config_path: Optional[Path],
+    config_path: Path | None,
     timeout_seconds: int,
     resume_timeout_seconds: int,
 ) -> None:
@@ -814,7 +815,7 @@ def _select_jobs(
     *,
     shuffle: bool,
     start_index: int,
-    limit: Optional[int],
+    limit: int | None,
 ) -> list[JobRecord]:
     selected = list(jobs)
     if start_index > 0:
@@ -855,16 +856,16 @@ def _append_and_persist(
 
 def run_orchestrator(
     engine_paths: Mapping[str, Path],
-    tracker_path: Optional[Path],
+    tracker_path: Path | None,
     resume_path: Path,
-    config_path: Optional[Path],
+    config_path: Path | None,
     results_path: Path,
     prepared_resume_path: Path | None = None,
     cover_letter_path: Path | None = None,
     email_override: str = "",
     email_pool_path: Path = DEFAULT_EMAIL_POOL_FILE,
     submission_log_path: Path = DEFAULT_SUBMISSION_LOG_FILE,
-    limit: Optional[int] = None,
+    limit: int | None = None,
     start_index: int = 0,
     live_submit: bool = False,
     fill_only: bool = False,
@@ -874,7 +875,7 @@ def run_orchestrator(
     timeout_seconds: int = DEFAULT_ENGINE_TIMEOUT_SECONDS,
     personalize_resume: bool = True,
     resume_timeout_seconds: int = DEFAULT_RESUME_TIMEOUT_SECONDS,
-    direct_url: Optional[str] = None,
+    direct_url: str | None = None,
     direct_company: str = "",
     direct_role: str = "",
     process_runner: ProcessRunner | None = None,
@@ -1258,7 +1259,7 @@ def _resolve_engine_paths(args: argparse.Namespace) -> dict[str, Path]:
     return {ats: resolve_engine_path(Path(path)) for ats, path in raw_engines.items()}
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     results_path = Path(args.results_file).resolve()
     try:

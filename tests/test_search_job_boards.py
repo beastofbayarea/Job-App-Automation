@@ -280,9 +280,7 @@ class SearchJobBoardsTests(unittest.TestCase):
         smartrecruiters = search.board_from_url(
             "https://jobs.smartrecruiters.com/Example/123-product-manager"
         )
-        workable = search.board_from_url(
-            "https://apply.workable.com/example-company/j/ABC123/"
-        )
+        workable = search.board_from_url("https://apply.workable.com/example-company/j/ABC123/")
         workable_short = search.board_from_url("https://apply.workable.com/j/ABC123/")
 
         self.assertEqual(search.Board("smartrecruiters", "Example"), smartrecruiters)
@@ -297,9 +295,7 @@ class SearchJobBoardsTests(unittest.TestCase):
             )
         )
         self.assertTrue(
-            search.looks_like_job_url(
-                "https://apply.workable.com/example-company/j/ABC123/"
-            )
+            search.looks_like_job_url("https://apply.workable.com/example-company/j/ABC123/")
         )
 
     def test_generic_ats_url_becomes_web_candidate(self) -> None:
@@ -421,9 +417,7 @@ class SearchJobBoardsTests(unittest.TestCase):
             provider_id_trusted=True,
             live_status="listed",
         )
-        response = FakeResponse(
-            payload={"id": "123", "active": True, "visibility": "PUBLIC"}
-        )
+        response = FakeResponse(payload={"id": "123", "active": True, "visibility": "PUBLIC"})
         search.verify_smartrecruiters_job_live(
             FakeSession(response),
             job,
@@ -824,7 +818,9 @@ class SearchJobBoardsTests(unittest.TestCase):
     def test_lever_api_base_and_salary_format(self) -> None:
         eu_board = search.Board("lever", "acme", region="eu")
         us_board = search.Board("lever", "acme", region="us")
-        self.assertEqual("https://api.eu.lever.co/v0/postings/acme", search.lever_api_base(eu_board))
+        self.assertEqual(
+            "https://api.eu.lever.co/v0/postings/acme", search.lever_api_base(eu_board)
+        )
         self.assertEqual("https://api.lever.co/v0/postings/acme", search.lever_api_base(us_board))
 
         salary_dict = {"currency": "USD", "min": 120000, "max": 150000, "interval": "per year"}
@@ -854,11 +850,7 @@ class SearchJobBoardsTests(unittest.TestCase):
             "typeOfEmployment": {"label": "Full-time"},
             "postingUrl": "https://jobs.smartrecruiters.com/example/123-product-manager",
             "applyUrl": "https://jobs.smartrecruiters.com/example/123-product-manager?oga=true",
-            "jobAd": {
-                "sections": {
-                    "jobDescription": {"text": "<p>Build an AI platform.</p>"}
-                }
-            },
+            "jobAd": {"sections": {"jobDescription": {"text": "<p>Build an AI platform.</p>"}}},
         }
         with patch.object(search, "get_json", side_effect=[listing, detail]):
             jobs = search.fetch_smartrecruiters_jobs(
@@ -939,13 +931,15 @@ class SearchJobBoardsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             log_path = Path(tmpdir) / "submission_log.json"
             log_path.write_text(
-                json.dumps({
-                    "sub1": {
-                        "job_url": "https://boards.greenhouse.io/acme/jobs/999",
-                        "status": "SUBMITTED & CONFIRMED"
+                json.dumps(
+                    {
+                        "sub1": {
+                            "job_url": "https://boards.greenhouse.io/acme/jobs/999",
+                            "status": "SUBMITTED & CONFIRMED",
+                        }
                     }
-                }),
-                encoding="utf-8"
+                ),
+                encoding="utf-8",
             )
             logged = search.load_logged_job_urls([log_path])
             self.assertIn("https://boards.greenhouse.io/acme/jobs/999", logged)
