@@ -87,6 +87,15 @@ class RuntimeConfig:
     ashby: Mapping[str, Any]
     gmail: Mapping[str, Any]
 
+    def get_section(self, name: str) -> Mapping[str, Any]:
+        """Return a named top-level config section or an empty mapping if unknown."""
+        section = getattr(self, name, None)
+        return section if isinstance(section, Mapping) else MappingProxyType({})
+
+    def get_setting(self, section: str, key: str, default: Any = None) -> Any:
+        """Return a validated setting value from a section, falling back to default."""
+        return self.get_section(section).get(key, default)
+
 
 def load_runtime_config(path: Path | None = None) -> RuntimeConfig:
     """Load local settings, falling back to the packaged safe defaults.
