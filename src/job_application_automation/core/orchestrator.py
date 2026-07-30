@@ -177,11 +177,19 @@ def load_jobs_from_tracker(tracker_path: Path) -> list[JobRecord]:
             ats = detect_ats(url)
             if not ats:
                 continue
+            company_val = str(row[company_index]).strip() if row[company_index] else ""
+            role_val = str(row[role_index]).strip() if row[role_index] else ""
+            if not company_val:
+                logger.warning("Tracker row %d has empty company; defaulting to 'Company'", row_number)
+                company_val = "Company"
+            if not role_val:
+                logger.warning("Tracker row %d has empty role; defaulting to 'Product Manager'", row_number)
+                role_val = "Product Manager"
             jobs.append(
                 {
                     "row_number": row_number,
-                    "company": str(row[company_index]).strip() if row[company_index] else "Company",
-                    "role": str(row[role_index]).strip() if row[role_index] else "Product Manager",
+                    "company": company_val,
+                    "role": role_val,
                     "url": url,
                     "ats": ats,
                 }
@@ -206,10 +214,16 @@ def job_from_url(
         )
     path_parts = [unquote(part).strip() for part in urlparse(url).path.split("/") if part.strip()]
     inferred_company = path_parts[0].replace("-", " ").strip().title() if path_parts else "Company"
+    final_company = company.strip() or inferred_company
+    final_role = role.strip() or "Product Manager"
+    if not company.strip():
+        logger.warning("No company specified for URL; using '%s'", final_company)
+    if not role.strip():
+        logger.warning("No role specified for URL; defaulting to 'Product Manager'")
     return {
         "row_number": 1,
-        "company": company.strip() or inferred_company,
-        "role": role.strip() or "Product Manager",
+        "company": final_company,
+        "role": final_role,
         "url": url.strip(),
         "ats": ats,
     }
