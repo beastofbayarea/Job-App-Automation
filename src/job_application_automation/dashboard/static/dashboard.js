@@ -11,7 +11,55 @@ let state = {
   activeFunnelStage: 'all'
 };
 
+// Single source of truth for the site nav, shared by the desktop nav, the
+// mobile drawer, and the mobile bottom bar across every page.
+const NAV_PAGES = [
+  { slug: 'index', href: 'index.html', icon: '📜', desktopLabel: 'Submissions', drawerLabel: 'Submissions & Failures', bottomLabel: 'Matrix' },
+  { slug: 'search', href: 'search.html', icon: '🌊', desktopLabel: 'Job Search', drawerLabel: 'Job Search & Coverage', bottomLabel: 'Search' },
+  { slug: 'generation', href: 'generation.html', icon: '🪨', desktopLabel: 'AI Queue', drawerLabel: 'Generation & Archives', bottomLabel: 'Queue' },
+  { slug: 'logs', href: 'logs.html', icon: '🔥', desktopLabel: 'Sync Logs', drawerLabel: 'Real-Time VPS Logs', bottomLabel: 'Logs' },
+  { slug: 'inspector', href: 'inspector.html', icon: '📁', desktopLabel: 'Inspector', drawerLabel: 'Raw File Inspector', bottomLabel: 'Files' },
+  { slug: 'cent-capital', href: 'cent-capital.html', icon: '🏛️', desktopLabel: 'Cent Capital', drawerLabel: 'Cent Capital (cent.capital)', bottomLabel: 'Cent' }
+];
+
+// Each page keeps its own <nav>/<aside> chrome (hamburger button, drawer
+// header, backdrops) exactly where it was; only the repeated <a> link lists
+// inside them are generated here, driven by a `data-active` attribute set on
+// each mount element to the current page's slug.
+function renderNav() {
+  const desktopMount = document.getElementById('desktopNav');
+  if (desktopMount) {
+    const activeSlug = desktopMount.dataset.active;
+    desktopMount.innerHTML = NAV_PAGES.map((page) => {
+      const activeClass = page.slug === activeSlug ? ' active' : '';
+      return `<a href="${page.href}" class="nav-link${activeClass}">${page.icon} ${page.desktopLabel}</a>`;
+    }).join('\n');
+  }
+
+  const drawerMount = document.getElementById('drawerLinks');
+  if (drawerMount) {
+    const activeSlug = drawerMount.dataset.active;
+    drawerMount.innerHTML = NAV_PAGES.map((page) => {
+      const activeClass = page.slug === activeSlug ? ' active' : '';
+      return `<a href="${page.href}" class="nav-link${activeClass}" onclick="closeMobileDrawer()">${page.icon} ${page.drawerLabel}</a>`;
+    }).join('\n');
+  }
+
+  const bottomMount = document.getElementById('bottomNav');
+  if (bottomMount) {
+    const activeSlug = bottomMount.dataset.active;
+    bottomMount.innerHTML = NAV_PAGES.map((page) => {
+      const activeClass = page.slug === activeSlug ? ' active' : '';
+      return `<a href="${page.href}" class="bottom-nav-item${activeClass}">
+        <span class="bottom-nav-icon">${page.icon}</span>
+        <span class="bottom-nav-label">${page.bottomLabel}</span>
+      </a>`;
+    }).join('\n');
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  renderNav();
   setupNavigation();
   fetchMetrics();
 

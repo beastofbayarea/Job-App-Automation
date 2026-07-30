@@ -91,14 +91,7 @@
     </a>
 
     <!-- Desktop Navigation Menu -->
-    <nav class="desktop-nav" aria-label="Desktop Navigation">
-      <a href="index.html" class="nav-link">📜 Submissions</a>
-      <a href="search.html" class="nav-link">🌊 Job Search</a>
-      <a href="generation.html" class="nav-link">🪨 AI Queue</a>
-      <a href="logs.html" class="nav-link">🔥 Sync Logs</a>
-      <a href="inspector.html" class="nav-link">📁 Inspector</a>
-      <a href="cent-capital.html" class="nav-link active">🏛️ Cent Capital</a>
-    </nav>
+    <nav class="desktop-nav" id="desktopNav" aria-label="Desktop Navigation" data-active="cent-capital"></nav>
 
     <div class="header-actions">
       <span id="vpsStatusBadge" class="badge badge-ashby" style="display: inline-flex;">CHECKING...</span>
@@ -120,14 +113,7 @@
       <span class="drawer-title">SKYBISON CLOUD</span>
       <button class="drawer-close" id="drawerCloseBtn" aria-label="Close Mobile Drawer">&times;</button>
     </div>
-    <nav class="drawer-links">
-      <a href="index.html" class="nav-link" onclick="closeMobileDrawer()">📜 Submissions & Failures</a>
-      <a href="search.html" class="nav-link" onclick="closeMobileDrawer()">🌊 Job Search & Coverage</a>
-      <a href="generation.html" class="nav-link" onclick="closeMobileDrawer()">🪨 Generation & Archives</a>
-      <a href="logs.html" class="nav-link" onclick="closeMobileDrawer()">🔥 Real-Time VPS Logs</a>
-      <a href="inspector.html" class="nav-link" onclick="closeMobileDrawer()">📁 Raw File Inspector</a>
-      <a href="cent-capital.html" class="nav-link active" onclick="closeMobileDrawer()">🏛️ Cent Capital (cent.capital)</a>
-    </nav>
+    <nav class="drawer-links" id="drawerLinks" data-active="cent-capital"></nav>
   </aside>
 
   <main class="container" id="mainContent">
@@ -193,32 +179,7 @@
   </main>
 
   <!-- Mobile Bottom Command Bar (< 768px) -->
-  <nav class="mobile-bottom-nav" aria-label="Mobile Bottom Command Bar">
-    <a href="index.html" class="bottom-nav-item">
-      <span class="bottom-nav-icon">📜</span>
-      <span class="bottom-nav-label">Matrix</span>
-    </a>
-    <a href="search.html" class="bottom-nav-item">
-      <span class="bottom-nav-icon">🌊</span>
-      <span class="bottom-nav-label">Search</span>
-    </a>
-    <a href="generation.html" class="bottom-nav-item">
-      <span class="bottom-nav-icon">🪨</span>
-      <span class="bottom-nav-label">Queue</span>
-    </a>
-    <a href="logs.html" class="bottom-nav-item">
-      <span class="bottom-nav-icon">🔥</span>
-      <span class="bottom-nav-label">Logs</span>
-    </a>
-    <a href="inspector.html" class="bottom-nav-item">
-      <span class="bottom-nav-icon">📁</span>
-      <span class="bottom-nav-label">Files</span>
-    </a>
-    <a href="cent-capital.html" class="bottom-nav-item active">
-      <span class="bottom-nav-icon">🏛️</span>
-      <span class="bottom-nav-label">Cent</span>
-    </a>
-  </nav>
+  <nav class="mobile-bottom-nav" id="bottomNav" aria-label="Mobile Bottom Command Bar" data-active="cent-capital"></nav>
 
   <!-- Site Global Footer with Candidate & Config Links -->
   <footer class="app-footer">
