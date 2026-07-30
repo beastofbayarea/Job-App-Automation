@@ -63,7 +63,7 @@
           {
             "@type": "ListItem",
             "position": 2,
-            "name": "AI Queue & Archives",
+            "name": "Application Queue",
             "item": "https://skybison.cloud/generation"
           }
         ]
@@ -115,36 +115,14 @@
 
   <main class="container" id="mainContent">
 
-    <!-- Four Elements KPI Top Grid -->
-    <section class="kpi-grid">
-      <div class="kpi-card element-air">
-        <div class="kpi-title">🌀 Air • Confirmed Submissions</div>
-        <div class="kpi-value kpi-air" id="kpiSubmissions">--</div>
-      </div>
-      <div class="kpi-card element-earth">
-        <div class="kpi-title">🪨 Earth • Generation Queue</div>
-        <div class="kpi-value kpi-earth" id="kpiGenQueue">--</div>
-      </div>
-      <div class="kpi-card element-fire">
-        <div class="kpi-title">🔥 Fire • Document Archives</div>
-        <div class="kpi-value kpi-fire" id="kpiArchives">--</div>
-      </div>
-    </section>
-
-    <!-- GENERATION & ARCHIVES PAGE CONTENT -->
+    <!-- GENERATION QUEUE PAGE CONTENT -->
     <section class="section">
       <div class="controls-bar">
         <input type="text" id="sec2Search" class="search-input" placeholder="Search archives and generation jobs..." oninput="renderSection2View()">
       </div>
-      <div class="split-grid">
-        <div class="card">
-          <h3 style="margin-bottom: 1rem; color: var(--air-cyan); font-family: var(--font-display);">VPS Generation Queue (`vps_generation_jobs.json`)</h3>
-          <div class="json-viewer" id="generationQueueView">Loading generation jobs...</div>
-        </div>
-        <div class="card">
-          <h3 style="margin-bottom: 1rem; color: var(--fire-gold); font-family: var(--font-display);">VPS Document Archives (`vps_document_archive_state.json`)</h3>
-          <div id="archiveStateView">Loading document archive state...</div>
-        </div>
+      <div class="card">
+        <h3 style="margin-bottom: 1rem; color: var(--air-cyan); font-family: var(--font-display);">VPS Generation Queue (`vps_generation_jobs.json`)</h3>
+        <div class="json-viewer" id="generationQueueView">Loading generation jobs...</div>
       </div>
     </section>
 
