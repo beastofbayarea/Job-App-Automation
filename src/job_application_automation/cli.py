@@ -43,11 +43,13 @@ COMMAND_MODULES = {
     "search": "job_application_automation.search.job_boards",
     "gmail": "job_application_automation.mail.gmail_client",
     "email-pool": "job_application_automation.mail.pool_select",
+    "dashboard": "job_application_automation.dashboard.server",
 }
 COMMAND_ALIASES = {
     "orchestrate": "apply",
     "archive": "documents",
     "email": "gmail",
+    "ui": "dashboard",
 }
 ENGINE_MODULES = {
     "ashby": "job_application_automation.engines.ashby",
@@ -67,7 +69,8 @@ def _print_usage(stream: TextIO) -> None:
         "  documents   Generate, store, or retrieve a private CV/cover-letter pair\n"
         "  search      Search supported ATS job boards\n"
         "  gmail       Read, export, draft, or send Gmail messages\n"
-        "  email-pool  Select configured candidate email addresses\n\n"
+        "  email-pool  Select configured candidate email addresses\n"
+        "  dashboard   Launch interactive web dashboard for output statistics\n\n"
         "Internal command:\n"
         "  engine <ashby|greenhouse|lever>  Run an ATS engine for the orchestrator\n\n"
         "Use `job_automation.py <command> --help` for command-specific help.",

@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VPS Output Monitor | Job Application Automation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-logo">⚡ VPS Output Monitor</span>
+      <span style="color: var(--text-muted); font-size: 0.85rem;">Job App Automation v0.1.0</span>
+    </div>
+    <div class="header-actions">
+      <button class="secondary-btn" onclick="fetchVpsStatus()">
+        <span>📡 VPS Status Check</span>
+      </button>
+      <button class="sync-btn" id="syncBtn" onclick="triggerVpsSync()">
+        <span>🔄 Sync Reports from VPS</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- VPS Infrastructure Specifications Panel -->
+    <section class="infra-card">
+      <div class="infra-header">
+        <span class="infra-title">🖥️ VPS Host Infrastructure & Account Specs</span>
+        <span id="vpsStatusBadge" class="badge badge-confirmed">ACTIVE & ONLINE</span>
+      </div>
+      <div class="infra-grid">
+        <div class="infra-item">
+          <span class="infra-label">VPS Host IP</span>
+          <span class="infra-val" id="vpsHost">2.24.28.180</span>
+        </div>
+        <div class="infra-item">
+          <span class="infra-label">Hostname</span>
+          <span class="infra-val" id="vpsHostname">srv1576573.hstgr.cloud</span>
+        </div>
+        <div class="infra-item">
+          <span class="infra-label">OS Environment</span>
+          <span class="infra-val" id="vpsOs">Ubuntu 24.04 LTS</span>
+        </div>
+        <div class="infra-item">
+          <span class="infra-label">Plan & Resource Specs</span>
+          <span class="infra-val" id="vpsPlan">KVM 1 (1 vCPU, 4GB RAM, 50GB Disk)</span>
+        </div>
+        <div class="infra-item">
+          <span class="infra-label">Datacenter</span>
+          <span class="infra-val" id="vpsDatacenter">US Boston 2</span>
+        </div>
+        <div class="infra-item">
+          <span class="infra-label">Daily Automation Cron</span>
+          <span class="infra-val" style="color: var(--accent-emerald);">0 3 * * * (03:00 UTC)</span>
+        </div>
+        <div class="infra-item">
+          <span class="infra-label">Plan Renewal Date</span>
+          <span class="infra-val" id="vpsExpiry">2027-04-10</span>
+        </div>
+        <div class="infra-item">
+          <span class="infra-label">Account Owner</span>
+          <span class="infra-val" id="vpsOwner">Cent Capital (Shivam Singh)</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Detailed KPI Metrics Top Bar -->
+    <section class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-title">Confirmed Submissions</div>
+        <div class="kpi-value kpi-emerald" id="kpiSubmissions">--</div>
+        <div class="kpi-subtext" id="kpiAtsBreakdown">Greenhouse: -- | Ashby: -- | Lever: --</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">Total Jobs Discovered</div>
+        <div class="kpi-value kpi-cyan" id="kpiJobsFound">--</div>
+        <div class="kpi-subtext" id="kpiLivenessSub">Live: -- | Unavailable: --</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">Queued Generation Jobs</div>
+        <div class="kpi-value kpi-purple" id="kpiGenQueue">--</div>
+        <div class="kpi-subtext">Tailored Specs Queue</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">Archived Document Sets</div>
+        <div class="kpi-value kpi-amber" id="kpiArchives">--</div>
+        <div class="kpi-subtext">PDF Resume + Cover Letter</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">Cached ATS Board Endpoints</div>
+        <div class="kpi-value kpi-cyan" id="kpiCachedBoards">--</div>
+        <div class="kpi-subtext">Cached Board Registry</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">Application Failures</div>
+        <div class="kpi-value kpi-rose" id="kpiFailures">--</div>
+        <div class="kpi-subtext">0% Failure Rate</div>
+      </div>
+    </section>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs">
+      <button class="tab-btn active" onclick="switchTab('sec3')">Section 3: Submissions & Failures Matrix</button>
+      <button class="tab-btn" onclick="switchTab('sec1')">Section 1: Job Search & Coverage Details</button>
+      <button class="tab-btn" onclick="switchTab('sec2')">Section 2: Generation Queue & Document Archives</button>
+      <button class="tab-btn" onclick="switchTab('logs')">📜 Real-time VPS Sync Logs</button>
+      <button class="tab-btn" onclick="switchTab('raw')">📁 Raw File Inspector</button>
+    </nav>
+
+    <!-- SECTION 3 TAB -->
+    <section id="tab-sec3" class="tab-content active">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+        <div class="infra-card" style="margin-bottom: 0;">
+          <h3 style="color: var(--accent-emerald); font-size: 0.95rem; margin-bottom: 0.75rem;">ATS Submission Conversion Matrix</h3>
+          <table class="data-table">
+            <thead>
+              <tr><th>ATS Engine</th><th>Attempted</th><th>Confirmed</th><th>Success Rate</th></tr>
+            </thead>
+            <tbody id="atsMatrixBody">
+              <tr><td>Greenhouse</td><td>16</td><td>16</td><td><span class="badge badge-confirmed">100%</span></td></tr>
+              <tr><td>Ashby</td><td>2</td><td>2</td><td><span class="badge badge-confirmed">100%</span></td></tr>
+              <tr><td>Lever</td><td>2</td><td>2</td><td><span class="badge badge-confirmed">100%</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="infra-card" style="margin-bottom: 0;">
+          <h3 style="color: var(--accent-rose); font-size: 0.95rem; margin-bottom: 0.75rem;">Application Failure Log Summary</h3>
+          <div id="failureLogSummary" style="font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted);">
+            No application failures recorded in the current run. All attempted applications passed ATS submission verification cleanly.
+          </div>
+        </div>
+      </div>
+
+      <div class="controls-bar">
+        <input type="text" id="sec3Search" class="search-input" placeholder="Search by Company, Role, Status, Email, or ATS..." oninput="renderSubmissionsTable()">
+      </div>
+
+      <div class="table-card">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Applied At</th>
+              <th>Company</th>
+              <th>Role / Title</th>
+              <th>ATS Platform</th>
+              <th>Candidate Email</th>
+              <th>Resume File</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="submissionsTableBody">
+            <tr><td colspan="7" style="text-align: center; color: var(--text-muted);">Loading submissions...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- SECTION 1 TAB -->
+    <section id="tab-sec1" class="tab-content">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+        <div class="infra-card" style="margin-bottom: 0;">
+          <h3 style="color: var(--accent-cyan); font-size: 0.95rem; margin-bottom: 0.75rem;">Search Coverage Metrics</h3>
+          <div id="coverageMetricsSummary" style="font-family: var(--font-mono); font-size: 0.85rem;">
+            Loading coverage diagnostics...
+          </div>
+        </div>
+        <div class="infra-card" style="margin-bottom: 0;">
+          <h3 style="color: var(--accent-purple); font-size: 0.95rem; margin-bottom: 0.75rem;">ATS Board Cache Registry</h3>
+          <div id="boardCacheSummary" style="font-family: var(--font-mono); font-size: 0.85rem;">
+            Loading board cache statistics...
+          </div>
+        </div>
+      </div>
+
+      <div class="controls-bar">
+        <input type="text" id="sec1Search" class="search-input" placeholder="Search jobs by Title, Company, Platform, Location..." oninput="renderJobsTable()">
+      </div>
+
+      <div class="table-card">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Platform</th>
+              <th>Company</th>
+              <th>Title</th>
+              <th>Location</th>
+              <th>Workplace</th>
+              <th>Status</th>
+              <th>Job Link</th>
+            </tr>
+          </thead>
+          <tbody id="jobsTableBody">
+            <tr><td colspan="7" style="text-align: center; color: var(--text-muted);">Loading search jobs...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- SECTION 2 TAB -->
+    <section id="tab-sec2" class="tab-content">
+      <div class="controls-bar">
+        <input type="text" id="sec2Search" class="search-input" placeholder="Search archives and generation jobs..." oninput="renderSection2View()">
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+        <div>
+          <h3 style="margin-bottom: 1rem; color: var(--accent-purple);">VPS Tailored Generation Queue (`vps_generation_jobs.json`)</h3>
+          <div class="json-viewer" id="generationQueueView">Loading generation jobs...</div>
+        </div>
+        <div>
+          <h3 style="margin-bottom: 1rem; color: var(--accent-amber);">VPS Private Document Archives (`vps_document_archive_state.json`)</h3>
+          <div id="archiveStateView">Loading document archive state...</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 4 REAL-TIME LOGS TAB -->
+    <section id="tab-logs" class="tab-content">
+      <div class="controls-bar">
+        <input type="text" id="logSearch" class="search-input" placeholder="Filter log by keyword (e.g. Resume, Gemini, Error, Front)..." oninput="filterLogs()">
+        <button class="secondary-btn" onclick="fetchVpsLog()">🔄 Refresh Log</button>
+      </div>
+      <div class="log-terminal" id="logTerminal">Loading real-time vps_sync.log...</div>
+    </section>
+
+    <!-- RAW FILE INSPECTOR TAB -->
+    <section id="tab-raw" class="tab-content">
+      <div class="controls-bar">
+        <label for="rawFileSelect" style="align-self: center; font-weight: 600; color: var(--text-muted);">Select File:</label>
+        <select id="rawFileSelect" class="file-select" onchange="loadRawFile()">
+          <option value="submission_log.json">submission_log.json (Section 3)</option>
+          <option value="vps_application_failures.json">vps_application_failures.json (Section 3)</option>
+          <option value="vps_application_state.json">vps_application_state.json (Section 3)</option>
+          <option value="ai_jobs.csv">ai_jobs.csv (Section 1)</option>
+          <option value="job_search_coverage.json">job_search_coverage.json (Section 1)</option>
+          <option value="ats_boards_cache.json">ats_boards_cache.json (Section 1)</option>
+          <option value="vps_generation_jobs.json">vps_generation_jobs.json (Section 2)</option>
+          <option value="vps_document_archive_state.json">vps_document_archive_state.json (Section 2)</option>
+        </select>
+      </div>
+      <pre class="json-viewer" id="rawFileViewer">Select a file above to inspect its contents.</pre>
+    </section>
+
+  </main>
+
+  <script src="dashboard.js"></script>
+</body>
+</html>
