@@ -139,7 +139,7 @@ if [ -z "`$job_app_units" ]; then
   printf '%s\n' 'No job-app services installed.'
 else
   systemctl show `$job_app_units --no-pager \
-    --property=Id,Description,LoadState,UnitFileState,ActiveState,SubState,MainPID,NRestarts,ExecMainStartTimestamp,CPUUsageNSec,MemoryCurrent,MemoryPeak,TasksCurrent,TasksMax,ExecStart
+    --property=Id,Description,LoadState,UnitFileState,ActiveState,SubState,MainPID,NRestarts,ExecMainStartTimestamp,StartLimitIntervalUSec,StartLimitBurst,CPUUsageNSec,CPUWeight,Nice,MemoryCurrent,MemoryPeak,MemoryHigh,MemoryMax,TasksCurrent,TasksMax,ExecStart
 fi
 
 section SELECTED_APPLICATION_UNITS
