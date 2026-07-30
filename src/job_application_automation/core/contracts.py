@@ -118,9 +118,9 @@ class EngineRequest:
         parsed = urlparse(url)
         if parsed.scheme.lower() != "https" or not parsed.netloc:
             raise ValueError("url must be an absolute HTTPS URL")
-        resume_path = Path(self.resume_path).expanduser()
-        if not str(resume_path):
+        if not self.resume_path or not str(self.resume_path).strip():
             raise ValueError("resume_path cannot be empty")
+        resume_path = Path(self.resume_path).expanduser()
         cover_letter_path = (
             Path(self.cover_letter_path).expanduser()
             if self.cover_letter_path is not None
