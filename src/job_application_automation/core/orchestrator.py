@@ -50,11 +50,11 @@ from .engine_shared import (
     ORCHESTRATOR_CONFIG_ENV,
     ORCHESTRATOR_CURRENT_TITLE_ENV,
     RESULT_PREFIX as ENGINE_RESULT_PREFIX,
-    email_from_resume,
     current_title_from_resume,
+    detect_ats_job_url,
+    email_from_resume,
     load_json_config,
     mask_email as _mask_email,
-    validate_ats_url,
 )
 from .adapters import CommandResult, ProcessRunner, ProcessSettings
 from .artifacts import write_json as write_json_artifact
@@ -136,13 +136,8 @@ class SubprocessRunner:
 
 
 def detect_ats(url: str) -> Optional[str]:
-    """Return the supported ATS for an HTTPS URL, or None."""
-    if not isinstance(url, str) or not url.strip():
-        return None
-    for ats in ATS_HOSTS:
-        if validate_ats_url(url, ats):
-            return ats
-    return None
+    """Return the supported ATS for a job-specific HTTPS URL, or None."""
+    return detect_ats_job_url(url)
 
 
 def _find_header(headers: Sequence[str], aliases: tuple[str, ...], label: str) -> int:
@@ -156,7 +151,7 @@ def _find_header(headers: Sequence[str], aliases: tuple[str, ...], label: str) -
 
 
 def load_jobs_from_tracker(tracker_path: Path) -> list[JobRecord]:
-    """Load validated Ashby, Greenhouse, and Lever entries from the active sheet."""
+    """Load validated job-specific supported ATS entries from the active sheet."""
     if not tracker_path.exists():
         raise FileNotFoundError(f"Tracker file not found: {tracker_path}")
 
@@ -205,7 +200,10 @@ def job_from_url(
     """Build one validated job record directly from an ATS URL."""
     ats = detect_ats(url)
     if not ats:
-        raise ValueError("URL must be a supported HTTPS Ashby, Greenhouse, or Lever job URL")
+        supported = ", ".join(ATS_HOSTS)
+        raise ValueError(
+            f"URL must be a job-specific HTTPS URL for a supported ATS: {supported}"
+        )
     path_parts = [unquote(part).strip() for part in urlparse(url).path.split("/") if part.strip()]
     inferred_company = path_parts[0].replace("-", " ").strip().title() if path_parts else "Company"
     return {
@@ -533,6 +531,9 @@ def generate_personalized_resume(
             output_path.name,
         )
         return output_path
+    tmp_output_path = output_path.with_name(
+        f".tmp_{os.getpid()}_{random.randint(1000, 9999)}_{output_path.name}"
+    )
     command = [
         sys.executable,
         str(generator),
@@ -544,14 +545,11 @@ def generate_personalized_resume(
         "--url",
         url,
         "--output",
-        str(output_path),
+        str(tmp_output_path),
     ]
     if email:
         command.extend(["--email", email])
-    # Track mtime rather than trusting returncode alone: the generator could
-    # exit 0 without actually rewriting output_path, which would silently
-    # leave a stale or undersized file behind and must be treated as failure.
-    before_mtime = output_path.stat().st_mtime_ns if output_path.exists() else None
+
     try:
         command_result = (process_runner or SubprocessRunner()).run(
             command,
@@ -564,26 +562,36 @@ def generate_personalized_resume(
         )
     except ProcessTimeoutError:
         logger.warning("Resume generation timed out after %d seconds.", timeout_seconds)
+        if tmp_output_path.exists():
+            tmp_output_path.unlink(missing_ok=True)
         return None
     except OSError as exc:
         logger.warning("Could not start resume generator: %s", exc)
+        if tmp_output_path.exists():
+            tmp_output_path.unlink(missing_ok=True)
         return None
 
-    after_mtime = output_path.stat().st_mtime_ns if output_path.exists() else None
-    changed = before_mtime is None or after_mtime != before_mtime
     if (
-        result.returncode != 0
-        or not output_path.exists()
-        or output_path.stat().st_size <= 5000
-        or not changed
+        result.returncode == 0
+        and tmp_output_path.exists()
+        and tmp_output_path.stat().st_size > 5000
     ):
+        try:
+            os.replace(tmp_output_path, output_path)
+            return output_path
+        except OSError as exc:
+            logger.warning("Could not replace output resume file: %s", exc)
+            tmp_output_path.unlink(missing_ok=True)
+            return None
+    else:
         logger.warning(
             "Resume generation failed (exit=%d): %s",
             result.returncode,
             (result.stderr or result.stdout)[-300:],
         )
+        if tmp_output_path.exists():
+            tmp_output_path.unlink(missing_ok=True)
         return None
-    return output_path
 
 
 def _validate_orchestrator_inputs(
