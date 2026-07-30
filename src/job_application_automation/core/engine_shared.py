@@ -303,6 +303,20 @@ def resolve_candidate_email(profile: Mapping[str, Any], override: str = "") -> s
 
 def load_candidate_evidence(config: Mapping[str, Any]) -> str:
     """Read configured resume evidence for shared essay generation."""
+    candidate = config.get("candidate")
+    if isinstance(candidate, Mapping):
+        inline_values: list[str] = []
+        summary = str(candidate.get("summary", "") or "").strip()
+        if summary:
+            inline_values.append(summary)
+        evidence = candidate.get("evidence")
+        if isinstance(evidence, Sequence) and not isinstance(evidence, (str, bytes)):
+            inline_values.extend(str(value).strip() for value in evidence if str(value).strip())
+        elif evidence:
+            inline_values.append(str(evidence).strip())
+        if inline_values:
+            return "\n".join(inline_values)
+
     configured_value = config.get("candidate_evidence_file")
     if configured_value:
         configured = Path(str(configured_value)).expanduser()

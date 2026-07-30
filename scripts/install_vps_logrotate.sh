@@ -42,6 +42,9 @@ render_config() {
   local line
 
   while IFS= read -r line || [[ -n "$line" ]]; do
+    # Git may check the template out with CRLF on Windows. Normalize the line
+    # before exact placeholder matching so --stdout remains cross-platform.
+    line="${line%$'\r'}"
     if [[ "$line" == "@VPS_SYNC_LOG_PATH@ {" ]]; then
       printf '"%s" {\n' "$LOG_PATH"
       replacement_count=$((replacement_count + 1))
