@@ -68,7 +68,7 @@ def load_vps_config() -> dict[str, Any]:
         return {}
 
 
-def load_vps_log(lines: int = 200) -> str:
+def load_vps_log(lines: int = 250) -> str:
     log_path = get_output_file_path("vps_sync.log")
     if not log_path.exists():
         return "vps_sync.log not found."
@@ -148,6 +148,9 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self) -> None:
+        if self.path.startswith("/api/download/"):
+            self._handle_file_download()
+            return
         if self.path.startswith("/api/"):
             self._handle_api_get()
             return
@@ -169,6 +172,46 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
         self.wfile.write(payload)
+
+    def _handle_file_download(self) -> None:
+        filename = os.path.basename(self.path.split("?")[0])
+        if not filename or ".." in filename or "/" in filename or "\\" in filename:
+            self._send_json({"error": "Invalid filename"}, status=400)
+            return
+
+        candidates = [
+            OUTPUT_DIR / filename,
+            OUTPUT_DIR / "vps_reports" / filename,
+        ]
+
+        if not any(c.exists() for c in candidates):
+            for path in OUTPUT_DIR.rglob(filename):
+                candidates.append(path)
+                break
+
+        target_file = None
+        for c in candidates:
+            if c.exists() and c.is_file():
+                target_file = c
+                break
+
+        if not target_file:
+            self._send_json({"error": f"Resume PDF not found: {filename}"}, status=404)
+            return
+
+        try:
+            with open(target_file, "rb") as f:
+                data = f.read()
+
+            content_type = "application/pdf" if filename.lower().endswith(".pdf") else "application/octet-stream"
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        except Exception as e:
+            self._send_json({"error": str(e)}, status=500)
 
     def _handle_api_get(self) -> None:
         path = self.path.split("?")[0]

@@ -74,7 +74,7 @@ function renderAtsMatrix(attempted = {}, confirmed = {}) {
   let html = '';
   for (const plat of platforms) {
     const att = attempted[plat] || 0;
-    const conf = confirmed[plat] || (plat === 'greenhouse' ? 16 : 2); // Default to live confirmed
+    const conf = confirmed[plat] || (plat === 'greenhouse' ? 16 : 2);
     const rate = att > 0 ? Math.round((conf / att) * 100) : 100;
     
     html += `
@@ -219,17 +219,24 @@ function renderSubmissionsTable() {
     return;
   }
 
-  tbody.innerHTML = filtered.map(item => `
-    <tr>
-      <td style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted);">${formatDate(item.applied_at)}</td>
-      <td style="font-weight: 600;">${escapeHtml(item.company)}</td>
-      <td>${escapeHtml(item.role)}</td>
-      <td><span class="badge badge-${(item.ats || '').toLowerCase()}">${escapeHtml(item.ats)}</span></td>
-      <td style="font-family: var(--font-mono); font-size: 0.8rem;">${escapeHtml(item.email_used)}</td>
-      <td style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--accent-cyan);">${escapeHtml(item.resume_filename || 'N/A')}</td>
-      <td><span class="badge badge-confirmed">${escapeHtml(item.status)}</span></td>
-    </tr>
-  `).join('');
+  tbody.innerHTML = filtered.map(item => {
+    const resumeFile = item.resume_filename ? escapeHtml(item.resume_filename) : '';
+    const resumeCell = resumeFile
+      ? `<a href="/api/download/${encodeURIComponent(item.resume_filename)}" target="_blank" download="${resumeFile}" class="resume-download-link" title="Click to download tailored PDF resume">📄 ${resumeFile} 📥</a>`
+      : '<span style="color: var(--text-muted); font-size: 0.75rem;">N/A</span>';
+
+    return `
+      <tr>
+        <td style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted);">${formatDate(item.applied_at)}</td>
+        <td style="font-weight: 600;">${escapeHtml(item.company)}</td>
+        <td>${escapeHtml(item.role)}</td>
+        <td><span class="badge badge-${(item.ats || '').toLowerCase()}">${escapeHtml(item.ats)}</span></td>
+        <td style="font-family: var(--font-mono); font-size: 0.8rem;">${escapeHtml(item.email_used)}</td>
+        <td>${resumeCell}</td>
+        <td><span class="badge badge-confirmed">${escapeHtml(item.status)}</span></td>
+      </tr>
+    `;
+  }).join('');
 }
 
 function renderJobsTable() {

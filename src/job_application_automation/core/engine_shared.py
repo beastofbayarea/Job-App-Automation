@@ -900,6 +900,7 @@ def build_engine_parser(description: str) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--url", required=True)
     parser.add_argument("--resume", required=True)
+    parser.add_argument("--cover-letter", default="")
     parser.add_argument("--company", default="")
     parser.add_argument("--role", default="")
     parser.add_argument("--essay", default="")
@@ -980,6 +981,7 @@ def _build_parser(ats: str) -> argparse.ArgumentParser:
     )
     parser.add_argument("--url", required=True)
     parser.add_argument("--resume", required=True)
+    parser.add_argument("--cover-letter", default="")
     parser.add_argument("--company", default="")
     parser.add_argument("--role", default="")
     parser.add_argument("--email", default="")
@@ -1013,6 +1015,8 @@ def _validate_nonempty_file(raw_path: str, label: str) -> None:
 def _validate(args: argparse.Namespace, ats: str) -> str:
     host = _parse_and_validate_host(args.url, ats)
     _validate_nonempty_file(args.resume, "resume")
+    if args.cover_letter:
+        _validate_nonempty_file(args.cover_letter, "cover letter")
 
     return host
 

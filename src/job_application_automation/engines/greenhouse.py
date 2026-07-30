@@ -139,6 +139,31 @@ def _upload_resume(page: Page, resume: Path) -> bool:
     return False
 
 
+def _upload_cover_letter(page: Page, cover_letter: Path) -> bool | None:
+    """Upload a cover letter when the Greenhouse form exposes that field."""
+    inputs = page.locator('input[type="file"]')
+    matched = False
+    for index in range(inputs.count()):
+        target = inputs.nth(index)
+        try:
+            context = target.evaluate(
+                """el => {
+                    const root = el.closest('div') || el.parentElement;
+                    return (root && root.innerText || '') + ' ' +
+                           (el.name || '') + ' ' + (el.id || '');
+                }"""
+            ).lower()
+            normalized = context.replace("_", " ").replace("-", " ")
+            if "cover" not in normalized or "letter" not in normalized:
+                continue
+            matched = True
+            target.set_input_files(str(cover_letter))
+            return True
+        except Exception:
+            continue
+    return False if matched else None
+
+
 def _open_application_form(page: Page, timeout: int, source_url: str, company: str) -> None:
     """Follow a custom career site's Apply CTA before filling Greenhouse fields."""
     if (
@@ -566,7 +591,8 @@ def _fill_standard_fields(
     profile: Mapping[str, Any],
     email: str,
     resume: Path,
-) -> dict[str, bool]:
+    cover_letter: Path | None = None,
+) -> dict[str, bool | None]:
     fields = {
         "first_name": _fill(
             page,
@@ -596,6 +622,8 @@ def _fill_standard_fields(
         "website": _fill_labeled(page, r"(?:website|portfolio)", str(profile.get("website", ""))),
         "resume": _upload_resume(page, resume),
     }
+    if cover_letter is not None:
+        fields["cover_letter"] = _upload_cover_letter(page, cover_letter)
     location_control = _first_visible(
         page.get_by_label(re.compile(r"(?:location|city)", re.IGNORECASE))
     )
@@ -840,6 +868,7 @@ def run(
     *,
     url: str,
     resume: Path,
+    cover_letter: Path | None,
     email_override: str,
     config: Mapping[str, Any],
     company: str,
@@ -850,6 +879,8 @@ def run(
     if not _valid_greenhouse_url(url):
         raise ValueError("URL must be an absolute Greenhouse HTTPS URL")
     resume = validate_nonempty_file(resume, "resume")
+    if cover_letter is not None:
+        cover_letter = validate_nonempty_file(cover_letter, "cover letter")
 
     profile = dict(config["candidate"])
     candidate_evidence = _load_candidate_evidence(config)
@@ -980,7 +1011,7 @@ def run(
                     "missing_required": [],
                     "screenshot": confirmed_screenshot,
                 }
-            fields = _fill_standard_fields(page, profile, email, resume)
+            fields = _fill_standard_fields(page, profile, email, resume, cover_letter)
             custom_questions = _fill_custom_questions(
                 page,
                 profile,
@@ -1010,6 +1041,8 @@ def run(
 
             critical = ("first_name", "last_name", "email", "resume")
             critical_missing = [name for name in critical if not fields.get(name)]
+            if fields.get("cover_letter") is False:
+                critical_missing.append("cover_letter")
             if critical_missing:
                 return {
                     "success": False,
@@ -1207,10 +1240,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     try:
         require_orchestrated_invocation(args.url)
         if getattr(args, "direct_api", False):
+            if args.cover_letter:
+                raise ValueError("--direct-api does not support cover-letter uploads")
             logger.info("Opt-in --direct-api enabled: using direct Greenhouse POST handler")
             result = submit_greenhouse_direct_post(
                 url=args.url,
                 resume=Path(args.resume).expanduser().resolve(),
+                cover_letter=(
+                    Path(args.cover_letter).expanduser().resolve()
+                    if args.cover_letter
+                    else None
+                ),
                 email_override=args.email,
                 config=_load_config(),
                 company=args.company,
@@ -1246,4 +1286,3 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

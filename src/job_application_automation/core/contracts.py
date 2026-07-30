@@ -104,6 +104,7 @@ class EngineRequest:
     ats: str
     url: str
     resume_path: Path
+    cover_letter_path: Path | None = None
     company: str = ""
     role: str = ""
     email: str = ""
@@ -120,6 +121,11 @@ class EngineRequest:
         resume_path = Path(self.resume_path).expanduser()
         if not str(resume_path):
             raise ValueError("resume_path cannot be empty")
+        cover_letter_path = (
+            Path(self.cover_letter_path).expanduser()
+            if self.cover_letter_path is not None
+            else None
+        )
         if not isinstance(self.mode, EngineMode):
             raise ValueError("mode must be an EngineMode")
         _require_bool(self.headed, "headed")
@@ -138,6 +144,7 @@ class EngineRequest:
         object.__setattr__(self, "ats", ats.lower())
         object.__setattr__(self, "url", url)
         object.__setattr__(self, "resume_path", resume_path)
+        object.__setattr__(self, "cover_letter_path", cover_letter_path)
         object.__setattr__(self, "company", self.company.strip())
         object.__setattr__(self, "role", self.role.strip())
         object.__setattr__(self, "email", self.email.strip())
@@ -155,6 +162,8 @@ class EngineRequest:
             "mode": self.mode.value,
             "headed": self.headed,
         }
+        if self.cover_letter_path is not None:
+            payload["cover_letter"] = str(self.cover_letter_path)
         if self.metadata:
             payload["metadata"] = dict(self.metadata)
         return payload
@@ -167,6 +176,7 @@ class EngineRequest:
         resume = payload.get("resume", payload.get("resume_path"))
         if resume is None:
             raise ValueError("engine request is missing resume")
+        cover_letter = payload.get("cover_letter", payload.get("cover_letter_path"))
         metadata = payload.get("metadata", {})
         if not isinstance(metadata, Mapping):
             raise ValueError("metadata must be an object")
@@ -174,6 +184,11 @@ class EngineRequest:
             ats=_require_string(payload.get("ats"), "ats"),
             url=_require_string(payload.get("url"), "url"),
             resume_path=Path(_require_string(resume, "resume")),
+            cover_letter_path=(
+                Path(_require_string(cover_letter, "cover_letter"))
+                if cover_letter is not None
+                else None
+            ),
             company=_require_string(payload.get("company", ""), "company", allow_empty=True),
             role=_require_string(payload.get("role", ""), "role", allow_empty=True),
             email=_require_string(payload.get("email", ""), "email", allow_empty=True),
@@ -184,11 +199,15 @@ class EngineRequest:
 
     def cli_arguments(self) -> tuple[str, ...]:
         """Return the stable engine-specific part of a CLI invocation."""
-        arguments = (
+        arguments: tuple[str, ...] = (
             "--url",
             self.url,
             "--resume",
             str(self.resume_path),
+        )
+        if self.cover_letter_path is not None:
+            arguments += ("--cover-letter", str(self.cover_letter_path))
+        arguments += (
             "--company",
             self.company,
             "--role",

@@ -254,6 +254,7 @@ def build_engine_command(
     role: str,
     email: str,
     live_submit: bool,
+    cover_letter_path: Path | None = None,
     headed: bool = False,
     fill_only: bool = False,
     dry_run: bool = False,
@@ -263,6 +264,7 @@ def build_engine_command(
         ats=detect_ats(url) or "unknown",
         url=url,
         resume_path=resume_path,
+        cover_letter_path=cover_letter_path,
         company=company,
         role=role,
         email=email,
@@ -446,6 +448,7 @@ def _record_submission(
     job: JobRecord,
     email: str,
     resume_path: Path,
+    cover_letter_path: Path | None,
     status: str,
 ) -> None:
     """Best-effort append to the submission log; never fails the orchestration run."""
@@ -459,6 +462,9 @@ def _record_submission(
                 status=status,
                 email_used=email,
                 resume_filename=resume_path.name,
+                cover_letter_filename=(
+                    cover_letter_path.name if cover_letter_path is not None else ""
+                ),
             )
         )
         submission_log.save(submission_log_path)
@@ -579,13 +585,20 @@ def _validate_orchestrator_inputs(
     tracker_path: Optional[Path],
     require_tracker: bool,
     resume_path: Path,
+    prepared_resume_path: Path | None,
+    cover_letter_path: Path | None,
     config_path: Optional[Path],
     timeout_seconds: int,
     resume_timeout_seconds: int,
 ) -> None:
     required_files = [
-        ("Resume", resume_path),
+        (
+            "Prepared resume" if prepared_resume_path is not None else "Resume",
+            prepared_resume_path or resume_path,
+        ),
     ]
+    if cover_letter_path is not None:
+        required_files.append(("Cover letter", cover_letter_path))
     if require_tracker:
         if tracker_path is None:
             raise ValueError("Tracker path is required when --url is not provided")
@@ -651,6 +664,9 @@ def run_orchestrator(
     resume_path: Path,
     config_path: Optional[Path],
     results_path: Path,
+    prepared_resume_path: Path | None = None,
+    cover_letter_path: Path | None = None,
+    email_override: str = "",
     submission_log_path: Path = DEFAULT_SUBMISSION_LOG_FILE,
     limit: Optional[int] = None,
     start_index: int = 0,
@@ -674,12 +690,23 @@ def run_orchestrator(
         tracker_path=tracker_path,
         require_tracker=not bool(direct_url),
         resume_path=resume_path,
+        prepared_resume_path=prepared_resume_path,
+        cover_letter_path=cover_letter_path,
         config_path=config_path,
         timeout_seconds=timeout_seconds,
         resume_timeout_seconds=resume_timeout_seconds,
     )
     if config_path is None:
         raise ValueError("A profile configuration is required.")
+    if prepared_resume_path is not None and not direct_url:
+        raise ValueError("--prepared-resume can only be used with --url")
+    if cover_letter_path is not None and prepared_resume_path is None:
+        raise ValueError("--cover-letter requires --prepared-resume")
+    normalized_email_override = email_override.strip().lower()
+    if normalized_email_override and (
+        "@" not in normalized_email_override or normalized_email_override.startswith("@")
+    ):
+        raise ValueError("Email override must contain a local part and @")
     profile_config = load_json_config(config_path)
     fallback_email = str(profile_config["candidate"].get("fallback_email", "")).strip()
 
@@ -724,8 +751,11 @@ def run_orchestrator(
         engine_label = _engine_label(engine_path, ats)
 
         try:
-            email = email_from_resume(resume_path, fallback_email)
-            generated = generate_personalized_resume(
+            email = normalized_email_override or email_from_resume(
+                prepared_resume_path or resume_path,
+                fallback_email,
+            )
+            generated = prepared_resume_path or generate_personalized_resume(
                 job["company"],
                 job["role"],
                 job["url"],
@@ -764,7 +794,12 @@ def run_orchestrator(
             continue
         target_resume = generated
         try:
-            email = email_from_resume(target_resume, fallback_email)
+            resume_email = email_from_resume(target_resume, fallback_email).strip().lower()
+            if normalized_email_override and resume_email != normalized_email_override:
+                raise ValueError(
+                    "Prepared resume email does not match the requested application email"
+                )
+            email = normalized_email_override or resume_email
             current_title = current_title_from_resume(target_resume)
         except Exception as exc:
             logger.error(
@@ -802,6 +837,7 @@ def run_orchestrator(
             job["role"],
             email,
             live_submit,
+            cover_letter_path=cover_letter_path,
             headed=headed,
             fill_only=fill_only,
             dry_run=dry_run,
@@ -852,6 +888,7 @@ def run_orchestrator(
                 job=job,
                 email=email,
                 resume_path=target_resume,
+                cover_letter_path=cover_letter_path,
                 status=str(outcome["status"]),
             )
         _append_and_persist(
@@ -860,6 +897,7 @@ def run_orchestrator(
                 **base_result,
                 "engine": engine_label,
                 "resume": target_resume.name,
+                "cover_letter": cover_letter_path.name if cover_letter_path else "",
                 "email": _mask_email(email),
                 **outcome,
             },
@@ -887,6 +925,21 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--role", default="", help="Role metadata for --url mode")
     parser.add_argument("--tracker", default=str(DEFAULT_TRACKER_FILE))
     parser.add_argument("--resume", default=str(DEFAULT_RESUME_FILE))
+    parser.add_argument(
+        "--prepared-resume",
+        default="",
+        help="Use this already personalized resume for a direct --url application",
+    )
+    parser.add_argument(
+        "--cover-letter",
+        default="",
+        help="Attach this personalized cover letter when the ATS form offers an upload",
+    )
+    parser.add_argument(
+        "--email",
+        default="",
+        help="Use this application email and require the prepared resume to match it",
+    )
     parser.add_argument("--config", default=str(DEFAULT_CONFIG_FILE))
     parser.add_argument("--results-file", default=str(DEFAULT_RESULTS_FILE))
     parser.add_argument("--submission-log-file", default=str(DEFAULT_SUBMISSION_LOG_FILE))
@@ -935,6 +988,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             engine_paths=_resolve_engine_paths(args),
             tracker_path=Path(args.tracker).resolve() if args.tracker else None,
             resume_path=Path(args.resume).resolve(),
+            prepared_resume_path=(
+                Path(args.prepared_resume).resolve() if args.prepared_resume else None
+            ),
+            cover_letter_path=(
+                Path(args.cover_letter).resolve() if args.cover_letter else None
+            ),
+            email_override=args.email,
             config_path=Path(args.config).resolve() if args.config else None,
             results_path=results_path,
             submission_log_path=Path(args.submission_log_file).resolve(),

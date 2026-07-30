@@ -50,6 +50,7 @@ def test_build_kpi_metrics_mocked():
             "company": "TestCo",
             "role": "Product Manager",
             "status": "SUBMITTED & CONFIRMED",
+            "resume_filename": "TestCo_Product_Manager_Resume.pdf",
         }
     }
     sample_fails = {
