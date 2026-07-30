@@ -86,6 +86,7 @@ SPEC = BrowserFormSpec(
         'input[aria-label^="City" i]',
         'input[role="combobox"][id^="spl-form-element"]',
     ),
+    next_selectors=('spl-button:has-text("Next")',),
     background_cdp=True,
     resume_parse_wait_ms=5000,
 )

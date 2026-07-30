@@ -73,6 +73,7 @@ class BrowserFormSpec:
     city_selectors: tuple[str, ...] = ()
     postcode_selectors: tuple[str, ...] = ()
     country_selectors: tuple[str, ...] = ()
+    next_selectors: tuple[str, ...] = ()
     background_cdp: bool = False
     resume_parse_wait_ms: int = 0
 
@@ -352,9 +353,21 @@ def _question_label(control: Any) -> str:
                         }).filter(Boolean).join(" "));
                     };
                     let node = element;
-                    for (let depth = 0; node && depth < 7; depth += 1, node = node.parentElement) {
+                    for (let depth = 0; node && depth < 12; depth += 1) {
                         const text = referencedText(node);
                         if (text) return text;
+                        const labelContent = node.querySelector &&
+                            node.querySelector('[slot="label-content"]');
+                        if (labelContent && clean(labelContent.innerText)) {
+                            return clean(labelContent.innerText);
+                        }
+                        const ariaLabel = node.getAttribute &&
+                            clean(node.getAttribute("aria-label"));
+                        if (ariaLabel && !/^select$/i.test(ariaLabel)) {
+                            return ariaLabel.replace(/^select\\s+/i, "");
+                        }
+                        const root = node.getRootNode && node.getRootNode();
+                        node = node.parentElement || (root && root.host) || null;
                     }
                     const labels = Array.from(element.labels || [])
                         .map(label => clean(label.innerText))
@@ -402,7 +415,7 @@ def _option_label(control: Any) -> str:
                         }).filter(Boolean).join(" "));
                         if (text) return text;
                     }
-                    return clean(element.value);
+                    return clean(element.getAttribute("label") || element.value);
                 }"""
             )
         )
@@ -472,52 +485,84 @@ def _select_combobox(
         readonly = control.get_attribute("readonly") is not None
         tag = control.evaluate("element => element.tagName.toLowerCase()")
         input_control = tag in {"input", "textarea"}
-        if input_control and not readonly and variants:
-            control.fill(str(variants[0]))
-        clickable = control
-        try:
-            root = control.locator(
-                "xpath=ancestor::*[@data-input-type='select' or @role='combobox'][1]"
-            )
-            if root.count():
-                clickable = root.first
-        except Exception:
-            pass
-        clickable.click(timeout=3000)
-        page.wait_for_timeout(350)
-        listbox_id = (
-            control.get_attribute("aria-controls") or control.get_attribute("aria-owns") or ""
+        requires_option = str(control.get_attribute("aria-autocomplete") or "").casefold() in {
+            "list",
+            "both",
+        }
+        queries = (
+            tuple(str(variant) for variant in variants if str(variant).strip())
+            if input_control and not readonly
+            else ("",)
         )
-        if listbox_id:
-            escaped_id = listbox_id.replace("\\", "\\\\").replace('"', '\\"')
-            options = page.locator(
-                f'[id="{escaped_id}"] [role="option"], [id="{escaped_id}"] [data-ui="option"]'
+        query_values = queries or ("",)
+        for query in query_values:
+            if query:
+                control.fill(query)
+                page.wait_for_timeout(350)
+            clickable = control
+            try:
+                root = control.locator(
+                    "xpath=ancestor::*[@data-input-type='select' or @role='combobox'][1]"
+                )
+                if root.count():
+                    clickable = root.first
+            except Exception:
+                pass
+            # Autocomplete inputs usually open their menu while typing. Clicking
+            # an already-expanded SmartRecruiters control toggles it closed and
+            # makes the freshly loaded suggestion impossible to select.
+            if control.get_attribute("aria-expanded") != "true":
+                clickable.click(timeout=3000)
+            page.wait_for_timeout(350)
+            listbox_id = (
+                control.get_attribute("aria-controls") or control.get_attribute("aria-owns") or ""
             )
-        else:
-            options = page.locator('[role="option"]:visible, [data-ui="option"]:visible')
-        visible: list[tuple[Any, str]] = []
-        for index in range(options.count()):
-            option = options.nth(index)
-            text = _clean_label(option.inner_text())
-            if text:
-                visible.append((option, text))
-        selected = next(
-            (option for option, text in visible if _option_matches(text, variants)),
-            None,
-        )
-        if selected is None and prefer_maximum and visible:
-            selected = max(visible, key=lambda item: _option_strength(item[1]))[0]
-        if selected is not None:
+            if listbox_id:
+                escaped_id = listbox_id.replace("\\", "\\\\").replace('"', '\\"')
+                options = page.locator(
+                    f'[id="{escaped_id}"] [role="option"], '
+                    f'[id="{escaped_id}"] [data-ui="option"], '
+                    f'[id="{escaped_id}"] spl-select-option'
+                )
+            else:
+                options = page.locator(
+                    '[role="option"]:visible, [data-ui="option"]:visible, spl-select-option:visible'
+                )
+            try:
+                options.first.wait_for(state="visible", timeout=3000)
+            except Exception:
+                if query != query_values[-1]:
+                    continue
+            visible: list[tuple[Any, str]] = []
+            for index in range(options.count()):
+                option = options.nth(index)
+                text = _clean_label(option.inner_text())
+                if text:
+                    visible.append((option, text))
+            selected = next(
+                (option for option, text in visible if _option_matches(text, variants)),
+                None,
+            )
+            if selected is None and prefer_maximum and visible:
+                selected = max(visible, key=lambda item: _option_strength(item[1]))[0]
+            if selected is None:
+                continue
             selected.click(timeout=3000)
-            page.wait_for_timeout(200)
-            if input_control and control.input_value().strip():
+            page.wait_for_timeout(500)
+            if (
+                input_control
+                and control.input_value().strip()
+                and (control.get_attribute("aria-invalid") != "true")
+            ):
                 return True
             backing = clickable.locator("input[aria-hidden='true']")
             if backing.count():
                 return bool(backing.first.input_value().strip())
             return True
-        if input_control and not readonly:
-            return bool(control.input_value().strip())
+        if input_control and not readonly and not requires_option:
+            return bool(control.input_value().strip()) and (
+                control.get_attribute("aria-invalid") != "true"
+            )
         if input_control:
             control.press("Escape")
     except Exception as exc:
@@ -560,11 +605,13 @@ def _select_native(control: Any, variants: Sequence[str], *, prefer_maximum: boo
 def _group_controls(page: Page, control: Any, control_type: str) -> Any:
     group = control.locator("xpath=ancestor::*[@role='group' or @role='radiogroup'][1]")
     if group.count():
-        return group.first.locator(f'input[type="{control_type}"]')
+        return group.first.locator(f'input[type="{control_type}"], [role="{control_type}"]')
     name = control.get_attribute("name") or ""
     if name:
         escaped = name.replace("\\", "\\\\").replace('"', '\\"')
         return page.locator(f'input[type="{control_type}"][name="{escaped}"]')
+    if (control.get_attribute("role") or "").casefold() == control_type:
+        return page.locator(f'[role="{control_type}"]')
     return control
 
 
@@ -597,9 +644,11 @@ def _choose_group_options(
     select_all_positive: bool = False,
 ) -> bool:
     controls = _group_controls(page, control, control_type)
+    question = _question_label(control).casefold()
     candidates: list[tuple[Any, str]] = [
         (controls.nth(index), _option_label(controls.nth(index)))
         for index in range(controls.count())
+        if not question or _question_label(controls.nth(index)).casefold() == question
     ]
     if control_type == "checkbox" and select_all_positive:
         selected = [
@@ -616,16 +665,30 @@ def _choose_group_options(
     successes = 0
     for item in selected:
         try:
-            item.check(force=True)
-            if not item.is_checked():
+            role = (item.get_attribute("role") or "").casefold()
+            if role in {"radio", "checkbox"}:
+                item.click(force=True, timeout=3000)
+            else:
+                item.check(force=True)
+            selected_now = (
+                item.get_attribute("aria-checked") == "true" if role else item.is_checked()
+            )
+            if not selected_now:
                 wrapper = item.locator("xpath=ancestor::*[@role='radio' or @role='checkbox'][1]")
                 (wrapper.first if wrapper.count() else item).click(force=True, timeout=3000)
-            successes += int(item.is_checked())
+                selected_now = (
+                    item.get_attribute("aria-checked") == "true" if role else item.is_checked()
+                )
+            successes += int(selected_now)
         except Exception:
             try:
                 wrapper = item.locator("xpath=ancestor::*[@role='radio' or @role='checkbox'][1]")
                 (wrapper.first if wrapper.count() else item).click(force=True, timeout=3000)
-                successes += int(item.is_checked())
+                successes += int(
+                    item.get_attribute("aria-checked") == "true"
+                    if item.get_attribute("role")
+                    else item.is_checked()
+                )
             except Exception:
                 continue
     return successes > 0
@@ -643,12 +706,27 @@ def _is_professional_binary_question(label: str) -> bool:
     )
 
 
+def _select_all_positive_checkbox_answers(
+    label: str,
+    rules: Mapping[str, Any],
+) -> bool:
+    return bool(
+        str(rules.get("interest_checkbox_selection", "")).casefold() == "all"
+        and re.search(
+            r"\b(?:interest|interested|areas?|topics?|disciplines?|specialt(?:y|ies))\b",
+            label,
+            re.I,
+        )
+    )
+
+
 def _fill_custom_questions(
     page: Page,
     config: Mapping[str, Any],
     *,
     company: str,
     role: str,
+    standard_selectors: Sequence[str] = (),
 ) -> dict[str, bool]:
     """Fill configured Workable/SmartRecruiters questions across native and React controls."""
     profile = _mapping(config.get("candidate"))
@@ -676,7 +754,8 @@ def _fill_custom_questions(
     }
     controls = page.locator(
         "select, textarea, input:not([type='file']):not([type='hidden']):"
-        "not([type='submit']):not([type='button']), [role='combobox']"
+        "not([type='submit']):not([type='button']), [role='combobox'], "
+        "[role='radio'], [role='checkbox']"
     )
     for index in range(controls.count()):
         control = controls.nth(index)
@@ -686,6 +765,12 @@ def _fill_custom_questions(
             name = (control.get_attribute("name") or "").casefold()
             control_id = (control.get_attribute("id") or "").casefold()
             role_name = (control.get_attribute("role") or "").casefold()
+            effective_type = role_name if role_name in {"radio", "checkbox"} else control_type
+            if standard_selectors and control.evaluate(
+                "(element, selectors) => selectors.some(selector => element.matches(selector))",
+                list(standard_selectors),
+            ):
+                continue
             if name in standard_names or control_id in {
                 "first-name-input",
                 "last-name-input",
@@ -698,18 +783,13 @@ def _fill_custom_questions(
                 "hiring-manager-message-input",
             }:
                 continue
-            group_key = _control_group_key(control)
-            if control_type in {"radio", "checkbox"} and group_key:
-                if group_key in handled_groups:
-                    continue
-                handled_groups.add(group_key)
             if (
-                control_type not in {"radio", "checkbox"}
+                effective_type not in {"radio", "checkbox"}
                 and control.get_attribute("aria-hidden") == "true"
             ):
                 continue
             if (
-                control_type not in {"radio", "checkbox"}
+                effective_type not in {"radio", "checkbox"}
                 and role_name != "combobox"
                 and not control.is_visible()
             ):
@@ -717,6 +797,15 @@ def _fill_custom_questions(
             label = _question_label(control)
             if not label:
                 continue
+            group_key = (
+                f"{effective_type}:{label.casefold()}"
+                if effective_type in {"radio", "checkbox"}
+                else _control_group_key(control)
+            )
+            if effective_type in {"radio", "checkbox"} and group_key:
+                if group_key in handled_groups:
+                    continue
+                handled_groups.add(group_key)
             if re.search(r"(?:telephone|phone) country code", label, re.I):
                 continue
             if re.search(r"phone number|country/region or code", label, re.I):
@@ -783,15 +872,15 @@ def _fill_custom_questions(
                     preferred,
                     prefer_maximum=maximum_policy,
                 )
-            elif control_type in {"radio", "checkbox"}:
+            elif effective_type in {"radio", "checkbox"}:
                 success = _choose_group_options(
                     page,
                     control,
-                    control_type,
+                    effective_type,
                     preferred,
                     select_all_positive=(
-                        control_type == "checkbox"
-                        and str(rules.get("interest_checkbox_selection", "")).casefold() == "all"
+                        effective_type == "checkbox"
+                        and _select_all_positive_checkbox_answers(label, rules)
                     ),
                 )
             elif desired and tag in {"input", "textarea"}:
@@ -806,14 +895,18 @@ def _fill_custom_questions(
 def _required_issues(page: Page) -> list[str]:
     """Inspect invalid native controls and controls explicitly marked as required."""
     try:
-        return list(
-            page.locator("input, select, textarea").evaluate_all(
+        issues = list(
+            page.locator("input, select, textarea, [role='radio'], [role='checkbox']").evaluate_all(
                 """controls => {
                     const issues = [];
                     const clean = value => String(value || "").replace(/\\s+/g, " ").trim();
                     for (const control of controls) {
-                        const type = (control.type || "").toLowerCase();
-                        if (control.disabled || type === "hidden") continue;
+                        const type = (
+                            control.type || control.getAttribute("role") || ""
+                        ).toLowerCase();
+                        if (control.disabled ||
+                            control.getAttribute("aria-disabled") === "true" ||
+                            type === "hidden") continue;
                         const labels = Array.from(control.labels || [])
                             .map(label => clean(label.innerText))
                             .filter(Boolean);
@@ -824,30 +917,50 @@ def _required_issues(page: Page) -> list[str]:
                             labels.join(" ") || (container && container.innerText) ||
                             (control.parentElement && control.parentElement.innerText)
                         ).slice(0, 180);
+                        const group = control.closest(
+                            "[role='group'], [role='radiogroup'], spl-radio-group"
+                        );
                         const required = control.required ||
-                            control.getAttribute("aria-required") === "true";
-                        if (!required && control.checkValidity()) continue;
+                            control.getAttribute("aria-required") === "true" ||
+                            (group && (
+                                group.hasAttribute("required") ||
+                                group.getAttribute("aria-required") === "true"
+                            ));
+                        const ariaInvalid = control.getAttribute("aria-invalid") === "true";
+                        const nativelyValid = typeof control.checkValidity !== "function" ||
+                            control.checkValidity();
+                        if (!required && !ariaInvalid && nativelyValid) continue;
                         let missing = false;
                         if (type === "radio") {
-                            const escaped = window.CSS && CSS.escape
-                                ? CSS.escape(control.name)
-                                : control.name.replace(/["\\\\]/g, "\\\\$&");
-                            missing = !control.name ||
-                                !document.querySelector(`input[type="radio"][name="${escaped}"]:checked`);
+                            if (group) {
+                                missing = !group.querySelector(
+                                    'input[type="radio"]:checked, ' +
+                                    '[role="radio"][aria-checked="true"]'
+                                );
+                            } else {
+                                const escaped = window.CSS && CSS.escape
+                                    ? CSS.escape(control.name)
+                                    : String(control.name || "").replace(/["\\\\]/g, "\\\\$&");
+                                missing = !control.name ||
+                                    !document.querySelector(
+                                        `input[type="radio"][name="${escaped}"]:checked`
+                                    );
+                            }
                         } else if (type === "checkbox") {
                             const group = control.closest("[role='group'], fieldset");
                             const grouped = group &&
                                 group.querySelectorAll('input[type="checkbox"]').length > 1;
                             missing = grouped
                                 ? !group.querySelector('input[type="checkbox"]:checked')
-                                : !control.checked;
+                                : !(control.checked ||
+                                    control.getAttribute("aria-checked") === "true");
                         } else if (type === "file") {
                             missing = !control.files || control.files.length === 0;
                         } else {
                             const value = clean(control.value);
                             missing = !value || /^no answer$/i.test(value);
                         }
-                        if (missing || !control.checkValidity()) {
+                        if (missing || ariaInvalid || !nativelyValid) {
                             issues.push(context || control.name || control.id || "Required field missing");
                         }
                     }
@@ -874,6 +987,25 @@ def _required_issues(page: Page) -> list[str]:
                 }"""
             )
         )
+        precise_checkbox_issues: list[str] = []
+        boxes = page.locator('input[type="checkbox"]')
+        for index in range(boxes.count()):
+            box = boxes.nth(index)
+            try:
+                required = (
+                    box.get_attribute("required") is not None
+                    or box.get_attribute("aria-required") == "true"
+                )
+                if required and not box.is_checked():
+                    label = _question_label(box)
+                    if label:
+                        precise_checkbox_issues.append(label)
+            except Exception:
+                continue
+        if precise_checkbox_issues:
+            issues = [issue for issue in issues if _clean_label(issue) not in {"", "*"}]
+            issues.extend(precise_checkbox_issues)
+        return list(dict.fromkeys(issues))
     except Exception as exc:
         logger.warning("Required-field inspection failed: %s", exc)
         return ["Required-field inspection failed"]
@@ -992,6 +1124,27 @@ def _fill_standard_fields(
     if not filled["resume"]:
         missing_critical.append("resume")
     return filled, missing_critical
+
+
+def _standard_control_selectors(spec: BrowserFormSpec) -> tuple[str, ...]:
+    """Selectors already owned by deterministic standard-field filling."""
+    return (
+        spec.first_name_selectors
+        + spec.last_name_selectors
+        + spec.full_name_selectors
+        + spec.email_selectors
+        + spec.email_confirmation_selectors
+        + spec.phone_selectors
+        + spec.headline_selectors
+        + spec.linkedin_selectors
+        + spec.github_selectors
+        + spec.portfolio_selectors
+        + spec.address_selectors
+        + spec.city_selectors
+        + spec.postcode_selectors
+        + spec.country_selectors
+        + spec.cover_letter_text_selectors
+    )
 
 
 def _result(
@@ -1150,6 +1303,7 @@ def run_browser_form_engine(
                 config,
                 company=company or spec.display_name,
                 role=role,
+                standard_selectors=_standard_control_selectors(spec),
             )
             consent = fill_required_consent(page)
             # Resume parsing, address selection, and custom React controls can
@@ -1161,6 +1315,37 @@ def run_browser_form_engine(
             consent = sorted(set(consent + fill_required_consent(page)))
             captcha = page_has_captcha(page)
             missing_required = validate_required_fields(page, _required_issues)
+            for _ in range(5):
+                if missing_critical or missing_required or captcha or not spec.next_selectors:
+                    break
+                next_button = _first_visible_for(page, spec.next_selectors)
+                if next_button is None:
+                    break
+                try:
+                    if not next_button.is_enabled():
+                        missing_required = validate_required_fields(page, _required_issues)
+                        break
+                    next_button.click(timeout=min(timeout, 10_000))
+                    page.wait_for_timeout(max(1000, spec.render_wait_ms))
+                except Exception as exc:
+                    logger.debug("%s intermediate step failed: %s", spec.display_name, exc)
+                    missing_required = ["Application step could not be advanced"]
+                    break
+                custom_questions.update(
+                    _fill_custom_questions(
+                        page,
+                        config,
+                        company=company or spec.display_name,
+                        role=role,
+                        standard_selectors=_standard_control_selectors(spec),
+                    )
+                )
+                if cover_letter is not None and not filled["cover_letter"]:
+                    filled["cover_letter"] = _fill_cover_letter(page, spec, cover_letter)
+                _repair_forbidden_text_characters(page)
+                consent = sorted(set(consent + fill_required_consent(page)))
+                captcha = page_has_captcha(page)
+                missing_required = validate_required_fields(page, _required_issues)
             screenshot = capture_screenshot(
                 page,
                 screenshot_dir,

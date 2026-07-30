@@ -589,6 +589,17 @@ def configured_answer(
         answer = rules.get("work_authorization") or rules.get("target_country_work_authorization")
         if answer not in (None, ""):
             return str(answer)
+    if re.search(r"\bvalid\s+work\s+permit\b|\bright\s+to\s+work\b", text):
+        answer = rules.get("target_country_work_authorization") or rules.get("work_authorization")
+        if answer not in (None, ""):
+            return str(answer)
+    if re.search(
+        r"\b(?:additional|outside|secondary|other)\s+(?:employment|job|work)\b",
+        text,
+    ):
+        answer = rules.get("employment_restrictions")
+        if answer not in (None, ""):
+            return str(answer)
     if re.search(
         r"\byears?\s+of\s+.*experience\b|"
         r"\b\d+\+?\s*years?\b.*\bexperience\b",
@@ -814,6 +825,18 @@ def fill_required_consent(page: Page) -> list[str]:
             # Skip EEO/demographic checkboxes unless the surrounding text is an
             # explicit self-attestation ("I confirm...") rather than a disclosure question.
             if SENSITIVE_FIELD_PATTERN.search(context) and not explicit_confirm:
+                continue
+            # A required checkbox can be a promise that supporting records have
+            # been attached, rather than consent to an application policy. Do
+            # not make that factual declaration unless it is already selected
+            # by an upstream document-aware workflow.
+            if re.search(
+                r"\b(?:provide|upload|attach|submit)\b.{0,140}"
+                r"\b(?:copy|scan|document|attachment|certificate|degree|"
+                r"reference|record)\b",
+                context,
+                re.I,
+            ):
                 continue
             required = (
                 explicit_confirm

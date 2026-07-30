@@ -137,6 +137,67 @@ def test_maximum_option_ranking_rejects_no_experience_even_when_list_is_reversed
     ) > browser_form._option_strength("No experience with multi-component AI systems")
 
 
+def test_smartrecruiters_combobox_selects_custom_spl_option() -> None:
+    page = MagicMock()
+    control = MagicMock()
+    control.evaluate.return_value = "input"
+    attributes = {
+        "readonly": None,
+        "aria-autocomplete": "list",
+        "aria-controls": "menu-city",
+        "aria-owns": None,
+        "aria-invalid": "false",
+    }
+    control.get_attribute.side_effect = attributes.get
+    control.locator.return_value.count.return_value = 0
+    control.input_value.return_value = "San Francisco, CA, US"
+    options = MagicMock()
+    options.count.return_value = 1
+    option = options.nth.return_value
+    option.inner_text.return_value = "San Francisco, CA, US"
+    page.locator.return_value = options
+
+    selected = browser_form._select_combobox(page, control, ("San Francisco",))
+
+    assert selected is True
+    assert "spl-select-option" in page.locator.call_args.args[0]
+    option.click.assert_called_once()
+
+
+def test_smartrecruiters_custom_radio_group_selects_configured_answer() -> None:
+    page = MagicMock()
+    controls = MagicMock()
+    yes = MagicMock()
+    no = MagicMock()
+    controls.count.return_value = 2
+    controls.nth.side_effect = lambda index: yes if index == 0 else no
+    yes.get_attribute.side_effect = lambda name: (
+        "radio" if name == "role" else "true" if name == "aria-checked" else None
+    )
+    no.get_attribute.side_effect = lambda name: (
+        "radio" if name == "role" else "false" if name == "aria-checked" else None
+    )
+    with (
+        patch.object(browser_form, "_group_controls", return_value=controls),
+        patch.object(browser_form, "_question_label", return_value="Valid work permit?"),
+        patch.object(
+            browser_form,
+            "_option_label",
+            side_effect=lambda item: "Yes" if item is yes else "No",
+        ),
+    ):
+        selected = browser_form._choose_group_options(
+            page,
+            yes,
+            "radio",
+            ("Yes",),
+        )
+
+    assert selected is True
+    yes.click.assert_called_once()
+    no.click.assert_not_called()
+
+
 def test_smartrecruiters_uses_the_background_cdp_fallback() -> None:
     from job_application_automation.engines import smartrecruiters
 
@@ -144,6 +205,7 @@ def test_smartrecruiters_uses_the_background_cdp_fallback() -> None:
     assert smartrecruiters.SPEC.first_name_selectors[0].startswith("input#")
     assert smartrecruiters.SPEC.cover_letter_text_selectors[0].startswith("textarea#")
     assert 'spl-button:has-text("Submit")' in smartrecruiters.SPEC.submit_selectors
+    assert smartrecruiters.SPEC.next_selectors == ('spl-button:has-text("Next")',)
     assert workable.SPEC.background_cdp is False
 
 
@@ -204,6 +266,18 @@ def test_repair_forbidden_text_characters_replaces_reported_semicolon() -> None:
     control.fill.assert_called_once_with("A strong fit, ready to contribute.")
     control.blur.assert_called_once()
     assert repaired == ["hiring-manager-message-input"]
+
+
+def test_positive_checkbox_policy_is_not_applied_to_document_declarations() -> None:
+    rules = {"interest_checkbox_selection": "all"}
+    assert not browser_form._select_all_positive_checkbox_answers(
+        "Please attach a copy of your academic degree and work references.",
+        rules,
+    )
+    assert browser_form._select_all_positive_checkbox_answers(
+        "Which areas of product management interest you?",
+        rules,
+    )
 
 
 def test_load_orchestrated_config_normalizes_grouped_profile() -> None:

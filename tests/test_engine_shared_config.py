@@ -85,6 +85,26 @@ class EngineSharedConfigTests(unittest.TestCase):
         self.assertTrue(payload["test_mode"])
         self.assertEqual(payload["screenshot"], "proof.png")
 
+    def test_required_document_declaration_is_not_blindly_checked(self) -> None:
+        page = unittest.mock.MagicMock()
+        box = page.locator.return_value.nth.return_value
+        page.locator.return_value.count.return_value = 1
+        box.is_checked.return_value = False
+        box.is_visible.return_value = True
+        box.get_attribute.side_effect = lambda name: "true" if name == "aria-required" else None
+        with unittest.mock.patch.object(
+            engine_shared,
+            "label_for",
+            return_value=(
+                "Please provide a copy of your degree and job references "
+                "in the additional attachments section."
+            ),
+        ):
+            checked = engine_shared.fill_required_consent(page)
+
+        self.assertEqual(checked, [])
+        box.check.assert_not_called()
+
 
 class ShellValidatorHostTests(unittest.TestCase):
     def test_custom_domain_greenhouse_url_is_accepted_like_the_orchestrator(self) -> None:
@@ -219,6 +239,28 @@ class ScreeningMatcherTests(unittest.TestCase):
         )
 
         self.assertEqual(answer, "Yes")
+
+    def test_valid_work_permit_uses_target_country_authorization_policy(self) -> None:
+        answer = engine_shared.configured_answer(
+            "Do you have a valid work permit for Germany?",
+            {},
+            {"target_country_work_authorization": "Yes"},
+            {},
+            {},
+        )
+
+        self.assertEqual(answer, "Yes")
+
+    def test_additional_employment_uses_employment_restrictions_policy(self) -> None:
+        answer = engine_shared.configured_answer(
+            "Do you plan to start any additional employment while working here?",
+            {},
+            {"employment_restrictions": "No"},
+            {},
+            {},
+        )
+
+        self.assertEqual(answer, "No")
 
     def test_example_profile_answers_observed_greenhouse_required_fields(self) -> None:
         config = engine_shared.load_json_config(
