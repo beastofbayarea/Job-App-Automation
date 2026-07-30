@@ -1,17 +1,15 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 import pytest
 
 from job_application_automation.mail.gmail_auth import (
     GMAIL_SCOPES,
     get_gmail_service,
-    import_google_dependencies,
 )
 from job_application_automation.mail.gmail_client import (
     confirm_send,
-    main as gmail_main,
     parse_args,
     send_email,
 )

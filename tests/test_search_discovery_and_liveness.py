@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from job_application_automation.search.liveness import (
-    LivenessDecision,
     page_jsonld_decision,
     page_response_decision,
     page_uncertainty,

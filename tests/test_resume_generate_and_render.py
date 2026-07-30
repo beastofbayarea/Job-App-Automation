@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 import pytest
 
 from job_application_automation.resume.cover_letter_rendering import (
-    CallableCoverLetterRenderer,
     CoverLetterRenderRequest,
-    render_cover_letter,
     render_cover_letter_pdf,
 )
 from job_application_automation.resume.scoring import (

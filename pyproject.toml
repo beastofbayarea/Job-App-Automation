@@ -54,7 +54,10 @@ line-length = 100
 extend-exclude = ["data", "docs", "output"]
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F"]
+select = ["E4", "E7", "E9", "F", "B"]
+ignore = ["B904", "B905"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*.py" = ["E402"]
+"tests/*.py" = ["E402", "B018"]
+
+

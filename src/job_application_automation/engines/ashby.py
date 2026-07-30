@@ -2758,7 +2758,8 @@ def run_job(
                 logger.warning("Browser cleanup failed: %s", cleanup_exc)
 
             logger.info("Final Outcome -> %s", status)
-            return status
+        return status
+
 
 
 def submit_ashby_graphql_direct(
