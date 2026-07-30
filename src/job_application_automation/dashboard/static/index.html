@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
   <!-- SEO Primary Meta Tags -->
-  <title>SkyBison Cloud Engine | ATS Submissions Matrix</title>
+  <title>SkyBison Cloud Engine | ATS Submissions Matrix & Automation</title>
   <meta name="description" content="SkyBison Automated Job Application Engine - Real-time tracking of confirmed ATS job submissions, candidate metrics, and failure diagnostics powered by SkyBison Cloud AI.">
   <meta name="keywords" content="Job Application Automation, ATS Engine, Greenhouse, Ashby, Lever, AI Resume Tailoring, SkyBison Cloud, Shivam Singh">
   <meta name="author" content="Shivam Singh (Cent Capital)">
@@ -28,28 +28,48 @@
   <meta name="twitter:description" content="Real-time tracking of confirmed ATS job submissions, candidate metrics, and failure diagnostics.">
   <meta name="twitter:image" content="https://skybison.cloud/sky_bison_logo.jpg">
 
-  <!-- Google Fonts -->
+  <!-- Google Fonts Preload & Stylesheets -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;800&display=swap" as="style">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 
-  <!-- Structured Data JSON-LD -->
+  <!-- Structured Data JSON-LD (SoftwareApplication, Person, BreadcrumbList) -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "WebApplication",
-    "name": "SkyBison Cloud Engine",
-    "url": "https://skybison.cloud",
-    "description": "Autonomous ATS job application submission, search coverage, and AI resume tailoring engine.",
-    "applicationCategory": "BusinessApplication",
-    "operatingSystem": "Ubuntu 24.04 LTS (VPS Host 2.24.28.180)",
-    "author": {
-      "@type": "Person",
-      "name": "Shivam Singh",
-      "email": "shivamsi@umich.edu",
-      "url": "https://shivam040200.github.io/"
-    }
+    "@graph": [
+      {
+        "@type": "SoftwareApplication",
+        "name": "SkyBison Cloud Engine",
+        "url": "https://skybison.cloud",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Ubuntu 24.04 LTS (VPS Host 2.24.28.180)",
+        "description": "Autonomous ATS job application submission, search coverage, and AI resume tailoring engine for Greenhouse, Ashby, and Lever.",
+        "author": {
+          "@type": "Person",
+          "name": "Shivam Singh",
+          "email": "shivamsi@umich.edu",
+          "url": "https://shivam040200.github.io/",
+          "sameAs": [
+            "https://www.linkedin.com/in/shivam-singh-58231522a/",
+            "https://github.com/shivam040200"
+          ]
+        }
+      },
+      {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Submissions Matrix",
+            "item": "https://skybison.cloud/"
+          }
+        ]
+      }
+    ]
   }
   </script>
 </head>
@@ -60,7 +80,7 @@
   <header class="app-header">
     <a href="index.html" class="brand">
       <div class="logo-container">
-        <img src="sky_bison_logo.jpg" alt="SkyBison Cloud Logo" class="brand-logo">
+        <img src="sky_bison_logo.jpg" alt="SkyBison Cloud Logo" class="brand-logo" width="44" height="44">
       </div>
       <div class="brand-text">
         <h1 class="brand-title">SKYBISON CLOUD</h1>
@@ -327,7 +347,7 @@
     <div class="footer-container">
       <div class="footer-col">
         <div class="footer-brand">
-          <img src="sky_bison_logo.jpg" alt="SkyBison Cloud Logo" class="footer-logo">
+          <img src="sky_bison_logo.jpg" alt="SkyBison Cloud Logo" class="footer-logo" width="32" height="32">
           <span class="footer-brand-title">SKYBISON CLOUD</span>
         </div>
         <p class="footer-desc">SkyBison Cloud Autonomous Job Application Engine. Hosted on Ubuntu 24.04 VPS (2.24.28.180) with Let's Encrypt HTTPS.</p>
