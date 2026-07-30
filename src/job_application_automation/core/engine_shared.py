@@ -42,6 +42,7 @@ from urllib.parse import parse_qs, urlparse
 from playwright.sync_api import Browser, Locator, Page, Playwright
 
 from .contracts import ENGINE_RESULT_PREFIX, EngineResult
+from .identity import normalize_email
 from .paths import DATA_DIR
 from .profile import AutomationProfile
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
@@ -393,8 +394,13 @@ def detect_ats_job_url(url: str) -> Optional[str]:
 
 
 def valid_email(value: str) -> bool:
-    local, separator, domain = str(value).strip().partition("@")
-    return bool(separator and local and "." in domain and not any(char.isspace() for char in value))
+    if not isinstance(value, str) or not value.strip():
+        return False
+    try:
+        normalize_email(value)
+        return True
+    except ValueError:
+        return False
 
 
 def validate_nonempty_file(path: Path, label: str) -> Path:
