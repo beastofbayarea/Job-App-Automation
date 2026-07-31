@@ -88,6 +88,8 @@ INFRA_SERVICES=(
   "job-app-greenhouse"
   "job-app-lever"
   "job-app-search-sync"
+  "vps-dashboard"
+  "nginx"
 )
 
 # Cron and an on-demand trigger must never update the search artifacts or sync
@@ -180,6 +182,8 @@ finish_run() {
   finished_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   write_run_status "$state" "$exit_code" "$finished_at" ||
     echo "Unable to write the final VPS run status." >&2
+  write_infra_status ||
+    echo "Unable to refresh the final VPS infra status snapshot." >&2
   printf 'VPS_RUN_FINISH state=%s stage=%s exit_code=%s at=%s\n' \
     "$state" "$CURRENT_STAGE" "$exit_code" "$finished_at"
   exit "$exit_code"
@@ -194,32 +198,142 @@ interrupt_run() {
 # effort) so the public dashboard can show which engines are actually live
 # without the dashboard server itself ever SSHing into the VPS.
 write_infra_status() {
-  local active_services=()
-  local service
-  for service in "${INFRA_SERVICES[@]}"; do
-    if systemctl is-active --quiet "$service" 2>/dev/null; then
-      active_services+=("$service")
-    fi
-  done
-  local uptime_text
-  uptime_text="$(uptime -p 2>/dev/null || echo "")"
-  python - "$INFRA_STATUS" "$uptime_text" "${active_services[@]}" <<'PY'
+  python - "$INFRA_STATUS" "${INFRA_SERVICES[@]}" <<'PY'
 import json
 import os
+import shutil
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 UTC = timezone.utc
 
-status_path, uptime_text, *active_services = sys.argv[1:]
+status_path, *service_names = sys.argv[1:]
 path = Path(status_path)
 path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def systemctl_show(service_name):
+    properties = (
+        "Id,Description,LoadState,ActiveState,SubState,UnitFileState,MainPID,"
+        "NRestarts,MemoryCurrent,TasksCurrent"
+    )
+    try:
+        result = subprocess.run(
+            [
+                "systemctl",
+                "show",
+                service_name,
+                f"--property={properties}",
+                "--no-pager",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        result = subprocess.CompletedProcess([], 1, stdout="", stderr="")
+    values = {}
+    for line in result.stdout.splitlines():
+        key, separator, value = line.partition("=")
+        if separator:
+            values[key] = value
+    def safe_integer(key):
+        try:
+            return int(values.get(key, "0") or 0)
+        except ValueError:
+            return 0
+
+    return {
+        "name": service_name,
+        "description": values.get("Description", ""),
+        "load_state": values.get("LoadState", "not-found"),
+        "active_state": values.get("ActiveState", "unknown"),
+        "sub_state": values.get("SubState", "unknown"),
+        "unit_file_state": values.get("UnitFileState", "unknown"),
+        "main_pid": safe_integer("MainPID"),
+        "restart_count": safe_integer("NRestarts"),
+        "memory_bytes": safe_integer("MemoryCurrent"),
+        "task_count": safe_integer("TasksCurrent"),
+    }
+
+
+def read_key_values(source):
+    values = {}
+    try:
+        for line in Path(source).read_text(encoding="utf-8").splitlines():
+            key, separator, value = line.partition(":")
+            if not separator:
+                continue
+            number = value.strip().split()[0]
+            if number.isdigit():
+                values[key] = int(number) * 1024
+    except OSError:
+        pass
+    return values
+
+
+def discover_service_names(configured_names):
+    names = set(configured_names)
+    try:
+        result = subprocess.run(
+            [
+                "systemctl",
+                "list-units",
+                "--type=service",
+                "--all",
+                "--no-legend",
+                "--no-pager",
+                "--plain",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return sorted(names)
+    for line in result.stdout.splitlines():
+        columns = line.split()
+        if columns and columns[0].endswith(".service"):
+            names.add(columns[0])
+    return sorted(names)
+
+
+services = [systemctl_show(name) for name in discover_service_names(service_names)]
+active_services = [
+    item["name"] for item in services if item["active_state"] == "active"
+]
+memory = read_key_values("/proc/meminfo")
+disk = shutil.disk_usage("/")
+try:
+    uptime_seconds = float(Path("/proc/uptime").read_text().split()[0])
+except (OSError, ValueError, IndexError):
+    uptime_seconds = 0.0
+try:
+    load_average = [round(value, 3) for value in os.getloadavg()]
+except OSError:
+    load_average = []
+
 payload = {
-    "version": 1,
+    "version": 2,
     "generated_at": datetime.now(UTC).isoformat(),
     "active_services": active_services,
-    "uptime": uptime_text,
+    "services": services,
+    "host": {
+        "cpu_count": os.cpu_count() or 0,
+        "load_average": load_average,
+        "uptime_seconds": uptime_seconds,
+        "memory_total_bytes": memory.get("MemTotal", 0),
+        "memory_available_bytes": memory.get("MemAvailable", 0),
+        "swap_total_bytes": memory.get("SwapTotal", 0),
+        "swap_free_bytes": memory.get("SwapFree", 0),
+        "disk_total_bytes": disk.total,
+        "disk_used_bytes": disk.used,
+        "disk_free_bytes": disk.free,
+    },
 }
 temporary = path.with_name(f"{path.name}.tmp.{os.getpid()}")
 temporary.write_text(

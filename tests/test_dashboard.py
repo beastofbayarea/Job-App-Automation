@@ -1,5 +1,6 @@
 """Unit tests for VPS Output Monitor Dashboard server."""
 
+import base64
 import json
 from email.message import Message
 from pathlib import Path
@@ -8,11 +9,16 @@ from unittest.mock import patch
 from job_application_automation.dashboard import server
 from job_application_automation.dashboard.server import (
     DashboardRequestHandler,
+    build_file_inventory,
     build_kpi_metrics,
     get_output_file_path,
     load_json_file,
     load_vps_config,
     load_vps_log,
+    public_backlog_jobs,
+    public_submission_records,
+    summarize_backlog,
+    summarize_worker_state,
 )
 
 
@@ -54,15 +60,48 @@ def test_load_vps_config_exposes_only_operational_metadata(tmp_path):
         assert data == {"vps": {"hostname": "example-vps", "memory_gb": 4}}
 
 
-def test_dashboard_exposes_no_authentication_surface():
-    """The dashboard is public by design; no credential gate may reappear."""
-    assert not hasattr(DashboardRequestHandler, "_is_authorized")
-    assert not hasattr(DashboardRequestHandler, "_require_authorization")
+def test_admin_authentication_accepts_only_matching_basic_credentials():
+    handler = DashboardRequestHandler.__new__(DashboardRequestHandler)
+    handler.headers = Message()
+    encoded = base64.b64encode(b"operator:correct-password").decode("ascii")
+    handler.headers["Authorization"] = f"Basic {encoded}"
 
-    source = Path(server.__file__).read_text(encoding="utf-8")
-    assert "WWW-Authenticate" not in source
-    assert "JOB_APP_DASHBOARD_USERNAME" not in source
-    assert "JOB_APP_DASHBOARD_PASSWORD" not in source
+    with patch.dict(
+        "os.environ",
+        {
+            server.ADMIN_USERNAME_ENV: "operator",
+            server.ADMIN_PASSWORD_ENV: "correct-password",
+        },
+        clear=False,
+    ):
+        assert handler._is_admin_authorized()
+        handler.headers.replace_header(
+            "Authorization",
+            f"Basic {base64.b64encode(b'operator:wrong').decode('ascii')}",
+        )
+        assert not handler._is_admin_authorized()
+
+
+def test_public_submission_records_omit_private_application_fields():
+    public = public_submission_records(
+        {
+            "record": {
+                "company": "Example",
+                "role": "Product Manager",
+                "status": "SUBMITTED & CONFIRMED",
+                "email_used": "private@example.com",
+                "resume_filename": "private.pdf",
+            }
+        }
+    )
+
+    assert public == {
+        "record": {
+            "company": "Example",
+            "role": "Product Manager",
+            "status": "SUBMITTED & CONFIRMED",
+        }
+    }
 
 
 def test_dashboard_rejects_all_post_requests():
@@ -88,6 +127,89 @@ def test_load_vps_log_missing(tmp_path):
     with patch("job_application_automation.dashboard.server.OUTPUT_DIR", tmp_path):
         log = load_vps_log()
         assert "not found" in log
+
+
+def test_backlog_database_is_summarized_and_public_fields_are_returned(tmp_path):
+    payload = {
+        "version": 2,
+        "updated_at": "2026-07-31T04:00:00+00:00",
+        "jobs": [
+            {
+                "platform": "greenhouse",
+                "company": "Example",
+                "title": "Product Manager",
+                "job_url": "https://example.test/job",
+                "last_seen_at": "2026-07-31T03:00:00+00:00",
+                "private_note": "do not publish",
+            }
+        ],
+    }
+    (tmp_path / "job_backlog.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    summary = summarize_backlog(payload)
+    assert summary["job_count"] == 1
+    assert summary["by_platform"] == {"greenhouse": 1}
+
+    with patch("job_application_automation.dashboard.server.OUTPUT_DIR", tmp_path):
+        jobs = public_backlog_jobs()
+    assert jobs[0]["company"] == "Example"
+    assert "private_note" not in jobs[0]
+
+
+def test_worker_state_summary_counts_all_outcomes_and_artifacts(tmp_path):
+    state_payload = {
+        "jobs": {
+            "a": {"status": "confirmed", "updated_at": "2026-07-31T01:00:00Z"},
+            "b": {"status": "failed", "updated_at": "2026-07-31T02:00:00Z"},
+            "c": {"status": "manual_review", "updated_at": "2026-07-31T03:00:00Z"},
+        }
+    }
+    (tmp_path / "continuous_ashby_results").mkdir()
+    (tmp_path / "continuous_ashby_results" / "result.json").write_text("{}")
+    (tmp_path / "continuous_ashby_documents").mkdir()
+    (tmp_path / "continuous_ashby_documents" / "resume.pdf").write_bytes(b"pdf")
+
+    with patch("job_application_automation.dashboard.server.OUTPUT_DIR", tmp_path):
+        summary = summarize_worker_state("ashby", state_payload)
+
+    assert summary["status_counts"] == {
+        "confirmed": 1,
+        "failed": 1,
+        "manual_review": 1,
+    }
+    assert summary["result_file_count"] == 1
+    assert summary["document_file_count"] == 1
+
+
+def test_admin_file_inventory_includes_all_scopes_but_public_recent_is_allowlisted(
+    tmp_path,
+):
+    project = tmp_path / "project"
+    output = project / "output"
+    archive = tmp_path / "archive"
+    output.mkdir(parents=True)
+    archive.mkdir()
+    (project / "README.md").write_text("documentation")
+    (output / "job_backlog.json").write_text("{}")
+    (output / "private_resume.pdf").write_bytes(b"resume")
+    (archive / "cover_letter.pdf").write_bytes(b"letter")
+
+    with (
+        patch("job_application_automation.dashboard.server.PROJECT_ROOT", project),
+        patch("job_application_automation.dashboard.server.OUTPUT_DIR", output),
+        patch("job_application_automation.dashboard.server.PRIVATE_ARCHIVE_DIR", archive),
+    ):
+        public_inventory = build_file_inventory()
+        admin_inventory = build_file_inventory(include_private=True)
+
+    assert [entry["path"] for entry in public_inventory["recent_files"]] == ["job_backlog.json"]
+    assert public_inventory["files"] == []
+    assert admin_inventory["file_count"] == 4
+    assert {entry["scope"] for entry in admin_inventory["files"]} == {
+        "output",
+        "private_archive",
+        "repository",
+    }
 
 
 def test_build_kpi_metrics_mocked():
@@ -201,3 +323,32 @@ def test_dashboard_request_handler_route_mappings():
         ):
             handler.do_GET()
             assert handler.path == expected_path
+
+
+def test_admin_route_maps_only_after_successful_authentication():
+    handler = DashboardRequestHandler.__new__(DashboardRequestHandler)
+    handler.path = "/admin"
+
+    with (
+        patch.object(DashboardRequestHandler, "_is_admin_authorized", return_value=True),
+        patch("http.server.SimpleHTTPRequestHandler.do_GET") as static_get,
+    ):
+        handler.do_GET()
+
+    assert handler.path == "/admin.html"
+    static_get.assert_called_once()
+
+
+def test_admin_route_requests_authentication_when_credentials_are_missing():
+    handler = DashboardRequestHandler.__new__(DashboardRequestHandler)
+    handler.path = "/admin"
+
+    with (
+        patch.object(DashboardRequestHandler, "_is_admin_authorized", return_value=False),
+        patch.object(DashboardRequestHandler, "_require_admin_authorization") as require,
+        patch("http.server.SimpleHTTPRequestHandler.do_GET") as static_get,
+    ):
+        handler.do_GET()
+
+    require.assert_called_once()
+    static_get.assert_not_called()

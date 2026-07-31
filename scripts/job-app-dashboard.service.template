@@ -1,5 +1,5 @@
 [Unit]
-Description=Public VPS output monitor dashboard
+Description=Public VPS monitor with protected admin vault
 Wants=network-online.target
 After=network-online.target
 StartLimitIntervalSec=300
@@ -12,6 +12,7 @@ WorkingDirectory=__REPO_DIR__
 Environment=PYTHONPATH=__REPO_DIR__/src
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONDONTWRITEBYTECODE=1
+EnvironmentFile=-__REPO_DIR__/config/dashboard.env
 ExecStartPre=/usr/bin/test -x __REPO_DIR__/.venv/bin/python
 ExecStart=__REPO_DIR__/.venv/bin/python -m job_application_automation.dashboard.server --host 127.0.0.1 --port 8000 --no-browser
 Restart=on-failure

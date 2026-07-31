@@ -8,10 +8,16 @@ internet, so do not add routes that expose secrets or perform actions.
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import csv
+import hmac
 import json
 import logging
+import mimetypes
 import os
+import re
+import shutil
 import sys
 import webbrowser
 from datetime import datetime, timezone
@@ -19,6 +25,7 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from typing import Any
 from collections.abc import Sequence
+from urllib.parse import parse_qs, urlsplit
 
 logger = logging.getLogger("DashboardServer")
 
@@ -26,6 +33,85 @@ STATIC_DIR = Path(__file__).parent / "static"
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 OUTPUT_DIR = PROJECT_ROOT / "output"
 CONFIG_DIR = PROJECT_ROOT / "config"
+PRIVATE_ARCHIVE_DIR = Path(
+    os.environ.get(
+        "JOB_APP_PRIVATE_ARCHIVE_DIR",
+        "/var/lib/job-application-automation/private-archive",
+    )
+)
+WORKER_PROVIDERS = ("ashby", "greenhouse", "lever")
+ADMIN_USERNAME_ENV = "JOB_APP_DASHBOARD_ADMIN_USERNAME"
+ADMIN_PASSWORD_ENV = "JOB_APP_DASHBOARD_ADMIN_PASSWORD"  # noqa: S105
+_ADMIN_LOG_FILES = {
+    "vps-sync": OUTPUT_DIR / "vps_sync.log",
+    "nginx-access": Path("/var/log/nginx/access.log"),
+    "nginx-error": Path("/var/log/nginx/error.log"),
+    "system": Path("/var/log/syslog"),
+}
+_PUBLIC_JOB_FIELDS = {
+    "platform",
+    "company",
+    "title",
+    "posted_at",
+    "days_old",
+    "location",
+    "workplace_type",
+    "employment_type",
+    "department",
+    "team",
+    "salary",
+    "job_url",
+    "apply_url",
+    "board_token",
+    "date_source",
+    "match_reason",
+    "platform_job_id",
+    "live_status",
+    "live_checked_at",
+    "live_check_source",
+    "live_check_http_status",
+    "live_check_final_url",
+    "live_check_reason",
+    "board_region",
+    "provider_id_trusted",
+    "source_identity",
+    "url_is_record_specific",
+    "unique_id",
+    "first_seen_at",
+    "last_seen_at",
+}
+_PUBLIC_RAW_FILES = {
+    "ai_jobs.csv",
+    "ats_boards_cache.json",
+    "job_backlog.json",
+    "job_search_coverage.json",
+    "vps_infra_status.json",
+    "vps_run_status.json",
+}
+_REPOSITORY_EXCLUDED_DIRECTORIES = {
+    ".agents",
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".sync-worktree",
+    ".venv",
+    "__pycache__",
+    "node_modules",
+    "output",
+}
+_REPOSITORY_PRIVATE_NAME_MARKERS = {
+    "candidate_email_pool",
+    "candidate_profile",
+    "credential",
+    "dashboard.env",
+    "password",
+    "private",
+    "secret",
+    "service_account",
+    "token",
+    "vps_config.json",
+}
 _PUBLIC_VPS_FIELDS = {
     "hostname",
     "os",
@@ -103,6 +189,437 @@ def load_vps_log(lines: int = 250) -> str:
             return "".join(all_lines[-lines:])
     except Exception as e:
         return f"Error reading log file: {e}"
+
+
+def _file_metadata(path: Path, *, scope: str, relative_path: str) -> dict[str, Any]:
+    try:
+        stat = path.stat()
+    except OSError:
+        return {}
+    return {
+        "scope": scope,
+        "path": relative_path.replace("\\", "/"),
+        "name": path.name,
+        "size_bytes": stat.st_size,
+        "modified_at": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
+        "content_type": mimetypes.guess_type(path.name)[0] or "application/octet-stream",
+    }
+
+
+def _iter_regular_files(root: Path) -> list[Path]:
+    if not root.is_dir():
+        return []
+    files: list[Path] = []
+    try:
+        for path in root.rglob("*"):
+            try:
+                if path.is_file() and not path.is_symlink():
+                    files.append(path)
+            except OSError:
+                continue
+    except OSError:
+        return []
+    return files
+
+
+def _is_repository_admin_file(path: Path) -> bool:
+    try:
+        relative = path.relative_to(PROJECT_ROOT)
+    except ValueError:
+        return False
+    lowered_parts = [part.lower() for part in relative.parts]
+    if any(part in _REPOSITORY_EXCLUDED_DIRECTORIES for part in lowered_parts[:-1]):
+        return False
+    lowered_name = relative.name.lower()
+    if lowered_name.endswith((".env", ".key", ".p12", ".pem")):
+        return False
+    if any(marker in lowered_name for marker in _REPOSITORY_PRIVATE_NAME_MARKERS):
+        return False
+    if lowered_parts[0] == "config":
+        safe_config_names = {
+            "config.js",
+            "runtime_config.json",
+            "seo_config.example.json",
+            "seo_config.json",
+        }
+        return lowered_name.endswith(".example.json") or lowered_name in safe_config_names
+    return True
+
+
+def _iter_repository_files() -> list[Path]:
+    files: list[Path] = []
+    if not PROJECT_ROOT.is_dir():
+        return files
+    try:
+        for current_root, directories, names in os.walk(PROJECT_ROOT):
+            directories[:] = [
+                directory
+                for directory in directories
+                if directory.lower() not in _REPOSITORY_EXCLUDED_DIRECTORIES
+            ]
+            root = Path(current_root)
+            for name in names:
+                path = root / name
+                try:
+                    if path.is_file() and not path.is_symlink() and _is_repository_admin_file(path):
+                        files.append(path)
+                except OSError:
+                    continue
+    except OSError:
+        return []
+    return files
+
+
+def build_file_inventory(*, include_private: bool = False) -> dict[str, Any]:
+    """Inventory VPS artifacts without returning their contents."""
+
+    scopes: list[tuple[str, Path]] = [("output", OUTPUT_DIR)]
+    if include_private:
+        scopes.extend(
+            (
+                ("private_archive", PRIVATE_ARCHIVE_DIR),
+                ("repository", PROJECT_ROOT),
+            )
+        )
+
+    entries: list[dict[str, Any]] = []
+    by_extension: dict[str, int] = {}
+    by_scope: dict[str, dict[str, int]] = {}
+    total_bytes = 0
+    for scope, root in scopes:
+        scope_count = 0
+        scope_bytes = 0
+        scope_files = (
+            _iter_repository_files() if scope == "repository" else _iter_regular_files(root)
+        )
+        for path in scope_files:
+            try:
+                relative = str(path.relative_to(root))
+            except ValueError:
+                continue
+            metadata = _file_metadata(path, scope=scope, relative_path=relative)
+            if not metadata:
+                continue
+            entries.append(metadata)
+            size = int(metadata["size_bytes"])
+            total_bytes += size
+            scope_bytes += size
+            scope_count += 1
+            extension = path.suffix.lower() or "[none]"
+            by_extension[extension] = by_extension.get(extension, 0) + 1
+        by_scope[scope] = {"file_count": scope_count, "size_bytes": scope_bytes}
+
+    entries.sort(key=lambda item: str(item.get("modified_at", "")), reverse=True)
+    recent_entries = (
+        entries[:25]
+        if include_private
+        else [
+            entry
+            for entry in entries
+            if entry["scope"] == "output" and entry["path"] in _PUBLIC_RAW_FILES
+        ][:25]
+    )
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "file_count": len(entries),
+        "size_bytes": total_bytes,
+        "by_scope": by_scope,
+        "by_extension": dict(sorted(by_extension.items())),
+        "files": entries if include_private else [],
+        "recent_files": recent_entries,
+    }
+
+
+def _backlog_jobs(payload: Any) -> list[dict[str, Any]]:
+    if isinstance(payload, dict):
+        jobs = payload.get("jobs")
+    else:
+        jobs = payload
+    if not isinstance(jobs, list):
+        return []
+    return [job for job in jobs if isinstance(job, dict)]
+
+
+def public_backlog_jobs() -> list[dict[str, Any]]:
+    payload = load_json_file("job_backlog.json", default={})
+    return [
+        {key: value for key, value in job.items() if key in _PUBLIC_JOB_FIELDS}
+        for job in _backlog_jobs(payload)
+    ]
+
+
+def public_submission_records(payload: Any) -> dict[str, dict[str, Any]]:
+    if not isinstance(payload, dict):
+        return {}
+    fields = {"applied_at", "ats", "company", "role", "status"}
+    return {
+        str(key): {field: value for field, value in record.items() if field in fields}
+        for key, record in payload.items()
+        if isinstance(record, dict)
+    }
+
+
+def public_generation_records(payload: Any) -> list[dict[str, Any]]:
+    if not isinstance(payload, list):
+        return []
+    fields = {
+        "company",
+        "target_company",
+        "role",
+        "job_title",
+        "status",
+        "ats",
+        "platform",
+    }
+    return [
+        {field: value for field, value in record.items() if field in fields}
+        for record in payload
+        if isinstance(record, dict)
+    ]
+
+
+def public_archive_records(payload: Any) -> dict[str, dict[str, Any]]:
+    return {
+        str(key): {
+            "status": record.get("status"),
+            "updated_at": record.get("updated_at"),
+            "identity": {
+                "company": record.get("identity", {}).get("company"),
+                "job_title": record.get("identity", {}).get("job_title"),
+            },
+        }
+        for key, record in archive_entries(payload).items()
+        if isinstance(record, dict)
+    }
+
+
+def summarize_backlog(payload: Any) -> dict[str, Any]:
+    jobs = _backlog_jobs(payload)
+    by_platform: dict[str, int] = {}
+    by_live_status: dict[str, int] = {}
+    latest_seen_at = ""
+    for job in jobs:
+        platform = str(job.get("platform") or "unknown").lower()
+        live_status = str(job.get("live_status") or "unknown").lower()
+        by_platform[platform] = by_platform.get(platform, 0) + 1
+        by_live_status[live_status] = by_live_status.get(live_status, 0) + 1
+        latest_seen_at = max(
+            latest_seen_at,
+            str(job.get("last_seen_at") or job.get("live_checked_at") or ""),
+        )
+    return {
+        "version": payload.get("version") if isinstance(payload, dict) else None,
+        "updated_at": payload.get("updated_at", "") if isinstance(payload, dict) else "",
+        "job_count": len(jobs),
+        "by_platform": dict(sorted(by_platform.items())),
+        "by_live_status": dict(sorted(by_live_status.items())),
+        "latest_seen_at": latest_seen_at,
+    }
+
+
+def summarize_worker_state(provider: str, payload: Any) -> dict[str, Any]:
+    records: list[dict[str, Any]] = []
+    if isinstance(payload, dict):
+        raw_records = payload.get("jobs", {})
+        if isinstance(raw_records, dict):
+            records = [value for value in raw_records.values() if isinstance(value, dict)]
+
+    status_counts: dict[str, int] = {}
+    result_counts: dict[str, int] = {}
+    latest: dict[str, Any] = {}
+    for record in records:
+        status = str(record.get("status") or "unknown").lower()
+        result = str(record.get("result_status") or "unknown")
+        status_counts[status] = status_counts.get(status, 0) + 1
+        result_counts[result] = result_counts.get(result, 0) + 1
+        if str(record.get("updated_at") or "") > str(latest.get("updated_at") or ""):
+            latest = record
+
+    results_dir = OUTPUT_DIR / f"continuous_{provider}_results"
+    documents_dir = OUTPUT_DIR / f"continuous_{provider}_documents"
+    result_files = _iter_regular_files(results_dir)
+    document_files = _iter_regular_files(documents_dir)
+    latest_summary = {
+        key: latest.get(key)
+        for key in (
+            "updated_at",
+            "company",
+            "title",
+            "status",
+            "stage",
+            "result_status",
+            "exit_code",
+            "timed_out",
+            "ledger_confirmed",
+            "captcha_present",
+        )
+        if key in latest
+    }
+    return {
+        "provider": provider,
+        "record_count": len(records),
+        "status_counts": dict(sorted(status_counts.items())),
+        "result_counts": dict(sorted(result_counts.items())),
+        "result_file_count": len(result_files),
+        "document_file_count": len(document_files),
+        "latest": latest_summary,
+    }
+
+
+def build_worker_summaries() -> list[dict[str, Any]]:
+    return [
+        summarize_worker_state(
+            provider,
+            load_json_file(f"continuous_{provider}_state.json", default={}),
+        )
+        for provider in WORKER_PROVIDERS
+    ]
+
+
+def _read_proc_status(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    try:
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            key, separator, value = line.partition(":")
+            if separator:
+                values[key] = value.strip()
+    except OSError:
+        return {}
+    return values
+
+
+def build_process_inventory() -> dict[str, Any]:
+    proc_root = Path("/proc")
+    processes: list[dict[str, Any]] = []
+    if not proc_root.is_dir():
+        return {"process_count": 0, "by_name": {}, "processes": []}
+
+    for process_dir in proc_root.iterdir():
+        if not process_dir.name.isdigit():
+            continue
+        status = _read_proc_status(process_dir / "status")
+        if not status:
+            continue
+        name = status.get("Name", "unknown")
+        memory_match = re.match(r"(\d+)", status.get("VmRSS", "0"))
+        processes.append(
+            {
+                "pid": int(process_dir.name),
+                "name": name,
+                "state": status.get("State", ""),
+                "parent_pid": int(status.get("PPid", "0") or 0),
+                "threads": int(status.get("Threads", "0") or 0),
+                "memory_kb": int(memory_match.group(1)) if memory_match else 0,
+                "uid": (status.get("Uid", "").split() or [""])[0],
+            }
+        )
+
+    by_name: dict[str, int] = {}
+    for process in processes:
+        name = str(process["name"])
+        by_name[name] = by_name.get(name, 0) + 1
+    processes.sort(key=lambda item: (str(item["name"]).lower(), int(item["pid"])))
+    return {
+        "process_count": len(processes),
+        "by_name": dict(sorted(by_name.items(), key=lambda item: (-item[1], item[0]))),
+        "processes": processes,
+    }
+
+
+def build_host_status() -> dict[str, Any]:
+    """Read bounded host resource facts without spawning external commands."""
+
+    host: dict[str, Any] = {
+        "cpu_count": os.cpu_count() or 0,
+        "hostname": "",
+        "load_average": [],
+        "uptime_seconds": 0.0,
+        "memory": {},
+        "disk": {},
+    }
+    try:
+        host["hostname"] = os.uname().nodename
+    except (AttributeError, OSError):
+        pass
+    try:
+        host["load_average"] = [round(value, 3) for value in os.getloadavg()]
+    except (AttributeError, OSError):
+        pass
+    try:
+        host["uptime_seconds"] = float(Path("/proc/uptime").read_text(encoding="utf-8").split()[0])
+    except (OSError, ValueError, IndexError):
+        pass
+
+    memory: dict[str, int] = {}
+    try:
+        for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+            key, separator, value = line.partition(":")
+            match = re.match(r"\s*(\d+)", value)
+            if separator and match:
+                memory[key] = int(match.group(1)) * 1024
+    except OSError:
+        pass
+    host["memory"] = {
+        "total_bytes": memory.get("MemTotal", 0),
+        "available_bytes": memory.get("MemAvailable", 0),
+        "swap_total_bytes": memory.get("SwapTotal", 0),
+        "swap_free_bytes": memory.get("SwapFree", 0),
+    }
+    try:
+        disk = shutil.disk_usage(PROJECT_ROOT)
+        host["disk"] = {
+            "total_bytes": disk.total,
+            "used_bytes": disk.used,
+            "free_bytes": disk.free,
+        }
+    except OSError:
+        pass
+    return host
+
+
+def _tail_text_file(path: Path, lines: int = 250) -> str:
+    try:
+        with open(path, encoding="utf-8", errors="replace") as stream:
+            return "".join(stream.readlines()[-lines:])
+    except OSError as exc:
+        return f"Unavailable: {exc}"
+
+
+def build_log_overview(*, include_admin_logs: bool = False) -> dict[str, Any]:
+    log_paths = (
+        _ADMIN_LOG_FILES if include_admin_logs else {"vps-sync": _ADMIN_LOG_FILES["vps-sync"]}
+    )
+    return {
+        name: {
+            "path": str(path),
+            "content": _tail_text_file(path),
+        }
+        for name, path in log_paths.items()
+    }
+
+
+def build_operations_overview(*, include_private: bool = False) -> dict[str, Any]:
+    backlog = load_json_file("job_backlog.json", default={})
+    run_status = load_json_file("vps_run_status.json", default={})
+    infra_status = load_json_file("vps_infra_status.json", default={})
+    workers = build_worker_summaries()
+    nonconfirmed = sum(
+        int(worker["status_counts"].get("failed", 0))
+        + int(worker["status_counts"].get("manual_review", 0))
+        for worker in workers
+    )
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "run_status": run_status if isinstance(run_status, dict) else {},
+        "backlog": summarize_backlog(backlog),
+        "workers": workers,
+        "continuous_nonconfirmed_count": nonconfirmed,
+        "infrastructure": infra_status if isinstance(infra_status, dict) else {},
+        "host": build_host_status(),
+        "files": build_file_inventory(include_private=include_private),
+        "processes": build_process_inventory(),
+        "logs": build_log_overview(include_admin_logs=include_private),
+    }
 
 
 def archive_entries(archives: Any) -> dict[str, Any]:
@@ -215,11 +732,22 @@ def build_kpi_metrics() -> dict[str, Any]:
     archives = load_json_file("vps_document_archive_state.json", default={})
     cache_data = load_json_file("ats_boards_cache.json", default={})
     infra_status = load_json_file("vps_infra_status.json", default={})
+    worker_summaries = build_worker_summaries()
+    backlog = load_json_file("job_backlog.json", default={})
+    run_status = load_json_file("vps_run_status.json", default={})
     jobs = load_csv_jobs()
     vps_cfg = load_vps_config()
 
     total_submissions = len(submissions) if isinstance(submissions, dict) else 0
-    failure_count = failures_data.get("failure_count", 0) if isinstance(failures_data, dict) else 0
+    current_run_failure_count = (
+        failures_data.get("failure_count", 0) if isinstance(failures_data, dict) else 0
+    )
+    continuous_failure_count = sum(
+        int(worker["status_counts"].get("failed", 0))
+        + int(worker["status_counts"].get("manual_review", 0))
+        for worker in worker_summaries
+    )
+    failure_count = continuous_failure_count or current_run_failure_count
 
     ats_counts: dict[str, int] = {}
     if isinstance(submissions, dict):
@@ -257,7 +785,10 @@ def build_kpi_metrics() -> dict[str, Any]:
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "total_submissions": total_submissions,
         "failure_count": failure_count,
+        "current_run_failure_count": current_run_failure_count,
+        "continuous_nonconfirmed_count": continuous_failure_count,
         "total_jobs_found": returned_jobs,
+        "backlog_job_count": summarize_backlog(backlog)["job_count"],
         "generation_queue_count": gen_queue_size,
         "archived_document_sets": archived_sets,
         "archive_status_counts": archive_status_counts,
@@ -281,6 +812,8 @@ def build_kpi_metrics() -> dict[str, Any]:
         "vps_info": vps_cfg.get("vps", {}),
         "hostinger_info": vps_cfg.get("hostinger_account", {}),
         "vps_infra": infra_status if isinstance(infra_status, dict) else {},
+        "run_status": run_status if isinstance(run_status, dict) else {},
+        "workers": worker_summaries,
     }
 
 
@@ -300,7 +833,17 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self) -> None:
-        path = self.path.split("?")[0]
+        path = urlsplit(self.path).path
+
+        if path in {"/admin", "/admin/"}:
+            self.path = "/admin.html"
+            path = "/admin.html"
+
+        if (path == "/admin.html" or path.startswith("/api/admin/")) and not (
+            self._is_admin_authorized()
+        ):
+            self._require_admin_authorization()
+            return
 
         # Clean page route mappings
         if path in {"/search", "/search/"}:
@@ -348,10 +891,86 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
+    def _is_admin_authorized(self) -> bool:
+        expected_username = os.environ.get(ADMIN_USERNAME_ENV, "")
+        expected_password = os.environ.get(ADMIN_PASSWORD_ENV, "")
+        if not expected_username or not expected_password:
+            return False
+        authorization = getattr(self, "headers", {}).get("Authorization", "")
+        scheme, separator, encoded = authorization.partition(" ")
+        if not separator or scheme.lower() != "basic":
+            return False
+        try:
+            decoded = base64.b64decode(encoded, validate=True).decode("utf-8")
+        except (binascii.Error, ValueError, UnicodeDecodeError):
+            return False
+        username, separator, password = decoded.partition(":")
+        if not separator:
+            return False
+        return hmac.compare_digest(username, expected_username) and hmac.compare_digest(
+            password,
+            expected_password,
+        )
+
+    def _require_admin_authorization(self) -> None:
+        self.send_response(401)
+        self.send_header("WWW-Authenticate", 'Basic realm="Sky Bison Admin"')
+        self.send_header("Content-Type", "application/json")
+        payload = b'{"error":"Admin authentication required"}'
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def _handle_admin_file_download(self) -> None:
+        query = parse_qs(urlsplit(self.path).query)
+        scope = (query.get("scope") or [""])[0]
+        relative = (query.get("path") or [""])[0]
+        roots = {
+            "output": OUTPUT_DIR,
+            "private_archive": PRIVATE_ARCHIVE_DIR,
+            "repository": PROJECT_ROOT,
+        }
+        root = roots.get(scope)
+        if root is None or not relative:
+            self._send_json({"error": "scope and path are required"}, status=400)
+            return
+        try:
+            resolved_root = root.resolve()
+            target = (resolved_root / relative).resolve()
+            target.relative_to(resolved_root)
+        except (OSError, ValueError):
+            self._send_json({"error": "Invalid file path"}, status=400)
+            return
+        if not target.is_file() or target.is_symlink():
+            self._send_json({"error": "File not found"}, status=404)
+            return
+        if scope == "repository" and not _is_repository_admin_file(target):
+            self._send_json({"error": "File is not displayable"}, status=403)
+            return
+        try:
+            data = target.read_bytes()
+        except OSError as exc:
+            self._send_json({"error": str(exc)}, status=500)
+            return
+        content_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        safe_name = target.name.replace('"', "_").replace("\r", "_").replace("\n", "_")
+        self.send_header("Content-Disposition", f'inline; filename="{safe_name}"')
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
     def _handle_file_download(self) -> None:
         filename = os.path.basename(self.path.split("?")[0])
         if not filename or ".." in filename or "/" in filename or "\\" in filename:
             self._send_json({"error": "Invalid filename"}, status=400)
+            return
+        if filename not in _PUBLIC_RAW_FILES:
+            self._send_json(
+                {"error": "This raw artifact is available through the Admin Vault"},
+                status=403,
+            )
             return
 
         output_root = OUTPUT_DIR.resolve()
@@ -373,7 +992,9 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
                 continue
             # Guard against directory traversal: the resolved path must stay
             # within OUTPUT_DIR even if symlinks or unexpected paths were added.
-            if not str(resolved).startswith(str(output_root)):
+            try:
+                resolved.relative_to(output_root)
+            except ValueError:
                 continue
             if resolved.exists() and resolved.is_file():
                 target_file = resolved
@@ -403,7 +1024,13 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
 
     def _handle_api_get(self) -> None:
         path = self.path.split("?")[0]
-        if path == "/api/metrics":
+        if path == "/api/admin/overview":
+            self._send_json(build_operations_overview(include_private=True))
+        elif path == "/api/admin/file":
+            self._handle_admin_file_download()
+        elif path == "/api/operations":
+            self._send_json(build_operations_overview())
+        elif path == "/api/metrics":
             self._send_json(build_kpi_metrics())
         elif path == "/api/system/vps":
             self._send_json(load_vps_config())
@@ -411,22 +1038,36 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
             self._send_json({"log": load_vps_log(250)})
         elif path == "/api/section1/jobs":
             self._send_json(load_csv_jobs())
+        elif path == "/api/section1/backlog":
+            self._send_json(public_backlog_jobs())
         elif path == "/api/section1/coverage":
             self._send_json(load_json_file("job_search_coverage.json"))
         elif path == "/api/section1/cache":
             self._send_json(load_json_file("ats_boards_cache.json"))
         elif path == "/api/section2/generation":
-            self._send_json(load_json_file("vps_generation_jobs.json"))
+            self._send_json(public_generation_records(load_json_file("vps_generation_jobs.json")))
         elif path == "/api/section2/archives":
-            self._send_json(load_json_file("vps_document_archive_state.json"))
+            self._send_json(
+                public_archive_records(
+                    load_json_file("vps_document_archive_state.json", default={})
+                )
+            )
         elif path == "/api/section3/submissions":
-            self._send_json(load_json_file("submission_log.json"))
+            self._send_json(
+                public_submission_records(load_json_file("submission_log.json", default={}))
+            )
         elif path == "/api/section3/failures":
             self._send_json(load_json_file("vps_application_failures.json"))
         elif path == "/api/section3/state":
             self._send_json(load_json_file("vps_application_state.json"))
         elif path.startswith("/api/files/"):
             filename = os.path.basename(path)
+            if filename not in _PUBLIC_RAW_FILES:
+                self._send_json(
+                    {"error": "This raw artifact is available through the Admin Vault"},
+                    status=403,
+                )
+                return
             file_path = get_output_file_path(filename)
             if file_path.exists():
                 try:

@@ -144,8 +144,8 @@
           <span class="infra-val" id="vpsDatacenter">US Boston 2</span>
         </div>
         <div class="infra-item">
-          <span class="infra-label">Daily Search Cron</span>
-          <span class="infra-val" style="color: var(--air);">0 3 * * * (03:00 UTC)</span>
+          <span class="infra-label">Search Supervisor</span>
+          <span class="infra-val" id="searchSupervisor" style="color: var(--air);">job-app-search-sync.service</span>
         </div>
         <div class="infra-item">
           <span class="infra-label">Active Engines</span>
@@ -162,6 +162,125 @@
         <div class="infra-item">
           <span class="infra-label">Account Owner</span>
           <span class="infra-val" id="vpsOwner">Cent Capital (Shivam Singh)</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-heading-row">
+        <div>
+          <h2>Current Search Run</h2>
+          <p class="section-description">Live state from `vps_run_status.json`, including the exact deployed commit and process.</p>
+        </div>
+        <span class="badge badge-info" id="runStateBadge">Loading...</span>
+      </div>
+      <div class="detail-grid" id="runStatusGrid">
+        <div class="table-empty">Loading current run status...</div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-heading-row">
+        <div>
+          <h2>Continuous ATS Workers</h2>
+          <p class="section-description">Complete aggregate state for Ashby, Greenhouse, and Lever, including result and document artifact counts.</p>
+        </div>
+      </div>
+      <div class="table-card">
+        <div class="table-scroll">
+          <table class="data-table wide-data-table">
+            <thead>
+              <tr>
+                <th>Provider</th>
+                <th>Tracked</th>
+                <th>Confirmed</th>
+                <th>Failed</th>
+                <th>Manual Review</th>
+                <th>Result Files</th>
+                <th>Documents</th>
+                <th>Latest Update</th>
+                <th>Latest Stage</th>
+              </tr>
+            </thead>
+            <tbody id="workerStatusBody">
+              <tr><td colspan="9" class="table-empty">Loading worker states...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="split-grid">
+        <div class="card">
+          <h3 class="panel-title">Host Resources</h3>
+          <div class="detail-grid" id="hostResourceGrid">Loading host resources...</div>
+        </div>
+        <div class="card">
+          <h3 class="panel-title">Output Inventory</h3>
+          <div class="detail-grid" id="outputInventoryGrid">Loading output inventory...</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-heading-row">
+        <div>
+          <h2>Managed Services</h2>
+          <p class="section-description">systemd state, process ID, restart count, memory, and task count from the VPS infrastructure snapshot.</p>
+        </div>
+      </div>
+      <div class="table-card">
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Service</th>
+                <th>State</th>
+                <th>Enabled</th>
+                <th>PID</th>
+                <th>Restarts</th>
+                <th>Memory</th>
+                <th>Tasks</th>
+              </tr>
+            </thead>
+            <tbody id="serviceStatusBody">
+              <tr><td colspan="7" class="table-empty">Waiting for infrastructure snapshot version 2...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-heading-row">
+        <div>
+          <h2>Live Process Inventory</h2>
+          <p class="section-description">Every process visible to the dashboard service through `/proc`.</p>
+        </div>
+        <span class="badge badge-info" id="processCountBadge">Loading...</span>
+      </div>
+      <div class="controls-bar">
+        <input type="text" id="processSearch" class="search-input" placeholder="Filter processes by name, PID, state, or UID..." oninput="renderProcessTable()">
+      </div>
+      <div class="table-card">
+        <div class="table-scroll process-table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>PID</th>
+                <th>Name</th>
+                <th>State</th>
+                <th>Parent PID</th>
+                <th>Threads</th>
+                <th>Memory</th>
+                <th>UID</th>
+              </tr>
+            </thead>
+            <tbody id="processStatusBody">
+              <tr><td colspan="7" class="table-empty">Loading process inventory...</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </section>
@@ -268,6 +387,7 @@
           <li><a href="logs.html">🔥 Real-time VPS Sync Logs</a></li>
           <li><a href="inspector.html">📁 Raw File Inspector</a></li>
           <li><a href="system-status.html">🛰️ System Status: VPS, Metrics & Diagnostics</a></li>
+          <li><a href="admin.html">🔐 Authenticated Admin Vault</a></li>
         </ul>
       </div>
 

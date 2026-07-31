@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#ff7a29">
   
   <!-- SEO Primary Meta Tags -->
-  <title>SkyBison Job Search & Coverage | Application Automation</title>
-  <meta name="description" content="Explore live ATS job listings discovered by SkyBison Automation across Greenhouse, Ashby, and Lever with search coverage diagnostics and board cache statistics.">
-  <meta name="keywords" content="Job Search, ATS Coverage, Greenhouse Jobs, Ashby Jobs, Lever Jobs, SkyBison Cloud, Shivam Singh, Cent Capital">
+  <title>Sky Bison Job Search | Live ATS Job Listings</title>
+  <meta name="description" content="Browse live ATS job listings discovered by Sky Bison Automation across Greenhouse, Ashby, and Lever.">
+  <meta name="keywords" content="Job Search, Greenhouse Jobs, Ashby Jobs, Lever Jobs, Sky Bison Cloud, Shivam Singh, Cent Capital">
   <meta name="author" content="Shivam Singh (Cent Capital)">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://skybison.cloud/search">
@@ -18,15 +19,15 @@
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://skybison.cloud/search">
-  <meta property="og:title" content="SkyBison Job Search & Coverage | Application Automation">
-  <meta property="og:description" content="Explore live ATS job listings discovered by SkyBison Automation across Greenhouse, Ashby, and Lever.">
+  <meta property="og:title" content="Sky Bison Job Search | Live ATS Job Listings">
+  <meta property="og:description" content="Browse live ATS job listings discovered by Sky Bison Automation across Greenhouse, Ashby, and Lever.">
   <meta property="og:image" content="https://skybison.cloud/sky_bison_logo.jpg">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:url" content="https://skybison.cloud/search">
-  <meta name="twitter:title" content="SkyBison Job Search & Coverage | Application Automation">
-  <meta name="twitter:description" content="Explore live ATS job listings discovered by SkyBison Automation across Greenhouse, Ashby, and Lever.">
+  <meta name="twitter:title" content="Sky Bison Job Search | Live ATS Job Listings">
+  <meta name="twitter:description" content="Browse live ATS job listings discovered by Sky Bison Automation across Greenhouse, Ashby, and Lever.">
   <meta name="twitter:image" content="https://skybison.cloud/sky_bison_logo.jpg">
 
   <!-- Google Fonts Preload & Non-Blocking Stylesheets -->
@@ -43,7 +44,7 @@
     "@graph": [
       {
         "@type": "DataCatalog",
-        "name": "SkyBison ATS Job Discovery Catalog",
+        "name": "Sky Bison ATS Job Discovery Catalog",
         "url": "https://skybison.cloud/search",
         "description": "Real-time index of live ATS job listings across Greenhouse, Ashby, and Lever.",
         "provider": {
@@ -64,7 +65,7 @@
           {
             "@type": "ListItem",
             "position": 2,
-            "name": "Job Search & Coverage",
+            "name": "Job Search",
             "item": "https://skybison.cloud/search"
           }
         ]
@@ -80,10 +81,10 @@
   <header class="app-header">
     <a href="index.html" class="brand">
       <div class="logo-container">
-        <img src="sky_bison_logo.jpg" alt="SkyBison Cloud Logo" class="brand-logo" width="44" height="44">
+        <img src="sky_bison_logo.jpg" alt="Sky Bison Cloud Logo" class="brand-logo" width="44" height="44">
       </div>
       <div class="brand-text">
-        <h1 class="brand-title">SKYBISON CLOUD</h1>
+        <h1 class="brand-title">SKY BISON CLOUD</h1>
         <span class="brand-subtitle">Autonomous Job Operations Engine</span>
       </div>
     </a>
@@ -108,7 +109,7 @@
   <div class="drawer-backdrop" id="drawerBackdrop"></div>
   <aside class="mobile-drawer" id="mobileDrawer" aria-label="Mobile Drawer Navigation">
     <div class="drawer-header">
-      <span class="drawer-title">SKYBISON CLOUD</span>
+      <span class="drawer-title">SKY BISON CLOUD</span>
       <button class="drawer-close" id="drawerCloseBtn" aria-label="Close Mobile Drawer">&times;</button>
     </div>
     <nav class="drawer-links" id="drawerLinks" data-active="search"></nav>
@@ -118,6 +119,13 @@
 
     <!-- SEARCH & COVERAGE PAGE CONTENT -->
     <section class="section">
+      <div class="section-heading-row">
+        <div>
+          <h2>Current Search Snapshot</h2>
+          <p class="section-description">The latest published `ai_jobs.csv` result set from the active search cycle.</p>
+        </div>
+        <span class="badge badge-info" id="snapshotJobCount">Loading...</span>
+      </div>
       <div class="controls-bar">
         <input type="text" id="sec1Search" class="search-input" placeholder="Search jobs by Title, Company, Platform, Location..." oninput="renderJobsTable()">
       </div>
@@ -144,6 +152,42 @@
       </div>
     </section>
 
+    <section class="section">
+      <div class="section-heading-row">
+        <div>
+          <h2>Persistent Job Database</h2>
+          <p class="section-description">Every current record in `job_backlog.json`, including provider identity, discovery timestamps, live-check details, and direct application links.</p>
+        </div>
+        <span class="badge badge-confirmed" id="backlogJobCount">Loading...</span>
+      </div>
+      <div class="controls-bar">
+        <input type="text" id="backlogSearch" class="search-input" placeholder="Search the persistent database..." oninput="renderBacklogTable()">
+      </div>
+      <div class="table-card">
+        <div class="table-scroll">
+          <table class="data-table wide-data-table">
+            <thead>
+              <tr>
+                <th>Platform</th>
+                <th>Company</th>
+                <th>Title</th>
+                <th>Location</th>
+                <th>Live Status</th>
+                <th>First Seen</th>
+                <th>Last Seen</th>
+                <th>Provider ID</th>
+                <th>Listing</th>
+                <th>Apply</th>
+              </tr>
+            </thead>
+            <tbody id="backlogTableBody">
+              <tr><td colspan="10" class="table-empty">Loading persistent job database...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
   </main>
 
   <!-- Mobile Bottom Command Bar (< 768px) -->
@@ -154,10 +198,10 @@
     <div class="footer-container">
       <div class="footer-col">
         <div class="footer-brand">
-          <img src="sky_bison_logo.jpg" alt="SkyBison Cloud Logo" class="footer-logo" width="32" height="32">
-          <span class="footer-brand-title">SKYBISON CLOUD</span>
+          <img src="sky_bison_logo.jpg" alt="Sky Bison Cloud Logo" class="footer-logo" width="32" height="32">
+          <span class="footer-brand-title">SKY BISON CLOUD</span>
         </div>
-        <p class="footer-desc">SkyBison Cloud Autonomous Job Application Engine. Operated under Cent Capital. Hosted on Ubuntu 24.04 VPS with Let's Encrypt HTTPS.</p>
+        <p class="footer-desc">Sky Bison Cloud Autonomous Job Application Engine. Operated under Cent Capital. Hosted on Ubuntu 24.04 VPS with Let's Encrypt HTTPS.</p>
         <span class="footer-copy">© 2026 Cent Capital (Shivam Singh). All rights reserved.</span>
       </div>
 
@@ -175,11 +219,11 @@
         <h4 class="footer-heading">🗺️ System Navigation</h4>
         <ul class="footer-links">
           <li><a href="index.html">📜 Submissions & Failures Matrix</a></li>
-          <li><a href="search.html">🌊 Job Search & Coverage Details</a></li>
-          <li><a href="generation.html">🪨 Generation Queue & Archives</a></li>
+          <li><a href="search.html">🌊 Job Search</a></li>
+          <li><a href="generation.html">🪨 Application Queue</a></li>
           <li><a href="logs.html">🔥 Real-time VPS Sync Logs</a></li>
           <li><a href="inspector.html">📁 Raw File Inspector</a></li>
-          <li><a href="system-status.html">🛰️ System Status: VPS Config & Failures</a></li>
+          <li><a href="system-status.html">🛰️ System Status: VPS, Metrics & Diagnostics</a></li>
         </ul>
       </div>
 

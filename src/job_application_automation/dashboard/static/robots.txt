@@ -1,4 +1,4 @@
-# SkyBison Cloud Robots Instructions
+# Sky Bison Cloud Robots Instructions
 User-agent: *
 Allow: /
 Allow: /index.html
@@ -6,6 +6,7 @@ Allow: /search.html
 Allow: /generation.html
 Allow: /logs.html
 Allow: /inspector.html
+Allow: /system-status.html
 Allow: /cent-capital.html
 Allow: /sitemap.xml
 Allow: /site.webmanifest

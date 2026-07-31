@@ -95,11 +95,13 @@ class PowerShellMaintenanceTests(unittest.TestCase):
         self.assertIn("MemoryMax=192M", unit)
         self.assertNotIn("--host 0.0.0.0", unit)
 
-        # The dashboard is public: no credential is generated, shipped, or required.
-        self.assertNotIn("RandomNumberGenerator", installer)
-        self.assertNotIn("dashboard.env", installer)
-        self.assertNotIn("JOB_APP_DASHBOARD_PASSWORD", installer)
-        self.assertNotIn("dashboard.env", unit)
+        # Public operational pages remain available, while the raw-artifact
+        # admin vault receives a generated credential through a mode-0600 env.
+        self.assertIn("RandomNumberGenerator", installer)
+        self.assertIn("dashboard.env", installer)
+        self.assertIn("JOB_APP_DASHBOARD_ADMIN_PASSWORD", installer)
+        self.assertIn("install -m 0600", installer)
+        self.assertIn("EnvironmentFile=-", unit)
 
     def test_backend_quarantine_requires_live_failure_evidence(self) -> None:
         script = (SCRIPTS / "quarantine_unhealthy_cent_backend.ps1").read_text(encoding="utf-8")
@@ -193,6 +195,12 @@ class PowerShellMaintenanceTests(unittest.TestCase):
         self.assertIn("Restart=always", unit)
         self.assertIn("WantedBy=multi-user.target", unit)
         self.assertIn('vps_search_sync.sh" --search-only', runner)
+        search_script = (SCRIPTS / "vps_search_sync.sh").read_text(encoding="utf-8")
+        self.assertIn('"version": 2', search_script)
+        self.assertIn('"services": services', search_script)
+        self.assertIn('"host": {', search_script)
+        self.assertIn('"vps-dashboard"', search_script)
+        self.assertIn('"nginx"', search_script)
 
     def test_continuous_greenhouse_installer_delegates_to_generic_supervisor(self) -> None:
         wrapper = (SCRIPTS / "install_vps_continuous_greenhouse.ps1").read_text(encoding="utf-8")

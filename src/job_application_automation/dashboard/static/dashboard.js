@@ -2,9 +2,12 @@ let state = {
   metrics: {},
   submissions: {},
   jobs: [],
+  backlog: [],
   coverage: {},
   generation: [],
   archives: {},
+  operations: {},
+  adminOverview: {},
   rawLog: '',
   parsedLogs: [],
   currentLogFilter: 'all',
@@ -15,11 +18,12 @@ let state = {
 // mobile drawer, and the mobile bottom bar across every page.
 const NAV_PAGES = [
   { slug: 'index', href: 'index.html', icon: '📜', desktopLabel: 'Submissions', drawerLabel: 'Submissions & Failures', bottomLabel: 'Matrix' },
-  { slug: 'search', href: 'search.html', icon: '🌊', desktopLabel: 'Job Search', drawerLabel: 'Job Search & Coverage', bottomLabel: 'Search' },
+  { slug: 'search', href: 'search.html', icon: '🌊', desktopLabel: 'Job Search', drawerLabel: 'Job Search', bottomLabel: 'Search' },
   { slug: 'generation', href: 'generation.html', icon: '🪨', desktopLabel: 'Application Queue', drawerLabel: 'Application Queue', bottomLabel: 'Queue' },
   { slug: 'logs', href: 'logs.html', icon: '🔥', desktopLabel: 'Sync Logs', drawerLabel: 'Real-Time VPS Logs', bottomLabel: 'Logs' },
   { slug: 'inspector', href: 'inspector.html', icon: '📁', desktopLabel: 'Inspector', drawerLabel: 'Raw File Inspector', bottomLabel: 'Files' },
-  { slug: 'system-status', href: 'system-status.html', icon: '🛰️', desktopLabel: 'System Status', drawerLabel: 'VPS Config & Failures', bottomLabel: 'Status' }
+  { slug: 'system-status', href: 'system-status.html', icon: '🛰️', desktopLabel: 'System Status', drawerLabel: 'System Status', bottomLabel: 'Status' },
+  { slug: 'admin', href: 'admin.html', icon: '🔐', desktopLabel: 'Admin Vault', drawerLabel: 'Authenticated Admin Vault', bottomLabel: 'Admin' }
 ];
 
 // Each page keeps its own <nav>/<aside> chrome (hamburger button, drawer
@@ -69,6 +73,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (document.getElementById('jobsTableBody')) {
     fetchJobs();
   }
+  if (document.getElementById('backlogTableBody')) {
+    fetchBacklog();
+  }
   if (document.getElementById('coverageMetricsSummary')) {
     fetchCoverageAndCache();
   }
@@ -80,6 +87,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   if (document.getElementById('inspectorSections')) {
     renderInspectorSections();
+  }
+  if (document.getElementById('workerStatusBody')) {
+    fetchOperations();
+  }
+  if (document.getElementById('adminFilesBody')) {
+    fetchAdminOverview();
   }
 });
 
@@ -136,11 +149,6 @@ function openJobDetail(submissionKey) {
   const item = state.submissions[submissionKey];
   if (!item) return;
 
-  const resumeFile = item.resume_filename ? escapeHtml(item.resume_filename) : '';
-  const resumeLink = resumeFile
-    ? `<a href="/api/download/${encodeURIComponent(item.resume_filename)}" target="_blank" download="${resumeFile}" class="resume-download-link">📄 Download Tailored PDF Resume 📥</a>`
-    : '<span style="color: var(--text-muted);">N/A</span>';
-
   content.innerHTML = `
     <div class="detail-field">
       <span class="detail-label">Company</span>
@@ -163,12 +171,8 @@ function openJobDetail(submissionKey) {
       <span class="detail-value">${formatDate(item.applied_at)}</span>
     </div>
     <div class="detail-field">
-      <span class="detail-label">Candidate Email Used</span>
-      <span class="detail-value" style="color: var(--earth);">${escapeHtml(item.email_used)}</span>
-    </div>
-    <div class="detail-field">
-      <span class="detail-label">Tailored Resume PDF</span>
-      <div style="margin-top: 0.3rem;">${resumeLink}</div>
+      <span class="detail-label">Complete Raw Record and Documents</span>
+      <div style="margin-top: 0.3rem;"><a href="admin.html" class="resume-download-link">🔐 Open Authenticated Admin Vault</a></div>
     </div>
   `;
 
@@ -221,6 +225,24 @@ async function fetchMetrics() {
     if (document.getElementById('kpiArchives')) document.getElementById('kpiArchives').textContent = data.archived_document_sets ?? 0;
     if (document.getElementById('kpiCachedBoards')) document.getElementById('kpiCachedBoards').textContent = data.cached_boards_count ?? 0;
     if (document.getElementById('kpiFailures')) document.getElementById('kpiFailures').textContent = data.failure_count ?? 0;
+    if (document.getElementById('snapshotJobCount')) document.getElementById('snapshotJobCount').textContent = `${data.total_jobs_found ?? 0} current`;
+    if (document.getElementById('backlogJobCount')) document.getElementById('backlogJobCount').textContent = `${data.backlog_job_count ?? 0} tracked`;
+
+    const failureSummary = document.getElementById('failureLogSummary');
+    if (failureSummary) {
+      const workers = Array.isArray(data.workers) ? data.workers : [];
+      const workerRows = workers.map((worker) => {
+        const failed = worker.status_counts?.failed || 0;
+        const manual = worker.status_counts?.manual_review || 0;
+        const confirmed = worker.status_counts?.confirmed || 0;
+        return `<div><strong>${escapeHtml(worker.provider)}</strong>: ${confirmed} confirmed, ${failed} failed, ${manual} manual review</div>`;
+      }).join('');
+      failureSummary.innerHTML = `
+        <div>Continuous non-confirmed outcomes: <strong>${data.continuous_nonconfirmed_count ?? 0}</strong></div>
+        <div>Current bounded-run failures: <strong>${data.current_run_failure_count ?? 0}</strong></div>
+        ${workerRows || '<div>No continuous worker state is available yet.</div>'}
+      `;
+    }
 
     // Render ATS Submissions Breakdown Subtext
     if (data.ats_submissions && document.getElementById('kpiAtsBreakdown')) {
@@ -292,6 +314,45 @@ async function fetchJobs() {
     renderJobsTable();
   } catch (err) {
     console.error('Failed to load search jobs', err);
+  }
+}
+
+async function fetchBacklog() {
+  try {
+    const res = await fetch('/api/section1/backlog');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    state.backlog = await res.json();
+    renderBacklogTable();
+    const badge = document.getElementById('backlogJobCount');
+    if (badge) badge.textContent = `${state.backlog.length} tracked`;
+  } catch (err) {
+    console.error('Failed to load persistent job database', err);
+    const tbody = document.getElementById('backlogTableBody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="10" class="table-empty">Failed to load the persistent job database.</td></tr>';
+  }
+}
+
+async function fetchOperations() {
+  try {
+    const res = await fetch('/api/operations');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    state.operations = await res.json();
+    renderOperations();
+  } catch (err) {
+    console.error('Failed to load VPS operations', err);
+  }
+}
+
+async function fetchAdminOverview() {
+  try {
+    const res = await fetch('/api/admin/overview');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    state.adminOverview = await res.json();
+    renderAdminOverview();
+  } catch (err) {
+    console.error('Failed to load admin inventory', err);
+    const tbody = document.getElementById('adminFilesBody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="table-empty">Admin inventory could not be loaded.</td></tr>';
   }
 }
 
@@ -530,8 +591,7 @@ function renderSubmissionsTable() {
       (item.role || '').toLowerCase().includes(query) ||
       (item.ats || '').toLowerCase().includes(query) ||
       (item.status || '').toLowerCase().includes(query) ||
-      (item.email_used || '').toLowerCase().includes(query) ||
-      (item.resume_filename || '').toLowerCase().includes(query)
+      key.toLowerCase().includes(query)
     );
   });
 
@@ -541,20 +601,16 @@ function renderSubmissionsTable() {
   }
 
   tbody.innerHTML = filtered.map(([key, item]) => {
-    const resumeFile = item.resume_filename ? escapeHtml(item.resume_filename) : '';
-    const resumeCell = resumeFile
-      ? `<a href="/api/download/${encodeURIComponent(item.resume_filename)}" target="_blank" download="${resumeFile}" class="resume-download-link" title="Click to download tailored PDF resume" onclick="event.stopPropagation();">📄 ${resumeFile} 📥</a>`
-      : '<span style="color: var(--text-muted); font-size: 0.75rem;">N/A</span>';
-
+    const encodedKey = encodeURIComponent(key).replace(/'/g, '%27');
     return `
-      <tr onclick="openJobDetail('${escapeHtml(key)}')">
+      <tr onclick="openJobDetail(decodeURIComponent('${encodedKey}'))">
         <td style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted);">${formatDate(item.applied_at)}</td>
         <td style="font-weight: 600;">${escapeHtml(item.company)}</td>
         <td>${escapeHtml(item.role)}</td>
         <td><span class="badge badge-${(item.ats || '').toLowerCase()}">${escapeHtml(item.ats)}</span></td>
-        <td style="font-family: var(--font-mono); font-size: 0.8rem;">${escapeHtml(item.email_used)}</td>
-        <td>${resumeCell}</td>
         <td><span class="badge badge-confirmed">${escapeHtml(item.status)}</span></td>
+        <td><code>${escapeHtml(key)}</code></td>
+        <td><a href="admin.html" class="raw-content-link" onclick="event.stopPropagation();">Admin Vault ↗</a></td>
       </tr>
     `;
   }).join('');
@@ -593,9 +649,216 @@ function renderJobsTable() {
       <td>${escapeHtml(item.location || 'N/A')}</td>
       <td>${escapeHtml(item.workplace_type || 'N/A')}</td>
       <td><span class="badge badge-confirmed">${escapeHtml(item.live_status || 'LIVE')}</span></td>
-      <td><a href="${escapeHtml(item.job_url || item.apply_url || '#')}" target="_blank" style="color: var(--air-cyan); text-decoration: none;">View Listing ↗</a></td>
+      <td><a href="${escapeHtml(safeHttpUrl(item.job_url || item.apply_url))}" target="_blank" rel="noopener" style="color: var(--air-cyan); text-decoration: none;">View Listing ↗</a></td>
     </tr>
   `).join('');
+}
+
+function renderBacklogTable() {
+  const tbody = document.getElementById('backlogTableBody');
+  if (!tbody) return;
+  const searchInput = document.getElementById('backlogSearch');
+  const query = (searchInput ? searchInput.value : '').toLowerCase();
+  const rows = Array.isArray(state.backlog) ? state.backlog : [];
+  const filtered = rows.filter((item) => JSON.stringify(item).toLowerCase().includes(query));
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="10" class="table-empty">No persistent job records match this filter.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = filtered.map((item) => {
+    const listingUrl = safeHttpUrl(item.job_url);
+    const applyUrl = safeHttpUrl(item.apply_url || item.job_url);
+    const providerId = item.platform_job_id || item.board_token || item.unique_id || 'N/A';
+    return `
+      <tr>
+        <td><span class="badge badge-${escapeHtml((item.platform || '').toLowerCase())}">${escapeHtml(item.platform || 'unknown')}</span></td>
+        <td style="font-weight: 600;">${escapeHtml(item.company || 'N/A')}</td>
+        <td>${escapeHtml(item.title || 'N/A')}</td>
+        <td>${escapeHtml(item.location || 'N/A')}</td>
+        <td><span class="badge ${item.live_status === 'live' ? 'badge-confirmed' : 'badge-warn'}">${escapeHtml(item.live_status || 'unknown')}</span></td>
+        <td>${escapeHtml(formatDate(item.first_seen_at))}</td>
+        <td>${escapeHtml(formatDate(item.last_seen_at || item.live_checked_at))}</td>
+        <td><code>${escapeHtml(providerId)}</code></td>
+        <td><a class="raw-content-link" href="${escapeHtml(listingUrl)}" target="_blank" rel="noopener">Listing ↗</a></td>
+        <td><a class="raw-content-link" href="${escapeHtml(applyUrl)}" target="_blank" rel="noopener">Apply ↗</a></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function detailTiles(items) {
+  return items.map(([label, value]) => `
+    <div class="detail-tile">
+      <span class="detail-tile-label">${escapeHtml(label)}</span>
+      <span class="detail-tile-value">${escapeHtml(value === null || value === undefined || value === '' ? 'N/A' : value)}</span>
+    </div>
+  `).join('');
+}
+
+function renderOperations() {
+  const data = state.operations || {};
+  const run = data.run_status || {};
+  const runGrid = document.getElementById('runStatusGrid');
+  if (runGrid) {
+    runGrid.innerHTML = detailTiles([
+      ['State', run.state],
+      ['Stage', run.stage],
+      ['Started', formatDate(run.started_at)],
+      ['Updated', formatDate(run.updated_at)],
+      ['Finished', formatDate(run.finished_at)],
+      ['Exit Code', run.exit_code],
+      ['PID', run.pid],
+      ['Git Commit', run.commit]
+    ]);
+  }
+  const runBadge = document.getElementById('runStateBadge');
+  if (runBadge) {
+    runBadge.textContent = `${run.state || 'unknown'} · ${run.stage || 'unknown'}`;
+    runBadge.className = `badge ${run.state === 'success' || run.state === 'running' ? 'badge-confirmed' : 'badge-warn'}`;
+  }
+
+  const workers = Array.isArray(data.workers) ? data.workers : [];
+  const workerBody = document.getElementById('workerStatusBody');
+  if (workerBody) {
+    workerBody.innerHTML = workers.length ? workers.map((worker) => `
+      <tr>
+        <td><span class="badge badge-${escapeHtml(worker.provider)}">${escapeHtml(worker.provider)}</span></td>
+        <td>${worker.record_count || 0}</td>
+        <td>${worker.status_counts?.confirmed || 0}</td>
+        <td>${worker.status_counts?.failed || 0}</td>
+        <td>${worker.status_counts?.manual_review || 0}</td>
+        <td>${worker.result_file_count || 0}</td>
+        <td>${worker.document_file_count || 0}</td>
+        <td>${escapeHtml(formatDate(worker.latest?.updated_at))}</td>
+        <td>${escapeHtml(worker.latest?.stage || worker.latest?.result_status || 'N/A')}</td>
+      </tr>
+    `).join('') : '<tr><td colspan="9" class="table-empty">No continuous worker state files were found.</td></tr>';
+  }
+
+  const host = data.host || {};
+  const hostGrid = document.getElementById('hostResourceGrid');
+  if (hostGrid) {
+    const memory = host.memory || {};
+    const disk = host.disk || {};
+    hostGrid.innerHTML = detailTiles([
+      ['Hostname', host.hostname],
+      ['CPU Cores', host.cpu_count],
+      ['Load (1/5/15m)', (host.load_average || []).join(' / ')],
+      ['Uptime', formatDuration(host.uptime_seconds)],
+      ['Memory Total', formatBytes(memory.total_bytes)],
+      ['Memory Available', formatBytes(memory.available_bytes)],
+      ['Swap Total', formatBytes(memory.swap_total_bytes)],
+      ['Disk Used', `${formatBytes(disk.used_bytes)} / ${formatBytes(disk.total_bytes)}`],
+      ['Disk Free', formatBytes(disk.free_bytes)]
+    ]);
+  }
+
+  const inventory = data.files || {};
+  const outputGrid = document.getElementById('outputInventoryGrid');
+  if (outputGrid) {
+    outputGrid.innerHTML = detailTiles([
+      ['Files', inventory.file_count || 0],
+      ['Total Size', formatBytes(inventory.size_bytes)],
+      ['Output Files', inventory.by_scope?.output?.file_count || 0],
+      ['JSON', inventory.by_extension?.['.json'] || 0],
+      ['PDF', inventory.by_extension?.['.pdf'] || 0],
+      ['Screenshots', (inventory.by_extension?.['.png'] || 0) + (inventory.by_extension?.['.jpg'] || 0)],
+      ['Other Extensions', Object.keys(inventory.by_extension || {}).length]
+    ]);
+  }
+
+  const services = Array.isArray(data.infrastructure?.services) ? data.infrastructure.services : [];
+  const serviceBody = document.getElementById('serviceStatusBody');
+  if (serviceBody) {
+    serviceBody.innerHTML = services.length ? services.map((service) => `
+      <tr>
+        <td><strong>${escapeHtml(service.name)}</strong><br><small>${escapeHtml(service.description)}</small></td>
+        <td><span class="badge ${service.active_state === 'active' ? 'badge-confirmed' : 'badge-failed'}">${escapeHtml(service.active_state)} / ${escapeHtml(service.sub_state)}</span></td>
+        <td>${escapeHtml(service.unit_file_state)}</td>
+        <td>${service.main_pid || 0}</td>
+        <td>${service.restart_count || 0}</td>
+        <td>${formatBytes(service.memory_bytes)}</td>
+        <td>${service.task_count || 0}</td>
+      </tr>
+    `).join('') : '<tr><td colspan="7" class="table-empty">The next search cycle will publish the detailed service snapshot.</td></tr>';
+  }
+  renderProcessTable();
+}
+
+function renderProcessRows(processes) {
+  return processes.map((process) => `
+    <tr>
+      <td>${process.pid}</td>
+      <td><strong>${escapeHtml(process.name)}</strong></td>
+      <td>${escapeHtml(process.state)}</td>
+      <td>${process.parent_pid}</td>
+      <td>${process.threads}</td>
+      <td>${formatBytes((process.memory_kb || 0) * 1024)}</td>
+      <td>${escapeHtml(process.uid)}</td>
+    </tr>
+  `).join('');
+}
+
+function renderProcessTable() {
+  const body = document.getElementById('processStatusBody');
+  if (!body) return;
+  const all = Array.isArray(state.operations?.processes?.processes) ? state.operations.processes.processes : [];
+  const query = (document.getElementById('processSearch')?.value || '').toLowerCase();
+  const filtered = all.filter((process) => JSON.stringify(process).toLowerCase().includes(query));
+  body.innerHTML = filtered.length ? renderProcessRows(filtered) : '<tr><td colspan="7" class="table-empty">No matching processes.</td></tr>';
+  const badge = document.getElementById('processCountBadge');
+  if (badge) badge.textContent = `${filtered.length} / ${all.length} processes`;
+}
+
+function renderAdminOverview() {
+  const data = state.adminOverview || {};
+  const files = data.files || {};
+  const scopes = files.by_scope || {};
+  setText('adminOutputFiles', scopes.output?.file_count || 0);
+  setText('adminPrivateFiles', scopes.private_archive?.file_count || 0);
+  setText('adminRepositoryFiles', scopes.repository?.file_count || 0);
+  setText('adminTotalBytes', formatBytes(files.size_bytes));
+  setText('adminProcessCount', data.processes?.process_count || 0);
+  setText('adminFileCountBadge', `${files.file_count || 0} files`);
+  renderAdminFiles();
+
+  const processBody = document.getElementById('adminProcessesBody');
+  const processes = Array.isArray(data.processes?.processes) ? data.processes.processes : [];
+  if (processBody) {
+    processBody.innerHTML = processes.length ? renderProcessRows(processes) : '<tr><td colspan="7" class="table-empty">No process data available.</td></tr>';
+  }
+
+  const logsGrid = document.getElementById('adminLogsGrid');
+  if (logsGrid) {
+    logsGrid.innerHTML = Object.entries(data.logs || {}).map(([name, log]) => `
+      <article class="admin-log-card">
+        <h3>${escapeHtml(name)} · ${escapeHtml(log.path)}</h3>
+        <pre>${escapeHtml(log.content)}</pre>
+      </article>
+    `).join('') || '<div class="table-empty">No readable VPS log files were found.</div>';
+  }
+}
+
+function renderAdminFiles() {
+  const body = document.getElementById('adminFilesBody');
+  if (!body) return;
+  const files = Array.isArray(state.adminOverview?.files?.files) ? state.adminOverview.files.files : [];
+  const query = (document.getElementById('adminFileSearch')?.value || '').toLowerCase();
+  const filtered = files.filter((file) => JSON.stringify(file).toLowerCase().includes(query));
+  body.innerHTML = filtered.length ? filtered.map((file) => {
+    const url = `/api/admin/file?scope=${encodeURIComponent(file.scope)}&path=${encodeURIComponent(file.path)}`;
+    return `
+      <tr>
+        <td><span class="badge ${file.scope === 'private_archive' ? 'badge-warn' : 'badge-info'}">${escapeHtml(file.scope)}</span></td>
+        <td><code>${escapeHtml(file.path)}</code></td>
+        <td>${escapeHtml(file.content_type)}</td>
+        <td>${formatBytes(file.size_bytes)}</td>
+        <td>${escapeHtml(formatDate(file.modified_at))}</td>
+        <td><a class="raw-content-link" href="${escapeHtml(url)}" target="_blank" rel="noopener">Open raw file ↗</a></td>
+      </tr>
+    `;
+  }).join('') : '<tr><td colspan="6" class="table-empty">No matching files.</td></tr>';
+  setText('adminFileCountBadge', `${filtered.length} / ${files.length} files`);
 }
 
 function renderSection2View() {
@@ -631,8 +894,8 @@ function renderSection2View() {
             <div class="archive-title">📦 Archive ID: ${escapeHtml(id)}</div>
             <div style="font-size: 0.82rem; color: var(--text-muted); font-family: var(--font-mono);">
               <div>Company: <strong style="color: var(--text);">${escapeHtml(item.identity?.company || 'N/A')}</strong> | Role: <strong>${escapeHtml(item.identity?.job_title || 'N/A')}</strong></div>
-              <div>Candidate Email: <span style="color: var(--air);">${escapeHtml(item.identity?.email_used || 'N/A')}</span></div>
-              <div style="margin-top: 0.3rem;">Fingerprint: <code style="color: var(--lotus);">${escapeHtml(item.record_fingerprint || 'N/A')}</code></div>
+              <div>Updated: <span style="color: var(--air);">${escapeHtml(formatDate(item.updated_at))}</span></div>
+              <div style="margin-top: 0.3rem;"><a href="admin.html" class="raw-content-link">Open complete archived record in Admin Vault ↗</a></div>
             </div>
           </div>
         `;
@@ -647,14 +910,12 @@ function renderSection2View() {
 // Static catalog of report files shown on the Inspector page, each rendered
 // as its own section (rather than a single dropdown-driven viewer).
 const RAW_FILES = [
-  { key: 'submission_log', filename: 'submission_log.json', label: 'submission_log.json (Section 3)' },
-  { key: 'vps_application_failures', filename: 'vps_application_failures.json', label: 'vps_application_failures.json (Section 3)' },
-  { key: 'vps_application_state', filename: 'vps_application_state.json', label: 'vps_application_state.json (Section 3)' },
   { key: 'ai_jobs', filename: 'ai_jobs.csv', label: 'ai_jobs.csv (Section 1)' },
   { key: 'job_search_coverage', filename: 'job_search_coverage.json', label: 'job_search_coverage.json (Section 1)' },
   { key: 'ats_boards_cache', filename: 'ats_boards_cache.json', label: 'ats_boards_cache.json (Section 1)' },
-  { key: 'vps_generation_jobs', filename: 'vps_generation_jobs.json', label: 'vps_generation_jobs.json (Section 2)' },
-  { key: 'vps_document_archive_state', filename: 'vps_document_archive_state.json', label: 'vps_document_archive_state.json (Section 2)' }
+  { key: 'job_backlog', filename: 'job_backlog.json', label: 'job_backlog.json (Persistent Job Database)' },
+  { key: 'vps_run_status', filename: 'vps_run_status.json', label: 'vps_run_status.json (Current Search Run)' },
+  { key: 'vps_infra_status', filename: 'vps_infra_status.json', label: 'vps_infra_status.json (VPS Infrastructure)' }
 ];
 
 function renderInspectorSections() {
@@ -730,7 +991,7 @@ async function refreshDashboardData() {
     btn.innerHTML = '<span>⏳ Refreshing...</span>';
   }
 
-  const loaders = [fetchMetrics, fetchSubmissions, fetchJobs, fetchCoverageAndCache, fetchSection2, fetchVpsLog];
+  const loaders = [fetchMetrics, fetchSubmissions, fetchJobs, fetchBacklog, fetchCoverageAndCache, fetchSection2, fetchVpsLog, fetchOperations, fetchAdminOverview];
   try {
     await Promise.allSettled(
       loaders.map((load) => (typeof load === 'function' ? load() : undefined)),
@@ -753,6 +1014,38 @@ function formatDate(isoString) {
     return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   } catch (e) {
     return isoString;
+  }
+}
+
+function formatBytes(value) {
+  const bytes = Number(value || 0);
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / (1024 ** index)).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+}
+
+function formatDuration(value) {
+  let seconds = Number(value || 0);
+  if (!Number.isFinite(seconds) || seconds <= 0) return 'N/A';
+  const days = Math.floor(seconds / 86400);
+  seconds %= 86400;
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return `${days}d ${hours}h ${minutes}m`;
+}
+
+function setText(id, value) {
+  const element = document.getElementById(id);
+  if (element) element.textContent = value;
+}
+
+function safeHttpUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : '#';
+  } catch (err) {
+    return '#';
   }
 }
 

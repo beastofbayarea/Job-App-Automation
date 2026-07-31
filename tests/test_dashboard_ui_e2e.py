@@ -26,13 +26,7 @@ def test_dashboard_ui_index_page() -> None:
         page.goto(index_html.as_uri())
 
         title = page.title()
-        assert (
-            "VPS" in title
-            or "Dashboard" in title
-            or "Monitor" in title
-            or "Submissions" in title
-            or True
-        )
+        assert "Sky Bison" in title
         assert page.locator("body").is_visible()
 
         browser.close()
@@ -40,20 +34,23 @@ def test_dashboard_ui_index_page() -> None:
 
 @pytest.mark.enable_socket
 def test_dashboard_ui_pages_exist_and_render() -> None:
-    page_files = [
-        "search.html",
-        "generation.html",
-        "logs.html",
-        "inspector.html",
-        "cent-capital.html",
-    ]
+    page_files = {
+        "search.html": "Sky Bison",
+        "generation.html": "Sky Bison",
+        "logs.html": "Sky Bison",
+        "inspector.html": "Sky Bison",
+        "cent-capital.html": "Cent Capital",
+        "system-status.html": "Sky Bison",
+        "admin.html": "Sky Bison",
+    }
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
-        for filename in page_files:
+        for filename, expected_title in page_files.items():
             file_path = DASHBOARD_STATIC_DIR / filename
-            if file_path.exists():
-                page.goto(file_path.as_uri())
-                assert page.locator("body").is_visible()
+            assert file_path.exists()
+            page.goto(file_path.as_uri())
+            assert page.locator("body").is_visible()
+            assert expected_title in page.title()
         browser.close()

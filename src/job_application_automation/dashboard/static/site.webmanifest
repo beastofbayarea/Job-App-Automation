@@ -1,11 +1,11 @@
 {
-  "name": "SkyBison Cloud Engine",
-  "short_name": "SkyBison Cloud",
+  "name": "Sky Bison Cloud Engine",
+  "short_name": "Sky Bison Cloud",
   "description": "Autonomous ATS job application submission, search coverage, and AI resume tailoring engine.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#060911",
-  "theme_color": "#38bdf8",
+  "background_color": "#0a0603",
+  "theme_color": "#ff7a29",
   "icons": [
     {
       "src": "sky_bison_logo.jpg",
