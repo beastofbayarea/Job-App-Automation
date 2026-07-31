@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from job_application_automation.core.artifacts import read_json, write_json
@@ -12,6 +12,9 @@ from job_application_automation.search.backlog import (
     reconcile_backlog,
 )
 from job_application_automation.search.models import Job
+
+
+UTC = timezone.utc
 
 
 def test_concurrent_atomic_write_json_stress(tmp_path: Path) -> None:

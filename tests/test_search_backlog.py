@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -11,6 +11,7 @@ from job_application_automation.search import backlog
 from job_application_automation.search.models import Job
 
 
+UTC = timezone.utc
 NOW = datetime(2026, 7, 31, 12, 0, tzinfo=UTC)
 
 

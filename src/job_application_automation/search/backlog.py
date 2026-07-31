@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import csv
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from collections.abc import Iterable, Mapping, Sequence
 
@@ -13,6 +13,7 @@ from ..core.identity import canonical_job_url
 from .models import Job
 
 
+UTC = timezone.utc
 BACKLOG_VERSION = 1
 CONFIRMED_STATUS = "SUBMITTED & CONFIRMED"
 
