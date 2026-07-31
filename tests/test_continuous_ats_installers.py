@@ -49,6 +49,10 @@ def test_parallel_status_probe_discovers_all_services_and_redacts_email() -> Non
     assert "[REDACTED]" in script
     assert "free -h" in script
     assert "Invoke-ExternalCommandWithTimeout" in script
+    assert '"possible_spam_circuit_open"' in script
+    assert "_POSSIBLE_SPAM_CIRCUIT_OPEN" in script
+    assert '"application_rate_limit_open"' in script
+    assert "_APPLICATION_RATE_LIMIT_OPEN" in script
 
 
 def test_targeted_greenhouse_retry_requires_safe_pre_submit_evidence() -> None:

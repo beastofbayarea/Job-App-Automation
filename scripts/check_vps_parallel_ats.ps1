@@ -331,6 +331,12 @@ for provider in ("ashby", "greenhouse", "lever"):
         "captcha_circuit_open": len(
             re.findall(r"_CAPTCHA_CIRCUIT_OPEN", journal)
         ),
+        "possible_spam_circuit_open": len(
+            re.findall(r"_POSSIBLE_SPAM_CIRCUIT_OPEN", journal)
+        ),
+        "application_rate_limit_open": len(
+            re.findall(r"_APPLICATION_RATE_LIMIT_OPEN", journal)
+        ),
         "traceback": len(re.findall(r"Traceback", journal)),
         "exception": len(re.findall(r"_CYCLE_EXCEPTION", journal)),
         "oom_or_killed": len(
