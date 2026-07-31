@@ -92,6 +92,7 @@ filtered=`$(printf '%s\n' "`$current" | grep -v '# $Marker' || true)
 bash $Repo/scripts/install_vps_logrotate.sh
 crontab -l | grep '# $Marker'
 "@
+$RemoteCommand = ConvertTo-LfLineEndings $RemoteCommand
 
 $PasswordFile = Join-Path ([IO.Path]::GetTempPath()) "job-app-install-$([guid]::NewGuid().ToString('N')).txt"
 try {

@@ -123,6 +123,7 @@ systemctl is-enabled "$ServiceName"
 systemctl is-active "$ServiceName"
 systemctl --no-pager --full status "$ServiceName" | sed -n '1,18p'
 "@
+$RemoteCommand = ConvertTo-LfLineEndings $RemoteCommand
 
 try {
     [IO.File]::WriteAllText(

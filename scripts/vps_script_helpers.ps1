@@ -14,6 +14,15 @@ function ConvertTo-PosixShellLiteral {
     return $SingleQuote + $Value.Replace($SingleQuote, $EmbeddedSingleQuote) + $SingleQuote
 }
 
+function ConvertTo-LfLineEndings {
+    param(
+        [AllowEmptyString()]
+        [string]$Value
+    )
+
+    return $Value.Replace("`r`n", "`n").Replace("`r", "`n")
+}
+
 function Invoke-ExternalCommandWithTimeout {
     param(
         [Parameter(Mandatory = $true)]
@@ -37,7 +46,10 @@ exit $LASTEXITCODE
 '@
     $Payload = @{
         file_path = $FilePath
-        arguments = @($ArgumentList | ForEach-Object { [string]$_ })
+        arguments = @(
+            $ArgumentList |
+                ForEach-Object { ConvertTo-LfLineEndings ([string]$_) }
+        )
     } | ConvertTo-Json -Depth 4
 
     try {

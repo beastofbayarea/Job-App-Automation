@@ -255,6 +255,32 @@ Write-Output "mock:$Value"
             self.assertEqual(payload["ExitCode"], 124)
             self.assertLess(elapsed, 4)
 
+    def test_vps_command_transport_normalizes_windows_line_endings(self) -> None:
+        expected = "first\nsecond\nthird\n"
+        encoded_value = base64.b64encode(b"first\r\nsecond\rthird\n").decode()
+        command = (
+            f"$value=[Text.Encoding]::UTF8.GetString("
+            f"[Convert]::FromBase64String('{encoded_value}'));"
+            f". '{SCRIPTS / 'vps_script_helpers.ps1'}';"
+            "$normalized=ConvertTo-LfLineEndings $value;"
+            "[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($normalized))"
+        )
+
+        result = run([PWSH, "-NoProfile", "-Command", command], cwd=ROOT, check=True)
+
+        self.assertEqual(base64.b64decode(result.stdout.strip()).decode(), expected)
+
+    def test_direct_plink_installers_normalize_remote_shell_scripts(self) -> None:
+        for name in (
+            "install_vps_continuous_ats.ps1",
+            "install_vps_daily_automation.ps1",
+        ):
+            script = (SCRIPTS / name).read_text(encoding="utf-8")
+            self.assertIn(
+                "$RemoteCommand = ConvertTo-LfLineEndings $RemoteCommand",
+                script,
+            )
+
     def test_shell_literal_round_trips_as_one_argument_without_execution(self) -> None:
         dangerous_value = "/tmp/Job App's;$(touch should-not-exist);`echo unsafe`"
         encoded_value = base64.b64encode(dangerous_value.encode()).decode()
