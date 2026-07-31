@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = ROOT / "scripts"
 PWSH = shutil.which("pwsh")
 GIT = shutil.which("git")
@@ -247,21 +247,23 @@ Write-Output "mock:$Value"
             mock.write_text("Start-Sleep -Seconds 5", encoding="utf-8")
             timeout_command = (
                 f". '{helper}';"
+                "$stopwatch=[Diagnostics.Stopwatch]::StartNew();"
                 f"$result=Invoke-ExternalCommandWithTimeout -FilePath '{mock}' "
                 "-ArgumentList @() -TimeoutSeconds 1;"
+                "$stopwatch.Stop();"
+                "$result | Add-Member -NotePropertyName ElapsedMilliseconds "
+                "-NotePropertyValue $stopwatch.ElapsedMilliseconds;"
                 "$result | ConvertTo-Json -Depth 5 -Compress"
             )
-            started = time.monotonic()
             timed_out = run(
                 [PWSH, "-NoProfile", "-Command", timeout_command],
                 cwd=directory,
                 check=True,
             )
-            elapsed = time.monotonic() - started
             payload = json.loads(timed_out.stdout)
             self.assertTrue(payload["TimedOut"])
             self.assertEqual(payload["ExitCode"], 124)
-            self.assertLess(elapsed, 4)
+            self.assertLess(payload["ElapsedMilliseconds"], 4_000)
 
     def test_vps_command_transport_normalizes_windows_line_endings(self) -> None:
         expected = "first\nsecond\nthird\n"

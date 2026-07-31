@@ -7,7 +7,7 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 from job_application_automation.core import engine_shared  # noqa: E402

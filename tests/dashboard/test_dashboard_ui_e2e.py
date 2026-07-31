@@ -7,7 +7,7 @@ from playwright.sync_api import sync_playwright
 pytestmark = pytest.mark.allow_hosts(["127.0.0.1", "localhost", "::1"])
 
 DASHBOARD_STATIC_DIR = (
-    Path(__file__).resolve().parents[1]
+    Path(__file__).resolve().parents[2]
     / "src"
     / "job_application_automation"
     / "dashboard"

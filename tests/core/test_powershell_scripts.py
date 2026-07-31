@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 
-SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "scripts"
+SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
 
 
 def test_powershell_scripts_exist_and_utf8() -> None:

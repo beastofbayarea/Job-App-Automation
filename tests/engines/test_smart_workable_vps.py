@@ -8,7 +8,7 @@ from job_application_automation.core.engine_shared import configured_answer
 from job_application_automation.engines import _browser_form as browser_form
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = ROOT / "scripts"
 
 
