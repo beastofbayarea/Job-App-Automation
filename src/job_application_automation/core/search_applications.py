@@ -7,7 +7,7 @@ import hashlib
 import json
 import subprocess
 import sys
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from collections.abc import Sequence
@@ -19,6 +19,7 @@ from .identity import canonical_job_url
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 
 
+UTC = timezone.utc
 SUPPORTED_PLATFORMS = frozenset(ATS_HOST_MARKERS)
 DEFAULT_MAX_ATTEMPTS_PER_ATS = int(RUNTIME_CONFIG.application["vps_max_attempts_per_ats"])
 DEFAULT_RESULTS_DIR = resolve_runtime_path(

@@ -15,7 +15,7 @@ import sys
 import tempfile
 import time
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from collections.abc import Callable, Mapping, Sequence
@@ -27,6 +27,7 @@ from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from ..mail.pool import load_email_pool
 
 
+UTC = timezone.utc
 SHARED_INPUT = resolve_runtime_path("output/vps_generation_jobs.json")
 # Retained for import compatibility; supervised workers use provider-specific
 # input files so parallel refreshes cannot overwrite each other.

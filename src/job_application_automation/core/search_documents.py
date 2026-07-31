@@ -8,7 +8,7 @@ import os
 import subprocess
 import sys
 import tempfile
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from collections.abc import Sequence
@@ -17,6 +17,7 @@ from .artifacts import atomic_write_text
 from .runtime_config import RUNTIME_CONFIG
 
 
+UTC = timezone.utc
 DEFAULT_MAX_JOBS = int(RUNTIME_CONFIG.application["vps_max_document_jobs"])
 DEFAULT_RETRY_JOBS = int(RUNTIME_CONFIG.application["vps_document_retry_jobs"])
 

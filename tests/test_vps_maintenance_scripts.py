@@ -214,7 +214,7 @@ class PowerShellMaintenanceTests(unittest.TestCase):
                 """
 param([string]$Value)
 Write-Output "mock:$Value"
-& $env:ComSpec /c exit 7
+    exit 7
 """.strip(),
                 encoding="utf-8",
             )
@@ -762,6 +762,7 @@ printf 'title\\n' > output/ai_jobs.csv
             )
             fake_python.chmod(0o755)
             git(repository, "init")
+            git(repository, "commit", "--allow-empty", "-m", "initialize test repository")
             environment = os.environ.copy()
             environment.pop("DISPLAY", None)
             environment["PATH"] = str(fake_bin) + os.pathsep + environment["PATH"]
@@ -897,6 +898,7 @@ exit 91
             )
             fake_python.chmod(0o755)
             git(repository, "init")
+            git(repository, "commit", "--allow-empty", "-m", "initialize test repository")
             environment = os.environ.copy()
             environment["PATH"] = str(fake_bin) + os.pathsep + environment["PATH"]
             # Not testing the Xvfb wrapper here; keep it out of the way so this
@@ -950,6 +952,7 @@ printf 'title\\n' > output/ai_jobs.csv
             )
             fake_python.chmod(0o755)
             git(repository, "init")
+            git(repository, "commit", "--allow-empty", "-m", "initialize test repository")
             environment = os.environ.copy()
             environment["PATH"] = str(fake_bin) + os.pathsep + environment["PATH"]
             # Not testing the Xvfb wrapper here; keep it out of the way so this

@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import json
 import tempfile
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from job_application_automation.core import continuous_ats as worker
+
+
+UTC = timezone.utc
 
 
 def _job(

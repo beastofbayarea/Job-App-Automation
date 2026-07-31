@@ -122,8 +122,10 @@ write_run_status() {
 import json
 import os
 import sys
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
+
+UTC = timezone.utc
 
 (
     status_path,
@@ -203,8 +205,10 @@ write_infra_status() {
 import json
 import os
 import sys
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
+
+UTC = timezone.utc
 
 status_path, uptime_text, *active_services = sys.argv[1:]
 path = Path(status_path)
