@@ -68,6 +68,13 @@ The preferred reproducible contributor setup uses the committed uv lockfile:
 uv sync --locked --dev
 ```
 
+Structured Pydantic-based resume decoding is an optional package capability for
+non-development installations:
+
+```powershell
+python -m pip install ".[structured]"
+```
+
 ## Configure local data and credentials
 
 Tracked examples are safe templates. Copy and personalize them; the resulting files, credentials, tokens, candidate source text, and generated output are ignored by Git.

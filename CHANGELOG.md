@@ -6,6 +6,8 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Added
 
+- An explicit `structured` package extra for supported Pydantic 2 resume-schema
+  decoding, installed and exercised by the locked CI environment.
 - Reproducible uv dependency locking, automated uv and GitHub Actions updates,
   and CI auditing of the synchronized dependency environment.
 - A single persistent `output/job_backlog.json` for active, unsubmitted jobs,

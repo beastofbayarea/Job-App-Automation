@@ -982,6 +982,11 @@ dependencies = [
     { name = "websockets" },
 ]
 
+[package.optional-dependencies]
+structured = [
+    { name = "pydantic" },
+]
+
 [package.dev-dependencies]
 dev = [
     { name = "mypy" },
@@ -1001,12 +1006,14 @@ requires-dist = [
     { name = "google-genai", specifier = ">=0.1.0" },
     { name = "openpyxl", specifier = ">=3.1.0" },
     { name = "playwright", specifier = ">=1.40.0" },
+    { name = "pydantic", marker = "extra == 'structured'", specifier = ">=2.7,<3.0" },
     { name = "pymupdf", specifier = ">=1.23.0" },
     { name = "pypdf", specifier = ">=4.0.0" },
     { name = "reportlab", specifier = ">=4.0.0" },
     { name = "requests", specifier = ">=2.31.0" },
     { name = "websockets", specifier = ">=14.0" },
 ]
+provides-extras = ["structured"]
 
 [package.metadata.requires-dev]
 dev = [
