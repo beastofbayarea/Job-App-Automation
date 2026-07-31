@@ -282,6 +282,19 @@ def _strictly_confirmed(result: Mapping[str, Any]) -> bool:
         return False
 
 
+def _requires_manual_review(
+    result: Mapping[str, Any],
+    outcome: CommandOutcome,
+) -> bool:
+    """Quarantine every possibly submitted or explicitly challenged attempt."""
+    return (
+        bool(result.get("submitted"))
+        or result.get("captcha_present") is True
+        or outcome.timed_out
+        or str(result.get("status", "")) in AMBIGUOUS_SUBMISSION_STATUSES
+    )
+
+
 def _diagnostics(outcome: CommandOutcome) -> dict[str, Any]:
     return {
         "exit_code": outcome.return_code,
@@ -556,12 +569,10 @@ def process_one(
         application_outcome.return_code == 0 and _strictly_confirmed(result) and ledger_confirmed
     )
     result_status = str(result.get("status", "NO_RESULT"))
-    possibly_submitted = (
-        bool(result.get("submitted"))
-        or application_outcome.timed_out
-        or result_status in AMBIGUOUS_SUBMISSION_STATUSES
+    manual_review_required = _requires_manual_review(result, application_outcome)
+    status = (
+        "confirmed" if confirmed else ("manual_review" if manual_review_required else "failed")
     )
-    status = "confirmed" if confirmed else ("manual_review" if possibly_submitted else "failed")
     record.update(
         {
             "status": status,

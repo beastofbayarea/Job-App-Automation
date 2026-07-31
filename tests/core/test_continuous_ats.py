@@ -271,6 +271,20 @@ def test_unconfirmed_submit_attempt_is_quarantined_and_never_retried() -> None:
         assert not created_screenshot_dirs[0].exists()
 
 
+def test_pre_submit_captcha_is_quarantined_for_manual_review() -> None:
+    result = {
+        "status": "CAPTCHA_REQUIRED",
+        "submitted": False,
+        "confirmed": False,
+        "captcha_present": True,
+    }
+
+    assert worker._requires_manual_review(
+        result,
+        worker.CommandOutcome(1, "", "challenge detected"),
+    )
+
+
 def test_documents_ready_resume_reuses_saved_email_without_sampling_again() -> None:
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
