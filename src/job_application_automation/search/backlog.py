@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from collections.abc import Iterable, Mapping, Sequence
+from urllib.parse import unquote, urlparse
 
 from ..core.artifacts import interprocess_file_lock, read_json, write_json
 from ..core.identity import canonical_job_url
@@ -68,6 +69,24 @@ def _scalar(value: object, default: int | str = "") -> int | str:
     return default
 
 
+def _ashby_url_proves_provider_identity(job: Job) -> bool:
+    """Recognize an exact Ashby record even when legacy JSON omitted trust flags."""
+    if job.platform != "ashby" or not job.board_token or not job.platform_job_id:
+        return False
+    for value in (job.job_url, job.apply_url):
+        parsed = urlparse(value)
+        if (parsed.hostname or "").casefold() != "jobs.ashbyhq.com":
+            continue
+        segments = [unquote(segment) for segment in parsed.path.split("/") if segment]
+        if (
+            len(segments) >= 2
+            and segments[0].casefold() == job.board_token.casefold()
+            and segments[1].casefold() == job.platform_job_id.casefold()
+        ):
+            return True
+    return False
+
+
 def job_from_mapping(value: Mapping[str, object]) -> Job:
     """Rebuild the public, liveness-capable portion of a serialized job."""
     required = {
@@ -77,7 +96,7 @@ def job_from_mapping(value: Mapping[str, object]) -> Job:
     missing = [field_name for field_name, field_value in required.items() if not field_value]
     if missing:
         raise ValueError(f"backlog job is missing required fields: {', '.join(missing)}")
-    return Job(
+    job = Job(
         platform=required["platform"].casefold(),
         company=required["company"],
         title=required["title"],
@@ -108,6 +127,13 @@ def job_from_mapping(value: Mapping[str, object]) -> Job:
         live_check_reason=_text(value.get("live_check_reason")),
         unique_id=_text(value.get("unique_id")),
     )
+    if not job.provider_id_trusted and _ashby_url_proves_provider_identity(job):
+        # Older CSV/JSON-LD artifacts did not serialize provider trust. The
+        # exact board-token/job-id URL is itself record-specific evidence and
+        # lets the migrated row merge with the authoritative Ashby API row.
+        job.provider_id_trusted = True
+        job.url_is_record_specific = True
+    return job
 
 
 def _entry_from_mapping(value: Mapping[str, object], *, fallback_seen_at: str) -> BacklogEntry:
