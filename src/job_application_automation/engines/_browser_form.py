@@ -793,6 +793,24 @@ def _answer_for_binary_options(desired: object, option_labels: Sequence[str]) ->
     return yes
 
 
+def _repeatable_language_answer(
+    label: str,
+    profile: Mapping[str, Any],
+    rules: Mapping[str, Any],
+) -> str:
+    """Map SmartRecruiters repeatable language rows to configured fluency evidence."""
+    match = re.search(r"\blanguage input for entry (\d+)\b", label, re.I)
+    if match:
+        languages = profile.get("languages")
+        if isinstance(languages, Sequence) and not isinstance(languages, (str, bytes)):
+            index = int(match.group(1)) - 1
+            if 0 <= index < len(languages):
+                return str(languages[index])
+    if re.search(r"\blevel for .*language entry \d+\b", label, re.I):
+        return str(rules.get("language_proficiency") or rules.get("language_fluency") or "")
+    return ""
+
+
 def _fill_custom_questions(
     page: Page,
     config: Mapping[str, Any],
@@ -894,6 +912,7 @@ def _fill_custom_questions(
                 eeo,
                 matchers,  # type: ignore[arg-type]
             )
+            desired = _repeatable_language_answer(label, profile, rules) or desired
             if re.search(r"\byears?\b.*\bexperience\b", label, re.I):
                 desired = str(rules.get("management_experience_years") or desired or "")
             if (
@@ -1449,6 +1468,21 @@ def run_browser_form_engine(
                 "prefill",
             )
 
+            if captcha:
+                return _result(
+                    spec=spec,
+                    status="CAPTCHA_REQUIRED",
+                    live_submit=live_submit,
+                    submitted=False,
+                    confirmed=False,
+                    filled_fields=filled,
+                    consent_fields=consent,
+                    missing_critical=missing_critical,
+                    missing_required=missing_required,
+                    captcha_present=True,
+                    screenshot=screenshot,
+                    custom_questions=custom_questions,
+                )
             if missing_critical or missing_required:
                 return _result(
                     spec=spec,
@@ -1476,21 +1510,6 @@ def run_browser_form_engine(
                     missing_critical=[],
                     missing_required=[],
                     captcha_present=captcha,
-                    screenshot=screenshot,
-                    custom_questions=custom_questions,
-                )
-            if captcha:
-                return _result(
-                    spec=spec,
-                    status="CAPTCHA_REQUIRED",
-                    live_submit=True,
-                    submitted=False,
-                    confirmed=False,
-                    filled_fields=filled,
-                    consent_fields=consent,
-                    missing_critical=[],
-                    missing_required=[],
-                    captcha_present=True,
                     screenshot=screenshot,
                     custom_questions=custom_questions,
                 )

@@ -354,6 +354,32 @@ def test_does_your_language_binary_question_uses_professional_policy() -> None:
     )
 
 
+def test_repeatable_language_fields_use_profile_language_and_proficiency() -> None:
+    profile = {"languages": ["English", "French"]}
+    rules = {"language_proficiency": "C1-C2 or native"}
+
+    assert (
+        browser_form._repeatable_language_answer(
+            "Language input for entry 1",
+            profile,
+            rules,
+        )
+        == "English"
+    )
+    assert (
+        browser_form._repeatable_language_answer(
+            "Level for , language entry 1",
+            profile,
+            rules,
+        )
+        == "C1-C2 or native"
+    )
+
+
+def test_technical_skills_prompt_is_answered_from_candidate_evidence() -> None:
+    assert browser_form.is_essay_question("What are your main technical skills?")
+
+
 @pytest.mark.parametrize(
     ("configured", "expected"),
     (
@@ -411,6 +437,22 @@ def test_fill_only_success_requires_critical_and_required_fields(tmp_path: Path)
     assert result["status"] == "PREFILLED_ONLY"
     assert result["filled_fields"]["email"] is True
     assert session.browser.close.called
+
+
+def test_captcha_gate_takes_precedence_over_unrendered_required_fields(
+    tmp_path: Path,
+) -> None:
+    result, _, _ = _run_with_browser_mocks(
+        tmp_path,
+        live_submit=False,
+        missing_required=["Candidate name"],
+        captcha_values=[True],
+    )
+
+    assert result["status"] == "CAPTCHA_REQUIRED"
+    assert result["captcha_present"] is True
+    assert result["missing_required"] == ["Candidate name"]
+    assert result["submitted"] is False
 
 
 def test_missing_required_fields_block_live_submission(tmp_path: Path) -> None:

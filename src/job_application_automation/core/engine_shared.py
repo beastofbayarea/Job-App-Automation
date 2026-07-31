@@ -771,7 +771,8 @@ def is_essay_question(label: str) -> bool:
     return bool(
         re.search(
             r"\bwhy\b|describe|explain|tell us|experience|achievement|"
-            r"interest|motivat|excit|product|project|challenge|accomplish",
+            r"interest|motivat|excit|product|project|challenge|accomplish|"
+            r"technical skills?",
             label,
             re.I,
         )
