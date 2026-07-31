@@ -1042,7 +1042,7 @@ def main(
                     application_timeout_seconds=args.application_timeout_seconds,
                     backlog_path=args.backlog,
                 )
-                if cycle_status == "no_work":
+                if cycle_status == "no_work" and not args.once:
                     shared_count = _seed_platform_input(
                         args.input,
                         ats_platform,

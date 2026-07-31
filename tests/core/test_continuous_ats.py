@@ -605,6 +605,43 @@ def test_possible_spam_circuit_prevents_application_work(
     assert "ASHBY_POSSIBLE_SPAM_CIRCUIT_OPEN" in capsys.readouterr().out
 
 
+def test_once_does_not_replace_a_custom_input_after_no_work(tmp_path: Path) -> None:
+    input_path = tmp_path / "jobs.json"
+    profile = tmp_path / "profile.json"
+    pool = tmp_path / "pool.json"
+    launcher = tmp_path / "launcher.py"
+    input_path.write_text("[]", encoding="utf-8")
+    profile.write_text("{}", encoding="utf-8")
+    pool.write_text(json.dumps(["candidate@example.test"]), encoding="utf-8")
+    launcher.write_text("", encoding="utf-8")
+
+    with (
+        patch.object(worker, "_seed_platform_input", return_value=0) as seed_input,
+        patch.object(worker, "process_one", return_value="no_work"),
+        patch.object(worker, "_refresh_jobs") as refresh_jobs,
+    ):
+        exit_code = worker.main(
+            [
+                "--input",
+                str(input_path),
+                "--profile",
+                str(profile),
+                "--email-pool",
+                str(pool),
+                "--launcher",
+                str(launcher),
+                "--state",
+                str(tmp_path / "state.json"),
+                "--once",
+            ],
+            ats_platform="ashby",
+        )
+
+    assert exit_code == 1
+    seed_input.assert_called_once_with(input_path, "ashby")
+    refresh_jobs.assert_not_called()
+
+
 def test_rolling_application_limit_caps_provider_volume() -> None:
     now = datetime(2026, 7, 31, 12, 0, tzinfo=UTC)
     state = {
