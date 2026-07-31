@@ -216,7 +216,7 @@ def poll_for_verification_code(
     compiled = re.compile(pattern, re.I)
     excluded_message_ids = excluded_message_ids or set()
     expected_recipient = parseaddr(expected_recipient)[1].lower()
-    while monotonic() < deadline:
+    while True:
         records = fetcher(service, query, max_results=10, include_body=True)
         for record in records:
             if record.message_id in excluded_message_ids:
@@ -236,5 +236,7 @@ def poll_for_verification_code(
                     sender=record.sender,
                     code=match.group(1) if match.groups() else match.group(0),
                 )
-        sleep(poll_interval_seconds)
-    return None
+        remaining_seconds = deadline - monotonic()
+        if remaining_seconds <= 0:
+            return None
+        sleep(min(poll_interval_seconds, remaining_seconds))

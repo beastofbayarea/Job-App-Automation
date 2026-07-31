@@ -350,6 +350,37 @@ class GmailMessageTests(unittest.TestCase):
         fetch.assert_called_once_with(service, "", max_results=10, include_body=True)
         sleep.assert_not_called()
 
+    def test_poll_performs_final_fetch_after_deadline_sleep(self) -> None:
+        record = gmail.EmailRecord(
+            "fresh",
+            "thread",
+            "sender@example.test",
+            "",
+            "OTP 42",
+            "",
+            [],
+            "",
+            "OTP 42",
+        )
+        fetch_results = iter([[], [record]])
+        monotonic_values = iter([0.0, 0.0, 3.0])
+        sleeps: list[float] = []
+
+        match = gmail_messages.poll_for_verification_code(
+            object(),
+            "",
+            r"OTP (\d+)",
+            timeout_seconds=3,
+            poll_interval_seconds=3,
+            fetcher=lambda *_args, **_kwargs: next(fetch_results),
+            monotonic=lambda: next(monotonic_values),
+            sleep=sleeps.append,
+        )
+
+        self.assertIsNotNone(match)
+        self.assertEqual(match.code, "42")
+        self.assertEqual(sleeps, [3])
+
 
 class GmailPersistenceTests(unittest.TestCase):
     def test_otp_history_is_idempotent_and_does_not_store_code(self) -> None:
