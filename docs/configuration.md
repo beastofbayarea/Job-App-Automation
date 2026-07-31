@@ -20,6 +20,13 @@ Copy the tracked examples before adding personal data. Local candidate data, cre
 
 The `candidate` object supplies personal fields and education history. `policies.answers` holds reusable answers; `policies.eeo` and the demographic fields should remain accurate or use the candidate's preferred disclosure option. `headless_overrides` permits a provider-specific browser choice, while `navigation_timeout_ms`, `action_timeout_ms`, and `attempts` control browser resilience.
 
+List every country where the candidate may legally work in
+`policies.answers.work_authorization_countries`. Set `target_work_country` in a
+job-specific profile when the form uses ambiguous phrases such as “the country
+where this job is located.” Country-specific authorization and residence
+questions fail closed when the target cannot be resolved; the global legacy
+answers are used only when the country list is absent.
+
 ## Runtime configuration
 
 `config/runtime_config.json` is the shared default for operational paths and limits. Its main sections are:

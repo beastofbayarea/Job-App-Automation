@@ -590,6 +590,115 @@ def location_answer_candidates(profile: Mapping[str, Any]) -> tuple[str, ...]:
     return tuple(seen)
 
 
+_COUNTRY_TERM_ALIASES: Mapping[str, tuple[str, ...]] = {
+    "australia": ("australia", "australian"),
+    "canada": ("canada", "canadian"),
+    "france": ("france", "french"),
+    "germany": ("germany", "german"),
+    "hong kong": ("hong kong",),
+    "india": ("india", "indian"),
+    "ireland": ("ireland", "irish"),
+    "new zealand": ("new zealand",),
+    "saudi arabia": ("saudi arabia", "saudi"),
+    "singapore": ("singapore", "singaporean"),
+    "united arab emirates": ("united arab emirates", "uae", "u a e", "emirati"),
+    "united kingdom": (
+        "united kingdom",
+        "great britain",
+        "britain",
+        "british",
+        "u k",
+    ),
+    "united states": (
+        "united states",
+        "united states of america",
+        "america",
+        "american",
+        "usa",
+        "u s",
+        "u s a",
+    ),
+}
+
+
+def _normalized_country(value: Any) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", " ", str(value).casefold()).strip()
+    for canonical, aliases in _COUNTRY_TERM_ALIASES.items():
+        if normalized == canonical or normalized in aliases:
+            return canonical
+    return normalized
+
+
+def _label_mentions_country(label: str, country: str) -> bool:
+    canonical = _normalized_country(country)
+    normalized_label = re.sub(r"[^a-z0-9]+", " ", label.casefold()).strip()
+    aliases = _COUNTRY_TERM_ALIASES.get(canonical, (canonical,))
+    if any(re.search(rf"\b{re.escape(alias)}\b", normalized_label) for alias in aliases):
+        return True
+    # Avoid treating the ordinary pronoun "us" as United States while still
+    # recognizing the conventional uppercase country abbreviations.
+    if canonical == "united states" and re.search(r"\b(?:US|USA)\b", label):
+        return True
+    if canonical == "united kingdom" and re.search(r"\bUK\b", label):
+        return True
+    return False
+
+
+def _mentioned_country(label: str) -> str | None:
+    return next(
+        (
+            country
+            for country in _COUNTRY_TERM_ALIASES
+            if _label_mentions_country(label, country)
+        ),
+        None,
+    )
+
+
+def _country_scoped_work_authorization(
+    label: str,
+    profile: Mapping[str, Any],
+    rules: Mapping[str, Any],
+) -> tuple[bool, str | None]:
+    """Resolve work rights only for an explicitly configured country.
+
+    The boolean indicates whether country-scoped policy is configured. When it
+    is configured but no target country can be identified, callers must fail
+    closed instead of falling back to a global authorization answer.
+    """
+    raw_countries = rules.get("work_authorization_countries")
+    if not isinstance(raw_countries, Sequence) or isinstance(raw_countries, (str, bytes)):
+        return False, None
+    authorized = {
+        _normalized_country(country)
+        for country in raw_countries
+        if _normalized_country(country)
+    }
+    if not authorized:
+        return True, None
+    configured_target = _normalized_country(rules.get("target_work_country", ""))
+    target = _mentioned_country(label) or configured_target or None
+    if not target:
+        return True, None
+    return True, "Yes" if target in authorized else "No"
+
+
+def _country_scoped_residence(
+    label: str,
+    profile: Mapping[str, Any],
+    rules: Mapping[str, Any],
+) -> tuple[bool, str | None]:
+    raw_countries = rules.get("work_authorization_countries")
+    if not isinstance(raw_countries, Sequence) or isinstance(raw_countries, (str, bytes)):
+        return False, None
+    residence = _normalized_country(profile.get("country", ""))
+    configured_target = _normalized_country(rules.get("target_work_country", ""))
+    target = _mentioned_country(label) or configured_target or None
+    if not target or not residence:
+        return True, None
+    return True, "Yes" if target == residence else "No"
+
+
 def configured_answer(
     label: str,
     profile: Mapping[str, Any],
@@ -603,6 +712,21 @@ def configured_answer(
         for question_alias, answer in explicit_answers.items():
             if answer not in (None, "") and _matcher_alias_matches(text, str(question_alias)):
                 return str(answer)
+    country_policy, country_authorization = _country_scoped_work_authorization(
+        label,
+        profile,
+        rules,
+    )
+    work_authorization_question = re.search(
+        r"\bvalid\s+work\s+permit\b|"
+        r"\bright\s+to\s+(?:live\s+and\s+)?work\b|"
+        r"\bwork(?:ing)?\s+rights?\b|"
+        r"\bwork\s+authori[sz]ation\b|"
+        r"\b(?:eligible|authori[sz]ed)\b.*\bwork\b",
+        text,
+    )
+    if work_authorization_question and country_policy:
+        return country_authorization
     if re.search(
         r"\b(?:eligible|authori[sz]ed|right)\b.*\bwork\b.*\bwithout\b.*\bsponsor",
         text,
@@ -610,10 +734,21 @@ def configured_answer(
         answer = rules.get("work_authorization") or rules.get("target_country_work_authorization")
         if answer not in (None, ""):
             return str(answer)
-    if re.search(r"\bvalid\s+work\s+permit\b|\bright\s+to\s+work\b", text):
+    if re.search(
+        r"\bvalid\s+work\s+permit\b|\bright\s+to\s+(?:live\s+and\s+)?work\b|"
+        r"\bwork(?:ing)?\s+rights?\b|\bwork\s+authori[sz]ation\b",
+        text,
+    ):
         answer = rules.get("target_country_work_authorization") or rules.get("work_authorization")
         if answer not in (None, ""):
             return str(answer)
+    if re.search(
+        r"\b(?:are|do)\s+you\b.*\b(?:currently\s+)?(?:based|located|resid(?:e|ing))\b.*\bin\b",
+        text,
+    ):
+        residence_policy, residence_answer = _country_scoped_residence(label, profile, rules)
+        if residence_policy:
+            return residence_answer
     if re.search(
         r"\b(?:additional|outside|secondary|other)\s+(?:employment|job|work)\b",
         text,

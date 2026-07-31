@@ -148,15 +148,18 @@ pwsh scripts\install_vps_continuous_search.ps1
 pwsh scripts\install_vps_continuous_ashby.ps1
 pwsh scripts\install_vps_continuous_greenhouse.ps1
 pwsh scripts\install_vps_continuous_lever.ps1
+pwsh scripts\install_vps_continuous_smartrecruiters.ps1
+pwsh scripts\install_vps_continuous_workable.ps1
 ```
 
 These installations replace the marked daily cron entry with the systemd
 units `job-app-search-sync.service`, `job-app-ashby.service`,
-`job-app-greenhouse.service`, and `job-app-lever.service`. All four run in
-parallel. The search service continuously refreshes verified Greenhouse, Lever,
-Ashby, SmartRecruiters, and Workable job discovery, publishes only the safe
-coverage/jobs/board-cache/backlog snapshot, waits five minutes, and repeats. It
-does not generate documents or submit applications.
+`job-app-greenhouse.service`, `job-app-lever.service`,
+`job-app-smartrecruiters.service`, and `job-app-workable.service`. All six run
+in parallel. The search service continuously refreshes verified Greenhouse,
+Lever, Ashby, SmartRecruiters, and Workable job discovery, publishes only the
+safe coverage/jobs/board-cache/backlog snapshot, waits five minutes, and
+repeats. It does not generate documents or submit applications.
 
 Installing or repairing one provider does not stop or restart another or the
 search service. When replacing an already-active instance of that same

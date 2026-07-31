@@ -372,6 +372,7 @@ def _apply(
         str(cover_letter_path),
         "--email",
         email,
+        "--headed",
         "--results-file",
         str(result_path),
         "--submission-log-file",

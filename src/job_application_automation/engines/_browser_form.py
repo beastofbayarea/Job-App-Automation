@@ -977,6 +977,24 @@ def _relocation_target_answers(
     )
 
 
+def _salary_answer(
+    label: str,
+    desired: object,
+    profile: Mapping[str, Any],
+) -> str | None:
+    """Preserve approved salary answers and avoid unit-changing fallbacks."""
+    if not re.search(r"\bsalary|compensation|pay expectation\b", label, re.I):
+        return str(desired) if desired not in (None, "") else None
+    if desired not in (None, ""):
+        return str(desired)
+    # The profile compensation value is annual. It must never be copied into a
+    # current, monthly, hourly, weekly, or daily field where its meaning changes.
+    if re.search(r"\b(?:current|monthly|hourly|weekly|daily)\b", label, re.I):
+        return None
+    compensation = str(profile.get("compensation", "") or "").strip()
+    return compensation or None
+
+
 def _fill_custom_questions(
     page: Page,
     config: Mapping[str, Any],
@@ -1083,12 +1101,7 @@ def _fill_custom_questions(
             relocation_answers = _relocation_target_answers(label, desired, profile)
             if re.search(r"\byears?\b.*\bexperience\b", label, re.I):
                 desired = str(rules.get("management_experience_years") or desired or "")
-            if (
-                re.search(r"\bsalary|compensation|pay expectation\b", label, re.I)
-                and not re.search(r"\d", str(desired or ""))
-                and profile.get("compensation")
-            ):
-                desired = str(profile["compensation"])
+            desired = _salary_answer(label, desired, profile)
             if not desired and re.search(r"\brefer(?:red|ral)\b", label, re.I):
                 desired = "N/A"
             if not desired and _is_professional_binary_question(label):

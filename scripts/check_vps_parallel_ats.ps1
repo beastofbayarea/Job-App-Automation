@@ -252,7 +252,17 @@ for record in records:
     provider = str(record.get("ats", "")).strip().lower()
     if not provider:
         provider = next(
-            (candidate for candidate in ("ashby", "greenhouse", "lever") if candidate in host),
+            (
+                candidate
+                for candidate in (
+                    "ashby",
+                    "greenhouse",
+                    "lever",
+                    "smartrecruiters",
+                    "workable",
+                )
+                if candidate in host
+            ),
             "unknown",
         )
     ats_counts[provider] += 1
@@ -280,7 +290,17 @@ print("applied_days=" + json.dumps(day_counts, sort_keys=True))
 print(f"duplicate_canonical_urls={duplicate_count}")
 PY
 printf '%s\n' '=== PROVIDER RESULT ARTIFACTS ==='
-for provider in ashby greenhouse greenhouse_excel lever; do
+providers=`$(
+  for service in `$ats_services; do
+    basename "`$service" .service | sed -e 's/^job-app-//' -e 's/-/_/g'
+  done
+  for state_file in "`$repo"/output/continuous_*_state.json; do
+    [ -e "`$state_file" ] || continue
+    basename "`$state_file" | sed -e 's/^continuous_//' -e 's/_state\.json`$//'
+  done
+)
+providers=`$(printf '%s\n' "`$providers" | sed '/^`$/d' | sort -u)
+for provider in `$providers; do
   result_dir="`$repo/output/continuous_`${provider}`_results"
   result_count=`$(find "`$result_dir" -maxdepth 1 -type f -name '*.json' 2>/dev/null |
     wc -l)
@@ -290,18 +310,15 @@ for provider in ashby greenhouse greenhouse_excel lever; do
     "`$provider" "`$result_count" "`$latest_result"
 done
 printf '%s\n' '=== JOURNAL EVENT COUNTS ==='
-python3 - <<'PY'
+python3 - `$ats_services <<'PY'
 import json
 import re
 import subprocess
+import sys
 from collections import Counter
 
-for provider, unit in (
-    ("ashby", "job-app-ashby.service"),
-    ("greenhouse", "job-app-greenhouse.service"),
-    ("greenhouse_excel", "job-app-greenhouse-excel.service"),
-    ("lever", "job-app-lever.service"),
-):
+for unit in sys.argv[1:]:
+    provider = unit.removeprefix("job-app-").removesuffix(".service").replace("-", "_")
     journal = subprocess.run(
         [
             "journalctl",

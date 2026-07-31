@@ -65,6 +65,7 @@ $Template = Get-Content -LiteralPath $ServiceTemplatePath -Raw
 
 $SearchArgs = (
     "--ats-platform greenhouse --source search --worker-id search " +
+    "--sleep-min-seconds 5 --sleep-max-seconds 15 " +
     "--state $RemoteRepoPath/output/continuous_greenhouse_state.json " +
     "--peer-state $RemoteRepoPath/output/continuous_greenhouse_excel_state.json " +
     "--claims $RemoteRepoPath/output/continuous_greenhouse_claims.json " +
@@ -74,6 +75,7 @@ $SearchArgs = (
 )
 $ExcelArgs = (
     "--ats-platform greenhouse --source tracker --worker-id excel " +
+    "--sleep-min-seconds 5 --sleep-max-seconds 15 " +
     "--tracker $RemoteRepoPath/data/greenhouse_roles.xlsx " +
     "--state $RemoteRepoPath/output/continuous_greenhouse_excel_state.json " +
     "--peer-state $RemoteRepoPath/output/continuous_greenhouse_state.json " +

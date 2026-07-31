@@ -399,8 +399,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--launcher", type=Path, default=DEFAULT_LAUNCHER)
     parser.add_argument("--submission-log", type=Path, default=DEFAULT_SUBMISSION_LOG)
     parser.add_argument("--backlog", type=Path, default=DEFAULT_BACKLOG)
-    parser.add_argument("--sleep-min-seconds", type=int, default=120)
-    parser.add_argument("--sleep-max-seconds", type=int, default=300)
+    parser.add_argument("--sleep-min-seconds", type=int, default=5)
+    parser.add_argument("--sleep-max-seconds", type=int, default=15)
     parser.add_argument("--document-timeout-seconds", type=int, default=1800)
     parser.add_argument(
         "--engine-timeout-seconds",
@@ -573,7 +573,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         if args.once:
             return 0 if cycle_status in {"confirmed", "no_work"} else 1
-        delay = random.randint(args.sleep_min_seconds, args.sleep_max_seconds)
+        if cycle_status == "no_work":
+            delay = random.randint(args.sleep_min_seconds, args.sleep_max_seconds)
+        else:
+            delay = min(args.sleep_min_seconds, args.sleep_max_seconds)
         print(
             f"{ats_platform.upper()}_SOURCE_SLEEP "
             f"worker={worker_id} seconds={delay} prior_status={cycle_status}",

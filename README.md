@@ -326,6 +326,8 @@ Install any or all supervised one-job ATS workers:
 pwsh scripts\install_vps_continuous_ashby.ps1
 pwsh scripts\install_vps_continuous_greenhouse.ps1
 pwsh scripts\install_vps_continuous_lever.ps1
+pwsh scripts\install_vps_continuous_smartrecruiters.ps1
+pwsh scripts\install_vps_continuous_workable.ps1
 ```
 
 Install the independent continuous job-discovery and safe-publication service:
@@ -355,8 +357,9 @@ pwsh scripts\install_vps_memory_guard.ps1
 The installers deploy the ignored candidate email pool, remove the older daily
 cron entry, and enable one independent `job-app-<ats>.service` per provider.
 Installing one worker does not stop or restart another or the search service.
-Ashby, Greenhouse, Lever, and continuous job discovery therefore run in
-parallel, and a future installed ATS engine can use the same supervisor:
+Ashby, Greenhouse, Lever, SmartRecruiters, Workable, and continuous job
+discovery therefore run in parallel, and a future installed ATS engine can use
+the same supervisor:
 
 ```powershell
 pwsh scripts\install_vps_continuous_ats.ps1 -AtsPlatform providername

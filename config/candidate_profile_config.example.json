@@ -120,6 +120,8 @@
     "salary_expectation": "Negotiable",
     "application_certification": "Yes",
     "target_country_work_authorization": "Yes",
+    "work_authorization_countries": ["United States"],
+    "target_work_country": "",
     "based_in_target_country": "No",
     "international_travel": "Yes",
     "led_product_implementation": "Yes",
@@ -339,6 +341,7 @@
     ],
     "current_salary": [
       "current salary",
+      "current monthly salary",
       "current annual salary",
       "current monthly base salary",
       "current compensation"

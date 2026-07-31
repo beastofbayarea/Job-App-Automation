@@ -14,6 +14,8 @@ All notable user-facing changes are documented here. This project currently uses
   including a post-application publication when confirmations prune the list.
 - First-class SmartRecruiters and Workable discovery, public-feed normalization,
   and provider-aware liveness checks in local and continuous VPS searches.
+- Persistent SmartRecruiters and Workable VPS application workers with
+  provider-specific installers and dynamically discovered status reporting.
 - Operational, configuration, CLI, data-format, security, architecture, ATS-support, and troubleshooting documentation.
 - Contributor guidance for safe local development and test boundaries.
 - VPS search-sync freshness reporting, dry-run generated-PDF pruning, an
@@ -25,6 +27,11 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Changed
 
+- Continuous ATS applications now run visibly inside their Xvfb session, and
+  country-scoped work-authorization answers fail closed unless the candidate's
+  profile explicitly lists the target country. Salary answers also retain their
+  configured period instead of reusing annual compensation in monthly/current
+  fields.
 - Application workers now require matching permanent ledger evidence before
   marking a result confirmed and prune that confirmed URL from the active
   backlog without removing failed or manual-review attempts.
