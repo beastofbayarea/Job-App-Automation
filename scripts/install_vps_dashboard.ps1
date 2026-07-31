@@ -4,8 +4,7 @@
 param(
     [string]$RemoteRepoPath = "/root/Job-App-Automation",
     [string]$ConfigPath = "config/vps_config.json",
-    [string]$ServiceTemplatePath = "scripts/job-app-dashboard.service.template",
-    [string]$AdminConfigPath = "config/dashboard.env"
+    [string]$ServiceTemplatePath = "scripts/job-app-dashboard.service.template"
 )
 
 . "$PSScriptRoot\vps_script_helpers.ps1"
@@ -56,7 +55,6 @@ if (-not $PlinkCmd -or -not $PscpCmd) {
 
 $Token = [guid]::NewGuid().ToString("N")
 $RemoteUnitStage = "/tmp/vps-dashboard-$Token.service"
-$RemoteAdminStage = "/tmp/vps-dashboard-$Token.env"
 $RenderedUnitPath = Join-Path ([IO.Path]::GetTempPath()) "vps-dashboard-$Token.service"
 $PasswordFile = Join-Path ([IO.Path]::GetTempPath()) "vps-dashboard-$Token.txt"
 $RenderedUnit = (
@@ -64,26 +62,6 @@ $RenderedUnit = (
 ).Replace("__REPO_DIR__", $RemoteRepoPath)
 $Repo = ConvertTo-PosixShellLiteral $RemoteRepoPath
 $UnitStage = ConvertTo-PosixShellLiteral $RemoteUnitStage
-$AdminStage = ConvertTo-PosixShellLiteral $RemoteAdminStage
-
-if (-not (Test-Path -LiteralPath $AdminConfigPath)) {
-    $RandomBytes = [byte[]]::new(32)
-    [Security.Cryptography.RandomNumberGenerator]::Fill($RandomBytes)
-    $AdminPassword = [Convert]::ToBase64String($RandomBytes).TrimEnd("=")
-    $AdminPassword = $AdminPassword.Replace("+", "-").Replace("/", "_")
-    $AdminConfigDirectory = Split-Path -Parent $AdminConfigPath
-    if ($AdminConfigDirectory) {
-        New-Item -ItemType Directory -Path $AdminConfigDirectory -Force | Out-Null
-    }
-    [IO.File]::WriteAllText(
-        $AdminConfigPath,
-        (
-            "JOB_APP_DASHBOARD_ADMIN_USERNAME=skybison-admin`n" +
-            "JOB_APP_DASHBOARD_ADMIN_PASSWORD=$AdminPassword`n"
-        ),
-        [Text.UTF8Encoding]::new($false)
-    )
-}
 
 $RemoteCommand = @"
 set -eu
@@ -91,10 +69,9 @@ repo=$Repo
 git -C "`$repo" pull --ff-only origin main
 test -x "`$repo/.venv/bin/python"
 test -f "`$repo/src/job_application_automation/dashboard/server.py"
-install -d -m 0700 "`$repo/config"
-install -m 0600 $AdminStage "`$repo/config/dashboard.env"
+install -d -m 0700 "$repo/config"
 install -m 0644 $UnitStage /etc/systemd/system/vps-dashboard.service
-rm -f $UnitStage $AdminStage
+rm -f $UnitStage
 systemctl daemon-reload
 systemctl enable vps-dashboard.service
 systemctl restart vps-dashboard.service
@@ -129,7 +106,6 @@ try {
     )
     $Uploads = @(
         [pscustomobject]@{ Local = $RenderedUnitPath; Remote = $RemoteUnitStage }
-        [pscustomobject]@{ Local = $AdminConfigPath; Remote = $RemoteAdminStage }
     )
     foreach ($Upload in $Uploads) {
         $Result = Invoke-ExternalCommandWithTimeout `
@@ -179,7 +155,6 @@ try {
 }
 
 Write-Host (
-    "Installed the dashboard on 127.0.0.1:8000 with a protected admin vault " +
-    "and restored validated Nginx routing. Admin credentials are stored only " +
-    "in the ignored local file $AdminConfigPath and the VPS service environment."
+    "Installed the dashboard on 127.0.0.1:8000 with public read-only access " +
+    "and restored validated Nginx routing."
 )

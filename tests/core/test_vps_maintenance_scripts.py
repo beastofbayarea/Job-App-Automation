@@ -95,13 +95,10 @@ class PowerShellMaintenanceTests(unittest.TestCase):
         self.assertIn("MemoryMax=192M", unit)
         self.assertNotIn("--host 0.0.0.0", unit)
 
-        # Public operational pages remain available, while the raw-artifact
-        # admin vault receives a generated credential through a mode-0600 env.
-        self.assertIn("RandomNumberGenerator", installer)
-        self.assertIn("dashboard.env", installer)
-        self.assertIn("JOB_APP_DASHBOARD_ADMIN_PASSWORD", installer)
-        self.assertIn("install -m 0600", installer)
-        self.assertIn("EnvironmentFile=-", unit)
+        # Dashboard is completely unauthenticated and serves no password authentication.
+        self.assertNotIn("JOB_APP_DASHBOARD_ADMIN_PASSWORD", installer)
+        self.assertNotIn("dashboard.env", installer)
+        self.assertNotIn("EnvironmentFile=-", unit)
 
     def test_backend_quarantine_requires_live_failure_evidence(self) -> None:
         script = (SCRIPTS / "quarantine_unhealthy_cent_backend.ps1").read_text(encoding="utf-8")

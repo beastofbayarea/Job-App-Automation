@@ -8,10 +8,7 @@ internet, so do not add routes that expose secrets or perform actions.
 from __future__ import annotations
 
 import argparse
-import base64
-import binascii
 import csv
-import hmac
 import json
 import logging
 import mimetypes
@@ -40,8 +37,6 @@ PRIVATE_ARCHIVE_DIR = Path(
     )
 )
 WORKER_PROVIDERS = ("ashby", "greenhouse", "lever")
-ADMIN_USERNAME_ENV = "JOB_APP_DASHBOARD_ADMIN_USERNAME"
-ADMIN_PASSWORD_ENV = "JOB_APP_DASHBOARD_ADMIN_PASSWORD"  # noqa: S105
 _ADMIN_LOG_FILES = {
     "vps-sync": OUTPUT_DIR / "vps_sync.log",
     "nginx-access": Path("/var/log/nginx/access.log"),
@@ -839,12 +834,6 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
             self.path = "/admin.html"
             path = "/admin.html"
 
-        if (path == "/admin.html" or path.startswith("/api/admin/")) and not (
-            self._is_admin_authorized()
-        ):
-            self._require_admin_authorization()
-            return
-
         # Clean page route mappings
         if path in {"/search", "/search/"}:
             self.path = "/search.html"
@@ -887,36 +876,6 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
         payload = json.dumps(data, indent=2).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(payload)))
-        self.end_headers()
-        self.wfile.write(payload)
-
-    def _is_admin_authorized(self) -> bool:
-        expected_username = os.environ.get(ADMIN_USERNAME_ENV, "")
-        expected_password = os.environ.get(ADMIN_PASSWORD_ENV, "")
-        if not expected_username or not expected_password:
-            return False
-        authorization = getattr(self, "headers", {}).get("Authorization", "")
-        scheme, separator, encoded = authorization.partition(" ")
-        if not separator or scheme.lower() != "basic":
-            return False
-        try:
-            decoded = base64.b64decode(encoded, validate=True).decode("utf-8")
-        except (binascii.Error, ValueError, UnicodeDecodeError):
-            return False
-        username, separator, password = decoded.partition(":")
-        if not separator:
-            return False
-        return hmac.compare_digest(username, expected_username) and hmac.compare_digest(
-            password,
-            expected_password,
-        )
-
-    def _require_admin_authorization(self) -> None:
-        self.send_response(401)
-        self.send_header("WWW-Authenticate", 'Basic realm="Sky Bison Admin"')
-        self.send_header("Content-Type", "application/json")
-        payload = b'{"error":"Admin authentication required"}'
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
         self.wfile.write(payload)

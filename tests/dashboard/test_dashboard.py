@@ -60,26 +60,15 @@ def test_load_vps_config_exposes_only_operational_metadata(tmp_path):
         assert data == {"vps": {"hostname": "example-vps", "memory_gb": 4}}
 
 
-def test_admin_authentication_accepts_only_matching_basic_credentials():
-    handler = DashboardRequestHandler.__new__(DashboardRequestHandler)
-    handler.headers = Message()
-    encoded = base64.b64encode(b"operator:correct-password").decode("ascii")
-    handler.headers["Authorization"] = f"Basic {encoded}"
-
-    with patch.dict(
-        "os.environ",
-        {
-            server.ADMIN_USERNAME_ENV: "operator",
-            server.ADMIN_PASSWORD_ENV: "correct-password",
-        },
-        clear=False,
-    ):
-        assert handler._is_admin_authorized()
-        handler.headers.replace_header(
-            "Authorization",
-            f"Basic {base64.b64encode(b'operator:wrong').decode('ascii')}",
-        )
-        assert not handler._is_admin_authorized()
+def test_dashboard_server_has_no_password_authentication():
+    """Verify that password authentication methods and constants are permanently removed from server.py."""
+    source = Path(server.__file__).read_text(encoding="utf-8")
+    assert "ADMIN_PASSWORD_ENV" not in source
+    assert "ADMIN_USERNAME_ENV" not in source
+    assert "_is_admin_authorized" not in source
+    assert "_require_admin_authorization" not in source
+    assert "WWW-Authenticate" not in source
+    assert "Basic realm" not in source
 
 
 def test_public_submission_records_omit_private_application_fields():
@@ -325,30 +314,12 @@ def test_dashboard_request_handler_route_mappings():
             assert handler.path == expected_path
 
 
-def test_admin_route_maps_only_after_successful_authentication():
+def test_admin_route_serves_unauthenticated():
     handler = DashboardRequestHandler.__new__(DashboardRequestHandler)
     handler.path = "/admin"
 
-    with (
-        patch.object(DashboardRequestHandler, "_is_admin_authorized", return_value=True),
-        patch("http.server.SimpleHTTPRequestHandler.do_GET") as static_get,
-    ):
+    with patch("http.server.SimpleHTTPRequestHandler.do_GET") as static_get:
         handler.do_GET()
 
     assert handler.path == "/admin.html"
     static_get.assert_called_once()
-
-
-def test_admin_route_requests_authentication_when_credentials_are_missing():
-    handler = DashboardRequestHandler.__new__(DashboardRequestHandler)
-    handler.path = "/admin"
-
-    with (
-        patch.object(DashboardRequestHandler, "_is_admin_authorized", return_value=False),
-        patch.object(DashboardRequestHandler, "_require_admin_authorization") as require,
-        patch("http.server.SimpleHTTPRequestHandler.do_GET") as static_get,
-    ):
-        handler.do_GET()
-
-    require.assert_called_once()
-    static_get.assert_not_called()

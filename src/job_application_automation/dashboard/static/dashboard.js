@@ -23,7 +23,7 @@ const NAV_PAGES = [
   { slug: 'logs', href: 'logs.html', icon: '🔥', desktopLabel: 'Sync Logs', drawerLabel: 'Real-Time VPS Logs', bottomLabel: 'Logs' },
   { slug: 'inspector', href: 'inspector.html', icon: '📁', desktopLabel: 'Inspector', drawerLabel: 'Raw File Inspector', bottomLabel: 'Files' },
   { slug: 'system-status', href: 'system-status.html', icon: '🛰️', desktopLabel: 'System Status', drawerLabel: 'System Status', bottomLabel: 'Status' },
-  { slug: 'admin', href: 'admin.html', icon: '🔐', desktopLabel: 'Admin Vault', drawerLabel: 'Authenticated Admin Vault', bottomLabel: 'Admin' }
+  { slug: 'admin', href: 'admin.html', icon: '🔐', desktopLabel: 'Admin Vault', drawerLabel: 'Admin Vault', bottomLabel: 'Admin' }
 ];
 
 // Each page keeps its own <nav>/<aside> chrome (hamburger button, drawer
@@ -172,7 +172,7 @@ function openJobDetail(submissionKey) {
     </div>
     <div class="detail-field">
       <span class="detail-label">Complete Raw Record and Documents</span>
-      <div style="margin-top: 0.3rem;"><a href="admin.html" class="resume-download-link">🔐 Open Authenticated Admin Vault</a></div>
+      <div style="margin-top: 0.3rem;"><a href="admin.html" class="resume-download-link">🔐 Open Admin Vault</a></div>
     </div>
   `;
 
