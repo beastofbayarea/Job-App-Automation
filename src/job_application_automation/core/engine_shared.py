@@ -454,6 +454,9 @@ def label_for(page: Page, control: Locator) -> str:
         label = page.locator(f"#{labelled_by}").first
         if label.count():
             return " ".join(label.inner_text().split()).rstrip("* ").strip()
+    ancestor = control.locator("xpath=ancestor::label[1]")
+    if ancestor.count():
+        return " ".join(ancestor.first.inner_text().split()).rstrip("* ").strip()
     return ""
 
 
@@ -820,8 +823,22 @@ def fill_required_consent(page: Page) -> list[str]:
             context = label or box.evaluate(
                 "el => (el.closest('fieldset,div') || el.parentElement)?.innerText || ''"
             )
-            explicit_confirm = bool(re.search(r"\bi\s+(?:hereby\s+)?confirm\b", context, re.I))
-            if not box.is_visible() and not explicit_confirm:
+            explicit_confirm = bool(
+                re.search(
+                    r"\bi\b.{0,120}\b(?:acknowledge|agree|consent|accept|confirm)\b",
+                    context,
+                    re.I,
+                )
+            )
+            consent_context = bool(
+                re.search(
+                    r"\b(?:acknowledge|agree|consent|privacy|terms|policy|"
+                    r"data (?:processing|protection)|personal data)\b",
+                    context,
+                    re.I,
+                )
+            )
+            if not box.is_visible() and not (explicit_confirm or consent_context):
                 continue
             # Skip EEO/demographic checkboxes unless the surrounding text is an
             # explicit self-attestation ("I confirm...") rather than a disclosure question.
@@ -839,14 +856,6 @@ def fill_required_consent(page: Page) -> list[str]:
                 re.I,
             ):
                 continue
-            consent_context = bool(
-                re.search(
-                    r"\b(?:acknowledge|agree|consent|privacy|terms|policy|"
-                    r"data (?:processing|protection)|personal data)\b",
-                    context,
-                    re.I,
-                )
-            )
             required = explicit_confirm or (
                 consent_context
                 and (

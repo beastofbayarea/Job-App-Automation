@@ -14,6 +14,18 @@ from job_application_automation.core import engine_shared  # noqa: E402
 
 
 class EngineSharedConfigTests(unittest.TestCase):
+    def test_label_for_uses_ancestor_label_for_hidden_custom_checkbox(self) -> None:
+        page = unittest.mock.MagicMock()
+        control = unittest.mock.MagicMock()
+        control.get_attribute.return_value = None
+        ancestor = control.locator.return_value
+        ancestor.count.return_value = 1
+        ancestor.first.inner_text.return_value = " I accept the Privacy Notice. * "
+
+        label = engine_shared.label_for(page, control)
+
+        self.assertEqual(label, "I accept the Privacy Notice.")
+
     def test_background_session_creates_a_non_activated_cdp_target(self) -> None:
         playwright = unittest.mock.MagicMock()
         page = unittest.mock.MagicMock()
@@ -139,6 +151,26 @@ class EngineSharedConfigTests(unittest.TestCase):
         self.assertEqual(
             checked,
             ["I agree to the privacy policy and processing of my personal data."],
+        )
+        box.check.assert_called_once_with(force=True)
+
+    def test_hidden_custom_privacy_checkbox_is_checked_with_force(self) -> None:
+        page = unittest.mock.MagicMock()
+        box = page.locator.return_value.nth.return_value
+        page.locator.return_value.count.return_value = 1
+        box.is_checked.side_effect = [False, True]
+        box.is_visible.return_value = False
+        box.get_attribute.return_value = None
+        with unittest.mock.patch.object(
+            engine_shared,
+            "label_for",
+            return_value="I accept the Privacy Notice and consent to processing my data.",
+        ):
+            checked = engine_shared.fill_required_consent(page)
+
+        self.assertEqual(
+            checked,
+            ["I accept the Privacy Notice and consent to processing my data."],
         )
         box.check.assert_called_once_with(force=True)
 

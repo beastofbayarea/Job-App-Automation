@@ -713,7 +713,11 @@ def _choose_group_options(
 
 def _is_professional_binary_question(label: str) -> bool:
     return bool(
-        re.search(r"^(?:do|did|have|has|are|can|will|would)\s+you\b", label, re.I)
+        re.search(
+            r"^(?:do|does|did|have|has|are|is|can|will|would)\s+(?:you|your)\b",
+            label,
+            re.I,
+        )
         and not re.search(
             r"gender|race|ethnic|veteran|disab|medical|health|sexual|transgender|"
             r"accommodation|criminal|convict",
@@ -738,6 +742,57 @@ def _select_all_positive_checkbox_answers(
     )
 
 
+def _answer_from_job_context(
+    label: str,
+    option_labels: Sequence[str],
+    job_context: str,
+) -> str:
+    """Resolve an explicit job-description attention check without guessing."""
+    if not job_context or not re.search(
+        r"\b(?:favorite|according to .{0,30}description|"
+        r"mentioned in .{0,30}description|attention check)\b",
+        label,
+        re.I,
+    ):
+        return ""
+    matches: list[str] = []
+    for option in option_labels:
+        cleaned = _clean_label(option)
+        if (
+            cleaned
+            and re.search(
+                rf"(?<!\w){re.escape(cleaned)}(?!\w)",
+                job_context,
+                re.I,
+            )
+            and cleaned.casefold() not in {match.casefold() for match in matches}
+        ):
+            matches.append(cleaned)
+    return matches[0] if len(matches) == 1 else ""
+
+
+def _answer_for_binary_options(desired: object, option_labels: Sequence[str]) -> str:
+    """Translate a configured substantive answer onto an explicit Yes/No group."""
+    options = {_clean_label(option).casefold(): _clean_label(option) for option in option_labels}
+    yes = options.get("yes")
+    no = options.get("no")
+    answer = _clean_label(desired)
+    if (
+        not yes
+        or not no
+        or not answer
+        or re.search(
+            r"\b(?:prefer not|decline|unknown|unspecified)\b",
+            answer,
+            re.I,
+        )
+    ):
+        return ""
+    if re.search(r"^(?:no|false|none|n/?a|not applicable)\b", answer, re.I):
+        return no
+    return yes
+
+
 def _fill_custom_questions(
     page: Page,
     config: Mapping[str, Any],
@@ -745,6 +800,7 @@ def _fill_custom_questions(
     company: str,
     role: str,
     standard_selectors: Sequence[str] = (),
+    job_context: str = "",
 ) -> dict[str, bool]:
     """Fill configured Workable/SmartRecruiters questions across native and React controls."""
     profile = _mapping(config.get("candidate"))
@@ -753,7 +809,8 @@ def _fill_custom_questions(
     matchers = _mapping(config.get("field_matchers"))
     variants = _mapping(config.get("answer_variants"))
     candidate_evidence = load_candidate_evidence(config)
-    job_text = page.locator("body").inner_text()[:30_000]
+    form_text = page.locator("body").inner_text()
+    job_text = f"{job_context}\n{form_text}"[:30_000]
     results: dict[str, bool] = {}
     handled_groups: set[str] = set()
     standard_names = {
@@ -849,6 +906,16 @@ def _fill_custom_questions(
                 desired = "N/A"
             if not desired and _is_professional_binary_question(label):
                 desired = str(rules.get("experience_requirement") or "")
+            option_labels: list[str] = []
+            if effective_type in {"radio", "checkbox"}:
+                group = _group_controls(page, control, effective_type)
+                option_labels = [_option_label(group.nth(item)) for item in range(group.count())]
+            if not desired and effective_type in {"radio", "checkbox"}:
+                desired = _answer_from_job_context(
+                    label,
+                    option_labels,
+                    job_context,
+                )
             if not desired and is_essay_question(label):
                 desired = generate_essay_answer(
                     label,
@@ -857,6 +924,7 @@ def _fill_custom_questions(
                     role,
                     candidate_evidence,
                 )
+            desired = _answer_for_binary_options(desired, option_labels) or desired
 
             preferred = (
                 location_answer_candidates(profile)
@@ -1303,6 +1371,10 @@ def run_browser_form_engine(
                     screenshot=screenshot,
                     detail=closed_reason,
                 )
+            try:
+                job_context = page.locator("body").inner_text()[:30_000]
+            except Exception:
+                job_context = ""
             if apply_button is not None:
                 href = apply_button.get_attribute("href") or ""
                 if href:
@@ -1326,6 +1398,7 @@ def run_browser_form_engine(
                 company=company or spec.display_name,
                 role=role,
                 standard_selectors=_standard_control_selectors(spec),
+                job_context=job_context,
             )
             consent = fill_required_consent(page)
             # Resume parsing, address selection, and custom React controls can
@@ -1360,6 +1433,7 @@ def run_browser_form_engine(
                         company=company or spec.display_name,
                         role=role,
                         standard_selectors=_standard_control_selectors(spec),
+                        job_context=job_context,
                     )
                 )
                 if cover_letter is not None and not filled["cover_letter"]:

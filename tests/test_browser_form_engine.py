@@ -326,6 +326,50 @@ def test_positive_checkbox_policy_is_not_applied_to_document_declarations() -> N
     )
 
 
+def test_attention_check_uses_exact_option_disclosed_in_job_description() -> None:
+    assert (
+        browser_form._answer_from_job_context(
+            "What is Andrew's favorite ice cream flavor?",
+            ("Salted caramel", "Salted caramel", "Cookies & Cream", "Pistachio", "Pistachio"),
+            "Ship the right problems while knowing Andrew's favorite flavor is pistachio.",
+        )
+        == "Pistachio"
+    )
+
+
+def test_regular_screening_question_does_not_infer_from_job_description() -> None:
+    assert (
+        browser_form._answer_from_job_context(
+            "Which product area have you worked in?",
+            ("Security", "Infrastructure"),
+            "This role owns our security and infrastructure roadmap.",
+        )
+        == ""
+    )
+
+
+def test_does_your_language_binary_question_uses_professional_policy() -> None:
+    assert browser_form._is_professional_binary_question(
+        "Does your level of Polish and English allow fluent work communication?"
+    )
+
+
+@pytest.mark.parametrize(
+    ("configured", "expected"),
+    (
+        ("more than 8 years", "YES"),
+        ("C1-C2 or native", "YES"),
+        ("No sponsorship required", "NO"),
+        ("Prefer not to disclose", ""),
+    ),
+)
+def test_configured_answers_are_mapped_to_explicit_binary_options(
+    configured: str,
+    expected: str,
+) -> None:
+    assert browser_form._answer_for_binary_options(configured, ("YES", "NO")) == expected
+
+
 def test_load_orchestrated_config_normalizes_grouped_profile() -> None:
     raw = {
         "schema_version": 2,
