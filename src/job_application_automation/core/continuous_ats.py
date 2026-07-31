@@ -23,6 +23,7 @@ from collections.abc import Callable, Mapping, Sequence
 from .artifacts import atomic_write_text, read_json
 from .contracts import EngineResult
 from .identity import canonical_job_url, normalize_email
+from .observability import NOOP_TELEMETRY, OperationalTelemetry, initialize_observability
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from .screenshots import (
     APPLICATION_SCREENSHOT_DIR_ENV,
@@ -254,6 +255,19 @@ def _sleep_between_cycles(delay: int, ats_platform: str) -> bool:
     return True
 
 
+def _cycle_event_level(status: str) -> str:
+    if status in {"confirmed", "no_work", "refreshed"}:
+        return "info"
+    if status in {
+        "application_rate_limit",
+        "captcha_cooldown",
+        "manual_review",
+        "possible_spam_cooldown",
+    }:
+        return "warning"
+    return "error"
+
+
 def _job_digest(canonical_url: str) -> str:
     return hashlib.sha256(canonical_url.encode("utf-8")).hexdigest()[:20]
 
@@ -417,7 +431,9 @@ def process_one(
     engine_timeout_seconds: int,
     application_timeout_seconds: int,
     backlog_path: Path | None = None,
+    telemetry: OperationalTelemetry | None = None,
 ) -> str:
+    telemetry = telemetry or NOOP_TELEMETRY
     state = _load_state(state_path, ats_platform)
     jobs = _eligible_jobs(_load_json(input_path), ats_platform)
     job = _select_job(
@@ -502,6 +518,14 @@ def process_one(
                 f"status={record['result_status']}",
                 flush=True,
             )
+            telemetry.emit(
+                "document_generation_failed",
+                provider=ats_platform,
+                stage="documents",
+                cycle_status=str(record["result_status"]),
+                exit_code=document_outcome.return_code,
+                timed_out=document_outcome.timed_out,
+            )
             return "failed"
         record.update(
             {
@@ -569,6 +593,24 @@ def process_one(
         application_outcome.return_code == 0 and _strictly_confirmed(result) and ledger_confirmed
     )
     result_status = str(result.get("status", "NO_RESULT"))
+    if result_status in {"BROWSER_SESSION_FAILED", "ENGINE_EXECUTION_ERROR"}:
+        telemetry.emit(
+            "browser_session_failed",
+            provider=ats_platform,
+            stage="application",
+            cycle_status=result_status,
+            exit_code=application_outcome.return_code,
+            timed_out=application_outcome.timed_out,
+        )
+    if _strictly_confirmed(result) and not ledger_confirmed:
+        telemetry.emit(
+            "ledger_persist_failed",
+            provider=ats_platform,
+            stage="submission_ledger",
+            cycle_status="confirmed_without_ledger",
+            exit_code=application_outcome.return_code,
+            timed_out=application_outcome.timed_out,
+        )
     manual_review_required = _requires_manual_review(result, application_outcome)
     status = "confirmed" if confirmed else ("manual_review" if manual_review_required else "failed")
     record.update(
@@ -957,6 +999,8 @@ def main(
         if not path.is_file():
             raise SystemExit(f"{label} file not found: {path}")
 
+    telemetry = initialize_observability(worker_kind="continuous_ats", provider=ats_platform)
+
     seeded = _seed_platform_input(args.input, ats_platform)
     if seeded:
         print(
@@ -1050,6 +1094,7 @@ def main(
                     engine_timeout_seconds=args.engine_timeout_seconds,
                     application_timeout_seconds=args.application_timeout_seconds,
                     backlog_path=args.backlog,
+                    telemetry=telemetry,
                 )
                 if cycle_status == "no_work" and not args.once:
                     shared_count = _seed_platform_input(
@@ -1077,6 +1122,7 @@ def main(
                             engine_timeout_seconds=args.engine_timeout_seconds,
                             application_timeout_seconds=args.application_timeout_seconds,
                             backlog_path=args.backlog,
+                            telemetry=telemetry,
                         )
                     if cycle_status == "no_work":
                         outcome = _refresh_jobs(
@@ -1098,6 +1144,7 @@ def main(
                 f"{ats_platform.upper()}_WORKER_STOPPED signal=keyboard_interrupt",
                 flush=True,
             )
+            telemetry.flush()
             return 130
         except Exception as exc:
             print(
@@ -1106,9 +1153,24 @@ def main(
                 file=sys.stderr,
                 flush=True,
             )
+            telemetry.emit(
+                "worker_cycle_exception",
+                provider=ats_platform,
+                stage="worker_cycle",
+                cycle_status="exception",
+                error_type=type(exc),
+            )
             cycle_status = "exception"
 
+        telemetry.emit(
+            "worker_cycle_complete",
+            level=_cycle_event_level(cycle_status),
+            provider=ats_platform,
+            stage="worker_cycle",
+            cycle_status=cycle_status,
+        )
         if args.once:
+            telemetry.flush()
             return 0 if cycle_status in {"confirmed", "refreshed"} else 1
         delay = random.randint(args.sleep_min_seconds, args.sleep_max_seconds)
         print(
@@ -1116,6 +1178,7 @@ def main(
             flush=True,
         )
         if not _sleep_between_cycles(delay, ats_platform):
+            telemetry.flush()
             return 130
 
 

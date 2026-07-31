@@ -4,7 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from job_application_automation.core import search_documents
 
@@ -177,7 +177,15 @@ class SearchDocumentTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch.object(search_documents.subprocess, "run") as run:
+            telemetry = MagicMock()
+            with (
+                patch.object(search_documents.subprocess, "run") as run,
+                patch.object(
+                    search_documents,
+                    "initialize_observability",
+                    return_value=telemetry,
+                ),
+            ):
                 run.return_value.returncode = 7
                 self.assertEqual(
                     search_documents.main(
@@ -196,3 +204,11 @@ class SearchDocumentTests(unittest.TestCase):
                 )
             state = json.loads(state_path.read_text(encoding="utf-8"))
             self.assertEqual(state["jobs"]["https://jobs.example.test/live"]["status"], "failed")
+            telemetry.emit.assert_any_call(
+                "document_archive_failed",
+                provider="",
+                stage="document_archive",
+                cycle_status="failed",
+                exit_code=7,
+            )
+            telemetry.flush.assert_called_once_with()

@@ -32,6 +32,18 @@ def test_all_provider_wrappers_use_guarded_generic_supervision() -> None:
     assert "job_application_automation.core.continuous_ats" in unit
     assert "--ats-platform __ATS_PLATFORM__" in unit
     assert "/usr/bin/xvfb-run" in unit
+    assert "EnvironmentFile=-/etc/job-application-automation/observability.env" in unit
+
+
+def test_all_unattended_worker_units_load_optional_observability_environment() -> None:
+    for filename in (
+        "job-app-continuous-ats.service.template",
+        "job-app-greenhouse-source.service.template",
+        "job-app-greenhouse.service.template",
+        "job-app-search-sync.service.template",
+    ):
+        unit = (SCRIPTS / filename).read_text(encoding="utf-8")
+        assert "EnvironmentFile=-/etc/job-application-automation/observability.env" in unit
 
 
 def test_parallel_status_probe_discovers_all_services_and_redacts_email() -> None:

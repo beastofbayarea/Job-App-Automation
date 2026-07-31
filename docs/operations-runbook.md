@@ -216,6 +216,27 @@ manual-review outcomes since the latest confirmation open a provider-wide
 24-hour cooldown; the worker stays supervised but does not risk another live
 submission until the cooldown expires.
 
+#### Optional centralized worker telemetry
+
+Install the optional SDK in the VPS environment with
+`uv sync --locked --no-dev --extra observability`, then create the environment
+file referenced optionally by every unattended worker unit:
+
+```bash
+sudo install -d -m 0700 /etc/job-application-automation
+sudo install -m 0600 /dev/null /etc/job-application-automation/observability.env
+sudoedit /etc/job-application-automation/observability.env
+```
+
+Set `SENTRY_DSN`, and optionally `SENTRY_ENVIRONMENT` and `SENTRY_RELEASE`, in
+that file. Run `systemctl daemon-reload` and restart only the intended worker
+units after reviewing the file permissions. Telemetry sends fixed operational
+event names and the allow-list documented in
+`docs/security-and-privacy.md`; it never sends candidate or job content,
+exception messages, logs, paths, URLs, or screenshots. To disable it, remove
+`SENTRY_DSN` (or the environment file) and restart the workers. A missing file,
+missing SDK, initialization failure, or transport failure never stops a worker.
+
 Inspect the service without starting another worker:
 
 ```powershell

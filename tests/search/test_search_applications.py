@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -488,7 +488,15 @@ class SearchApplicationTests(unittest.TestCase):
                 result_path.write_text(json.dumps([_confirmed_result()]), encoding="utf-8")
                 return SimpleNamespace(returncode=0, stdout="", stderr="")
 
-            with patch.object(search_applications.subprocess, "run", side_effect=fake_run):
+            telemetry = MagicMock()
+            with (
+                patch.object(search_applications.subprocess, "run", side_effect=fake_run),
+                patch.object(
+                    search_applications,
+                    "initialize_observability",
+                    return_value=telemetry,
+                ),
+            ):
                 exit_code = search_applications.main(
                     [
                         "--input",
@@ -517,6 +525,14 @@ class SearchApplicationTests(unittest.TestCase):
             record = next(iter(state["jobs"].values()))
             self.assertEqual(record["status"], "failed")
             self.assertFalse(record["ledger_confirmed"])
+            telemetry.emit.assert_any_call(
+                "ledger_persist_failed",
+                provider="greenhouse",
+                stage="submission_ledger",
+                cycle_status="confirmed_without_ledger",
+                exit_code=0,
+            )
+            telemetry.flush.assert_called_once_with()
 
 
 if __name__ == "__main__":

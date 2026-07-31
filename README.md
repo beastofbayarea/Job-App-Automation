@@ -75,6 +75,15 @@ non-development installations:
 python -m pip install ".[structured]"
 ```
 
+Privacy-safe unattended-worker telemetry is also optional:
+
+```powershell
+python -m pip install ".[observability]"
+```
+
+It remains disabled unless the worker environment contains `SENTRY_DSN`; see
+the operations runbook for the allow-listed event fields and VPS setup.
+
 ## Configure local data and credentials
 
 Tracked examples are safe templates. Copy and personalize them; the resulting files, credentials, tokens, candidate source text, and generated output are ignored by Git.

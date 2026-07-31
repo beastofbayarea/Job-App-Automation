@@ -14,6 +14,7 @@ from typing import Any
 from collections.abc import Sequence
 
 from .artifacts import atomic_write_text
+from .observability import initialize_observability
 from .runtime_config import RUNTIME_CONFIG
 
 
@@ -138,6 +139,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.max_jobs and args.retry_jobs > args.max_jobs:
         raise SystemExit("--retry-jobs cannot exceed --max-jobs")
 
+    telemetry = initialize_observability(worker_kind="document_archive")
+
     email = _candidate_email(args.profile)
     state = _load_state(args.state)
     records: dict[str, Any] = state["jobs"]
@@ -204,6 +207,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             }
             if completed.returncode != 0:
                 failures += 1
+                telemetry.emit(
+                    "document_archive_failed",
+                    provider=str(job.get("platform", "")),
+                    stage="document_archive",
+                    cycle_status="failed",
+                    exit_code=completed.returncode,
+                )
         except OSError as exc:
             failures += 1
             records[url] = {
@@ -213,6 +223,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "updated_at": now,
                 "error": str(exc),
             }
+            telemetry.emit(
+                "document_archive_failed",
+                provider=str(job.get("platform", "")),
+                stage="document_archive",
+                cycle_status="failed",
+                error_type=type(exc),
+            )
         finally:
             if jd_path:
                 Path(jd_path).unlink(missing_ok=True)
@@ -228,6 +245,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"processed={len(pending)}, retries={selected_retries}, "
         f"archived_total={archived}, failures={failures}, max_jobs={args.max_jobs}"
     )
+    telemetry.emit(
+        "worker_cycle_complete",
+        level="error" if failures else "info",
+        stage="document_archive",
+        cycle_status="failed" if failures else "archived",
+        failure_count=failures,
+    )
+    telemetry.flush()
     return 1 if failures else 0
 
 

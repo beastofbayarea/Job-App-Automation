@@ -9,6 +9,7 @@ Type=simple
 WorkingDirectory=__REPO_DIR__
 Environment=PYTHONPATH=__REPO_DIR__/src
 Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=-/etc/job-application-automation/observability.env
 ExecStartPre=/usr/bin/test -x __REPO_DIR__/.venv/bin/python
 ExecStartPre=/usr/bin/test -r __REPO_DIR__/config/candidate_profile_config.json
 ExecStartPre=/usr/bin/test -r __REPO_DIR__/config/candidate_email_pool.json

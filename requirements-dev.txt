@@ -1,4 +1,4 @@
--e .[structured]
+-e .[observability,structured]
 mypy>=1.15,<3.0
 pip-audit>=2.9,<3.0
 pytest>=9.0.3,<10.0

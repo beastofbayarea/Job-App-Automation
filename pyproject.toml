@@ -20,6 +20,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+observability = [
+    "sentry-sdk>=2.22,<3.0",
+]
 structured = [
     "pydantic>=2.7,<3.0",
 ]

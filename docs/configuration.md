@@ -43,6 +43,16 @@ answers are used only when the country list is absent.
 
 Paths are resolved from the project root. Keep secrets in the local files named above; never put them in runtime configuration committed to Git.
 
+## Optional operational telemetry
+
+Install the `observability` package extra and set `SENTRY_DSN` only in the
+worker's external environment when centralized worker diagnostics are wanted.
+`SENTRY_ENVIRONMENT` and `SENTRY_RELEASE` are optional bounded labels. These
+values do not belong in `config/runtime_config.json`; on the VPS they belong in
+the root-readable `/etc/job-application-automation/observability.env` file.
+Without `SENTRY_DSN`, the application does not import or initialize the Sentry
+SDK.
+
 ## Google submission and Cent Capital reference inventory
 
 `config/cent_capital_config.json` is an ignored reference inventory for settings

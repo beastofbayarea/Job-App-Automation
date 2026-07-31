@@ -24,12 +24,14 @@ from .continuous_ats import (
     RESUMABLE_STATUSES,
     SHARED_INPUT,
     _eligible_jobs,
+    _cycle_event_level,
     _load_state,
     _reconcile_interrupted_submissions,
     _save_state,
     process_one,
 )
 from .identity import canonical_job_url
+from .observability import initialize_observability
 from .orchestrator import load_jobs_from_tracker
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from ..resume.ai_client import scrape_job
@@ -449,6 +451,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 0 if jobs else 1
 
+    telemetry = initialize_observability(
+        worker_kind=f"source_{args.source}",
+        provider=ats_platform,
+        worker_id=worker_id,
+    )
+
     state = _load_state(args.state, ats_platform)
     reconciled = _reconcile_interrupted_submissions(state)
     if reconciled:
@@ -504,6 +512,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                             file=sys.stderr,
                             flush=True,
                         )
+                        telemetry.emit(
+                            "source_context_failed",
+                            provider=ats_platform,
+                            stage="source_context",
+                            cycle_status="failed",
+                            error_type=type(exc),
+                        )
                     else:
                         args.selected_input.parent.mkdir(parents=True, exist_ok=True)
                         atomic_write_text(
@@ -525,6 +540,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                             engine_timeout_seconds=args.engine_timeout_seconds,
                             application_timeout_seconds=args.application_timeout_seconds,
                             backlog_path=args.backlog,
+                            telemetry=telemetry,
                         )
                 else:
                     args.selected_input.parent.mkdir(parents=True, exist_ok=True)
@@ -547,6 +563,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         engine_timeout_seconds=args.engine_timeout_seconds,
                         application_timeout_seconds=args.application_timeout_seconds,
                         backlog_path=args.backlog,
+                        telemetry=telemetry,
                     )
                 _sync_claim_from_state(
                     job=selected,
@@ -562,6 +579,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 f"worker={worker_id} signal=keyboard_interrupt",
                 flush=True,
             )
+            telemetry.flush()
             return 130
         except Exception as exc:
             cycle_status = "exception"
@@ -571,7 +589,22 @@ def main(argv: Sequence[str] | None = None) -> int:
                 file=sys.stderr,
                 flush=True,
             )
+            telemetry.emit(
+                "worker_cycle_exception",
+                provider=ats_platform,
+                stage="source_cycle",
+                cycle_status="exception",
+                error_type=type(exc),
+            )
+        telemetry.emit(
+            "worker_cycle_complete",
+            level=_cycle_event_level(cycle_status),
+            provider=ats_platform,
+            stage="source_cycle",
+            cycle_status=cycle_status,
+        )
         if args.once:
+            telemetry.flush()
             return 0 if cycle_status in {"confirmed", "no_work"} else 1
         if cycle_status == "no_work":
             delay = random.randint(args.sleep_min_seconds, args.sleep_max_seconds)
@@ -587,6 +620,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             ats_platform=ats_platform,
             worker_id=worker_id,
         ):
+            telemetry.flush()
             return 130
 
 

@@ -16,6 +16,7 @@ from .artifacts import atomic_write_text, read_json
 from .contracts import EngineResult
 from .engine_shared import ATS_HOST_MARKERS, detect_ats_job_url
 from .identity import canonical_job_url
+from .observability import initialize_observability
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from ..search.backlog import load_confirmed_urls, remove_confirmed_job
 
@@ -215,6 +216,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.timeout <= 0:
         raise SystemExit("--timeout must be greater than zero")
 
+    telemetry = initialize_observability(worker_kind="application_batch")
+
     state = _load_state(args.state)
     records: dict[str, Any] = state["jobs"]
     jobs = _eligible_jobs(_load_json(args.input))
@@ -303,6 +306,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         result = _read_single_result(result_path)
         ledger_confirmed = canonical_url in _confirmed_urls(args.submission_log)
+        result_status = str(result.get("status", "NO_RESULT"))
+        if result_status in {"BROWSER_SESSION_FAILED", "ENGINE_EXECUTION_ERROR"}:
+            telemetry.emit(
+                "browser_session_failed",
+                provider=platform,
+                stage="application",
+                cycle_status=result_status,
+                exit_code=return_code,
+            )
+        if _is_confirmed(result) and not ledger_confirmed:
+            telemetry.emit(
+                "ledger_persist_failed",
+                provider=platform,
+                stage="submission_ledger",
+                cycle_status="confirmed_without_ledger",
+                exit_code=return_code,
+            )
         confirmed = return_code == 0 and _is_confirmed(result) and ledger_confirmed
         status = "confirmed" if confirmed else "failed"
         record = {
@@ -314,7 +334,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "started_at": started_at.isoformat(),
             "updated_at": datetime.now(UTC).isoformat(),
             "exit_code": return_code,
-            "result_status": str(result.get("status", "NO_RESULT")),
+            "result_status": result_status,
             "ledger_confirmed": ledger_confirmed,
             "evidence_path": str(result_path),
             "result": result,
@@ -385,6 +405,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"limit_per_ats={args.max_attempts_per_ats}",
         flush=True,
     )
+    telemetry.emit(
+        "worker_cycle_complete",
+        level="error" if failures else "info",
+        stage="application_batch",
+        cycle_status="failed" if failures else "complete",
+        failure_count=len(failures),
+    )
+    telemetry.flush()
     return 1 if failures else 0
 
 

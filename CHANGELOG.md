@@ -6,6 +6,9 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Added
 
+- Opt-in, fail-open Sentry telemetry for unattended application, source,
+  document-archive, and application-batch workers, with fixed event names,
+  strict metadata allow-listing, and optional systemd environment loading.
 - An explicit `structured` package extra for supported Pydantic 2 resume-schema
   decoding, installed and exercised by the locked CI environment.
 - Reproducible uv dependency locking, automated uv and GitHub Actions updates,
