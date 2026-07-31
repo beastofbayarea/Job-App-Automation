@@ -114,8 +114,32 @@ class ResumeAIClientTests(unittest.TestCase):
         self.assertEqual(result["ats"], "workable")
         playwright.chromium.launch.assert_called_once_with(headless=True)
         playwright.chromium.connect_over_cdp.assert_not_called()
-        page.close.assert_called_once()
+        page.close.assert_not_called()
         browser.close.assert_called_once()
+
+    def test_smartrecruiters_job_scraping_closes_its_owned_background_session(self) -> None:
+        playwright = MagicMock()
+        page = MagicMock()
+        page.evaluate.return_value = "Product Manager job description " * 20
+        page.locator.return_value.all.return_value = []
+        session = MagicMock(page=page)
+        manager = MagicMock()
+        manager.__enter__.return_value = playwright
+        manager.__exit__.return_value = False
+
+        with (
+            patch.object(ai, "sync_playwright", return_value=manager),
+            patch.object(ai, "open_chrome_session", return_value=session) as open_session,
+            patch.object(ai, "close_browser_session") as close_session,
+        ):
+            result = ai.scrape_job(
+                "https://jobs.smartrecruiters.com/Example/744000123456789-product-manager"
+            )
+
+        self.assertEqual(result["ats"], "smartrecruiters")
+        self.assertTrue(open_session.call_args.kwargs["headless"])
+        self.assertTrue(open_session.call_args.kwargs["background"])
+        close_session.assert_called_once_with(session)
 
     def test_job_scraping_rejects_a_non_job_url_before_opening_a_browser(self) -> None:
         with patch.object(ai, "sync_playwright") as sync_playwright:

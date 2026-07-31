@@ -46,7 +46,11 @@ import pypdf
 from playwright.sync_api import sync_playwright
 
 from ..core.adapters import LLMClient, LLMSettings
-from ..core.engine_shared import detect_ats_job_url, open_chrome_session
+from ..core.engine_shared import (
+    close_browser_session,
+    detect_ats_job_url,
+    open_chrome_session,
+)
 from ..core.runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 
 try:
@@ -430,11 +434,7 @@ def scrape_job(url: str) -> dict[str, Any]:
                 "questions": questions,
             }
         finally:
-            try:
-                page.close()
-            finally:
-                if session.close_browser_on_exit:
-                    session.browser.close()
+            close_browser_session(session)
 
 
 def scrape_ashby_job(url: str) -> dict[str, Any]:

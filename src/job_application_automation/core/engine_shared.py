@@ -30,8 +30,10 @@ import json
 import logging
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 import uuid
@@ -114,6 +116,10 @@ class BrowserSession:
     page: Page
     close_browser_on_exit: bool
     close_page_on_exit: bool = False
+    close_cdp_browser_on_exit: bool = False
+    cdp_endpoint: str = ""
+    owned_process: subprocess.Popen[Any] | None = None
+    owned_profile_path: Path | None = None
 
 
 def deep_merge(base: Mapping[str, Any], override: Mapping[str, Any]) -> dict[str, Any]:
@@ -475,6 +481,16 @@ def answer_variants(
     del label  # semantic option aliases are configuration-driven.
     if normalized in {"yes", "no"}:
         variants.append(normalized.title())
+    duration = re.fullmatch(r"(\d+)\s*(day|week|month)s?", normalized)
+    if duration:
+        quantity = int(duration.group(1))
+        unit = duration.group(2)
+        days = quantity * {"day": 1, "week": 7, "month": 30}[unit]
+        variants.append(f"{days} days")
+        if days in {14, 15}:
+            variants.extend(("2 weeks", "15 days"))
+        if days in {28, 30}:
+            variants.extend(("4 weeks", "1 month", "30 days"))
     if configured_variants:
         for key, values in configured_variants.items():
             if (
@@ -534,6 +550,11 @@ def is_location_question(question_text: Any) -> bool:
     normalized = re.sub(r"\s+", " ", str(question_text)).strip().lower()
     # Binary onsite/hybrid questions can mention an "office location" while
     # asking for a Yes/No commitment rather than a geographic selection.
+    if re.search(r"\b(?:are|would|will|can)\s+you\b", normalized) and re.search(
+        r"\brelocat(?:e|ing|ion)\b",
+        normalized,
+    ):
+        return False
     if re.search(
         r"\b(?:are|would)\s+you\s+(?:willing|able|available|comfortable)\b",
         normalized,
@@ -804,13 +825,26 @@ def generate_essay_answer(
         return ""
 
 
+def _consent_control_is_checked(control: Locator) -> bool:
+    if (control.get_attribute("role") or "").casefold() == "checkbox":
+        return (control.get_attribute("aria-checked") or "").casefold() == "true"
+    return control.is_checked()
+
+
+def _check_consent_control(control: Locator) -> None:
+    if (control.get_attribute("role") or "").casefold() == "checkbox":
+        control.click(force=True)
+    else:
+        control.check(force=True)
+
+
 def fill_required_consent(page: Page) -> list[str]:
     checked: list[str] = []
-    boxes = page.locator('input[type="checkbox"]')
+    boxes = page.locator('input[type="checkbox"], [role="checkbox"]')
     for index in range(boxes.count()):
         box = boxes.nth(index)
         try:
-            if box.is_checked():
+            if _consent_control_is_checked(box):
                 continue
             label = label_for(page, box)
             context = label or box.evaluate(
@@ -818,7 +852,8 @@ def fill_required_consent(page: Page) -> list[str]:
             )
             explicit_confirm = bool(
                 re.search(
-                    r"\bi\b.{0,120}\b(?:acknowledge|agree|consent|accept|confirm)\b",
+                    r"\b(?:i|you)\b.{0,120}"
+                    r"\b(?:acknowledge|agree|consent|accept|confirm|declare)\b",
                     context,
                     re.I,
                 )
@@ -849,16 +884,14 @@ def fill_required_consent(page: Page) -> list[str]:
                 re.I,
             ):
                 continue
-            required = explicit_confirm or (
-                consent_context
-                and (
-                    box.get_attribute("required") is not None
-                    or box.get_attribute("aria-required") == "true"
-                )
+            required = consent_context and (
+                explicit_confirm
+                or box.get_attribute("required") is not None
+                or box.get_attribute("aria-required") == "true"
             )
             if required:
-                box.check(force=True)
-                if box.is_checked():
+                _check_consent_control(box)
+                if _consent_control_is_checked(box):
                     checked.append(" ".join(context.split())[:160])
         except Exception:
             continue
@@ -901,10 +934,14 @@ def capture_screenshot(page: Page, directory: Path, company: str, tag: str) -> s
     directory.mkdir(parents=True, exist_ok=True)
     target = directory / f"{safe_filename(company, 'ats')}_{safe_filename(tag, 'capture')}.png"
     try:
-        page.screenshot(path=str(target), full_page=True)
+        page.screenshot(path=str(target), full_page=True, timeout=15_000)
         return str(target)
     except Exception:
-        return ""
+        try:
+            page.screenshot(path=str(target), full_page=False, timeout=10_000)
+            return str(target)
+        except Exception:
+            return ""
 
 
 def _new_page(browser: Browser) -> Page:
@@ -987,6 +1024,7 @@ def _resolve_background_page(browser: Browser, marker: str) -> Page:
 
 def page_has_captcha(page: Page) -> bool:
     """Return whether a visible CAPTCHA is present without interacting with it."""
+    inspection_failed = False
     try:
         challenge = page.locator(
             'iframe[src*="captcha" i]:visible, iframe[title*="captcha" i]:visible, '
@@ -997,17 +1035,25 @@ def page_has_captcha(page: Page) -> bool:
         )
         if challenge.count() > 0:
             return True
-        body = page.locator("body").inner_text()
-        return bool(
-            re.search(
-                r"\b(?:verify you are human|complete the security (?:check|challenge)|"
-                r"cloudflare security challenge)\b",
-                body,
-                re.I,
-            )
-        )
     except Exception:
-        return False
+        inspection_failed = True
+    try:
+        body = page.locator("body").inner_text()
+        if re.search(
+            r"\b(?:verify you are human|complete the security (?:check|challenge)|"
+            r"cloudflare security challenge)\b",
+            body,
+            re.I,
+        ):
+            return True
+    except Exception:
+        inspection_failed = True
+    if inspection_failed:
+        logger.warning(
+            "CAPTCHA inspection failed; blocking browser action because page state is uncertain"
+        )
+        return True
+    return False
 
 
 def _normalized_navigation_url(value: str) -> str:
@@ -1049,7 +1095,33 @@ def navigate_reusing_tab(
         if page_has_captcha(page):
             raise RuntimeError("CAPTCHA_REQUIRED: existing tab was left open")
         return
-    page.goto(url, wait_until=wait_until, timeout=timeout)
+    last_error: Exception | None = None
+    for attempt in range(2):
+        try:
+            page.goto(url, wait_until=wait_until, timeout=timeout)
+            return
+        except Exception as exc:
+            last_error = exc
+            try:
+                at_target = _normalized_navigation_url(page.url) == target
+                body_text = page.locator("body").inner_text(timeout=2000).strip()
+                network_error = re.search(
+                    r"\b(?:this site can(?:not|'t) be reached|"
+                    r"page (?:is not|isn't) working|err_[a-z_]+)\b",
+                    body_text,
+                    re.I,
+                )
+                if at_target and len(body_text) >= 40 and not network_error:
+                    logger.info(
+                        "Navigation timed out after usable page content loaded; continuing in-place"
+                    )
+                    return
+            except Exception:
+                pass
+            if attempt == 0:
+                page.wait_for_timeout(750)
+    if last_error is not None:
+        raise last_error
 
 
 def _find_chrome_executable() -> Path | None:
@@ -1059,6 +1131,215 @@ def _find_chrome_executable() -> Path | None:
         Path(os.environ.get("LOCALAPPDATA", "")) / "Google/Chrome/Application/chrome.exe",
     )
     return next((path for path in candidates if path.is_file()), None)
+
+
+def _start_hidden_background_chrome(
+    endpoint: str,
+    profile_name: str,
+) -> tuple[subprocess.Popen[Any], Path, str] | None:
+    """Start an owned Chrome without activating or exposing its window."""
+    parsed_endpoint = urlparse(endpoint)
+    if parsed_endpoint.hostname not in {"127.0.0.1", "localhost"}:
+        return None
+    chrome = _find_chrome_executable()
+    if chrome is None:
+        return None
+
+    temp_root = Path(tempfile.gettempdir())
+    _cleanup_stale_owned_profiles(temp_root, profile_name)
+    profile: Path | None = None
+    try:
+        profile = Path(
+            tempfile.mkdtemp(
+                prefix=f"{safe_filename(profile_name, 'ats-profile')}-",
+                dir=temp_root,
+            )
+        )
+        startupinfo = None
+        creationflags = 0
+        if os.name == "nt":
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = subprocess.SW_HIDE
+            creationflags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+
+        process = subprocess.Popen(
+            [
+                str(chrome),
+                "--remote-debugging-port=0",
+                f"--user-data-dir={profile}",
+                "--no-first-run",
+                "--no-default-browser-check",
+                "--disable-session-crashed-bubble",
+                "--disable-background-mode",
+                "--start-minimized",
+                "--window-position=-32000,-32000",
+                "--window-size=800,600",
+                "about:blank",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            startupinfo=startupinfo,
+            creationflags=creationflags,
+        )
+    except Exception as exc:
+        if profile is not None:
+            _cleanup_owned_profile(profile)
+        logger.info("Could not launch owned hidden Chrome: %s", exc)
+        return None
+
+    for _ in range(20):
+        if process.poll() is not None:
+            _cleanup_owned_profile(profile)
+            return None
+        owned_endpoint = _read_owned_cdp_endpoint(profile)
+        if not owned_endpoint:
+            time.sleep(0.3)
+            continue
+        try:
+            version_url = f"{owned_endpoint}/json/version"
+            with urllib.request.urlopen(version_url, timeout=1):  # noqa: S310
+                return process, profile, owned_endpoint
+        except Exception:
+            time.sleep(0.3)
+    _stop_owned_chrome_process(process)
+    _cleanup_owned_profile(profile)
+    return None
+
+
+def _read_owned_cdp_endpoint(profile: Path) -> str:
+    """Read the exclusive loopback endpoint Chrome assigned to an owned profile."""
+    try:
+        lines = (profile / "DevToolsActivePort").read_text(encoding="utf-8").splitlines()
+        port = int(lines[0])
+        if 1 <= port <= 65_535:
+            return f"http://127.0.0.1:{port}"
+    except (OSError, ValueError, IndexError):
+        pass
+    return ""
+
+
+def _owned_cdp_endpoint_is_live(endpoint: str) -> bool:
+    if not endpoint:
+        return False
+    try:
+        with urllib.request.urlopen(  # noqa: S310
+            f"{endpoint.rstrip('/')}/json/version",
+            timeout=0.5,
+        ):
+            return True
+    except Exception:
+        return False
+
+
+def _cleanup_stale_owned_profiles(
+    temp_root: Path,
+    profile_name: str,
+    *,
+    max_age_seconds: int = 3600,
+) -> None:
+    """Remove only aged, inactive unique profiles left by a force-killed engine."""
+    prefix = f"{safe_filename(profile_name, 'ats-profile')}-"
+    try:
+        candidates = list(temp_root.iterdir())
+    except OSError:
+        return
+    now = time.time()
+    for candidate in candidates:
+        try:
+            if (
+                candidate.is_symlink()
+                or not candidate.is_dir()
+                or not candidate.name.startswith(prefix)
+                or now - candidate.stat().st_mtime < max_age_seconds
+            ):
+                continue
+            endpoint = _read_owned_cdp_endpoint(candidate)
+            if endpoint and _owned_cdp_endpoint_is_live(endpoint):
+                continue
+            _cleanup_owned_profile(candidate)
+        except OSError:
+            logger.debug("Could not inspect stale owned profile %s", candidate, exc_info=True)
+
+
+def _cleanup_owned_profile(profile: Path) -> None:
+    """Remove only an exact temporary Chrome profile created by this runtime."""
+    try:
+        temp_root = Path(tempfile.gettempdir()).resolve()
+        resolved = profile.resolve()
+        if resolved.parent == temp_root and resolved != temp_root:
+            for _ in range(3):
+                shutil.rmtree(resolved, ignore_errors=True)
+                if not resolved.exists():
+                    return
+                time.sleep(0.2)
+            logger.warning("Owned Chrome profile remains after cleanup: %s", resolved)
+    except Exception:
+        logger.debug("Could not remove owned Chrome profile %s", profile, exc_info=True)
+
+
+def _stop_owned_chrome_process(process: subprocess.Popen[Any]) -> None:
+    try:
+        process.wait(timeout=5)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    except Exception:
+        logger.debug("Could not wait for owned Chrome to exit", exc_info=True)
+    try:
+        process.terminate()
+    except Exception:
+        logger.debug("Could not terminate owned Chrome", exc_info=True)
+    try:
+        process.wait(timeout=5)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    except Exception:
+        logger.debug("Could not wait for terminated owned Chrome", exc_info=True)
+    try:
+        process.kill()
+    except Exception:
+        logger.debug("Could not kill owned Chrome", exc_info=True)
+    try:
+        process.wait(timeout=5)
+    except Exception:
+        logger.debug("Owned Chrome did not exit after kill", exc_info=True)
+
+
+def close_browser_session(session: BrowserSession) -> None:
+    """Release a session, including an owned hidden Chrome when applicable."""
+    if getattr(session, "close_page_on_exit", False):
+        try:
+            session.page.close()
+        except Exception:
+            logger.debug("Could not close the browser session page", exc_info=True)
+    if getattr(session, "close_browser_on_exit", False):
+        try:
+            session.browser.close()
+        except Exception:
+            logger.debug("Could not close the Playwright browser", exc_info=True)
+    if not getattr(session, "close_cdp_browser_on_exit", False):
+        return
+
+    endpoint = getattr(session, "cdp_endpoint", "")
+    if endpoint:
+        try:
+            _raw_browser_cdp_command(endpoint, "Browser.close", {})
+        except Exception:
+            logger.debug("Could not close the owned Chrome over CDP", exc_info=True)
+    process = getattr(session, "owned_process", None)
+    if process is not None:
+        try:
+            _stop_owned_chrome_process(process)
+        except Exception:
+            logger.debug("Could not stop the owned Chrome process", exc_info=True)
+    profile = getattr(session, "owned_profile_path", None)
+    if profile is not None:
+        try:
+            _cleanup_owned_profile(profile)
+        except Exception:
+            logger.debug("Could not clean the owned Chrome profile", exc_info=True)
 
 
 def open_chrome_session(
@@ -1086,10 +1367,45 @@ def open_chrome_session(
             if target_id:
                 _close_background_target(endpoint, target_id)
             logger.info(
-                "Background Chrome session unavailable on %s; using isolated headless browser: %s",
+                "Existing background Chrome session unavailable on %s: %s",
                 endpoint,
                 exc,
             )
+        owned_chrome = _start_hidden_background_chrome(endpoint, profile_name)
+        if owned_chrome is not None:
+            owned_process, owned_profile, owned_endpoint = owned_chrome
+            target_id = ""
+            try:
+                marker, target_id = _create_background_target(owned_endpoint)
+                browser = playwright.chromium.connect_over_cdp(owned_endpoint)
+                return BrowserSession(
+                    browser=browser,
+                    page=_resolve_background_page(browser, marker),
+                    close_browser_on_exit=False,
+                    close_page_on_exit=True,
+                    close_cdp_browser_on_exit=True,
+                    cdp_endpoint=owned_endpoint,
+                    owned_process=owned_process,
+                    owned_profile_path=owned_profile,
+                )
+            except Exception as exc:
+                if target_id:
+                    _close_background_target(owned_endpoint, target_id)
+                try:
+                    _raw_browser_cdp_command(owned_endpoint, "Browser.close", {})
+                except Exception:
+                    logger.debug(
+                        "Could not close the failed owned Chrome session over CDP",
+                        exc_info=True,
+                    )
+                _stop_owned_chrome_process(owned_process)
+                _cleanup_owned_profile(owned_profile)
+                logger.info(
+                    "Owned hidden Chrome session unavailable on %s; "
+                    "using isolated headless browser: %s",
+                    owned_endpoint,
+                    exc,
+                )
     if headless:
         browser = playwright.chromium.launch(headless=True)
         return BrowserSession(browser, _new_page(browser), True)

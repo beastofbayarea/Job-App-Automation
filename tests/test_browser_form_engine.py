@@ -4,7 +4,7 @@ from contextlib import nullcontext
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 
@@ -83,7 +83,7 @@ def _run_with_browser_mocks(
         ) as open_session,
         patch.object(browser_form, "navigate_reusing_tab"),
         patch.object(browser_form, "_dismiss_cookie_banner"),
-        patch.object(browser_form, "_wait_for_application_entry"),
+        patch.object(browser_form, "_wait_for_application_entry", return_value="form"),
         patch.object(browser_form, "_closed_job_reason", return_value=""),
         patch.object(browser_form, "_first_visible_for", side_effect=apply_and_submit),
         patch.object(browser_form, "_fill_standard_fields", return_value=_successful_fill()),
@@ -117,6 +117,7 @@ def _run_with_browser_mocks(
             screenshot_dir=tmp_path,
         )
     assert open_session.call_args.kwargs["headless"] is True
+    assert open_session.call_args.kwargs["background"] is True
     return result, session, page
 
 
@@ -142,8 +143,12 @@ def test_application_entry_waits_when_initial_apply_control_is_late(tmp_path: Pa
         patch.object(browser_form, "open_chrome_session", return_value=session),
         patch.object(browser_form, "navigate_reusing_tab") as navigate,
         patch.object(browser_form, "_dismiss_cookie_banner"),
-        patch.object(browser_form, "_wait_for_application_entry") as wait_for_entry,
-        patch.object(browser_form, "_wait_for_form"),
+        patch.object(
+            browser_form,
+            "_wait_for_application_entry",
+            return_value="apply",
+        ) as wait_for_entry,
+        patch.object(browser_form, "_wait_for_form", return_value=True),
         patch.object(browser_form, "_closed_job_reason", return_value=""),
         patch.object(
             browser_form,
@@ -170,7 +175,128 @@ def test_application_entry_waits_when_initial_apply_control_is_late(tmp_path: Pa
 
     wait_for_entry.assert_called_once_with(session.page, workable.SPEC, 30000)
     assert navigate.call_count == 2
+    assert all(call.kwargs["wait_until"] == "commit" for call in navigate.call_args_list)
     assert result["status"] == "PREFILLED_ONLY"
+
+
+def test_application_entry_waits_for_a_visible_control_not_a_hidden_template() -> None:
+    page = MagicMock()
+    apply_button = MagicMock()
+    apply_button.evaluate.return_value = "a"
+    apply_button.get_attribute.side_effect = lambda name: (
+        "/example/j/ABC123/apply/" if name == "href" else None
+    )
+    with patch.object(browser_form, "_first_visible_for", side_effect=[None, None, apply_button]):
+        entry_kind = browser_form._wait_for_application_entry(page, workable.SPEC, 15_000)
+
+    assert entry_kind == "apply"
+    assert page.wait_for_timeout.call_count == 1
+
+
+def test_visible_anchor_is_not_ready_until_provider_assigns_href() -> None:
+    control = MagicMock()
+    control.evaluate.return_value = "a"
+    control.get_attribute.side_effect = lambda name: "" if name in {"href", "onclick"} else None
+
+    assert browser_form._apply_control_is_ready(control) is False
+
+    control.get_attribute.side_effect = lambda name: (
+        "/oneclick-ui/company/example/publication/123" if name == "href" else ""
+    )
+    assert browser_form._apply_control_is_ready(control) is True
+
+
+def test_disabled_apply_button_is_not_ready_during_page_hydration() -> None:
+    control = MagicMock()
+    control.is_enabled.return_value = False
+    control.get_attribute.return_value = None
+    control.evaluate.return_value = "button"
+
+    assert browser_form._apply_control_is_ready(control) is False
+
+
+def test_captcha_after_apply_entry_blocks_before_any_form_fill(tmp_path: Path) -> None:
+    session, page = _session()
+    page.url = "https://jobs.smartrecruiters.com/Example/744000123456789-role"
+    apply_button = MagicMock()
+    apply_button.evaluate.return_value = "a"
+    apply_button.get_attribute.return_value = (
+        "https://jobs.smartrecruiters.com/oneclick-ui/company/Example/publication/123"
+    )
+    with (
+        patch.object(browser_form, "sync_playwright", return_value=nullcontext(MagicMock())),
+        patch.object(browser_form, "open_chrome_session", return_value=session),
+        patch.object(browser_form, "navigate_reusing_tab"),
+        patch.object(browser_form, "_dismiss_cookie_banner"),
+        patch.object(browser_form, "_closed_job_reason", return_value=""),
+        patch.object(
+            browser_form,
+            "_first_visible_for",
+            side_effect=[apply_button, apply_button],
+        ),
+        patch.object(browser_form, "_wait_for_form", return_value=False),
+        patch.object(browser_form, "page_has_captcha", return_value=True),
+        patch.object(browser_form, "capture_screenshot", return_value="captcha.png"),
+        patch.object(browser_form, "_fill_standard_fields") as fill_standard_fields,
+    ):
+        result = browser_form.run_browser_form_engine(
+            workable.SPEC,
+            url="https://apply.workable.com/example/j/ABC123/",
+            resume=_resume(tmp_path),
+            config=_profile(),
+            live_submit=False,
+            screenshot_dir=tmp_path,
+        )
+
+    assert result["status"] == "CAPTCHA_REQUIRED"
+    assert result["captcha_present"] is True
+    assert result["submitted"] is False
+    assert result["detail"] == "CAPTCHA challenge blocked the application form"
+    fill_standard_fields.assert_not_called()
+
+
+def test_form_wait_stops_immediately_when_a_captcha_replaces_the_form() -> None:
+    page = MagicMock()
+    with (
+        patch.object(browser_form, "_first_visible_for", return_value=None),
+        patch.object(browser_form, "page_has_captcha", return_value=True),
+    ):
+        assert browser_form._wait_for_form(page, workable.SPEC, 30_000) is False
+
+    page.wait_for_timeout.assert_not_called()
+
+
+def test_multistep_readiness_waits_for_spinner_to_clear() -> None:
+    page = MagicMock()
+    spinner = page.locator.return_value
+    spinner.count.side_effect = [1, 0]
+    control = MagicMock()
+    with (
+        patch.object(
+            browser_form,
+            "_first_visible_for",
+            return_value=control,
+        ),
+        patch.object(browser_form, "_step_fingerprint", return_value="step-two"),
+    ):
+        ready = browser_form._wait_for_step_ready(page, 30_000, "step-one")
+
+    assert ready is True
+    page.wait_for_timeout.assert_called_once_with(250)
+
+
+def test_multistep_readiness_fails_closed_when_step_never_changes() -> None:
+    page = MagicMock()
+    page.locator.return_value.count.return_value = 0
+    with (
+        patch.object(browser_form, "_first_visible_for", return_value=MagicMock()),
+        patch.object(browser_form, "_step_fingerprint", return_value="same-step"),
+        patch.object(browser_form.time, "monotonic", side_effect=[0, 0, 31]),
+    ):
+        ready = browser_form._wait_for_step_ready(page, 30_000, "same-step")
+
+    assert ready is False
+    page.wait_for_timeout.assert_called_once_with(250)
 
 
 def test_maximum_option_ranking_rejects_no_experience_even_when_list_is_reversed() -> None:
@@ -204,6 +330,66 @@ def test_smartrecruiters_combobox_selects_custom_spl_option() -> None:
     assert selected is True
     assert "spl-select-option" in page.locator.call_args.args[0]
     option.click.assert_called_once()
+
+
+def test_combobox_clears_failed_search_to_match_the_full_option_list() -> None:
+    page = MagicMock()
+    control = MagicMock()
+    control.evaluate.return_value = "input"
+    attributes = {
+        "readonly": None,
+        "aria-autocomplete": "list",
+        "aria-controls": "menu-answer",
+        "aria-owns": None,
+        "aria-invalid": "false",
+        "aria-expanded": "true",
+    }
+    control.get_attribute.side_effect = attributes.get
+    control.locator.return_value.count.return_value = 0
+    control.input_value.return_value = "Yes"
+    options = MagicMock()
+    options.count.side_effect = [0, 1]
+    option = options.nth.return_value
+    option.inner_text.return_value = "Yes"
+    page.locator.return_value = options
+
+    selected = browser_form._select_combobox(page, control, ("Yes",))
+
+    assert selected is True
+    assert control.fill.call_args_list == [call("Yes"), call("")]
+    option.click.assert_called_once_with(force=True, timeout=3000)
+
+
+def test_custom_select_without_combobox_role_is_detected_from_listbox_wiring() -> None:
+    control = MagicMock()
+    control.get_attribute.side_effect = lambda name: (
+        "menu-relocation" if name == "aria-controls" else None
+    )
+
+    assert browser_form._is_combobox_control(control) is True
+
+
+def test_affirmative_relocation_location_control_uses_named_target() -> None:
+    label = "Are you currently based in Pune or willing to relocate to Pune?"
+
+    assert browser_form._relocation_target_answers(
+        label,
+        "Yes",
+        {"location": "San Francisco, California, United States"},
+    ) == ("Willing to relocate to Pune", "Relocate to Pune")
+    assert browser_form._relocation_target_answers(
+        label,
+        "Yes",
+        {"location": "Pune, India"},
+    ) == ("Based in Pune",)
+    assert (
+        browser_form._relocation_target_answers(
+            label,
+            "No",
+            {"location": "San Francisco, California, United States"},
+        )
+        == ()
+    )
 
 
 def test_smartrecruiters_custom_radio_group_selects_configured_answer() -> None:
@@ -248,7 +434,7 @@ def test_smartrecruiters_uses_the_background_cdp_fallback() -> None:
     assert smartrecruiters.SPEC.cover_letter_text_selectors[0].startswith("textarea#")
     assert 'spl-button:has-text("Submit")' in smartrecruiters.SPEC.submit_selectors
     assert smartrecruiters.SPEC.next_selectors == ('spl-button:has-text("Next")',)
-    assert workable.SPEC.background_cdp is False
+    assert workable.SPEC.background_cdp is True
 
 
 def test_stabilize_email_fields_refills_confirmation_after_dynamic_rerender() -> None:
@@ -322,6 +508,10 @@ def test_positive_checkbox_policy_is_not_applied_to_document_declarations() -> N
     )
     assert browser_form._select_all_positive_checkbox_answers(
         "How do you use AI tools in your workflows? Select all that apply.",
+        rules,
+    )
+    assert not browser_form._select_all_positive_checkbox_answers(
+        "What topics do you create content for?",
         rules,
     )
 
@@ -499,11 +689,45 @@ def test_confirmation_is_required_for_successful_submission(tmp_path: Path) -> N
     assert result["success"] is True
 
 
-def test_post_submit_captcha_is_not_reported_as_success(tmp_path: Path) -> None:
+def test_captcha_that_appears_before_submit_blocks_the_click(tmp_path: Path) -> None:
+    submit = MagicMock()
     result, _, _ = _run_with_browser_mocks(
         tmp_path,
         live_submit=True,
         captcha_values=[False, True],
+        submit_button=submit,
+        confirmed=False,
+    )
+
+    submit.click.assert_not_called()
+    assert result["status"] == "CAPTCHA_REQUIRED"
+    assert result["submitted"] is False
+    assert result["captcha_present"] is True
+
+
+def test_submit_click_timeout_is_quarantined_as_possibly_submitted(tmp_path: Path) -> None:
+    submit = MagicMock()
+    submit.click.side_effect = TimeoutError("navigation started")
+    result, _, _ = _run_with_browser_mocks(
+        tmp_path,
+        live_submit=True,
+        captcha_values=[False, False] + [False] * 15,
+        submit_button=submit,
+        confirmed=False,
+    )
+
+    submit.click.assert_called_once()
+    assert result["status"] == "SUBMISSION_UNCONFIRMED"
+    assert result["submitted"] is True
+    assert result["confirmed"] is False
+    assert "dispatch may have occurred" in result["detail"]
+
+
+def test_post_submit_captcha_is_not_reported_as_success(tmp_path: Path) -> None:
+    result, _, _ = _run_with_browser_mocks(
+        tmp_path,
+        live_submit=True,
+        captcha_values=[False, False, True],
         submit_button=MagicMock(),
         confirmed=False,
     )

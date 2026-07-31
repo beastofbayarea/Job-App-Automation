@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import logging
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,7 @@ from ..core.engine_shared import (
     answer_variants,
     build_engine_parser,
     capture_screenshot,
+    close_browser_session,
     configured_answer,
     confirmation_visible,
     emit_engine_result,
@@ -316,34 +318,139 @@ def _dismiss_cookie_banner(page: Page) -> None:
             continue
 
 
-def _wait_for_form(page: Page, spec: BrowserFormSpec, timeout: int) -> None:
-    """Wait until the provider's asynchronously rendered identity form is attached."""
-    selector = ", ".join(spec.first_name_selectors + spec.full_name_selectors)
-    if not selector:
-        return
+def _wait_for_form(page: Page, spec: BrowserFormSpec, timeout: int) -> bool:
+    """Wait until the provider's asynchronously rendered identity form is visible."""
+    selectors = spec.first_name_selectors + spec.full_name_selectors
+    if not selectors:
+        return True
+    deadline = time.monotonic() + min(max(timeout * 2, 30_000), 60_000) / 1000
+    while time.monotonic() < deadline:
+        if _first_visible_for(page, selectors) is not None:
+            return True
+        if page_has_captcha(page):
+            return False
+        page.wait_for_timeout(250)
+    return False
+
+
+def _apply_control_is_ready(control: Any) -> bool:
     try:
-        page.locator(selector).first.wait_for(
-            state="attached",
-            timeout=min(timeout, 15_000),
+        if (control.get_attribute("aria-disabled") or "").casefold() == "true":
+            return False
+        if not control.is_enabled():
+            return False
+        tag = str(control.evaluate("element => element.tagName.toLowerCase()")).casefold()
+        if tag != "a":
+            return True
+        return bool(
+            (control.get_attribute("href") or "").strip()
+            or (control.get_attribute("onclick") or "").strip()
         )
-    except Exception as exc:
-        logger.debug("%s form did not become ready: %s", spec.display_name, exc)
+    except Exception:
+        return False
 
 
-def _wait_for_application_entry(page: Page, spec: BrowserFormSpec, timeout: int) -> None:
-    """Wait for either a job-page apply control or a directly rendered form."""
-    selector = ", ".join(
-        spec.apply_selectors + spec.first_name_selectors + spec.full_name_selectors
+def _wait_for_application_entry(page: Page, spec: BrowserFormSpec, timeout: int) -> str:
+    """Wait for an actionable apply control or a directly rendered form."""
+    deadline = time.monotonic() + min(max(timeout * 2, 30_000), 60_000) / 1000
+    form_selectors = spec.first_name_selectors + spec.full_name_selectors
+    while time.monotonic() < deadline:
+        apply_control = _first_visible_for(page, spec.apply_selectors)
+        if apply_control is not None and _apply_control_is_ready(apply_control):
+            return "apply"
+        if form_selectors and _first_visible_for(page, form_selectors) is not None:
+            return "form"
+        page.wait_for_timeout(250)
+    return ""
+
+
+def _step_fingerprint(page: Page) -> str:
+    """Describe visible controls without retaining candidate-entered values."""
+    try:
+        return str(
+            page.evaluate(
+                """() => {
+                    const visible = element => {
+                        const style = getComputedStyle(element);
+                        const rect = element.getBoundingClientRect();
+                        return style.visibility !== "hidden" && style.display !== "none" &&
+                            rect.width > 0 && rect.height > 0;
+                    };
+                    const selector = [
+                        "input:not([type='hidden'])",
+                        "select",
+                        "textarea",
+                        "[role='combobox']",
+                        "[role='checkbox']",
+                        "[role='radio']",
+                        "button",
+                        "spl-button",
+                    ].join(",");
+                    const controls = [...document.querySelectorAll(selector)]
+                        .filter(visible)
+                        .map(element => {
+                            const label = element.labels?.[0]?.innerText ||
+                                element.closest("label, fieldset")?.innerText || "";
+                            return [
+                                element.tagName,
+                                element.getAttribute("type") || "",
+                                element.getAttribute("name") || "",
+                                element.id || "",
+                                element.getAttribute("aria-label") || "",
+                                String(label).replace(/\\s+/g, " ").trim().slice(0, 120),
+                            ];
+                        });
+                    return JSON.stringify({url: location.href, controls});
+                }"""
+            )
+            or ""
+        )
+    except Exception:
+        return ""
+
+
+def _wait_for_step_ready(
+    page: Page,
+    timeout: int,
+    previous_fingerprint: str,
+) -> bool:
+    """Wait for a multistep form to visibly transition before inspecting controls."""
+    deadline = time.monotonic() + min(timeout, 30_000) / 1000
+    if not previous_fingerprint:
+        return False
+    saw_busy_state = False
+    spinner_selector = (
+        '[role="progressbar"]:visible, [aria-busy="true"]:visible, '
+        "spl-spinner:visible, spl-loader:visible, "
+        '[class*="spinner" i]:visible, [class*="loading" i]:visible'
     )
-    if not selector:
-        return
-    try:
-        page.locator(selector).first.wait_for(
-            state="attached",
-            timeout=min(timeout, 15_000),
-        )
-    except Exception as exc:
-        logger.debug("%s application entry did not become ready: %s", spec.display_name, exc)
+    control_selectors = (
+        'input:not([type="hidden"]):not([type="file"])',
+        "select",
+        "textarea",
+        '[role="combobox"]',
+        '[role="checkbox"]',
+        'button[type="submit"]',
+        "spl-button",
+    )
+    while time.monotonic() < deadline:
+        try:
+            busy = page.locator(spinner_selector).count() > 0
+            saw_busy_state = saw_busy_state or busy
+            current_fingerprint = _step_fingerprint(page)
+            if (
+                not busy
+                and _first_visible_for(page, control_selectors) is not None
+                and (
+                    saw_busy_state
+                    or (current_fingerprint and current_fingerprint != previous_fingerprint)
+                )
+            ):
+                return True
+        except Exception:
+            pass
+        page.wait_for_timeout(250)
+    return False
 
 
 def _clean_label(value: object) -> str:
@@ -498,6 +605,7 @@ def _select_combobox(
     prefer_maximum: bool = False,
 ) -> bool:
     """Select a React combobox option, with a guarded strongest-option policy."""
+    last_visible: list[str] = []
     try:
         readonly = control.get_attribute("readonly") is not None
         tag = control.evaluate("element => element.tagName.toLowerCase()")
@@ -511,10 +619,16 @@ def _select_combobox(
             if input_control and not readonly
             else ("",)
         )
-        query_values = queries or ("",)
+        # Provider search boxes sometimes require exact display text. If every
+        # configured alias filters the desired option out, clear the query once
+        # and match against the complete list instead of leaving the field blank.
+        query_values = (*queries, "") if queries else ("",)
         for query in query_values:
             if query:
                 control.fill(query)
+                page.wait_for_timeout(350)
+            elif input_control and not readonly:
+                control.fill("")
                 page.wait_for_timeout(350)
             clickable = control
             try:
@@ -556,6 +670,7 @@ def _select_combobox(
                 text = _clean_label(option.inner_text())
                 if text:
                     visible.append((option, text))
+            last_visible = [text for _, text in visible]
             selected = next(
                 (option for option, text in visible if _option_matches(text, variants)),
                 None,
@@ -564,7 +679,7 @@ def _select_combobox(
                 selected = max(visible, key=lambda item: _option_strength(item[1]))[0]
             if selected is None:
                 continue
-            selected.click(timeout=3000)
+            selected.click(force=True, timeout=3000)
             page.wait_for_timeout(500)
             if (
                 input_control
@@ -584,6 +699,11 @@ def _select_combobox(
             control.press("Escape")
     except Exception as exc:
         logger.debug("Combobox selection failed for %r: %s", variants, exc)
+    logger.debug(
+        "No combobox option matched configured values=%r; visible options=%r",
+        tuple(variants),
+        last_visible,
+    )
     return False
 
 
@@ -650,6 +770,23 @@ def _control_group_key(control: Any) -> str:
         )
     except Exception:
         return ""
+
+
+def _is_combobox_control(control: Any) -> bool:
+    if (control.get_attribute("role") or "").casefold() == "combobox":
+        return True
+    if control.get_attribute("aria-controls") or control.get_attribute("aria-owns"):
+        return True
+    if (control.get_attribute("aria-autocomplete") or "").casefold() in {"list", "both"}:
+        return True
+    try:
+        return bool(
+            control.locator(
+                "xpath=ancestor::*[@data-input-type='select' or @role='combobox'][1]"
+            ).count()
+        )
+    except Exception:
+        return False
 
 
 def _choose_group_options(
@@ -733,6 +870,11 @@ def _select_all_positive_checkbox_answers(
 ) -> bool:
     return bool(
         str(rules.get("interest_checkbox_selection", "")).casefold() == "all"
+        and not re.search(
+            r"\b(?:create|publish|write|produce)\b.{0,60}\b(?:content|topics?)\b",
+            label,
+            re.I,
+        )
         and re.search(
             r"\b(?:interest|interested|areas?|topics?|disciplines?|specialt(?:y|ies)|"
             r"select all that apply|use .{0,80} tools?)\b",
@@ -811,6 +953,30 @@ def _repeatable_language_answer(
     return ""
 
 
+def _relocation_target_answers(
+    label: str,
+    desired: object,
+    profile: Mapping[str, Any],
+) -> tuple[str, ...]:
+    if str(desired or "").strip().casefold() not in {"yes", "true"}:
+        return ()
+    match = re.search(
+        r"\brelocat(?:e|ing)\s+to\s+([^?;,]{2,60})",
+        label,
+        re.I,
+    )
+    if not match:
+        return ()
+    target = _clean_label(match.group(1))
+    current_location = str(profile.get("location") or "").casefold()
+    if target.casefold() in current_location:
+        return (f"Based in {target}",)
+    return (
+        f"Willing to relocate to {target}",
+        f"Relocate to {target}",
+    )
+
+
 def _fill_custom_questions(
     page: Page,
     config: Mapping[str, Any],
@@ -859,6 +1025,7 @@ def _fill_custom_questions(
             control_id = (control.get_attribute("id") or "").casefold()
             role_name = (control.get_attribute("role") or "").casefold()
             effective_type = role_name if role_name in {"radio", "checkbox"} else control_type
+            combobox_control = _is_combobox_control(control)
             if standard_selectors and control.evaluate(
                 "(element, selectors) => selectors.some(selector => element.matches(selector))",
                 list(standard_selectors),
@@ -913,6 +1080,7 @@ def _fill_custom_questions(
                 matchers,  # type: ignore[arg-type]
             )
             desired = _repeatable_language_answer(label, profile, rules) or desired
+            relocation_answers = _relocation_target_answers(label, desired, profile)
             if re.search(r"\byears?\b.*\bexperience\b", label, re.I):
                 desired = str(rules.get("management_experience_years") or desired or "")
             if (
@@ -946,7 +1114,9 @@ def _fill_custom_questions(
             desired = _answer_for_binary_options(desired, option_labels) or desired
 
             preferred = (
-                location_answer_candidates(profile)
+                relocation_answers
+                if relocation_answers
+                else location_answer_candidates(profile)
                 if is_location_question(label)
                 else answer_variants(
                     label,
@@ -964,7 +1134,7 @@ def _fill_custom_questions(
                 )
             )
             success = False
-            if role_name == "combobox":
+            if combobox_control:
                 success = _select_combobox(
                     page,
                     control,
@@ -1316,12 +1486,6 @@ def _closed_job_reason(page: Page, apply_button: Any | None) -> str:
     marker = next((phrase for phrase in _CLOSED_JOB_PATTERNS if phrase in combined), "")
     if marker:
         return marker
-    if apply_button is not None:
-        try:
-            if not apply_button.is_enabled():
-                return button_text or "apply control is disabled"
-        except Exception:
-            pass
     return ""
 
 
@@ -1358,17 +1522,31 @@ def run_browser_form_engine(
         )
         page = session.page
         try:
-            navigate_reusing_tab(page, url, timeout=timeout)
+            navigate_reusing_tab(page, url, timeout=timeout, wait_until="commit")
             if spec.render_wait_ms:
                 page.wait_for_timeout(spec.render_wait_ms)
             _dismiss_cookie_banner(page)
 
-            apply_button = _first_visible_for(page, spec.apply_selectors)
-            if apply_button is None:
-                _wait_for_application_entry(page, spec, timeout)
+            visible_apply_button = _first_visible_for(page, spec.apply_selectors)
+            entry_kind = (
+                "apply"
+                if visible_apply_button is not None
+                and _apply_control_is_ready(visible_apply_button)
+                else _wait_for_application_entry(page, spec, timeout)
+            )
+            apply_button = None
+            if entry_kind == "apply":
                 _dismiss_cookie_banner(page)
                 apply_button = _first_visible_for(page, spec.apply_selectors)
-            closed_reason = _closed_job_reason(page, apply_button)
+                if apply_button is None or not _apply_control_is_ready(apply_button):
+                    entry_kind = ""
+                    apply_button = None
+            closed_reason = _closed_job_reason(
+                page,
+                apply_button
+                or visible_apply_button
+                or _first_visible_for(page, spec.apply_selectors),
+            )
             if closed_reason:
                 screenshot = capture_screenshot(
                     page,
@@ -1390,18 +1568,93 @@ def run_browser_form_engine(
                     screenshot=screenshot,
                     detail=closed_reason,
                 )
+            if not entry_kind:
+                captcha = page_has_captcha(page)
+                screenshot = capture_screenshot(
+                    page,
+                    screenshot_dir,
+                    company or spec.display_name,
+                    "captcha" if captcha else "entry-not-ready",
+                )
+                return _result(
+                    spec=spec,
+                    status="CAPTCHA_REQUIRED" if captcha else "REQUIRED_FIELDS_NOT_FILLED",
+                    live_submit=live_submit,
+                    submitted=False,
+                    confirmed=False,
+                    filled_fields={},
+                    consent_fields=[],
+                    missing_critical=(
+                        [] if captcha else ["application form entry did not become ready"]
+                    ),
+                    missing_required=[],
+                    captcha_present=captcha,
+                    screenshot=screenshot,
+                    detail=(
+                        "CAPTCHA challenge blocked application form entry"
+                        if captcha
+                        else "application form entry did not become ready"
+                    ),
+                )
             try:
                 job_context = page.locator("body").inner_text()[:30_000]
             except Exception:
                 job_context = ""
             if apply_button is not None:
-                href = apply_button.get_attribute("href") or ""
-                if href:
-                    navigate_reusing_tab(page, urljoin(page.url, href), timeout=timeout)
-                else:
-                    apply_button.click(timeout=min(timeout, 10_000))
-                page.wait_for_timeout(max(1000, spec.render_wait_ms))
-                _wait_for_form(page, spec, timeout)
+                form_opened = False
+                captcha_blocked = False
+                for attempt in range(2):
+                    href = apply_button.get_attribute("href") or ""
+                    if href:
+                        navigate_reusing_tab(
+                            page,
+                            urljoin(page.url, href),
+                            timeout=timeout,
+                            wait_until="commit",
+                        )
+                    else:
+                        apply_button.click(timeout=min(timeout, 10_000))
+                    page.wait_for_timeout(max(1000, spec.render_wait_ms))
+                    if _wait_for_form(page, spec, timeout):
+                        form_opened = True
+                        break
+                    if page_has_captcha(page):
+                        captcha_blocked = True
+                        break
+                    if attempt == 0:
+                        _wait_for_application_entry(page, spec, timeout)
+                        apply_button = _first_visible_for(page, spec.apply_selectors)
+                        if apply_button is None or not _apply_control_is_ready(apply_button):
+                            break
+                if not form_opened:
+                    screenshot = capture_screenshot(
+                        page,
+                        screenshot_dir,
+                        company or spec.display_name,
+                        "captcha" if captcha_blocked else "form-not-open",
+                    )
+                    return _result(
+                        spec=spec,
+                        status=(
+                            "CAPTCHA_REQUIRED" if captcha_blocked else "REQUIRED_FIELDS_NOT_FILLED"
+                        ),
+                        live_submit=live_submit,
+                        submitted=False,
+                        confirmed=False,
+                        filled_fields={},
+                        consent_fields=[],
+                        missing_critical=(
+                            [] if captcha_blocked else ["application form did not open"]
+                        ),
+                        missing_required=[],
+                        captcha_present=captcha_blocked,
+                        screenshot=screenshot,
+                        detail=(
+                            "CAPTCHA challenge blocked the application form"
+                            if captcha_blocked
+                            else "application form did not open"
+                        ),
+                    )
                 _dismiss_cookie_banner(page)
 
             filled, missing_critical = _fill_standard_fields(
@@ -1439,8 +1692,14 @@ def run_browser_form_engine(
                     if not next_button.is_enabled():
                         missing_required = validate_required_fields(page, _required_issues)
                         break
+                    previous_step = _step_fingerprint(page)
                     next_button.click(timeout=min(timeout, 10_000))
                     page.wait_for_timeout(max(1000, spec.render_wait_ms))
+                    if not _wait_for_step_ready(page, timeout, previous_step):
+                        captcha = page_has_captcha(page)
+                        if not captcha:
+                            missing_required = ["Application step did not become ready"]
+                        break
                 except Exception as exc:
                     logger.debug("%s intermediate step failed: %s", spec.display_name, exc)
                     missing_required = ["Application step could not be advanced"]
@@ -1550,8 +1809,35 @@ def run_browser_form_engine(
                     custom_questions=custom_questions,
                 )
 
-            submit_button.click()
+            if page_has_captcha(page):
+                screenshot = capture_screenshot(
+                    page,
+                    screenshot_dir,
+                    company or spec.display_name,
+                    "captcha",
+                )
+                return _result(
+                    spec=spec,
+                    status="CAPTCHA_REQUIRED",
+                    live_submit=True,
+                    submitted=False,
+                    confirmed=False,
+                    filled_fields=filled,
+                    consent_fields=consent,
+                    missing_critical=[],
+                    missing_required=[],
+                    captcha_present=True,
+                    screenshot=screenshot,
+                    custom_questions=custom_questions,
+                    detail="CAPTCHA challenge appeared before submit",
+                )
+
             submitted = True
+            click_error = ""
+            try:
+                submit_button.click()
+            except Exception as exc:
+                click_error = f"{type(exc).__name__}: {exc}"[:300]
             confirmed = False
             post_submit_captcha = False
             for _ in range(15):
@@ -1588,12 +1874,14 @@ def run_browser_form_engine(
                 captcha_present=post_submit_captcha,
                 screenshot=screenshot,
                 custom_questions=custom_questions,
+                detail=(
+                    f"Submit click raised after dispatch may have occurred: {click_error}"
+                    if click_error and not confirmed
+                    else ""
+                ),
             )
         finally:
-            if getattr(session, "close_page_on_exit", False):
-                session.page.close()
-            if session.close_browser_on_exit:
-                session.browser.close()
+            close_browser_session(session)
 
 
 def engine_parser(spec: BrowserFormSpec) -> argparse.ArgumentParser:

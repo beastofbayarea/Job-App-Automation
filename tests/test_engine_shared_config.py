@@ -14,6 +14,63 @@ from job_application_automation.core import engine_shared  # noqa: E402
 
 
 class EngineSharedConfigTests(unittest.TestCase):
+    def test_screenshot_falls_back_to_viewport_when_full_page_capture_times_out(
+        self,
+    ) -> None:
+        page = unittest.mock.MagicMock()
+        page.screenshot.side_effect = [TimeoutError("fonts stalled"), None]
+        with tempfile.TemporaryDirectory() as directory:
+            target = engine_shared.capture_screenshot(
+                page,
+                Path(directory),
+                "Example",
+                "captcha",
+            )
+
+        self.assertTrue(target.endswith("Example_captcha.png"))
+        self.assertEqual(
+            page.screenshot.call_args_list,
+            [
+                unittest.mock.call(
+                    path=target,
+                    full_page=True,
+                    timeout=15_000,
+                ),
+                unittest.mock.call(
+                    path=target,
+                    full_page=False,
+                    timeout=10_000,
+                ),
+            ],
+        )
+
+    def test_notice_period_variants_include_common_two_week_dropdown_value(self) -> None:
+        self.assertEqual(
+            engine_shared.answer_variants("Notice period", "2 weeks"),
+            ("2 weeks", "14 days", "15 days"),
+        )
+
+    def test_navigation_retries_in_the_same_tab_after_an_unusable_timeout(self) -> None:
+        page = unittest.mock.MagicMock()
+        page.url = "about:blank"
+        page.goto.side_effect = [TimeoutError("slow navigation"), None]
+
+        engine_shared.navigate_reusing_tab(
+            page,
+            "https://apply.workable.com/example/j/ABC123/",
+            timeout=30_000,
+        )
+
+        self.assertEqual(page.goto.call_count, 2)
+        page.wait_for_timeout.assert_called_once_with(750)
+
+    def test_captcha_inspection_failure_blocks_browser_action(self) -> None:
+        page = unittest.mock.MagicMock()
+        page.locator.return_value.count.side_effect = RuntimeError("DOM detached")
+        page.locator.return_value.inner_text.return_value = "Application form"
+
+        self.assertTrue(engine_shared.page_has_captcha(page))
+
     def test_label_for_uses_ancestor_label_for_hidden_custom_checkbox(self) -> None:
         page = unittest.mock.MagicMock()
         control = unittest.mock.MagicMock()
@@ -52,6 +109,253 @@ class EngineSharedConfigTests(unittest.TestCase):
         self.assertTrue(session.close_page_on_exit)
         create_target.assert_called_once()
         playwright.chromium.launch.assert_not_called()
+
+    def test_background_session_starts_an_owned_hidden_chrome_when_needed(self) -> None:
+        playwright = unittest.mock.MagicMock()
+        page = unittest.mock.MagicMock()
+        process = unittest.mock.MagicMock()
+        profile = Path(r"C:\Temp\workable-test-profile-fixed")
+        owned_endpoint = "http://127.0.0.1:43123"
+        with (
+            unittest.mock.patch.object(
+                engine_shared,
+                "_create_background_target",
+                side_effect=[
+                    ConnectionRefusedError,
+                    ("about:blank#job-automation-fixed", "target-2"),
+                ],
+            ) as create_target,
+            unittest.mock.patch.object(
+                engine_shared,
+                "_start_hidden_background_chrome",
+                return_value=(process, profile, owned_endpoint),
+            ) as start_chrome,
+            unittest.mock.patch.object(
+                engine_shared,
+                "_resolve_background_page",
+                return_value=page,
+            ),
+        ):
+            session = engine_shared.open_chrome_session(
+                playwright,
+                headless=True,
+                background=True,
+                profile_name="workable-test-profile",
+            )
+
+        self.assertIs(session.page, page)
+        self.assertFalse(session.close_browser_on_exit)
+        self.assertTrue(session.close_page_on_exit)
+        self.assertTrue(session.close_cdp_browser_on_exit)
+        self.assertEqual(session.cdp_endpoint, owned_endpoint)
+        self.assertIs(session.owned_process, process)
+        self.assertEqual(session.owned_profile_path, profile)
+        self.assertEqual(
+            create_target.call_args_list,
+            [
+                unittest.mock.call("http://localhost:9222"),
+                unittest.mock.call(owned_endpoint),
+            ],
+        )
+        start_chrome.assert_called_once_with(
+            "http://localhost:9222",
+            "workable-test-profile",
+        )
+        playwright.chromium.connect_over_cdp.assert_called_once_with(owned_endpoint)
+        playwright.chromium.launch.assert_not_called()
+
+    def test_owned_cdp_endpoint_is_read_from_the_fresh_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            profile = Path(directory)
+            (profile / "DevToolsActivePort").write_text(
+                "43123\n/devtools/browser/example\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                engine_shared._read_owned_cdp_endpoint(profile),
+                "http://127.0.0.1:43123",
+            )
+            for invalid in ("", "not-a-port\n", "0\n", "65536\n"):
+                (profile / "DevToolsActivePort").write_text(invalid, encoding="utf-8")
+                self.assertEqual(engine_shared._read_owned_cdp_endpoint(profile), "")
+
+    def test_stale_profile_cleanup_is_prefix_scoped_and_preserves_live_profile(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temp_root = Path(directory)
+            stale = temp_root / "workable-cdp-profile-stale"
+            live = temp_root / "workable-cdp-profile-live"
+            fixed = temp_root / "workable-cdp-profile"
+            unrelated = temp_root / "smartrecruiters-cdp-profile-stale"
+            for path in (stale, live, fixed, unrelated):
+                path.mkdir()
+            (live / "DevToolsActivePort").write_text(
+                "43123\n/devtools/browser/example\n",
+                encoding="utf-8",
+            )
+            with (
+                unittest.mock.patch.object(
+                    engine_shared.tempfile,
+                    "gettempdir",
+                    return_value=directory,
+                ),
+                unittest.mock.patch.object(
+                    engine_shared,
+                    "_owned_cdp_endpoint_is_live",
+                    return_value=True,
+                ),
+            ):
+                engine_shared._cleanup_stale_owned_profiles(
+                    temp_root,
+                    "workable-cdp-profile",
+                    max_age_seconds=0,
+                )
+
+            self.assertFalse(stale.exists())
+            self.assertTrue(live.exists())
+            self.assertTrue(fixed.exists())
+            self.assertTrue(unrelated.exists())
+
+    def test_hidden_chrome_launch_is_minimized_offscreen_and_not_shown(self) -> None:
+        process = unittest.mock.MagicMock()
+        process.poll.return_value = None
+        response = unittest.mock.MagicMock()
+        response.__enter__.return_value = response
+        profile = Path(r"C:\Temp\workable-test-profile-fixed")
+        with (
+            unittest.mock.patch.object(
+                engine_shared,
+                "_find_chrome_executable",
+                return_value=Path(r"C:\Chrome\chrome.exe"),
+            ),
+            unittest.mock.patch.object(
+                engine_shared,
+                "_cleanup_stale_owned_profiles",
+            ),
+            unittest.mock.patch.object(
+                engine_shared.subprocess,
+                "Popen",
+                return_value=process,
+            ) as popen,
+            unittest.mock.patch.object(
+                engine_shared.tempfile,
+                "mkdtemp",
+                return_value=str(profile),
+            ),
+            unittest.mock.patch.object(
+                engine_shared,
+                "_read_owned_cdp_endpoint",
+                return_value="http://127.0.0.1:43123",
+            ),
+            unittest.mock.patch.object(
+                engine_shared.urllib.request,
+                "urlopen",
+                return_value=response,
+            ) as urlopen,
+        ):
+            launched = engine_shared._start_hidden_background_chrome(
+                "http://localhost:9222",
+                "workable-test-profile",
+            )
+
+        self.assertEqual(launched, (process, profile, "http://127.0.0.1:43123"))
+        arguments = popen.call_args.args[0]
+        self.assertIn("--remote-debugging-port=0", arguments)
+        self.assertIn("--start-minimized", arguments)
+        self.assertIn("--window-position=-32000,-32000", arguments)
+        urlopen.assert_called_once_with(
+            "http://127.0.0.1:43123/json/version",
+            timeout=1,
+        )
+        if engine_shared.os.name == "nt":
+            startupinfo = popen.call_args.kwargs["startupinfo"]
+            self.assertEqual(startupinfo.wShowWindow, engine_shared.subprocess.SW_HIDE)
+
+    def test_hidden_chrome_launch_failure_removes_its_fresh_profile(self) -> None:
+        profile = Path(r"C:\Temp\workable-test-profile-fixed")
+        with (
+            unittest.mock.patch.object(
+                engine_shared,
+                "_find_chrome_executable",
+                return_value=Path(r"C:\Chrome\chrome.exe"),
+            ),
+            unittest.mock.patch.object(
+                engine_shared,
+                "_cleanup_stale_owned_profiles",
+            ),
+            unittest.mock.patch.object(
+                engine_shared.tempfile,
+                "mkdtemp",
+                return_value=str(profile),
+            ),
+            unittest.mock.patch.object(
+                engine_shared.subprocess,
+                "Popen",
+                side_effect=OSError("launch failed"),
+            ),
+            unittest.mock.patch.object(
+                engine_shared,
+                "_cleanup_owned_profile",
+            ) as cleanup_profile,
+        ):
+            launched = engine_shared._start_hidden_background_chrome(
+                "http://localhost:9222",
+                "workable-test-profile",
+            )
+
+        self.assertIsNone(launched)
+        cleanup_profile.assert_called_once_with(profile)
+
+    def test_owned_process_kill_path_waits_for_final_exit(self) -> None:
+        process = unittest.mock.MagicMock()
+        process.wait.side_effect = [
+            engine_shared.subprocess.TimeoutExpired("chrome", 5),
+            engine_shared.subprocess.TimeoutExpired("chrome", 5),
+            None,
+        ]
+
+        engine_shared._stop_owned_chrome_process(process)
+
+        process.terminate.assert_called_once_with()
+        process.kill.assert_called_once_with()
+        self.assertEqual(process.wait.call_count, 3)
+
+    def test_owned_hidden_chrome_is_closed_over_cdp(self) -> None:
+        page = unittest.mock.MagicMock()
+        browser = unittest.mock.MagicMock()
+        process = unittest.mock.MagicMock()
+        session = engine_shared.BrowserSession(
+            browser,
+            page,
+            False,
+            True,
+            True,
+            "http://localhost:9222",
+            process,
+            Path(r"C:\Temp\workable-test-profile-fixed"),
+        )
+        with (
+            unittest.mock.patch.object(
+                engine_shared,
+                "_raw_browser_cdp_command",
+            ) as cdp_command,
+            unittest.mock.patch.object(
+                engine_shared,
+                "_cleanup_owned_profile",
+            ) as cleanup_profile,
+        ):
+            engine_shared.close_browser_session(session)
+
+        page.close.assert_called_once_with()
+        browser.close.assert_not_called()
+        cdp_command.assert_called_once_with(
+            "http://localhost:9222",
+            "Browser.close",
+            {},
+        )
+        process.wait.assert_called_once_with(timeout=5)
+        cleanup_profile.assert_called_once_with(Path(r"C:\Temp\workable-test-profile-fixed"))
 
     def test_schema_v2_profile_flattens_policy_groups_without_losing_fields(self) -> None:
         config = {
@@ -134,6 +438,23 @@ class EngineSharedConfigTests(unittest.TestCase):
         self.assertEqual(checked, [])
         box.check.assert_not_called()
 
+    def test_required_factual_declaration_is_not_treated_as_policy_consent(self) -> None:
+        page = unittest.mock.MagicMock()
+        box = page.locator.return_value.nth.return_value
+        page.locator.return_value.count.return_value = 1
+        box.is_checked.return_value = False
+        box.is_visible.return_value = True
+        box.get_attribute.side_effect = lambda name: "true" if name == "aria-required" else None
+        with unittest.mock.patch.object(
+            engine_shared,
+            "label_for",
+            return_value="I declare that I have never been convicted of a criminal offence.",
+        ):
+            checked = engine_shared.fill_required_consent(page)
+
+        self.assertEqual(checked, [])
+        box.check.assert_not_called()
+
     def test_required_privacy_consent_is_checked(self) -> None:
         page = unittest.mock.MagicMock()
         box = page.locator.return_value.nth.return_value
@@ -173,6 +494,39 @@ class EngineSharedConfigTests(unittest.TestCase):
             ["I accept the Privacy Notice and consent to processing my data."],
         )
         box.check.assert_called_once_with(force=True)
+
+    def test_required_role_privacy_declaration_is_clicked(self) -> None:
+        page = unittest.mock.MagicMock()
+        box = page.locator.return_value.nth.return_value
+        page.locator.return_value.count.return_value = 1
+        attributes = {
+            "role": "checkbox",
+            "aria-required": "true",
+        }
+        checked_states = iter(["false", "true"])
+
+        def get_attribute(name: str) -> str | None:
+            if name == "aria-checked":
+                return next(checked_states)
+            return attributes.get(name)
+
+        box.get_attribute.side_effect = get_attribute
+        box.is_visible.return_value = True
+        with unittest.mock.patch.object(
+            engine_shared,
+            "label_for",
+            return_value=(
+                "You declare that you have read and understand the privacy notice of QAD, Inc."
+            ),
+        ):
+            checked = engine_shared.fill_required_consent(page)
+
+        self.assertEqual(
+            checked,
+            ["You declare that you have read and understand the privacy notice of QAD, Inc."],
+        )
+        box.click.assert_called_once_with(force=True)
+        box.check.assert_not_called()
 
 
 class ShellValidatorHostTests(unittest.TestCase):
@@ -242,6 +596,13 @@ class LocationQuestionTests(unittest.TestCase):
         ):
             with self.subTest(question=question):
                 self.assertFalse(engine_shared.is_location_question(question))
+
+    def test_binary_relocation_question_is_not_filled_with_current_location(self) -> None:
+        self.assertFalse(
+            engine_shared.is_location_question(
+                "Are you currently based in Pune or willing to relocate to Pune?"
+            )
+        )
 
     def test_location_candidates_widen_from_precise_to_country(self) -> None:
         """Country-only dropdowns need the broader fallbacks."""

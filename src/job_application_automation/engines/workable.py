@@ -51,6 +51,7 @@ SPEC = BrowserFormSpec(
         'button[type="submit"]:has-text("Submit application")',
         'input[type="submit"][value*="Submit" i]',
     ),
+    background_cdp=True,
     address_selectors=('input[name="address"]', "#address"),
     city_selectors=('input[name="city"]', "#city"),
     postcode_selectors=('input[name="postcode"]', "#postcode"),
