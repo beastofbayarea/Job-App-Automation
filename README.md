@@ -238,7 +238,7 @@ python src/job_automation.py apply `
 python src/job_automation.py apply --limit 1 --dry-run
 ```
 
-Use `--tracker`, `--resume`, `--config`, `--results-file`, and `--submission-log-file` to override defaults. `--headed` shows the browser, while `--no-shuffle` preserves tracker order. A URL run ignores `--tracker`. The orchestrator supports Ashby, Greenhouse, Lever, Workable, SmartRecruiters, Recruitee, BambooHR, Breezy HR, and JazzHR and always enables URL-specific resume personalization. Company-board roots are rejected: every row must contain a job-specific URL. Workflow results are recorded in `output/orchestration_results.json`; only exact confirmed submissions are added to `output/submission_log.json`.
+Use `--tracker`, `--resume`, `--config`, `--results-file`, and `--submission-log-file` to override defaults. `--headed` shows the browser, while `--no-shuffle` preserves tracker order. A URL run ignores `--tracker`. The orchestrator supports Ashby, Greenhouse, Lever, Workable, and SmartRecruiters and always enables URL-specific resume personalization. Company-board roots are rejected: every row must contain a job-specific URL. Workflow results are recorded in `output/orchestration_results.json`; only exact confirmed submissions are added to `output/submission_log.json`.
 
 ### Run a submission queue
 

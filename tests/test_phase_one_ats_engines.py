@@ -6,10 +6,6 @@ from unittest.mock import patch
 import pytest
 
 from job_application_automation.engines import (
-    bamboohr,
-    breezy,
-    jazzhr,
-    recruitee,
     smartrecruiters,
     workable,
 )
@@ -26,10 +22,13 @@ ENGINES = (
         "smartrecruiters",
         "https://jobs.smartrecruiters.com/Example/744000123-role",
     ),
-    (recruitee, "recruitee", "https://example.recruitee.com/o/product-manager"),
-    (bamboohr, "bamboohr", "https://example.bamboohr.com/careers/123"),
-    (breezy, "breezy", "https://example.breezy.hr/p/123-product-manager/apply"),
-    (jazzhr, "jazzhr", "https://example.applytojob.com/apply/ABC123/Product-Manager"),
+)
+
+REMOVED_ENGINE_URLS = (
+    ("recruitee", "https://example.recruitee.com/o/product-manager"),
+    ("bamboohr", "https://example.bamboohr.com/careers/123"),
+    ("breezy", "https://example.breezy.hr/p/123-product-manager/apply"),
+    ("jazzhr", "https://example.applytojob.com/apply/ABC123/Product-Manager"),
 )
 
 
@@ -109,14 +108,15 @@ def test_job_url_validation_accepts_each_engine_job(module, ats: str, url: str) 
     (
         ("workable", "https://apply.workable.com/example/"),
         ("smartrecruiters", "https://jobs.smartrecruiters.com/Example/"),
-        ("recruitee", "https://example.recruitee.com/"),
-        ("bamboohr", "https://example.bamboohr.com/careers/"),
-        ("bamboohr", "https://example.bamboohr.com/careers/list"),
-        ("breezy", "https://example.breezy.hr/"),
-        ("jazzhr", "https://example.applytojob.com/apply/"),
     ),
 )
 def test_company_board_roots_are_not_job_urls(ats: str, url: str) -> None:
+    assert not validate_ats_job_url(url, ats)
+    assert detect_ats_job_url(url) is None
+
+
+@pytest.mark.parametrize(("ats", "url"), REMOVED_ENGINE_URLS)
+def test_removed_engine_urls_are_not_supported(ats: str, url: str) -> None:
     assert not validate_ats_job_url(url, ats)
     assert detect_ats_job_url(url) is None
 

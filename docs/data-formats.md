@@ -12,7 +12,7 @@ The tracker is an `.xlsx` workbook. The orchestrator reads the active worksheet 
 | Role | `title`, `job title`, `role`, `role title` |
 | URL | `url`, `job url`, `link`, `job link` |
 
-Rows without a job-specific URL for a supported provider are skipped. Supported providers are Ashby, Greenhouse, Lever, Workable, SmartRecruiters, Recruitee, BambooHR, Breezy HR, and JazzHR. Company-board roots are not application identities. Missing company and role cells fall back to `Company` and `Product Manager`.
+Rows without a job-specific URL for a supported provider are skipped. Supported providers are Ashby, Greenhouse, Lever, Workable, and SmartRecruiters. Company-board roots are not application identities. Missing company and role cells fall back to `Company` and `Product Manager`.
 
 ## Queue file
 

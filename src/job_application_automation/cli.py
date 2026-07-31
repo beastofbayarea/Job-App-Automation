@@ -42,10 +42,6 @@ ENGINE_MODULES = {
     "lever": "job_application_automation.engines.lever",
     "workable": "job_application_automation.engines.workable",
     "smartrecruiters": "job_application_automation.engines.smartrecruiters",
-    "recruitee": "job_application_automation.engines.recruitee",
-    "bamboohr": "job_application_automation.engines.bamboohr",
-    "breezy": "job_application_automation.engines.breezy",
-    "jazzhr": "job_application_automation.engines.jazzhr",
 }
 
 
@@ -76,7 +72,7 @@ def _print_usage(stream: TextIO) -> None:
 def _print_engine_usage(stream: TextIO) -> None:
     print(
         "Usage: job_automation.py engine <provider> [arguments]\n\n"
-        "Supported providers: ashby, greenhouse, lever, workable, smartrecruiters, recruitee, bamboohr, breezy, jazzhr.\n"
+        "Supported providers: ashby, greenhouse, lever, workable, smartrecruiters.\n"
         "The application workflow invokes engines internally. For direct diagnostic help, "
         "use `job_automation.py engine <provider> --help`.",
         file=stream,

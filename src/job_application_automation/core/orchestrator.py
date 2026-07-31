@@ -103,10 +103,6 @@ DEFAULT_ENGINE_FILES: Mapping[str, Path] = {
     "lever": CLI_ENTRYPOINT,
     "workable": CLI_ENTRYPOINT,
     "smartrecruiters": CLI_ENTRYPOINT,
-    "recruitee": CLI_ENTRYPOINT,
-    "bamboohr": CLI_ENTRYPOINT,
-    "breezy": CLI_ENTRYPOINT,
-    "jazzhr": CLI_ENTRYPOINT,
 }
 
 
@@ -1241,10 +1237,6 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--smartrecruiters-engine", default=None, help="Custom SmartRecruiters engine script"
     )
-    parser.add_argument("--recruitee-engine", default=None, help="Custom Recruitee engine script")
-    parser.add_argument("--bamboohr-engine", default=None, help="Custom BambooHR engine script")
-    parser.add_argument("--breezy-engine", default=None, help="Custom Breezy HR engine script")
-    parser.add_argument("--jazzhr-engine", default=None, help="Custom JazzHR engine script")
     return parser
 
 

@@ -6,9 +6,9 @@ This document provides a comprehensive technical feasibility analysis, required 
 
 ## 1. Executive Summary & ATS Ecosystem Overview
 
-The platform now supports **9 ATS engines**: the original Ashby, Greenhouse, and Lever adapters plus guarded browser-form adapters for Workable, SmartRecruiters, Recruitee, BambooHR, Breezy HR, and JazzHR. This document preserves the original prioritization analysis; its endpoint ideas and effort estimates are not claims about delivered behavior.
+The platform supports **5 ATS engines**: Ashby, Greenhouse, Lever, Workable, and SmartRecruiters. The former Recruitee, BambooHR, Breezy HR, and JazzHR application adapters have been removed. This document preserves the original prioritization analysis; its endpoint ideas and effort estimates are not claims about delivered behavior.
 
-The six phase-one engines use browser automation. Direct candidate-submission APIs described below remain design options and are not implemented. Search discovers these providers through generic JSON-LD pages rather than native provider feed adapters.
+Workable and SmartRecruiters use browser automation. Direct candidate-submission APIs described below remain design options and are not implemented. Generic JSON-LD search can discover some unsupported providers, but those results are not routed to an application engine.
 
 Below is an analysis of **12 additional ATS platforms**, categorized by market segment and technical interaction model:
 
@@ -119,7 +119,7 @@ graph TD
 * **Application Page**: `https://{company}.bamboohr.com/careers/{job_id}`
 * **Changes Required**:
   1. `src/job_application_automation/core/engine_shared.py`: Add `"bamboohr": ("bamboohr.com",)` to `ATS_HOST_MARKERS`.
-  2. `src/job_application_automation/engines/bamboohr.py` **[IMPLEMENTED, BROWSER]**: Fill known BambooHR form variants and require a successful guarded prefill before submission.
+  2. `src/job_application_automation/engines/bamboohr.py` **[REMOVED / NOT SUPPORTED]**: A future implementation would need to fill known BambooHR form variants and require a successful guarded prefill before submission.
   3. `src/job_application_automation/cli.py`: Register `"bamboohr"` in `ENGINE_MODULES`.
   4. `src/job_application_automation/core/orchestrator.py`: Add `"bamboohr"` to `DEFAULT_ENGINE_FILES`.
   5. Confirmation detection: Match text phrases (`"Application Submitted!"`, `"Thank you for applying to"`).
@@ -130,7 +130,7 @@ graph TD
 * **Application Endpoint**: `POST https://{company}.recruitee.com/api/v1/offers/{offer_id}/candidates`
 * **Changes Required**:
   1. `src/job_application_automation/core/engine_shared.py`: Add `"recruitee": ("recruitee.com",)` to `ATS_HOST_MARKERS`.
-  2. `src/job_application_automation/engines/recruitee.py` **[IMPLEMENTED, BROWSER]**: Fill current Recruitee browser fields and uploads. Direct multipart API submission is not implemented.
+  2. `src/job_application_automation/engines/recruitee.py` **[REMOVED / NOT SUPPORTED]**: A future implementation would need to fill current Recruitee browser fields and uploads. Direct multipart API submission is not implemented.
   3. `src/job_application_automation/cli.py`: Add `"recruitee"` to `ENGINE_MODULES`.
   4. `src/job_application_automation/core/orchestrator.py`: Register `"recruitee"`.
 
@@ -140,7 +140,7 @@ graph TD
 * **Application Page**: `https://{company}.breezy.hr/p/{job_id}/apply`
 * **Changes Required**:
   1. `src/job_application_automation/core/engine_shared.py`: Add `"breezy": ("breezy.hr",)` to `ATS_HOST_MARKERS`.
-  2. `src/job_application_automation/engines/breezy.py` **[IMPLEMENTED, BROWSER]**: Fill the current Breezy form controls and guard required questions before submission.
+  2. `src/job_application_automation/engines/breezy.py` **[REMOVED / NOT SUPPORTED]**: A future implementation would need to fill the current Breezy form controls and guard required questions before submission.
   3. `src/job_application_automation/cli.py` & `orchestrator.py`: Register `"breezy"`.
 
 ### 3.6 JazzHR (`applytojob.com`, `jazz.co`)
@@ -148,7 +148,7 @@ graph TD
 * **Domain Markers**: `("applytojob.com", "jazz.co")`
 * **Changes Required**:
   1. `src/job_application_automation/core/engine_shared.py`: Add `"jazzhr": ("applytojob.com", "jazz.co")` to `ATS_HOST_MARKERS`.
-  2. `src/job_application_automation/engines/jazzhr.py` **[IMPLEMENTED, BROWSER]**: Fill current `resumator-*` controls and use the provider's anchor-based submit action.
+  2. `src/job_application_automation/engines/jazzhr.py` **[REMOVED / NOT SUPPORTED]**: A future implementation would need to fill current `resumator-*` controls and use the provider's anchor-based submit action.
   3. `src/job_application_automation/cli.py` & `orchestrator.py`: Register `"jazzhr"`.
 
 ### 3.7 Wellfound / AngelList Jobs (`wellfound.com`)
@@ -235,10 +235,10 @@ $$\text{RICE Score} = \frac{\text{Reach} \times \text{Impact} \times \text{Confi
 | **Baseline** | **Greenhouse (Multipart API POST)** | [greenhouse.py](file:///c:/Users/Nagarro/Downloads/Job%20App%20Automation/src/job_application_automation/engines/greenhouse.py) | 80 | 3.0 | 90% | 1.2 | **180.0** | Delivered (Optimization) |
 | **1** | **Workable Engine** | `engines/workable.py` | 85 | 3.0 | 95% | 1.0 | **242.3** | **Tier 1 (Immediate)** |
 | **2** | **SmartRecruiters Engine** | `engines/smartrecruiters.py` | 80 | 3.0 | 90% | 1.2 | **180.0** | **Tier 1 (Immediate)** |
-| **3** | **BambooHR Engine** | `engines/bamboohr.py` | 70 | 2.5 | 95% | 1.0 | **166.3** | **Tier 1 (Immediate)** |
-| **4** | **Recruitee Engine** | `engines/recruitee.py` | 60 | 2.5 | 95% | 0.8 | **178.1** | **Tier 1 (Immediate)** |
-| **5** | **Breezy HR Engine** | `engines/breezy.py` | 55 | 2.0 | 90% | 0.8 | **123.8** | **Tier 1 (Immediate)** |
-| **6** | **JazzHR Engine** | `engines/jazzhr.py` | 45 | 2.0 | 90% | 0.8 | **101.3** | **Tier 1 (Immediate)** |
+| **3** | **BambooHR Engine** | `engines/bamboohr.py` | 70 | 2.5 | 95% | 1.0 | **166.3** | Removed / not supported |
+| **4** | **Recruitee Engine** | `engines/recruitee.py` | 60 | 2.5 | 95% | 0.8 | **178.1** | Removed / not supported |
+| **5** | **Breezy HR Engine** | `engines/breezy.py` | 55 | 2.0 | 90% | 0.8 | **123.8** | Removed / not supported |
+| **6** | **JazzHR Engine** | `engines/jazzhr.py` | 45 | 2.0 | 90% | 0.8 | **101.3** | Removed / not supported |
 | **7** | **Workday Engine** | `engines/workday.py` | 95 | 3.0 | 70% | 2.5 | **79.8** | **Tier 2 (High Value)** |
 | **8** | **Wellfound (AngelList) Engine** | `engines/wellfound.py` | 65 | 2.5 | 80% | 1.8 | **72.2** | **Tier 2 (High Value)** |
 | **9** | **Jobvite Engine** | `engines/jobvite.py` | 50 | 2.0 | 85% | 1.5 | **56.7** | **Tier 2 (High Value)** |
@@ -264,15 +264,15 @@ $$\text{RICE Score} = \frac{\text{Reach} \times \text{Impact} \times \text{Confi
 * **Confidence (90%)**: Proven public candidate application API.
 * **Effort (1.2 days)**: Standard REST API client module.
 
-### 3. Recruitee Engine (RICE Score: 178.1)
-* **Target File**: [recruitee.py](file:///c:/Users/Nagarro/Downloads/Job%20App%20Automation/src/job_application_automation/engines/recruitee.py)
+### 3. Recruitee Engine (RICE Score: 178.1; removed)
+* **Former Target File**: `engines/recruitee.py` (removed)
 * **Reach (60)**: Core ATS for European and international tech startups.
 * **Impact (2.5)**: High reliability API submission endpoint (`POST /api/v1/offers/{offer_id}/candidates`).
 * **Confidence (95%)**: Very clean REST architecture.
 * **Effort (0.8 days)**: Rapid implementation.
 
-### 4. BambooHR Engine (RICE Score: 166.3)
-* **Target File**: [bamboohr.py](file:///c:/Users/Nagarro/Downloads/Job%20App%20Automation/src/job_application_automation/engines/bamboohr.py)
+### 4. BambooHR Engine (RICE Score: 166.3; removed)
+* **Former Target File**: `engines/bamboohr.py` (removed)
 * **Reach (70)**: Prevalent across mid-market tech and US SMBs.
 * **Impact (2.5)**: Clean HTML forms enable robust 100% Playwright DOM auto-fill with zero dynamic ARIA obstacles.
 * **Confidence (95%)**: Highly stable static element IDs (`#firstName`, `#lastName`, `#email`, `#resume`).
@@ -288,6 +288,8 @@ $$\text{RICE Score} = \frac{\text{Reach} \times \text{Impact} \times \text{Confi
 ---
 
 ## 6. Implementation Roadmap & Phasing Plan
+
+This roadmap is retained as historical prioritization context. Recruitee, BambooHR, Breezy HR, and JazzHR are not current delivery commitments and have no registered application engines.
 
 ```mermaid
 gantt
@@ -311,8 +313,8 @@ gantt
 
 ## 7. Conclusion & Recommended Next Steps
 
-1. **Immediate Execution (Phase 1 Quick Wins)**:
-   Focus on implementing **Workable**, **SmartRecruiters**, **Recruitee**, and **BambooHR**. These four engines require only ~4.0 person-days of total effort while increasing the platform's job application reach by **over 250%** across modern scaleup and enterprise tech markets.
+1. **Maintain the Supported Baseline**:
+   Keep application routing and regression coverage focused on **Ashby**, **Greenhouse**, **Lever**, **Workable**, and **SmartRecruiters**. Reintroducing any removed provider requires a new implementation and validation decision.
 
 2. **Enterprise Expansion (Phase 2)**:
    Prioritize the **Workday Engine** to unlock enterprise applications, utilizing Playwright step-by-step state machines to manage account credentials and multi-page wizard navigation.

@@ -9,10 +9,6 @@ ATS_TEST_CANARY_URLS = {
     "lever": "https://jobs.lever.co/examplecompany/abcdef",
     "workable": "https://apply.workable.com/example-company/j/12345",
     "smartrecruiters": "https://jobs.smartrecruiters.com/ExampleCompany/12345",
-    "recruitee": "https://examplecompany.recruitee.com/o/job-title",
-    "bamboohr": "https://examplecompany.bamboohr.com/careers/123",
-    "breezy": "https://examplecompany.breezy.hr/p/12345-job-title",
-    "jazzhr": "https://examplecompany.applytojob.com/apply/12345",
 }
 
 

@@ -122,29 +122,46 @@ class SearchApplicationTests(unittest.TestCase):
         self.assertEqual(len(jobs), 1)
         self.assertEqual(jobs[0]["job_url"], live["job_url"])
 
-    def test_generic_search_result_is_routed_to_new_engine_from_apply_url(self) -> None:
+    def test_generic_search_result_is_routed_to_supported_engine_from_apply_url(self) -> None:
         job = _job(
             "https://careers.example.test/product-manager",
             platform="web",
-            apply_url="https://example.recruitee.com/o/product-manager",
+            apply_url="https://apply.workable.com/example/j/ABC123/",
         )
 
         jobs = search_applications._eligible_jobs([job])
 
         self.assertEqual(len(jobs), 1)
-        self.assertEqual(jobs[0]["platform"], "recruitee")
+        self.assertEqual(jobs[0]["platform"], "workable")
         self.assertEqual(
             jobs[0]["_application_url"],
-            "https://example.recruitee.com/o/product-manager",
+            "https://apply.workable.com/example/j/ABC123/",
         )
 
     def test_declared_provider_mismatch_is_rejected(self) -> None:
         job = _job(
             "https://apply.workable.com/example/j/ABC123/",
-            platform="recruitee",
+            platform="greenhouse",
         )
 
         self.assertEqual(search_applications._eligible_jobs([job]), [])
+
+    def test_removed_engine_apply_urls_are_not_eligible(self) -> None:
+        urls = (
+            "https://example.recruitee.com/o/product-manager",
+            "https://example.bamboohr.com/careers/123",
+            "https://example.breezy.hr/p/123-product-manager/apply",
+            "https://example.applytojob.com/apply/ABC123/Product-Manager",
+        )
+
+        for apply_url in urls:
+            with self.subTest(apply_url=apply_url):
+                job = _job(
+                    "https://careers.example.test/product-manager",
+                    platform="web",
+                    apply_url=apply_url,
+                )
+                self.assertEqual(search_applications._eligible_jobs([job]), [])
 
     def test_confirmed_submission_log_urls_are_loaded_strictly(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

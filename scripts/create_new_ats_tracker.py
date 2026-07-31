@@ -1,4 +1,4 @@
-"""Script to create Excel tracker for the 3 Product Management roles per new ATS."""
+"""Create a tracker for Product Management roles on supported browser-form ATSs."""
 
 from pathlib import Path
 import openpyxl
@@ -23,38 +23,6 @@ ROLES = [
     ),
     ("Vitol", "GenAI Product Manager", "https://jobs.smartrecruiters.com/Vitol/"),
     ("Grab", "Lead Product Manager, Deliveries", "https://jobs.smartrecruiters.com/Grab/"),
-    # Recruitee
-    ("Aikido Security", "Product Manager (Enterprise)", "https://aikidosecurity.recruitee.com/"),
-    ("Bitfinex", "Product Manager (Trading & Wallets)", "https://bitfinex.recruitee.com/"),
-    (
-        "Better Collective",
-        "Product Manager, Partnerships",
-        "https://bettercollective.recruitee.com/",
-    ),
-    # BambooHR
-    (
-        "BambooHR",
-        "Product Manager II - HRIS Compensation",
-        "https://bamboohr.bamboohr.com/careers/",
-    ),
-    ("BambooHR", "Product Manager II - HRIS Training", "https://bamboohr.bamboohr.com/careers/"),
-    ("BambooHR", "Product Manager - Core Data Platform", "https://bamboohr.bamboohr.com/careers/"),
-    # Breezy HR
-    ("Beli", "Product Manager (Consumer Products)", "https://beli.breezy.hr/"),
-    ("Aidaptive", "Product Manager (0 to 1 AI/Data Platform)", "https://aidaptive.breezy.hr/"),
-    ("Nexo", "Product Manager (FinTech / Crypto)", "https://nexo.breezy.hr/"),
-    # JazzHR
-    ("Codekeeper", "Product Manager (Security & UX)", "https://codekeeper.applytojob.com/apply/"),
-    (
-        "Instinct Science",
-        "Product Manager (Veterinary Software)",
-        "https://instinctscience.applytojob.com/apply/",
-    ),
-    (
-        "Wealth Access",
-        "Product Manager (Wealth Management Tech)",
-        "https://wealthaccess.applytojob.com/apply/",
-    ),
 ]
 
 

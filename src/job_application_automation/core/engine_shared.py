@@ -91,10 +91,6 @@ ATS_HOST_MARKERS: Mapping[str, tuple[str, ...]] = {
     "lever": ("lever.co",),
     "workable": ("workable.com", "apply.workable.com"),
     "smartrecruiters": ("smartrecruiters.com", "jobs.smartrecruiters.com"),
-    "recruitee": ("recruitee.com",),
-    "bamboohr": ("bamboohr.com",),
-    "breezy": ("breezy.hr",),
-    "jazzhr": ("applytojob.com", "jazz.co"),
 }
 
 # Requiring provider-owned job path shapes prevents a company board root from
@@ -109,10 +105,6 @@ ATS_JOB_PATH_PATTERNS: Mapping[str, tuple[re.Pattern[str], ...]] = {
         re.compile(r"^/[^/]+/[^/]+/?$", re.I),
         re.compile(r"^/oneclick-ui/company/[^/]+/publication/[^/]+/?$", re.I),
     ),
-    "recruitee": (re.compile(r"^/(?:o|jobs)/[^/]+(?:/(?:apply|application))?/?$", re.I),),
-    "bamboohr": (re.compile(r"^/careers/\d+(?:/(?:apply|application))?/?$", re.I),),
-    "breezy": (re.compile(r"^/p/[^/]+(?:/(?:apply|application))?/?$", re.I),),
-    "jazzhr": (re.compile(r"^/apply/[^/]+(?:/[^/]+)?/?$", re.I),),
 }
 
 

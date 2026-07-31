@@ -24,6 +24,9 @@ class FakeLocator:
     def count(self) -> int:
         return self._count
 
+    def inner_text(self, *, timeout: int | None = None) -> str:
+        return ""
+
 
 class FakePage:
     def __init__(self, url: str, *, captcha_count: int = 0) -> None:

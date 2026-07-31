@@ -93,6 +93,19 @@ class UnifiedCliDispatchTests(unittest.TestCase):
         self.assertEqual(2, cli.dispatch(["engine", "unsupported_ats"], stderr=errors))
         self.assertIn("unknown engine", errors.getvalue())
 
+    def test_removed_application_engines_are_not_dispatchable_or_advertised(self) -> None:
+        removed = ("recruitee", "bamboohr", "breezy", "jazzhr")
+        output = StringIO()
+
+        self.assertEqual(0, cli.dispatch(["engine", "--help"], stdout=output))
+        for engine in removed:
+            with self.subTest(engine=engine):
+                self.assertNotIn(engine, cli.ENGINE_MODULES)
+                self.assertNotIn(engine, output.getvalue())
+                errors = StringIO()
+                self.assertEqual(2, cli.dispatch(["engine", engine], stderr=errors))
+                self.assertIn("unknown engine", errors.getvalue())
+
     def test_cover_letter_command_dispatches_to_its_module(self) -> None:
         calls: list[tuple[str, list[str]]] = []
 
