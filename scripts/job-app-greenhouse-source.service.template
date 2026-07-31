@@ -1,0 +1,35 @@
+[Unit]
+Description=__DESCRIPTION__
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=900
+StartLimitBurst=5
+
+[Service]
+Type=simple
+WorkingDirectory=__REPO_DIR__
+Environment=PYTHONPATH=__REPO_DIR__/src
+Environment=PYTHONUNBUFFERED=1
+ExecStartPre=/usr/bin/test -x __REPO_DIR__/.venv/bin/python
+ExecStartPre=/usr/bin/test -r __REPO_DIR__/config/candidate_profile_config.json
+ExecStartPre=/usr/bin/test -r __REPO_DIR__/config/candidate_email_pool.json
+ExecStartPre=/usr/bin/test -r __REPO_DIR__/config/vertex_service_account.json
+__SOURCE_PRECHECK__
+ExecStart=/usr/bin/xvfb-run -a "--server-args=-screen 0 1280x1024x24" __REPO_DIR__/.venv/bin/python -m job_application_automation.core.continuous_source_ats __SOURCE_ARGS__
+Restart=always
+RestartSec=15
+MemoryAccounting=true
+MemoryHigh=800M
+MemoryMax=1050M
+TasksMax=256
+CPUAccounting=true
+CPUWeight=60
+Nice=5
+KillSignal=SIGINT
+TimeoutStopSec=480
+SyslogIdentifier=__SYSLOG_IDENTIFIER__
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

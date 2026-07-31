@@ -55,7 +55,7 @@ ats_services=`$(systemctl list-unit-files 'job-app-*.service' --no-legend --no-p
   while read -r service; do
     exec_start=`$(systemctl show "`$service" --property=ExecStart --value 2>/dev/null || true)
     case "`$exec_start" in
-      *continuous_ats*|*continuous-ashby*|*continuous-greenhouse*|*continuous-lever*)
+      *continuous_ats*|*continuous_source_ats*|*continuous-ashby*|*continuous-greenhouse*|*continuous-lever*)
         printf '%s\n' "`$service"
         ;;
     esac
@@ -69,7 +69,7 @@ else
 fi
 printf '%s\n' '=== SEARCH AND ATS PROCESSES ==='
 ps -eo pid,ppid,lstart,etime,%cpu,%mem,rss,stat,args |
-  grep -E '[v]ps_continuous_search_sync|[v]ps_search_sync.sh|[c]ontinuous-(ashby|greenhouse|lever)|[c]ontinuous_ats|[j]ob_automation.py (apply|search)' |
+  grep -E '[v]ps_continuous_search_sync|[v]ps_search_sync.sh|[c]ontinuous-(ashby|greenhouse|lever)|[c]ontinuous_(source_)?ats|[j]ob_automation.py (apply|search)' |
   grep -v '[b]ash -c set -eu repo=' |
   sed -E 's/(--email )[[:graph:]]+/\1[REDACTED]/g' || true
 printf '%s\n' '=== PROVIDER STATE ==='
@@ -280,7 +280,7 @@ print("applied_days=" + json.dumps(day_counts, sort_keys=True))
 print(f"duplicate_canonical_urls={duplicate_count}")
 PY
 printf '%s\n' '=== PROVIDER RESULT ARTIFACTS ==='
-for provider in ashby greenhouse lever; do
+for provider in ashby greenhouse greenhouse_excel lever; do
   result_dir="`$repo/output/continuous_`${provider}`_results"
   result_count=`$(find "`$result_dir" -maxdepth 1 -type f -name '*.json' 2>/dev/null |
     wc -l)
@@ -296,8 +296,12 @@ import re
 import subprocess
 from collections import Counter
 
-for provider in ("ashby", "greenhouse", "lever"):
-    unit = f"job-app-{provider}.service"
+for provider, unit in (
+    ("ashby", "job-app-ashby.service"),
+    ("greenhouse", "job-app-greenhouse.service"),
+    ("greenhouse_excel", "job-app-greenhouse-excel.service"),
+    ("lever", "job-app-lever.service"),
+):
     journal = subprocess.run(
         [
             "journalctl",
