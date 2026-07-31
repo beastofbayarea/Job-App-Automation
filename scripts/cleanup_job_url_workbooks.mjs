@@ -13,35 +13,35 @@ const workbookPlans = [
   {
     source: "ashby_roles.xlsx",
     target: "ashby_product_management_jobs.xlsx",
-    outputSheets: [{ name: "Product Management Jobs" }],
+    outputSheets: [{ name: "Ashby Product Management" }],
   },
   {
     source: "greenhouse_roles_all.xlsx",
     target: "greenhouse_all_jobs.xlsx",
-    outputSheets: [{ name: "All Jobs" }],
+    outputSheets: [{ name: "Greenhouse All Roles" }],
   },
   {
     source: "greenhouse_roles_marketing.xlsx",
     target: "greenhouse_marketing_jobs.xlsx",
-    outputSheets: [{ name: "Marketing Jobs" }],
+    outputSheets: [{ name: "Greenhouse Growth Marketing" }],
   },
   {
     source: "greenhouse_roles_pm.xlsx",
     target: "greenhouse_product_management_jobs.xlsx",
-    outputSheets: [{ name: "Product Management Jobs" }],
+    outputSheets: [{ name: "Greenhouse Product Management" }],
   },
   {
     source: "lever_roles.xlsx",
     target: "lever_product_management_jobs.xlsx",
-    outputSheets: [{ name: "Product Management Jobs" }],
+    outputSheets: [{ name: "Lever Product Management" }],
   },
   {
     source: "smartrecruiters_workable.xlsx",
     target: "smartrecruiters_and_workable_jobs.xlsx",
     splitByPlatform: true,
     outputSheets: [
-      { name: "SmartRecruiters Jobs", platform: "smartrecruiters" },
-      { name: "Workable Jobs", platform: "workable" },
+      { name: "SmartRecruiters Product Roles", platform: "smartrecruiters" },
+      { name: "Workable Product Roles", platform: "workable" },
     ],
   },
 ];

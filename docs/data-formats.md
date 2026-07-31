@@ -20,12 +20,12 @@ The private, Git-ignored URL inventories in `data/` use these canonical names:
 
 | File | Worksheet(s) |
 | --- | --- |
-| `ashby_product_management_jobs.xlsx` | `Product Management Jobs` |
-| `greenhouse_all_jobs.xlsx` | `All Jobs` |
-| `greenhouse_marketing_jobs.xlsx` | `Marketing Jobs` |
-| `greenhouse_product_management_jobs.xlsx` | `Product Management Jobs` |
-| `lever_product_management_jobs.xlsx` | `Product Management Jobs` |
-| `smartrecruiters_and_workable_jobs.xlsx` | `SmartRecruiters Jobs`, `Workable Jobs` |
+| `ashby_product_management_jobs.xlsx` | `Ashby Product Management` |
+| `greenhouse_all_jobs.xlsx` | `Greenhouse All Roles` |
+| `greenhouse_marketing_jobs.xlsx` | `Greenhouse Growth Marketing` |
+| `greenhouse_product_management_jobs.xlsx` | `Greenhouse Product Management` |
+| `lever_product_management_jobs.xlsx` | `Lever Product Management` |
+| `smartrecruiters_and_workable_jobs.xlsx` | `SmartRecruiters Product Roles`, `Workable Product Roles` |
 
 The prompt instructions formerly embedded beside the job tables are preserved
 verbatim in the private, Git-ignored `data/job_search_prompts.txt` archive and
