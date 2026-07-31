@@ -624,7 +624,13 @@ class PullSnapshotTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()
 
-    def _publish_snapshot(self, *, include_cache: bool, generation: str) -> None:
+    def _publish_snapshot(
+        self,
+        *,
+        include_cache: bool,
+        generation: str,
+        include_backlog: bool = True,
+    ) -> None:
         output = self.publisher / "output"
         output.mkdir(exist_ok=True)
         (output / "job_search_coverage.json").write_text(
@@ -637,6 +643,14 @@ class PullSnapshotTests(unittest.TestCase):
             cache.write_text(json.dumps({"generation": generation}), encoding="utf-8")
         elif cache.exists():
             cache.unlink()
+        backlog = output / "job_backlog.json"
+        if include_backlog:
+            backlog.write_text(
+                json.dumps({"version": 1, "generation": generation, "jobs": []}),
+                encoding="utf-8",
+            )
+        elif backlog.exists():
+            backlog.unlink()
         git(self.publisher, "add", "-A")
         git(self.publisher, "commit", "-m", f"publish snapshot {generation}")
         git(self.publisher, "push", "-u", "origin", "vps-search-output")
@@ -668,6 +682,10 @@ class PullSnapshotTests(unittest.TestCase):
             json.loads((output / "ats_boards_cache.json").read_text(encoding="utf-8")),
             {"generation": "one"},
         )
+        self.assertEqual(
+            json.loads((output / "job_backlog.json").read_text(encoding="utf-8"))["generation"],
+            "one",
+        )
         git(self.consumer, "diff", "--cached", "--exit-code")
 
     def test_incomplete_remote_snapshot_leaves_all_local_files_unchanged(self) -> None:
@@ -677,6 +695,7 @@ class PullSnapshotTests(unittest.TestCase):
             "job_search_coverage.json": "local coverage",
             "ai_jobs.csv": "local jobs",
             "ats_boards_cache.json": "local cache",
+            "job_backlog.json": "local backlog",
         }
         for name, content in sentinels.items():
             (output / name).write_text(content, encoding="utf-8")
@@ -690,6 +709,30 @@ class PullSnapshotTests(unittest.TestCase):
             self.assertEqual((output / name).read_text(encoding="utf-8"), content)
         git(self.consumer, "diff", "--cached", "--exit-code")
 
+    def test_remote_snapshot_missing_backlog_leaves_all_local_files_unchanged(self) -> None:
+        output = self.consumer / "output"
+        output.mkdir(exist_ok=True)
+        sentinels = {
+            "job_search_coverage.json": "local coverage",
+            "ai_jobs.csv": "local jobs",
+            "ats_boards_cache.json": "local cache",
+            "job_backlog.json": "local backlog",
+        }
+        for name, content in sentinels.items():
+            (output / name).write_text(content, encoding="utf-8")
+        self._publish_snapshot(
+            include_cache=True,
+            include_backlog=False,
+            generation="missing-backlog",
+        )
+
+        result = self._run_pull()
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("job_backlog.json", result.stderr)
+        for name, content in sentinels.items():
+            self.assertEqual((output / name).read_text(encoding="utf-8"), content)
+
 
 @unittest.skipUnless(BASH, "Bash is required")
 class BashMaintenanceTests(unittest.TestCase):
@@ -698,14 +741,18 @@ class BashMaintenanceTests(unittest.TestCase):
     ) -> None:
         script = (SCRIPTS / "vps_search_sync.sh").read_text(encoding="utf-8")
 
-        publication = script.index('git push "$PUSH_URL"')
+        first_publication = script.index("\npublish_sync_snapshot\n")
+        second_publication = script.index(
+            "\npublish_sync_snapshot\n",
+            first_publication + 1,
+        )
         documents = script.index("job_application_automation.core.search_documents")
         application = script.index("job_application_automation.core.search_applications")
-        self.assertLess(publication, documents)
+        self.assertLess(first_publication, documents)
         self.assertLess(documents, application)
-        self.assertLess(publication, application)
+        self.assertLess(application, second_publication)
         search_only_exit = script.index("VPS_SEARCH_ONLY_COMPLETE")
-        self.assertLess(publication, search_only_exit)
+        self.assertLess(first_publication, search_only_exit)
         self.assertLess(search_only_exit, documents)
         self.assertIn('--document-state "$DOCUMENT_STATE"', script)
         self.assertIn('RUN_STATUS="$REPO_DIR/output/vps_run_status.json"', script)
@@ -713,6 +760,9 @@ class BashMaintenanceTests(unittest.TestCase):
         self.assertNotIn("--max-attempts-per-ats 10", script)
         self.assertIn("--ats-platform smartrecruiters", script)
         self.assertIn("--ats-platform workable", script)
+        self.assertIn('"output/job_backlog.json"', script)
+        self.assertIn('--backlog-output "$BACKLOG_OUTPUT"', script)
+        self.assertIn('--backlog "$BACKLOG_OUTPUT"', script)
         sync_block = script[
             script.index("SYNC_FILES=(") : script.index("PRIVATE_GENERATION_OUTPUT=")
         ]
@@ -807,6 +857,7 @@ if [[ "${1:-}" == "src/job_automation.py" ]]; then
   printf '{}\\n' > output/job_search_coverage.json
   printf 'title\\n' > output/ai_jobs.csv
   printf '{}\\n' > output/ats_boards_cache.json
+  printf '{"version":1,"jobs":[]}\\n' > output/job_backlog.json
   exit 0
 fi
 if [[ "${1:-}" == "-m" ]]; then
@@ -864,6 +915,9 @@ exit 0
             self.assertFalse((repository / "xvfb-run-invoked").exists())
             self.assertFalse((repository / "private-stage-invoked").exists())
             self.assertTrue((repository / ".sync-worktree" / "output" / "ai_jobs.csv").is_file())
+            self.assertTrue(
+                (repository / ".sync-worktree" / "output" / "job_backlog.json").is_file()
+            )
 
     def test_shell_scripts_parse_and_logrotate_template_renders(self) -> None:
         for name in (
@@ -967,6 +1021,7 @@ exit 91
 mkdir -p output
 printf '{}\\n' > output/job_search_coverage.json
 printf 'title\\n' > output/ai_jobs.csv
+printf '{"version":1,"jobs":[]}\\n' > output/job_backlog.json
 """,
                 encoding="utf-8",
             )

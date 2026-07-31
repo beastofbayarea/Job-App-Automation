@@ -7,8 +7,14 @@ import io
 import json
 import os
 import tempfile
+import time
+from contextlib import contextmanager
 from pathlib import Path
 from collections.abc import Iterable, Mapping, Sequence
+
+
+DEFAULT_LOCK_TIMEOUT_SECONDS = 30.0
+DEFAULT_STALE_LOCK_SECONDS = 300.0
 
 
 def _target_path(path: str | Path) -> Path:
@@ -16,6 +22,68 @@ def _target_path(path: str | Path) -> Path:
     if not target.name:
         raise ValueError("artifact path must name a file")
     return target
+
+
+@contextmanager
+def interprocess_file_lock(
+    path: str | Path,
+    *,
+    timeout_seconds: float = DEFAULT_LOCK_TIMEOUT_SECONDS,
+    stale_seconds: float = DEFAULT_STALE_LOCK_SECONDS,
+):
+    """Serialize read-modify-write updates made by independent processes."""
+    if timeout_seconds <= 0:
+        raise ValueError("timeout_seconds must be greater than zero")
+    if stale_seconds <= 0:
+        raise ValueError("stale_seconds must be greater than zero")
+
+    target = _target_path(path)
+    lock_path = target.with_name(f"{target.name}.lock")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    deadline = time.monotonic() + timeout_seconds
+    descriptor: int | None = None
+    while descriptor is None:
+        try:
+            candidate = os.open(
+                lock_path,
+                os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+                0o600,
+            )
+            try:
+                os.write(candidate, f"{os.getpid()}\n".encode("ascii"))
+            except Exception:
+                os.close(candidate)
+                lock_path.unlink(missing_ok=True)
+                raise
+            descriptor = candidate
+        except (FileExistsError, PermissionError):
+            # Windows can report a sharing violation as PermissionError while
+            # another process still owns (or is unlinking) the lock file.
+            try:
+                # Filesystem mtimes use wall-clock time; the deadline uses a
+                # monotonic clock so clock adjustments cannot extend the wait.
+                stale = time.time() - lock_path.stat().st_mtime > stale_seconds
+            except FileNotFoundError:
+                continue
+            except PermissionError:
+                stale = False
+            if stale:
+                try:
+                    lock_path.unlink()
+                except (FileNotFoundError, PermissionError):
+                    pass
+                continue
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f"timed out waiting for artifact lock: {lock_path}") from None
+            time.sleep(0.05)
+    try:
+        yield
+    finally:
+        os.close(descriptor)
+        try:
+            lock_path.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def atomic_write_text(path: str | Path, text: str, *, encoding: str = "utf-8") -> Path:

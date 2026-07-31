@@ -32,7 +32,9 @@ def page_uncertainty(
     final_url: str = "",
 ) -> LivenessDecision:
     """Return a conservative decision when a page cannot prove job identity."""
-    preserve_listing = existing_status in {"listed", "live"}
+    # A page-level timeout or bot block cannot overturn either a positive
+    # provider listing or an authoritative provider closure.
+    preserve_listing = existing_status in {"listed", "live", "closed"}
     return LivenessDecision(
         status=None if preserve_listing else "unknown",
         source="job_page",

@@ -72,7 +72,9 @@ SYNC_FILES=(
   "output/job_search_coverage.json"
   "output/ai_jobs.csv"
   "output/ats_boards_cache.json"
+  "output/job_backlog.json"
 )
+BACKLOG_OUTPUT="$REPO_DIR/output/job_backlog.json"
 PRIVATE_GENERATION_OUTPUT="$REPO_DIR/output/vps_generation_jobs.json"
 DOCUMENT_STATE="$REPO_DIR/output/vps_document_archive_state.json"
 APPLICATION_STATE="$REPO_DIR/output/vps_application_state.json"
@@ -228,6 +230,41 @@ os.replace(temporary, path)
 PY
 }
 
+publish_sync_snapshot() {
+  local missing_sync_files=()
+  local artifact
+  for artifact in "${SYNC_FILES[@]}"; do
+    if [ ! -f "$REPO_DIR/$artifact" ]; then
+      missing_sync_files+=("$artifact")
+    fi
+  done
+  if ((${#missing_sync_files[@]} > 0)); then
+    printf 'Search completed without required sync artifact: %s\n' \
+      "${missing_sync_files[@]}" >&2
+    return 66
+  fi
+
+  if [ ! -d "$SYNC_DIR" ]; then
+    git fetch origin "$BRANCH"
+    git worktree add "$SYNC_DIR" "$BRANCH"
+  fi
+
+  for artifact in "${SYNC_FILES[@]}"; do
+    mkdir -p "$SYNC_DIR/$(dirname "$artifact")"
+    cp "$REPO_DIR/$artifact" "$SYNC_DIR/$artifact"
+  done
+
+  cd "$SYNC_DIR"
+  git add "${SYNC_FILES[@]}"
+  if ! git diff --cached --quiet; then
+    git commit -m "vps: search run $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    git push "$PUSH_URL" "HEAD:refs/heads/$BRANCH"
+  else
+    echo "No changes to sync."
+  fi
+  cd "$REPO_DIR"
+}
+
 trap 'interrupt_run 130' INT
 trap 'interrupt_run 143' TERM
 trap finish_run EXIT
@@ -258,41 +295,11 @@ python src/job_automation.py search \
   --ats-platform workable \
   "${SEARCH_MODE_ARGS[@]}" \
   --verify-live \
+  --backlog-output "$BACKLOG_OUTPUT" \
   --private-generation-output "$PRIVATE_GENERATION_OUTPUT"
 
 set_stage "publication"
-MISSING_SYNC_FILES=()
-for f in "${SYNC_FILES[@]}"; do
-  if [ ! -f "$REPO_DIR/$f" ]; then
-    MISSING_SYNC_FILES+=("$f")
-  fi
-done
-if ((${#MISSING_SYNC_FILES[@]} > 0)); then
-  printf 'Search completed without required sync artifact: %s\n' \
-    "${MISSING_SYNC_FILES[@]}" >&2
-  exit 66
-fi
-
-if [ ! -d "$SYNC_DIR" ]; then
-  git fetch origin "$BRANCH"
-  git worktree add "$SYNC_DIR" "$BRANCH"
-fi
-
-for f in "${SYNC_FILES[@]}"; do
-  mkdir -p "$SYNC_DIR/$(dirname "$f")"
-  cp "$REPO_DIR/$f" "$SYNC_DIR/$f"
-done
-
-cd "$SYNC_DIR"
-git add "${SYNC_FILES[@]}"
-if ! git diff --cached --quiet; then
-  git commit -m "vps: search run $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  git push "$PUSH_URL" "HEAD:refs/heads/$BRANCH"
-else
-  echo "No changes to sync."
-fi
-
-cd "$REPO_DIR"
+publish_sync_snapshot
 if ((SEARCH_ONLY)); then
   CURRENT_STAGE="finalizing"
   printf 'VPS_SEARCH_ONLY_COMPLETE at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -319,8 +326,15 @@ PYTHONPATH="$REPO_DIR/src${PYTHONPATH:+:$PYTHONPATH}" \
   --results-dir "$APPLICATION_RESULTS" \
   --failure-report "$APPLICATION_FAILURES" \
   --submission-log "$SUBMISSION_LOG" \
+  --backlog "$BACKLOG_OUTPUT" \
   --document-state "$DOCUMENT_STATE" \
   --state "$APPLICATION_STATE" || APPLICATION_EXIT=$?
+
+set_stage "publication"
+# Confirmed applications prune the VPS backlog immediately. Publish that
+# post-application state as well so local pulls never have to wait for the next
+# five-minute search cycle to stop showing a submitted job.
+publish_sync_snapshot
 
 CURRENT_STAGE="finalizing"
 if ((DOCUMENT_EXIT != 0)); then

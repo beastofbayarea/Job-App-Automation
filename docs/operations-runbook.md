@@ -3,7 +3,8 @@
 ## Safe operating sequence
 
 1. Update the candidate profile, email pool, and approved resume source.
-2. Search public boards and inspect `output/ai_jobs.csv` plus `output/job_search_coverage.json`.
+2. Search public boards and inspect `output/ai_jobs.csv`,
+   `output/job_backlog.json`, and `output/job_search_coverage.json`.
 3. Generate and review a tailored resume or cover letter.
 4. Run `apply` with `--dry-run` or `--fill-only` first.
 5. Review browser evidence and the orchestration result before using `--live-submit`.
@@ -50,6 +51,7 @@ If submission status is uncertain, verify it with the employer account or confir
 - `output/submission_log.json`: only confirmed submissions recorded by the orchestrator.
 - `output/job_url_queue_progress.json`: latest queue checkpoint.
 - `output/ai_jobs.csv` and `output/job_search_coverage.json`: search results and coverage evidence.
+- `output/job_backlog.json`: persistent active, unsubmitted public job metadata.
 - `output/google_url_submission_report.json`: latest sitemap, URL notification, or
   notification-status result.
 
@@ -153,8 +155,8 @@ units `job-app-search-sync.service`, `job-app-ashby.service`,
 `job-app-greenhouse.service`, and `job-app-lever.service`. All four run in
 parallel. The search service continuously refreshes verified Greenhouse, Lever,
 Ashby, SmartRecruiters, and Workable job discovery, publishes only the safe
-coverage/jobs/board-cache snapshot, waits five minutes, and repeats. It does
-not generate documents or submit applications.
+coverage/jobs/board-cache/backlog snapshot, waits five minutes, and repeats. It
+does not generate documents or submit applications.
 
 Installing or repairing one provider does not stop or restart another or the
 search service. When replacing an already-active instance of that same
@@ -186,7 +188,9 @@ only when both the strict engine result and
 The worker waits a uniformly random 120-300 seconds after every cycle. When
 the list is exhausted, it first refreshes its provider list from the newest
 shared search-service snapshot, then falls back to a provider-only verified
-search if the shared snapshot contains no unattempted work.
+search if the shared snapshot contains no unattempted work. That provider-only
+refresh uses provider-specific CSV/cache/coverage files and merges its results
+into the same locked active backlog.
 
 Private state and evidence are kept in:
 
@@ -307,13 +311,39 @@ hour. The operation is idempotent and replaces only the cron line marked
 `job-app-automation-daily-search`.
 
 After search and liveness verification, the scheduled workflow first publishes
-the complete coverage, jobs, and board-cache snapshot. Private document work
-cannot delay that publication. It then generates and archives a bounded set of
-CV/cover-letter pairs: `application.vps_max_document_jobs` controls the total
-per run (10 by default), while `application.vps_document_retry_jobs` reserves
-part of that capacity for prior failures (two by default). Remaining capacity
-advances new jobs, so permanent failures cannot starve the backlog. Archived
-URLs are skipped.
+the complete coverage, current jobs, board cache, and active backlog snapshot.
+Private document work cannot delay that publication. It then generates and
+archives a bounded set of CV/cover-letter pairs:
+`application.vps_max_document_jobs` controls the total per run (10 by default),
+while `application.vps_document_retry_jobs` reserves part of that capacity for
+prior failures (two by default). Remaining capacity advances new jobs, so
+permanent document failures cannot starve new work. Archived URLs are skipped.
+
+### Persistent active-job backlog
+
+The VPS search passes
+`--backlog-output output/job_backlog.json`. That one JSON file is the durable
+list of discovered jobs that are still eligible to remain under consideration;
+there is deliberately no archive or tombstone file.
+
+On each complete search, the workflow:
+
+1. loads the existing backlog (or migrates the prior CSV/private search input
+   on the first rollout);
+2. merges newly discovered roles and deduplicates provider and canonical URL
+   identities;
+3. rechecks prior-only roles as well as newly found roles;
+4. removes only exact `SUBMITTED & CONFIRMED` ledger matches and roles whose
+   provider/page conclusively returns `closed`; and
+5. atomically replaces the same `job_backlog.json`.
+
+Failed, CAPTCHA-gated, interrupted, and manual-review application attempts stay
+in the backlog even though private application state prevents unsafe automatic
+retries. Request failures, timeouts, `429`, `5xx`, bot blocks, malformed
+responses, and uncertain identity also stay. A closed job may re-enter if it is
+genuinely published again because no deletion archive exists; a submitted job
+cannot re-enter while its permanent confirmation remains in
+`submission_log.json`.
 
 Individual document failures keep the final cron status nonzero and remain
 visible in `output/vps_sync.log`, but they do not suppress the guarded
@@ -347,7 +377,17 @@ per-provider limit.
 `output/vps_application_results/`, `output/submission_log.json`, and ATS
 screenshots are private VPS artifacts. They must never be added to
 `vps-search-output`. A prior exact `SUBMITTED & CONFIRMED` log entry is skipped.
-Every attempted job is recorded atomically.
+Every attempted job is recorded atomically. A result is marked confirmed only
+when the engine result and permanent ledger agree; that URL is then removed
+from the active backlog under an interprocess lock. If cleanup is temporarily
+unavailable, the next search reconciles it from the ledger.
+
+The full daily/on-demand script publishes once before private work and again
+after applications. The second coherent publication is a no-op when nothing
+changed; when one or more jobs were confirmed, it makes their backlog removal
+available to the next local pull immediately. Provider workers also prune the
+VPS file directly, and the search-only service publishes their latest state on
+its next successful cycle.
 
 Any CAPTCHA, required-field failure, timeout, malformed result, engine error,
 or submission lacking exact confirmation is saved as `failed`. The runner
@@ -367,7 +407,8 @@ increase throughput.
 The cron entry and an on-demand trigger both run
 `scripts/vps_search_sync.sh`. That script uses a nonblocking lock and exits
 without starting when another sync is active. It also refuses to publish unless
-the search produced coverage, jobs, and board-cache artifacts for that run.
+the search produced coverage, current jobs, board-cache, and backlog artifacts
+for that run.
 The continuous service invokes the same script with `--search-only`, which
 exits after publication and never enters document or application stages.
 
@@ -379,8 +420,8 @@ pwsh scripts\trigger_vps_search.ps1 -RemoteRepoPath /absolute/path/to/Job-App-Au
 ```
 
 The trigger pulls output only after a successful remote run. A standalone pull
-requires coverage, jobs, and board-cache files from the same remote commit and
-updates the worktree without staging generated files:
+requires coverage, current jobs, board-cache, and backlog files from the same
+remote commit and updates the worktree without staging generated files:
 
 ```powershell
 pwsh scripts\pull_search_output.ps1

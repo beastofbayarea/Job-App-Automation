@@ -6,6 +6,12 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Added
 
+- A single persistent `output/job_backlog.json` for active, unsubmitted jobs,
+  with atomic merge, conservative liveness pruning, exact confirmed-submission
+  removal, legacy search-output migration, and no archive/tombstone file.
+- Four-file VPS publication and commit-coherent local pull support for the
+  backlog alongside coverage, current CSV results, and the board cache,
+  including a post-application publication when confirmations prune the list.
 - First-class SmartRecruiters and Workable discovery, public-feed normalization,
   and provider-aware liveness checks in local and continuous VPS searches.
 - Operational, configuration, CLI, data-format, security, architecture, ATS-support, and troubleshooting documentation.
@@ -19,6 +25,11 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Changed
 
+- Application workers now require matching permanent ledger evidence before
+  marking a result confirmed and prune that confirmed URL from the active
+  backlog without removing failed or manual-review attempts.
+- Preserve authoritative provider closure when a later application-page check
+  is uncertain, and retain unknown/backoff/server-error roles in the backlog.
 - Reconciled the PRD and historical implementation records with the delivered
   cover-letter and VPS-maintenance workflows, and clarified which documents are
   current operating references.

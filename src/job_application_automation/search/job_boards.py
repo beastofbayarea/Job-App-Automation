@@ -56,6 +56,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from . import cache as _search_cache
+from . import backlog as _search_backlog
 from . import discovery as _search_discovery
 from . import jsonld as _search_jsonld
 from . import liveness as _search_liveness
@@ -2683,8 +2684,8 @@ def preserve_listing_status_on_page_uncertainty(
     http_status: int | str = "",
     final_url: str = "",
 ) -> bool:
-    """Do not discard an authoritative listing confirmation because a page blocks bots."""
-    if job.live_status not in {"listed", "live"}:
+    """Do not overturn authoritative provider evidence because a page is uncertain."""
+    if job.live_status not in {"listed", "live", "closed"}:
         return False
     job.live_checked_at = iso_or_blank(now)
     job.live_check_source = " ; ".join(
@@ -2850,7 +2851,14 @@ def job_identity_keys(job: Job) -> set[str]:
         keys.add(f"source:{job.source_identity}")
     if (
         job.provider_id_trusted
-        and job.platform in {"greenhouse", "lever", "ashby"}
+        and job.platform
+        in {
+            "greenhouse",
+            "lever",
+            "ashby",
+            "smartrecruiters",
+            "workable",
+        }
         and job.board_token
         and job.platform_job_id
     ):
@@ -3352,6 +3360,17 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--backlog-output",
+        "--backlog",
+        dest="backlog_output",
+        type=Path,
+        help=(
+            "Optional persistent JSON backlog. It accumulates active, unsubmitted "
+            "jobs, removes only exact confirmed submissions or conclusively closed "
+            "roles, and excludes descriptions/private application data."
+        ),
+    )
+    parser.add_argument(
         "--coverage-report",
         type=Path,
         default=DEFAULT_COVERAGE_REPORT,
@@ -3778,6 +3797,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "failed_boards": [],
                     },
                     "fallback": {"attempted": 0, "matched": 0, "failed": 0},
+                    "backlog": {
+                        "enabled": bool(args.backlog_output),
+                        "status": "not_modified_no_boards",
+                    },
                     "results": {
                         "collected_before_deduplication": 0,
                         "deduplicated": 0,
@@ -3899,12 +3922,45 @@ def main(argv: Sequence[str] | None = None) -> int:
         and (not logged_urls or canonical_url(job.job_url) not in logged_urls)
     ]
     deduplicated_count = len(jobs)
+    backlog_candidates: list[_search_backlog.BacklogEntry] = []
+    backlog_admissions: list[Job] = list(jobs)
+    backlog_migrated = 0
+    if args.backlog_output:
+        backlog_exists = args.backlog_output.exists()
+        existing_backlog = _search_backlog.load_backlog(args.backlog_output)
+        if not backlog_exists:
+            migration_sources = [
+                args.private_generation_output,
+                args.json_output,
+                args.output,
+                *submission_log_paths,
+            ]
+            migrated_jobs: list[Job] = []
+            for migration_source in migration_sources:
+                if migration_source is None:
+                    continue
+                migrated_jobs.extend(_search_backlog.load_legacy_jobs(migration_source))
+            migrated_jobs = [
+                job for job in deduplicate_jobs(migrated_jobs) if not is_restricted_job(job)
+            ]
+            backlog_migrated = len(migrated_jobs)
+            backlog_admissions.extend(migrated_jobs)
+            existing_backlog = _search_backlog.prepare_candidates(
+                existing_backlog,
+                migrated_jobs,
+                now=now,
+            )
+        backlog_candidates = _search_backlog.prepare_candidates(
+            existing_backlog,
+            jobs,
+            now=now,
+        )
     if args.require_live:
         args.verify_live = True
     if args.verify_live:
         verify_live_jobs(
             session,
-            jobs,
+            ([entry.job for entry in backlog_candidates] if args.backlog_output else jobs),
             timeout=live_timeout,
             delay=args.delay,
             now=datetime.now(UTC),
@@ -3913,6 +3969,28 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.require_live:
         jobs = [job for job in jobs if job.live_status == "live"]
     jobs = sort_jobs(jobs)
+
+    backlog_report: dict[str, Any] = {"enabled": False}
+    if args.backlog_output:
+        backlog_update = _search_backlog.reconcile_backlog(
+            args.backlog_output,
+            backlog_candidates,
+            admitted_jobs=backlog_admissions,
+            submission_logs=submission_log_paths,
+            now=datetime.now(UTC),
+        )
+        backlog_report = {
+            "enabled": True,
+            "path": str(args.backlog_output),
+            "migrated": backlog_migrated,
+            **asdict(backlog_update),
+        }
+        print(
+            "Backlog: "
+            f"{backlog_update.retained} active unsubmitted jobs "
+            f"({backlog_update.removed_confirmed} confirmed and "
+            f"{backlog_update.removed_closed} closed removed)."
+        )
 
     live_status_counts: dict[str, int] = {}
     for job in jobs:
@@ -3935,6 +4013,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "discovery": asdict(discovery_stats),
                 "feed_fetch": {**fetch_stats, "failed_boards": sorted(failed_boards)},
                 "fallback": fallback_stats,
+                "backlog": backlog_report,
                 "results": {
                     "collected_before_deduplication": len(collected),
                     "deduplicated": deduplicated_count,

@@ -44,6 +44,7 @@ def test_process_one_uses_one_random_email_and_both_personalized_documents() -> 
         launcher = root / "launcher.py"
         state = root / "state.json"
         submission_log = root / "submissions.json"
+        backlog = root / "job_backlog.json"
         results = root / "results"
         documents = root / "documents"
         input_path.write_text(json.dumps([_job()]), encoding="utf-8")
@@ -53,6 +54,24 @@ def test_process_one_uses_one_random_email_and_both_personalized_documents() -> 
             encoding="utf-8",
         )
         launcher.write_text("", encoding="utf-8")
+        backlog.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "updated_at": "2026-07-31T00:00:00+00:00",
+                    "jobs": [
+                        {
+                            "platform": "ashby",
+                            "company": "Example",
+                            "title": "Product Manager",
+                            "job_url": _job()["job_url"],
+                            "apply_url": _job()["job_url"],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
 
         def prepare(**kwargs: object) -> worker.CommandOutcome:
             output_dir = Path(str(kwargs["output_dir"]))
@@ -110,6 +129,7 @@ def test_process_one_uses_one_random_email_and_both_personalized_documents() -> 
                 document_timeout_seconds=60,
                 engine_timeout_seconds=30,
                 application_timeout_seconds=60,
+                backlog_path=backlog,
             )
 
         assert status == "confirmed"
@@ -124,6 +144,7 @@ def test_process_one_uses_one_random_email_and_both_personalized_documents() -> 
         assert record["status"] == "confirmed"
         assert record["ledger_confirmed"] is True
         assert record["email"] == "chosen@example.test"
+        assert json.loads(backlog.read_text(encoding="utf-8"))["jobs"] == []
 
         with (
             patch.object(worker, "_prepare_documents") as no_prepare,
@@ -241,6 +262,35 @@ def test_eligibility_is_platform_specific_live_complete_and_deduplicated() -> No
 
     assert len(jobs) == 1
     assert jobs[0]["_canonical_url"] == "https://jobs.ashbyhq.com/example/123"
+
+
+def test_provider_refresh_uses_shared_backlog_and_isolated_search_artifacts(
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "continuous_greenhouse_jobs.json"
+    backlog_path = tmp_path / "job_backlog.json"
+    submission_log = tmp_path / "submission_log.json"
+
+    with patch.object(
+        worker,
+        "_run_command",
+        return_value=worker.CommandOutcome(0, "", ""),
+    ) as run_command:
+        worker._refresh_jobs(
+            ats_platform="greenhouse",
+            launcher=tmp_path / "job_automation.py",
+            input_path=input_path,
+            backlog_path=backlog_path,
+            submission_log=submission_log,
+            timeout_seconds=60,
+        )
+
+    command = run_command.call_args.args[0]
+    assert command[command.index("--backlog-output") + 1] == str(backlog_path)
+    assert command[command.index("--submission-log") + 1] == str(submission_log)
+    assert command[command.index("--output") + 1] == str(input_path.with_suffix(".csv"))
+    assert command[command.index("--cache") + 1].endswith("_cache.json")
+    assert command[command.index("--coverage-report") + 1].endswith("_coverage.json")
 
 
 def test_parallel_workers_seed_distinct_provider_inputs() -> None:

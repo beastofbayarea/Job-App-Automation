@@ -111,10 +111,13 @@ python src/job_automation.py search `
   --ats-platform workable `
   --location "New York" `
   --verify-live `
-  --require-live
+  --require-live `
+  --backlog-output output/job_backlog.json
 ```
 
-Use `--posted-on YYYY-MM-DD`, or `--posted-since` with `--posted-until`, for explicit calendar filters. `--days 7` applies a rolling window. Seed known boards with `--board-url` or `--boards-file`, or scan company pages with `--career-page` or `--career-pages-file`. Results go to `output/ai_jobs.csv`; `output/job_search_coverage.json` explains discovery, feed, fallback, and live-check coverage. `--require-live` implies `--verify-live` and excludes unknown outcomes.
+Use `--posted-on YYYY-MM-DD`, or `--posted-since` with `--posted-until`, for explicit calendar filters. `--days 7` applies a rolling window. Seed known boards with `--board-url` or `--boards-file`, or scan company pages with `--career-page` or `--career-pages-file`. Results from the current run go to `output/ai_jobs.csv`; `output/job_search_coverage.json` explains discovery, feed, fallback, live-check, and backlog coverage. `--require-live` implies `--verify-live` and excludes unknown outcomes from the current-run view.
+
+`--backlog-output output/job_backlog.json` enables the persistent active-job list used by the VPS. Each successful search merges newly found roles with the existing list, rechecks prior roles even when they were not rediscovered, and atomically rewrites the same file. Only exact `SUBMITTED & CONFIRMED` ledger evidence or a conclusive closed-role result removes a job. Failed/manual-review applications, timeouts, rate limits, server errors, and other unknown liveness outcomes remain in the backlog. No archive or tombstone file is created.
 
 ### Submit the site to Google
 
@@ -303,7 +306,7 @@ pwsh scripts\prune_old_outputs.ps1 -Days 14
 pwsh scripts\prune_old_outputs.ps1 -Days 14 -Delete
 ```
 
-On the VPS, `scripts/vps_search_sync.sh` runs the configured search under a nonblocking lock and publishes a complete result set to the dedicated `vps-search-output` branch. Install repository-aware log rotation with `bash scripts/install_vps_logrotate.sh`; add `--stdout` to preview the rendered policy. These workflows, their prerequisites, cron guidance, and safe branch boundary are detailed in the [operations runbook](docs/operations-runbook.md).
+On the VPS, `scripts/vps_search_sync.sh` runs the configured search under a nonblocking lock and publishes one coherent four-file result set—including the persistent backlog—to the dedicated `vps-search-output` branch. Install repository-aware log rotation with `bash scripts/install_vps_logrotate.sh`; add `--stdout` to preview the rendered policy. These workflows, their prerequisites, cron guidance, and safe branch boundary are detailed in the [operations runbook](docs/operations-runbook.md).
 
 Install or repair the unattended daily schedule and private archive root from
 Windows with:
@@ -372,9 +375,10 @@ for review and are never retried automatically.
 
 The search service continuously refreshes verified Greenhouse, Lever, Ashby,
 SmartRecruiters, and Workable listings, publishes only the safe
-coverage/jobs/board-cache snapshot, waits five minutes, and repeats. It never
-generates documents or submits applications, so those boundaries remain owned
-by the guarded ATS workers and the explicit full daily/on-demand pipeline.
+coverage/jobs/board-cache/active-backlog snapshot, waits five minutes, and
+repeats. It never generates documents or submits applications, so those
+boundaries remain owned by the guarded ATS workers and the explicit full
+daily/on-demand pipeline.
 
 Each successful scheduled search publishes its complete safe snapshot before
 starting private document work. The workflow then processes a bounded number of
@@ -383,7 +387,9 @@ retry slots) and uploads successful pairs to the private VPS archive. An
 ignored state file records completed URLs, so later runs skip archived pairs
 while continuing through both new jobs and prior failures. Full job
 descriptions and document-generation state remain private on the VPS and are
-never copied to `vps-search-output`.
+never copied to `vps-search-output`. After the application stage, it publishes
+the safe snapshot once more when confirmed submissions changed the backlog, so
+the next local pull does not continue showing those submitted jobs.
 
 The explicit full daily/on-demand pipeline can then submit eligible
 verified-live jobs whose document pair is already archived, including
@@ -410,6 +416,7 @@ and leaves existing local reports untouched unless `-Overwrite` is explicit.
 | `output/ai_jobs.csv` | Search results |
 | `output/job_search_coverage.json` | Discovery, feed, fallback, and liveness coverage |
 | `output/ats_boards_cache.json` | Reusable discovered-board cache |
+| `output/job_backlog.json` | Persistent active, unsubmitted public job metadata; no archive |
 | `output/orchestration_results.json` | Latest application workflow records |
 | `output/submission_log.json` | Confirmed, non-test submissions only |
 | `output/job_url_queue_progress.json` | Latest queue attempt and resume index |

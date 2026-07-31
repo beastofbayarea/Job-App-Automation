@@ -79,6 +79,7 @@ flowchart TD
         SearchDiscovery["search/discovery.py"]
         SearchJsonld["search/jsonld.py"]
         SearchLiveness["search/liveness.py"]
+        SearchBacklog["search/backlog.py<br/>(active / unsubmitted only)"]
         SearchModels["search/models.py"]
         SearchSerial["search/serialization.py"]
         SearchTerms["search/terms.py"]
@@ -87,11 +88,14 @@ flowchart TD
     Search --> SearchDiscovery
     Search --> SearchJsonld
     Search --> SearchLiveness
+    Search --> SearchBacklog
     Search --> SearchModels
     Search --> SearchSerial
     Search --> SearchTerms
     Search --> Artifacts
     Search --> Paths
+    VPSWorkers["core/search_applications.py<br/>core/continuous_ats.py"] --> SearchBacklog
+    VPSWorkers -.drives.-> Orchestrator
 
     subgraph GmailPipeline["Gmail integration"]
         direction LR
@@ -114,4 +118,4 @@ flowchart TD
     classDef pipeline fill:#12b886,color:#fff,stroke:#0b7285;
     class Entry,CLI entry;
     class Adapters,Contracts,Artifacts,Paths,EngShared,Identity shared;
-    class Orchestrator,Queue,Resume,CoverLetter,Documents,DocumentArchive,Search,Gmail,EmailPool pipeline;
+    class Orchestrator,Queue,Resume,CoverLetter,Documents,DocumentArchive,Search,VPSWorkers,Gmail,EmailPool pipeline;

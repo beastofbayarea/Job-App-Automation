@@ -8,7 +8,8 @@ param(
 $Files = @(
     "output/job_search_coverage.json",
     "output/ai_jobs.csv",
-    "output/ats_boards_cache.json"
+    "output/ats_boards_cache.json",
+    "output/job_backlog.json"
 )
 
 try {

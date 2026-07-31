@@ -4,7 +4,7 @@ The package is organized by workflow boundary, while `src/job_automation.py` is 
 
 ```text
 CLI
-├── search: discovery, feeds, JSON-LD, liveness, cache, serialization
+├── search: discovery, feeds, JSON-LD, liveness, active backlog, cache, serialization
 ├── resume: source validation, AI/local generation, scoring, rendering
 ├── cover-letter: claims, AI generation, validation, rendering, cache
 ├── documents: paired generation, immutable manifests, pinned PuTTY transport
@@ -17,12 +17,16 @@ CLI
 
 - `core/runtime_config.py` loads validated shared operational settings and resolves configured paths.
 - `core/contracts.py` defines data passed between orchestrator and engines; `EngineResult` is the submission-confirmation boundary.
-- `core/artifacts.py` atomically writes JSON, CSV, and text artifacts.
+- `core/artifacts.py` atomically writes JSON, CSV, and text artifacts and
+  provides the interprocess lock used for shared read-modify-write files.
 - `core/orchestrator.py` coordinates candidate profile, resume generation, provider detection, engine invocation, result persistence, and confirmed-submission logging.
 - `core/identity.py` provides dependency-free canonical job URL, email, and lookup normalization.
 - `core/document_archive.py` owns immutable manifests, opaque IDs, integrity checks, atomic local promotion, and the injected VPS transport boundary.
 - `core/document_cli.py` composes paired generation with explicit archive storage and deterministic retrieval.
 - `core/queue_runner.py` invokes live orchestration serially and checkpoints after every URL.
+- `search/backlog.py` owns the single active/unsubmitted JSON list, strict
+  ledger reconciliation, liveness-capable identity round trips, migration, and
+  immediate confirmed-job pruning. It never owns an archive.
 
 The detailed component diagram is maintained in [architecture.mmd](../architecture.mmd). The PRD is a living roadmap with per-feature implementation status; use the CLI reference and current code for delivered behavior.
 

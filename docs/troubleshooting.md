@@ -24,6 +24,22 @@ Inspect the application result, screenshot, and provider page. Queue execution s
 
 Read `output/job_search_coverage.json`. Broaden locations, provide known boards or career pages, use more than one ATS, and avoid an unnecessarily narrow date filter. `--require-live` intentionally excludes roles whose liveness cannot be confirmed.
 
+## Job backlog is missing, stale, or unexpectedly retains a role
+
+The VPS search command must include
+`--backlog-output output/job_backlog.json`. Check the coverage report's
+`backlog` object and the remote status helper's backlog timestamp. A timeout,
+`429`, `5xx`, bot block, malformed response, or uncertain page identity is not
+proof that a job closed, so the role is intentionally retained. Only an exact
+`SUBMITTED & CONFIRMED` ledger match or conclusive provider/page closure can
+remove it.
+
+The local pull requires coverage, current CSV, board cache, and backlog from
+one remote commit. If the remote generated-data branch predates backlog
+support, deploy current `main` and let one successful VPS search publish the
+first four-file snapshot; the pull safely leaves all local files unchanged
+until then.
+
 ## VPS cron is installed but search output is stale
 
 Run `pwsh scripts\check_vps_automation_status.ps1`. Compare the cron entry,

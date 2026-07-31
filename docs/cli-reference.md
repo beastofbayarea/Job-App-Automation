@@ -25,7 +25,12 @@ Run commands with either `python src/job_automation.py` from the repository root
 
 ## Common options
 
-- `search`: repeat `--role-type`, `--ats-platform`, `--location`, and source URL options as needed. `--require-live` implies `--verify-live`. Results default to `output/ai_jobs.csv`; `--json-output` is optional.
+- `search`: repeat `--role-type`, `--ats-platform`, `--location`, and source URL
+  options as needed. `--require-live` implies `--verify-live`. Results default
+  to the current-run `output/ai_jobs.csv`; `--json-output` is optional. Use
+  `--backlog-output` (alias `--backlog`) to maintain one atomic active,
+  unsubmitted JSON backlog. It retains uncertain and failed/manual-review jobs
+  and removes only exact confirmed submissions or conclusively closed roles.
 - `resume`: accept job text through `--keywords`, `--jd-overview`, `--jd-resp`, and `--jd-req`, or use `--url` for Ashby context fallback. `--email` changes only the generated document.
 - `cover-letter`: accepts the same segmented job text, `--jd-file`, `--profile`, `--output`, and an `--email` override for the rendered contact header.
 - `documents generate`: accepts `--jd-file` or segmented `--jd-*` text. It writes both PDFs under an opaque application ID. `--archive` is the explicit live VPS action.

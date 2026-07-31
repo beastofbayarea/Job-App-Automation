@@ -10,6 +10,7 @@
     "vps_application_results_dir": "output/vps_application_results",
     "vps_application_state_file": "output/vps_application_state.json",
     "vps_application_failure_report": "output/vps_application_failures.json",
+    "vps_job_backlog_file": "output/job_backlog.json",
     "candidate_email_pool_file": "config/candidate_email_pool.json",
     "seo_config_file": "config/seo_config.json",
     "engine_timeout_seconds": 180,

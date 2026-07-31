@@ -251,6 +251,7 @@ class SearchJobBoardsTests(unittest.TestCase):
             ]
         )
         self.assertEqual(search.OUTPUT_DIR / "ai_jobs.csv", args.output)
+        self.assertIsNone(args.backlog_output)
 
     def test_parser_allows_default_locations_when_location_is_omitted(self) -> None:
         args = search.build_parser().parse_args(
@@ -376,6 +377,18 @@ class SearchJobBoardsTests(unittest.TestCase):
             now=datetime(2026, 7, 28, tzinfo=UTC),
         )
         self.assertEqual("closed", job.live_status)
+
+    def test_uncertain_application_page_does_not_overturn_provider_closure(self) -> None:
+        job = make_job(live_status="closed")
+        search.verify_page_job_live(
+            FakeSession(FakeResponse(status_code=503)),
+            job,
+            timeout=1,
+            now=NOW,
+        )
+
+        self.assertEqual("closed", job.live_status)
+        self.assertIn("http_503", job.live_check_reason)
 
     def test_page_liveness_rejects_same_title_from_a_different_job_url(self) -> None:
         job = make_job(live_status="not_checked", provider_id_trusted=False)
@@ -706,10 +719,98 @@ class SearchJobBoardsTests(unittest.TestCase):
         self.assertEqual(1, len(captured_contexts))
         self.assertFalse(captured_contexts[0].criteria.include_unknown_dates)
 
+    def test_search_rechecks_and_retains_prior_only_unknown_backlog_job(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            backlog_path = root / "job_backlog.json"
+            ledger_path = root / "submission_log.json"
+            ledger_path.write_text("{}", encoding="utf-8")
+            prior = make_job(
+                platform_job_id="123",
+                live_status="unknown",
+                live_check_reason="request_failed",
+            )
+            backlog_path.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "updated_at": NOW.isoformat(),
+                        "jobs": [
+                            {
+                                **prior.to_csv_row(),
+                                "board_region": prior.board_region,
+                                "provider_id_trusted": prior.provider_id_trusted,
+                                "url_is_record_specific": True,
+                                "first_seen_at": NOW.isoformat(),
+                                "last_seen_at": NOW.isoformat(),
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            fresh = make_job(
+                platform_job_id="456",
+                title="Senior Product Manager",
+                job_url="https://boards.greenhouse.io/example/jobs/456",
+                apply_url="https://boards.greenhouse.io/example/jobs/456",
+                unique_id="greenhouse:global:example:456",
+                live_status="live",
+            )
+
+            with (
+                patch.object(search, "fetch_board_jobs", return_value=[fresh]),
+                patch.object(search, "verify_live_jobs") as verify,
+            ):
+                exit_code = search.main(
+                    [
+                        "--role-type",
+                        "Product Manager",
+                        "--ats-platform",
+                        "greenhouse",
+                        "--location",
+                        "New York",
+                        "--skip-search",
+                        "--board-url",
+                        "https://boards.greenhouse.io/example",
+                        "--scrape-discovered-pages",
+                        "none",
+                        "--verify-live",
+                        "--backlog-output",
+                        str(backlog_path),
+                        "--submission-log",
+                        str(ledger_path),
+                        "--no-exclude-logged",
+                        "--cache",
+                        str(root / "cache.json"),
+                        "--output",
+                        str(root / "jobs.csv"),
+                        "--no-coverage-report",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            checked = verify.call_args.args[1]
+            self.assertEqual({job.platform_job_id for job in checked}, {"123", "456"})
+            persisted = search._search_backlog.load_backlog(backlog_path)
+            self.assertEqual(
+                {entry.job.platform_job_id for entry in persisted},
+                {"123", "456"},
+            )
+
     def test_no_board_coverage_report_uses_the_standard_schema(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             coverage_path = root / "coverage.json"
+            backlog_path = root / "job_backlog.json"
+            original_backlog = json.dumps(
+                {
+                    "version": 1,
+                    "updated_at": NOW.isoformat(),
+                    "jobs": [],
+                }
+            )
+            backlog_path.write_text(original_backlog, encoding="utf-8")
             exit_code = search.main(
                 [
                     "--role-type",
@@ -725,15 +826,21 @@ class SearchJobBoardsTests(unittest.TestCase):
                     str(root / "jobs.csv"),
                     "--coverage-report",
                     str(coverage_path),
+                    "--backlog-output",
+                    str(backlog_path),
                 ]
             )
             report = json.loads(coverage_path.read_text(encoding="utf-8"))
+            persisted_backlog = backlog_path.read_text(encoding="utf-8")
         self.assertEqual(1, exit_code)
         self.assertEqual(1, report["version"])
         self.assertEqual(0, report["results"]["returned"])
         self.assertTrue(
-            {"criteria", "cache", "discovery", "feed_fetch", "fallback", "results"} <= report.keys()
+            {"criteria", "cache", "discovery", "feed_fetch", "fallback", "backlog", "results"}
+            <= report.keys()
         )
+        self.assertEqual("not_modified_no_boards", report["backlog"]["status"])
+        self.assertEqual(original_backlog, persisted_backlog)
 
     def test_failed_feed_mode_includes_generic_web_candidates(self) -> None:
         web_board = search.Board("web", "example.wd1.myworkdayjobs.com")

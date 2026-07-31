@@ -39,6 +39,38 @@ def _confirmed_result() -> dict[str, object]:
     }
 
 
+def _record_confirmed_submission(command: list[str]) -> None:
+    ledger_path = Path(command[command.index("--submission-log-file") + 1])
+    job_url = command[command.index("--url") + 1]
+    payload = json.loads(ledger_path.read_text(encoding="utf-8")) if ledger_path.exists() else {}
+    payload[f"confirmed-{len(payload) + 1}"] = {
+        "job_url": job_url,
+        "status": "SUBMITTED & CONFIRMED",
+    }
+    ledger_path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _write_backlog(path: Path, job_url: str) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "updated_at": "2026-07-31T00:00:00+00:00",
+                "jobs": [
+                    {
+                        "platform": "greenhouse",
+                        "company": "Example",
+                        "title": "Product Manager",
+                        "job_url": job_url,
+                        "apply_url": job_url,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 class SearchApplicationTests(unittest.TestCase):
     def test_runner_initializes_empty_submission_and_failure_reports(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -170,6 +202,7 @@ class SearchApplicationTests(unittest.TestCase):
             def fake_run(command: list[str], **kwargs: object) -> SimpleNamespace:
                 result_path = Path(command[command.index("--results-file") + 1])
                 result_path.write_text(json.dumps([_confirmed_result()]), encoding="utf-8")
+                _record_confirmed_submission(command)
                 return SimpleNamespace(returncode=0, stdout="", stderr="")
 
             with patch.object(search_applications.subprocess, "run", side_effect=fake_run) as run:
@@ -245,6 +278,7 @@ class SearchApplicationTests(unittest.TestCase):
                         stderr="confirmation timeout",
                     )
                 result_path.write_text(json.dumps([_confirmed_result()]), encoding="utf-8")
+                _record_confirmed_submission(command)
                 return SimpleNamespace(returncode=0, stdout="", stderr="")
 
             arguments = [
@@ -298,6 +332,7 @@ class SearchApplicationTests(unittest.TestCase):
             def fake_run(command: list[str], **kwargs: object) -> SimpleNamespace:
                 result_path = Path(command[command.index("--results-file") + 1])
                 result_path.write_text(json.dumps([_confirmed_result()]), encoding="utf-8")
+                _record_confirmed_submission(command)
                 return SimpleNamespace(returncode=0, stdout="", stderr="")
 
             with patch.object(search_applications.subprocess, "run", side_effect=fake_run) as run:
@@ -379,6 +414,92 @@ class SearchApplicationTests(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             run.assert_not_called()
+
+    def test_backlog_is_pruned_only_when_result_and_ledger_both_confirm(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            job_url = "https://boards.greenhouse.io/example/jobs/1"
+            input_path = root / "jobs.json"
+            profile = root / "profile.json"
+            ledger = root / "submissions.json"
+            backlog = root / "job_backlog.json"
+            input_path.write_text(json.dumps([_job(job_url)]), encoding="utf-8")
+            profile.write_text("{}", encoding="utf-8")
+            ledger.write_text("{}", encoding="utf-8")
+            _write_backlog(backlog, job_url)
+
+            def fake_run(command: list[str], **kwargs: object) -> SimpleNamespace:
+                result_path = Path(command[command.index("--results-file") + 1])
+                result_path.write_text(json.dumps([_confirmed_result()]), encoding="utf-8")
+                _record_confirmed_submission(command)
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+            with patch.object(search_applications.subprocess, "run", side_effect=fake_run):
+                exit_code = search_applications.main(
+                    [
+                        "--input",
+                        str(input_path),
+                        "--profile",
+                        str(profile),
+                        "--submission-log",
+                        str(ledger),
+                        "--backlog",
+                        str(backlog),
+                        "--state",
+                        str(root / "state.json"),
+                        "--results-dir",
+                        str(root / "results"),
+                        "--failure-report",
+                        str(root / "failures.json"),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(json.loads(backlog.read_text(encoding="utf-8"))["jobs"], [])
+
+    def test_engine_confirmation_without_ledger_evidence_keeps_backlog(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            job_url = "https://boards.greenhouse.io/example/jobs/1"
+            (root / "jobs.json").write_text(json.dumps([_job(job_url)]), encoding="utf-8")
+            (root / "profile.json").write_text("{}", encoding="utf-8")
+            (root / "submissions.json").write_text("{}", encoding="utf-8")
+            _write_backlog(root / "job_backlog.json", job_url)
+
+            def fake_run(command: list[str], **kwargs: object) -> SimpleNamespace:
+                result_path = Path(command[command.index("--results-file") + 1])
+                result_path.write_text(json.dumps([_confirmed_result()]), encoding="utf-8")
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+            with patch.object(search_applications.subprocess, "run", side_effect=fake_run):
+                exit_code = search_applications.main(
+                    [
+                        "--input",
+                        str(root / "jobs.json"),
+                        "--profile",
+                        str(root / "profile.json"),
+                        "--submission-log",
+                        str(root / "submissions.json"),
+                        "--backlog",
+                        str(root / "job_backlog.json"),
+                        "--state",
+                        str(root / "state.json"),
+                        "--results-dir",
+                        str(root / "results"),
+                        "--failure-report",
+                        str(root / "failures.json"),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 1)
+            self.assertEqual(
+                len(json.loads((root / "job_backlog.json").read_text(encoding="utf-8"))["jobs"]),
+                1,
+            )
+            state = json.loads((root / "state.json").read_text(encoding="utf-8"))
+            record = next(iter(state["jobs"].values()))
+            self.assertEqual(record["status"], "failed")
+            self.assertFalse(record["ledger_confirmed"])
 
 
 if __name__ == "__main__":

@@ -39,9 +39,41 @@ live_check_http_status, live_check_final_url, live_check_reason
 
 The JSON output is an array of objects with the same public fields. An empty value means the source did not provide a reliable value; it does not imply a negative result.
 
+## Active job backlog
+
+`output/job_backlog.json` is the persistent active, unsubmitted list used by
+the VPS search workflow. Its root is:
+
+```json
+{
+  "version": 1,
+  "updated_at": "2026-07-31T12:00:00+00:00",
+  "jobs": []
+}
+```
+
+Each `jobs` entry contains the public search-result fields plus
+`board_region`, `provider_id_trusted`, `source_identity`,
+`url_is_record_specific`, `unique_id`, `first_seen_at`, and `last_seen_at`.
+These identity fields let a role that was not rediscovered be checked against
+its provider again. `days_old` remains the value observed when that record was
+last refreshed.
+
+The file never stores descriptions, candidate data, application state,
+failure diagnostics, documents, email addresses, or submission evidence. A
+search merges new roles, preserves the earliest `first_seen_at`, refreshes
+`last_seen_at` when rediscovered, and removes only:
+
+- a URL matching an exact `SUBMITTED & CONFIRMED` submission-ledger entry; or
+- a role whose provider or job page conclusively reports `closed`.
+
+`unknown`, `not_checked`, `listed`, and `live` records remain. There is no
+archive or deletion-history structure; a genuinely reopened role may re-enter,
+while a confirmed role remains excluded by the permanent submission ledger.
+
 ## Search coverage report
 
-`output/job_search_coverage.json` has `version`, `generated_at`, `criteria`, `cache`, `discovery`, `feed_fetch`, `fallback`, and `results` objects. The `results.returned` value is the number written after filtering; `results.live_status_counts` summarizes liveness outcomes. Use discovery and feed statistics to distinguish “no matching jobs” from incomplete source coverage.
+`output/job_search_coverage.json` has `version`, `generated_at`, `criteria`, `cache`, `discovery`, `feed_fetch`, `fallback`, `backlog`, and `results` objects. The `results.returned` value is the current-run count written after filtering; `results.live_status_counts` summarizes those liveness outcomes. When backlog persistence is enabled, `backlog` reports migration, candidate, removal, and retained counts. Use discovery and feed statistics to distinguish “no matching jobs” from incomplete source coverage.
 
 ## Orchestration results
 

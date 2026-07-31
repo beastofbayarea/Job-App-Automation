@@ -147,6 +147,7 @@ def load_runtime_config(path: Path | None = None) -> RuntimeConfig:
         "vps_application_results_dir",
         "vps_application_state_file",
         "vps_application_failure_report",
+        "vps_job_backlog_file",
         "candidate_email_pool_file",
         "seo_config_file",
     ):

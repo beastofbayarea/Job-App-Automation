@@ -5,7 +5,9 @@ This project processes identity, contact, resume, employment, and application da
 ## Protect local secrets
 
 - Keep Google OAuth credentials, OAuth tokens, Vertex/Search Console/Indexing service-account keys, candidate profile data, email pools, resume sources, and generated output out of Git.
-- Keep the VPS archive config, private key, PDFs, manifests, job metadata, and candidate emails out of Git and every publicly served directory.
+- Keep the VPS archive config, private key, PDFs, manifests, private
+  document/application job metadata, and candidate emails out of Git and every
+  publicly served directory.
 - Use the provided example JSON files as templates; do not put real values in examples, test fixtures, issues, or commit messages.
 - Limit local filesystem access and remove unused credential copies. Revoke and rotate a credential if it is exposed.
 - Prefer `--redact` when exporting Gmail data. Review every export before sharing it.
@@ -31,7 +33,11 @@ Generated artifacts, result JSON, screenshots, and logs can contain personal dat
 - Use a dedicated unprivileged SSH account, archive root mode `0700`, file mode `0600`, and a separately managed authentication key.
 - Pin the expected SSH host key. Never accept an unexpected key merely to make a transfer work.
 - Do not reuse the Git search-publication deploy key for private documents.
-- `vps-search-output` is public generated data and must remain limited to search coverage, job CSV, and board-cache artifacts. Never add archive paths or content to its allow-list.
+- `vps-search-output` is public generated data and must remain limited to search
+  coverage, the current job CSV, the board cache, and `job_backlog.json`.
+  Backlog records contain only public ATS metadata and liveness identity—never
+  descriptions, emails, application state/errors, documents, or submission
+  evidence. Never add archive paths or content to its allow-list.
 - VPS application state, results, screenshots, submission logs, Gmail OAuth
   files, and candidate inputs are private and must never enter the search
   publication worktree.

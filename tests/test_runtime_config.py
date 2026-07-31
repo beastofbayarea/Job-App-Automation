@@ -45,6 +45,10 @@ class RuntimeConfigTests(unittest.TestCase):
             "output/vps_application_failures.json",
         )
         self.assertEqual(
+            config.application["vps_job_backlog_file"],
+            "output/job_backlog.json",
+        )
+        self.assertEqual(
             resolve_runtime_path(config.application["resume_source_file"]),
             ROOT / "data" / "base_resume.txt",
         )

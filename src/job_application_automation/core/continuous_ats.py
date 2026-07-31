@@ -25,6 +25,7 @@ from .contracts import EngineResult
 from .identity import canonical_job_url, normalize_email
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from ..mail.pool import load_email_pool
+from ..search.backlog import remove_confirmed_job
 
 
 UTC = timezone.utc
@@ -33,6 +34,7 @@ SHARED_INPUT = resolve_runtime_path("output/vps_generation_jobs.json")
 # input files so parallel refreshes cannot overwrite each other.
 DEFAULT_INPUT = SHARED_INPUT
 DEFAULT_SUBMISSION_LOG = resolve_runtime_path(RUNTIME_CONFIG.application["submission_log_file"])
+DEFAULT_BACKLOG = resolve_runtime_path(RUNTIME_CONFIG.application["vps_job_backlog_file"])
 DEFAULT_PROFILE = resolve_runtime_path("config/candidate_profile_config.json")
 DEFAULT_EMAIL_POOL = resolve_runtime_path(RUNTIME_CONFIG.application["candidate_email_pool_file"])
 DEFAULT_LAUNCHER = resolve_runtime_path("src/job_automation.py")
@@ -380,6 +382,7 @@ def process_one(
     document_timeout_seconds: int,
     engine_timeout_seconds: int,
     application_timeout_seconds: int,
+    backlog_path: Path | None = None,
 ) -> str:
     state = _load_state(state_path, ats_platform)
     jobs = _eligible_jobs(_load_json(input_path), ats_platform)
@@ -525,6 +528,16 @@ def process_one(
     )
     _save_state(state_path, state)
     if confirmed:
+        if backlog_path is not None:
+            try:
+                remove_confirmed_job(backlog_path, canonical_url)
+            except (OSError, TimeoutError, ValueError) as exc:
+                print(
+                    f"{ats_platform.upper()}_BACKLOG_PRUNE_DEFERRED "
+                    f"url_digest={_job_digest(canonical_url)} error={exc}",
+                    file=sys.stderr,
+                    flush=True,
+                )
         print(
             f"{ats_platform.upper()}_CYCLE_CONFIRMED "
             f"url_digest={_job_digest(canonical_url)} status=SUBMITTED_AND_CONFIRMED",
@@ -545,8 +558,13 @@ def _refresh_jobs(
     ats_platform: str,
     launcher: Path,
     input_path: Path,
+    backlog_path: Path,
+    submission_log: Path,
     timeout_seconds: int,
 ) -> CommandOutcome:
+    csv_output = input_path.with_suffix(".csv")
+    coverage_output = input_path.with_name(f"{input_path.stem}_coverage.json")
+    cache_output = input_path.with_name(f"{input_path.stem}_cache.json")
     command = [
         sys.executable,
         str(launcher),
@@ -556,6 +574,16 @@ def _refresh_jobs(
         "--ats-platform",
         ats_platform,
         "--verify-live",
+        "--output",
+        str(csv_output),
+        "--coverage-report",
+        str(coverage_output),
+        "--cache",
+        str(cache_output),
+        "--backlog-output",
+        str(backlog_path),
+        "--submission-log",
+        str(submission_log),
         "--private-generation-output",
         str(input_path),
     ]
@@ -680,6 +708,12 @@ def build_parser(ats_platform: str) -> argparse.ArgumentParser:
         default=_platform_output_path(ats_platform, "_documents"),
     )
     parser.add_argument("--submission-log", type=Path, default=DEFAULT_SUBMISSION_LOG)
+    parser.add_argument(
+        "--backlog",
+        type=Path,
+        default=DEFAULT_BACKLOG,
+        help="Active-job backlog pruned only after confirmed ledger evidence.",
+    )
     parser.add_argument("--sleep-min-seconds", type=int, default=120)
     parser.add_argument("--sleep-max-seconds", type=int, default=300)
     parser.add_argument("--document-timeout-seconds", type=int, default=1800)
@@ -778,6 +812,8 @@ def main(
                     ats_platform=ats_platform,
                     launcher=args.launcher,
                     input_path=args.input,
+                    backlog_path=args.backlog,
+                    submission_log=args.submission_log,
                     timeout_seconds=args.refresh_timeout_seconds,
                 )
                 if outcome.return_code != 0:
@@ -803,6 +839,7 @@ def main(
                     document_timeout_seconds=args.document_timeout_seconds,
                     engine_timeout_seconds=args.engine_timeout_seconds,
                     application_timeout_seconds=args.application_timeout_seconds,
+                    backlog_path=args.backlog,
                 )
                 if cycle_status == "no_work":
                     shared_count = _seed_platform_input(
@@ -829,12 +866,15 @@ def main(
                             document_timeout_seconds=args.document_timeout_seconds,
                             engine_timeout_seconds=args.engine_timeout_seconds,
                             application_timeout_seconds=args.application_timeout_seconds,
+                            backlog_path=args.backlog,
                         )
                     if cycle_status == "no_work":
                         outcome = _refresh_jobs(
                             ats_platform=ats_platform,
                             launcher=args.launcher,
                             input_path=args.input,
+                            backlog_path=args.backlog,
+                            submission_log=args.submission_log,
                             timeout_seconds=args.refresh_timeout_seconds,
                         )
                         print(

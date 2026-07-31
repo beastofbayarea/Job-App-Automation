@@ -17,6 +17,7 @@ from .contracts import EngineResult
 from .engine_shared import ATS_HOST_MARKERS, detect_ats_job_url
 from .identity import canonical_job_url
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
+from ..search.backlog import load_confirmed_urls, remove_confirmed_job
 
 
 UTC = timezone.utc
@@ -29,6 +30,7 @@ DEFAULT_STATE_FILE = resolve_runtime_path(RUNTIME_CONFIG.application["vps_applic
 DEFAULT_FAILURE_REPORT = resolve_runtime_path(
     RUNTIME_CONFIG.application["vps_application_failure_report"]
 )
+DEFAULT_BACKLOG = resolve_runtime_path(RUNTIME_CONFIG.application["vps_job_backlog_file"])
 
 
 def _load_json(path: Path) -> Any:
@@ -131,22 +133,7 @@ def _eligible_jobs(payload: Any) -> list[dict[str, Any]]:
 
 
 def _confirmed_urls(submission_log_path: Path) -> set[str]:
-    if not submission_log_path.exists():
-        return set()
-    payload = read_json(submission_log_path)
-    if not isinstance(payload, dict):
-        raise ValueError("submission log root must be an object")
-    confirmed: set[str] = set()
-    for value in payload.values():
-        if not isinstance(value, dict):
-            continue
-        if str(value.get("status", "")).strip() != "SUBMITTED & CONFIRMED":
-            continue
-        try:
-            confirmed.add(canonical_job_url(str(value.get("job_url", ""))))
-        except ValueError:
-            continue
-    return confirmed
+    return load_confirmed_urls([submission_log_path])
 
 
 def _archived_document_urls(document_state_path: Path) -> set[str]:
@@ -195,6 +182,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--launcher", type=Path, default=Path("src/job_automation.py"))
     parser.add_argument("--results-dir", type=Path, default=DEFAULT_RESULTS_DIR)
     parser.add_argument("--submission-log", type=Path, required=True)
+    parser.add_argument(
+        "--backlog",
+        type=Path,
+        default=DEFAULT_BACKLOG,
+        help="Active-job backlog pruned only after confirmed ledger evidence.",
+    )
     parser.add_argument(
         "--document-state",
         type=Path,
@@ -309,7 +302,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 flush=True,
             )
         result = _read_single_result(result_path)
-        confirmed = return_code == 0 and _is_confirmed(result)
+        ledger_confirmed = canonical_url in _confirmed_urls(args.submission_log)
+        confirmed = return_code == 0 and _is_confirmed(result) and ledger_confirmed
         status = "confirmed" if confirmed else "failed"
         record = {
             "status": status,
@@ -321,6 +315,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "updated_at": datetime.now(UTC).isoformat(),
             "exit_code": return_code,
             "result_status": str(result.get("status", "NO_RESULT")),
+            "ledger_confirmed": ledger_confirmed,
             "evidence_path": str(result_path),
             "result": result,
             "stdout_tail": stdout[-20000:],
@@ -363,6 +358,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             continue
         confirmed_by_ats[platform] += 1
         confirmed_urls.add(canonical_url)
+        try:
+            remove_confirmed_job(args.backlog, canonical_url)
+        except (OSError, TimeoutError, ValueError) as exc:
+            print(
+                f"VPS_BACKLOG_PRUNE_DEFERRED url={job['job_url']} error={exc}",
+                file=sys.stderr,
+                flush=True,
+            )
         print(
             "VPS_APPLICATION_CONFIRMED "
             f"ats={platform} count={confirmed_by_ats[platform]} url={job['job_url']}",

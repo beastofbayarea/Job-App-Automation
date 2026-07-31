@@ -68,7 +68,7 @@ else
   printf '%s\n' 'MISSING'
 fi
 printf '%s\n' '=== OUTPUT FILES ==='
-for name in job_search_coverage.json ai_jobs.csv ats_boards_cache.json \
+for name in job_search_coverage.json ai_jobs.csv ats_boards_cache.json job_backlog.json \
   vps_generation_jobs.json vps_document_archive_state.json \
   submission_log.json vps_application_failures.json \
   vps_application_state.json continuous_greenhouse_state.json vps_sync.log; do
