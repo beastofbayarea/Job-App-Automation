@@ -24,6 +24,11 @@ from .artifacts import atomic_write_text, read_json
 from .contracts import EngineResult
 from .identity import canonical_job_url, normalize_email
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
+from .screenshots import (
+    APPLICATION_SCREENSHOT_DIR_ENV,
+    cleanup_application_screenshot_directory,
+    create_application_screenshot_directory,
+)
 from ..mail.pool import load_email_pool
 from ..search.backlog import remove_confirmed_job
 
@@ -183,7 +188,12 @@ def _reconcile_interrupted_submissions(state: dict[str, Any]) -> int:
     return reconciled
 
 
-def _run_command(command: list[str], timeout_seconds: int) -> CommandOutcome:
+def _run_command(
+    command: list[str],
+    timeout_seconds: int,
+    *,
+    environment: Mapping[str, str] | None = None,
+) -> CommandOutcome:
     """Run a child with bounded lifetime and descendant cleanup on both platforms."""
     creationflags = (
         subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
@@ -198,6 +208,7 @@ def _run_command(command: list[str], timeout_seconds: int) -> CommandOutcome:
             errors="replace",
             creationflags=creationflags,
             start_new_session=os.name != "nt",
+            env={**os.environ, **environment} if environment is not None else None,
         )
         try:
             stdout, stderr = process.communicate(timeout=timeout_seconds)
@@ -339,6 +350,7 @@ def _apply(
     cover_letter_path: Path,
     result_path: Path,
     submission_log: Path,
+    screenshot_dir: Path,
     engine_timeout_seconds: int,
     process_timeout_seconds: int,
 ) -> CommandOutcome:
@@ -369,7 +381,11 @@ def _apply(
         "--timeout",
         str(engine_timeout_seconds),
     ]
-    return _run_command(command, process_timeout_seconds)
+    return _run_command(
+        command,
+        process_timeout_seconds,
+        environment={APPLICATION_SCREENSHOT_DIR_ENV: str(screenshot_dir)},
+    )
 
 
 def process_one(
@@ -500,18 +516,39 @@ def process_one(
     )
     _save_state(state_path, state)
 
-    application_outcome = _apply(
-        job=job,
-        email=email,
-        launcher=launcher,
-        profile=profile,
-        resume_path=resume_path,
-        cover_letter_path=cover_letter_path,
-        result_path=result_path,
-        submission_log=submission_log,
-        engine_timeout_seconds=engine_timeout_seconds,
-        process_timeout_seconds=application_timeout_seconds,
-    )
+    screenshot_root = results_dir.parent
+    screenshot_dir = create_application_screenshot_directory(output_root=screenshot_root)
+    try:
+        application_outcome = _apply(
+            job=job,
+            email=email,
+            launcher=launcher,
+            profile=profile,
+            resume_path=resume_path,
+            cover_letter_path=cover_letter_path,
+            result_path=result_path,
+            submission_log=submission_log,
+            screenshot_dir=screenshot_dir,
+            engine_timeout_seconds=engine_timeout_seconds,
+            process_timeout_seconds=application_timeout_seconds,
+        )
+    finally:
+        try:
+            files_deleted, bytes_deleted = cleanup_application_screenshot_directory(
+                screenshot_dir,
+                output_root=screenshot_root,
+            )
+            print(
+                f"{ats_platform.upper()}_SCREENSHOTS_CLEANED "
+                f"files={files_deleted} bytes={bytes_deleted}",
+                flush=True,
+            )
+        except (OSError, ValueError) as exc:
+            print(
+                f"{ats_platform.upper()}_SCREENSHOT_CLEANUP_FAILED error={exc}",
+                file=sys.stderr,
+                flush=True,
+            )
     result = _read_result(result_path)
     ledger_confirmed = canonical_url in _confirmed_urls(submission_log, ats_platform)
     confirmed = (

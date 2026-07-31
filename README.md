@@ -224,7 +224,7 @@ Archives use opaque IDs, immutable manifests, pinned SSH host keys, private VPS 
 
 ### Apply to jobs
 
-Applications are dry runs unless `--live-submit` is explicitly passed. `--fill-only` drives the form without submitting. Review generated results and screenshots before any live action.
+Applications are dry runs unless `--live-submit` is explicitly passed. `--fill-only` drives the form without submitting. Review the generated result and visible browser state before any live action. Screenshots are isolated per attempt and deleted automatically when the application succeeds or fails.
 
 ```powershell
 # One job; company and role are optional metadata in URL mode.
@@ -401,8 +401,9 @@ attempted state. A CAPTCHA, missing required field, timeout, engine failure, or
 unconfirmed attempt is recorded and skipped so processing can continue. Full
 failure details are written privately to
 `output/vps_application_failures.json` and per-job result files. Application
-results, screenshots, submission logs, and state never enter
-`vps-search-output`.
+results, submission logs, and state never enter `vps-search-output`.
+Application screenshots are temporary and are deleted at the end of every
+successful, failed, timed-out, or quarantined attempt.
 
 Use `scripts/pull_vps_application_reports.ps1` whenever the private confirmed
 submission list and latest failure report are needed locally. It downloads both

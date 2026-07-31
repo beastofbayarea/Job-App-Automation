@@ -26,7 +26,7 @@ This project processes identity, contact, resume, employment, and application da
 
 ## Retention and sharing
 
-Generated artifacts, result JSON, screenshots, and logs can contain personal data. Keep only what is needed for the candidate's application process, share it only with authorized people, and securely delete local copies according to the candidate's retention requirements.
+Generated artifacts, result JSON, screenshots, and logs can contain personal data. Screenshots are temporary and are deleted automatically after each application attempt. Keep only what is needed for the candidate's application process, share it only with authorized people, and securely delete local copies according to the candidate's retention requirements.
 
 ## VPS archive boundary
 
@@ -38,7 +38,7 @@ Generated artifacts, result JSON, screenshots, and logs can contain personal dat
   Backlog records contain only public ATS metadata and liveness identity—never
   descriptions, emails, application state/errors, documents, or submission
   evidence. Never add archive paths or content to its allow-list.
-- VPS application state, results, screenshots, submission logs, Gmail OAuth
+- VPS application state, results, temporary screenshots, submission logs, Gmail OAuth
   files, and candidate inputs are private and must never enter the search
   publication worktree.
 - Pull confirmed submissions and failure reports only with

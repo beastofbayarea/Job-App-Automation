@@ -71,6 +71,11 @@ from .engine_shared import (
 )
 from .paths import CLI_ENTRYPOINT, CONFIG_DIR, OUTPUT_DIR, SRC_DIR, resolve_existing
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
+from .screenshots import (
+    APPLICATION_SCREENSHOT_DIR_ENV,
+    cleanup_application_screenshot_directory,
+    create_application_screenshot_directory,
+)
 from .submission_log import SubmissionLog, SubmissionRecord
 
 logging.basicConfig(
@@ -93,8 +98,6 @@ DEFAULT_EMAIL_POOL_FILE = resolve_runtime_path(
 DEFAULT_ENGINE_TIMEOUT_SECONDS = int(RUNTIME_CONFIG.application["engine_timeout_seconds"])
 DEFAULT_RESUME_TIMEOUT_SECONDS = int(RUNTIME_CONFIG.application["resume_timeout_seconds"])
 MIN_COVER_LETTER_BYTES = 1_000
-SCREENSHOT_EXTENSIONS = {".jpeg", ".jpg", ".png"}
-
 SUPPORTED_ATS = tuple(ATS_HOSTS)
 
 DEFAULT_ENGINE_FILES: Mapping[str, Path] = {
@@ -508,14 +511,6 @@ def _is_confirmed_submission(outcome: Mapping[str, object]) -> bool:
         return EngineResult.from_payload(outcome).is_confirmed_submission
     except ValueError:
         return False
-
-
-def cleanup_post_run_artifacts(results_path: Path) -> None:
-    """Preserve results, screenshots, and submission proof for auditability."""
-    logger.info(
-        "Post-run artifacts preserved for diagnosis and confirmation; results=%s",
-        results_path,
-    )
 
 
 def _personalized_document_stem(company: str, role: str, url: str, email: str = "") -> str:
@@ -1103,7 +1098,12 @@ def run_orchestrator(
             dry_run=dry_run,
         )
 
+        screenshot_dir: Path | None = None
         try:
+            inherited_screenshot_dir = os.environ.get(APPLICATION_SCREENSHOT_DIR_ENV, "")
+            screenshot_dir = create_application_screenshot_directory(
+                inherited=inherited_screenshot_dir or None,
+            )
             engine_env = dict(os.environ)
             # Required so the engine's require_orchestrated_invocation() guard
             # (engine_shared.py) lets the run through; engines
@@ -1113,6 +1113,7 @@ def run_orchestrator(
                 raise RuntimeError("A profile configuration is required for engine execution.")
             engine_env[ORCHESTRATOR_CONFIG_ENV] = str(config_path)
             engine_env[ORCHESTRATOR_CURRENT_TITLE_ENV] = current_title
+            engine_env[APPLICATION_SCREENSHOT_DIR_ENV] = str(screenshot_dir)
             command_result = (process_runner or SubprocessRunner()).run(
                 command,
                 ProcessSettings(
@@ -1140,6 +1141,24 @@ def run_orchestrator(
         except Exception as exc:
             logger.error("Engine execution failed: %s", exc)
             outcome = {"success": False, "status": "ENGINE_EXECUTION_ERROR", "detail": str(exc)}
+        finally:
+            if screenshot_dir is not None:
+                try:
+                    files_deleted, bytes_deleted = cleanup_application_screenshot_directory(
+                        screenshot_dir
+                    )
+                    logger.info(
+                        "Application screenshots cleaned: files=%d bytes=%d directory=%s",
+                        files_deleted,
+                        bytes_deleted,
+                        screenshot_dir,
+                    )
+                except (OSError, ValueError) as exc:
+                    logger.warning(
+                        "Could not clean application screenshot directory %s: %s",
+                        screenshot_dir,
+                        exc,
+                    )
 
         if _is_confirmed_submission(outcome):
             _record_submission(
@@ -1289,8 +1308,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (OSError, ValueError, openpyxl.utils.exceptions.InvalidFileException) as exc:
         logger.error("Orchestration could not start: %s", exc)
         return 2
-    finally:
-        cleanup_post_run_artifacts(results_path)
     # Exit codes: 0 = every job succeeded, 1 = ran but at least one job
     # failed, 2 = orchestration could not even start (see except above).
     return 0 if all(result.get("success") for result in results) else 1

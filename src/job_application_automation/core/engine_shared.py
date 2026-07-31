@@ -52,6 +52,7 @@ from .identity import normalize_email
 from .paths import DATA_DIR
 from .profile import AutomationProfile
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
+from .screenshots import active_screenshot_directory
 
 logger = logging.getLogger("ATSEngineCommon")
 
@@ -934,6 +935,7 @@ def validate_required_fields(
 
 
 def capture_screenshot(page: Page, directory: Path, company: str, tag: str) -> str:
+    directory = active_screenshot_directory(directory)
     directory.mkdir(parents=True, exist_ok=True)
     target = directory / f"{safe_filename(company, 'ats')}_{safe_filename(tag, 'capture')}.png"
     try:

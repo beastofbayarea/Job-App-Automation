@@ -18,7 +18,7 @@ Check the service-account file path, project ID, Vertex permissions, and model c
 
 ## Application did not submit or queue stopped
 
-Inspect the application result, screenshot, and provider page. Queue execution stops whenever return status or confirmation evidence is insufficient. Verify the employer's confirmation before retrying, then resume with the correct zero-based `--start-index` only when duplicate submission is not possible.
+Inspect the application result, diagnostic logs, submission ledger, and provider page. Screenshots are removed automatically after the attempt terminates. Queue execution stops whenever return status or confirmation evidence is insufficient. Verify the employer's confirmation before retrying, then resume with the correct zero-based `--start-index` only when duplicate submission is not possible.
 
 ## Search returns too few results
 

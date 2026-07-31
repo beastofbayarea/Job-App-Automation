@@ -35,6 +35,31 @@ def _pdf(path: Path) -> None:
     path.write_bytes(b"%PDF-" + b"x" * 1500)
 
 
+def test_apply_passes_isolated_screenshot_directory_to_orchestrator(tmp_path: Path) -> None:
+    screenshot_dir = tmp_path / "screenshots"
+    expected = worker.CommandOutcome(0, "done", "")
+
+    with patch.object(worker, "_run_command", return_value=expected) as run_command:
+        actual = worker._apply(
+            job=_job(),
+            email="candidate@example.test",
+            launcher=tmp_path / "launcher.py",
+            profile=tmp_path / "profile.json",
+            resume_path=tmp_path / "resume.pdf",
+            cover_letter_path=tmp_path / "cover_letter.pdf",
+            result_path=tmp_path / "result.json",
+            submission_log=tmp_path / "submission_log.json",
+            screenshot_dir=screenshot_dir,
+            engine_timeout_seconds=30,
+            process_timeout_seconds=60,
+        )
+
+    assert actual == expected
+    assert run_command.call_args.kwargs["environment"] == {
+        worker.APPLICATION_SCREENSHOT_DIR_ENV: str(screenshot_dir)
+    }
+
+
 def test_process_one_uses_one_random_email_and_both_personalized_documents() -> None:
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
@@ -79,8 +104,14 @@ def test_process_one_uses_one_random_email_and_both_personalized_documents() -> 
             _pdf(output_dir / "cover_letter.pdf")
             return worker.CommandOutcome(0, "documents ready", "")
 
+        created_screenshot_dirs: list[Path] = []
+
         def apply(**kwargs: object) -> worker.CommandOutcome:
             result_path = Path(str(kwargs["result_path"]))
+            screenshot_dir = Path(str(kwargs["screenshot_dir"]))
+            screenshot_dir.mkdir(parents=True, exist_ok=True)
+            (screenshot_dir / "confirmed.png").write_bytes(b"proof")
+            created_screenshot_dirs.append(screenshot_dir)
             result_path.parent.mkdir(parents=True, exist_ok=True)
             result_path.write_text(
                 json.dumps(
@@ -139,6 +170,8 @@ def test_process_one_uses_one_random_email_and_both_personalized_documents() -> 
         assert apply_call.call_args.kwargs["email"] == "chosen@example.test"
         assert apply_call.call_args.kwargs["resume_path"].name == "resume.pdf"
         assert apply_call.call_args.kwargs["cover_letter_path"].name == "cover_letter.pdf"
+        assert len(created_screenshot_dirs) == 1
+        assert not created_screenshot_dirs[0].exists()
         saved = json.loads(state.read_text(encoding="utf-8"))
         record = next(iter(saved["jobs"].values()))
         assert record["status"] == "confirmed"
@@ -187,8 +220,14 @@ def test_unconfirmed_submit_attempt_is_quarantined_and_never_retried() -> None:
             _pdf(output_dir / "cover_letter.pdf")
             return worker.CommandOutcome(0, "", "")
 
+        created_screenshot_dirs: list[Path] = []
+
         def apply(**kwargs: object) -> worker.CommandOutcome:
             result_path = Path(str(kwargs["result_path"]))
+            screenshot_dir = Path(str(kwargs["screenshot_dir"]))
+            screenshot_dir.mkdir(parents=True, exist_ok=True)
+            (screenshot_dir / "failed.png").write_bytes(b"proof")
+            created_screenshot_dirs.append(screenshot_dir)
             result_path.parent.mkdir(parents=True, exist_ok=True)
             result_path.write_text(
                 json.dumps(
@@ -228,6 +267,8 @@ def test_unconfirmed_submit_attempt_is_quarantined_and_never_retried() -> None:
             assert worker.process_one(**kwargs) == "manual_review"
             assert worker.process_one(**kwargs) == "no_work"
         assert apply_call.call_count == 1
+        assert len(created_screenshot_dirs) == 1
+        assert not created_screenshot_dirs[0].exists()
 
 
 def test_documents_ready_resume_reuses_saved_email_without_sampling_again() -> None:

@@ -66,6 +66,7 @@ from ..core.engine_shared import (
 )
 from ..core.paths import SRC_DIR
 from ..core.runtime_config import RUNTIME_CONFIG, resolve_runtime_path
+from ..core.screenshots import active_screenshot_directory
 
 # ==============================================================================
 # DEFAULT CONFIGURATION
@@ -2639,7 +2640,9 @@ def run_job(
         raise ValueError("Config missing required candidate fields: " + ", ".join(missing_identity))
     essay = str(overrides.get("essay", essay or defaults.get("essay", "")) or "")
 
-    ashby_dir = expand(str(paths.get("ashby_dir", RUNTIME_CONFIG.ashby["screenshot_dir"])))
+    ashby_dir = active_screenshot_directory(
+        expand(str(paths.get("ashby_dir", RUNTIME_CONFIG.ashby["screenshot_dir"])))
+    )
     ashby_dir.mkdir(parents=True, exist_ok=True)
 
     resume = Path(resume_path).expanduser().resolve()

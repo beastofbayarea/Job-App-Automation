@@ -2,7 +2,6 @@ param(
     [ValidatePattern("^\d+$")]
     [string]$JobId,
     [switch]$InspectLatest,
-    [string]$ScreenshotOutputPath = "",
     [string]$RemoteRepoPath = "/root/Job-App-Automation",
     [string]$ConfigPath = "config/vps_config.json"
 )
@@ -15,10 +14,6 @@ if (-not $InspectLatest -and -not $JobId) {
 }
 if ($InspectLatest -and $JobId) {
     Write-Error "Use either -JobId or -InspectLatest, not both."
-    exit 1
-}
-if ($ScreenshotOutputPath -and -not $InspectLatest) {
-    Write-Error "ScreenshotOutputPath requires -InspectLatest."
     exit 1
 }
 if (-not (Test-Path -LiteralPath $ConfigPath)) {
@@ -57,9 +52,8 @@ if ($SshPort -lt 1 -or $SshPort -gt 65535) {
 }
 
 $PlinkCmd = Get-Command plink -ErrorAction SilentlyContinue
-$PscpCmd = Get-Command pscp -ErrorAction SilentlyContinue
-if (-not $PlinkCmd -or ($ScreenshotOutputPath -and -not $PscpCmd)) {
-    Write-Error "plink.exe is required; pscp.exe is also required for screenshot downloads."
+if (-not $PlinkCmd) {
+    Write-Error "plink.exe is required."
     exit 1
 }
 
@@ -131,12 +125,6 @@ for name in ("stdout_tail", "stderr_tail"):
 if diagnostic_lines:
     print("selected_diagnostics=" + "\n".join(diagnostic_lines[-20:]))
 PY
-latest_screenshot=`$(find "`$repo/output" -maxdepth 1 -type f \
-  -iname '*ai71*prefilled*.png' -printf '%T@|%p\n' |
-  sort -nr | head -n 1 | cut -d'|' -f2-)
-if [ -n "`$latest_screenshot" ]; then
-  printf 'latest_prefilled_screenshot=%s\n' "`$latest_screenshot"
-fi
 systemctl is-active job-app-greenhouse.service
 "@
 } else {
@@ -253,31 +241,6 @@ try {
             -pwfile $PasswordFile "$SshUser@$VpsHost" $RemoteCommand
     }
     $RemoteExitCode = $LASTEXITCODE
-    if ($RemoteExitCode -eq 0 -and $ScreenshotOutputPath) {
-        $ScreenshotLine = @(
-            $RemoteOutput | Where-Object { $_ -like "latest_prefilled_screenshot=*" }
-        ) | Select-Object -Last 1
-        $RemoteScreenshot = [string]$ScreenshotLine -replace "^[^=]+=", ""
-        $ExpectedPrefix = "$RemoteRepoPath/output/"
-        if (-not $RemoteScreenshot.StartsWith($ExpectedPrefix)) {
-            Write-Error "The inspected screenshot path was missing or outside VPS output."
-            exit 1
-        }
-        $ResolvedScreenshotOutput = [IO.Path]::GetFullPath($ScreenshotOutputPath)
-        $ScreenshotParent = Split-Path -Parent $ResolvedScreenshotOutput
-        if ($ScreenshotParent) {
-            [void](New-Item -ItemType Directory -Force -Path $ScreenshotParent)
-        }
-        & $PscpCmd.Source -batch -P $SshPort -hostkey $SshHostKey `
-            -pwfile $PasswordFile `
-            "$SshUser@${VpsHost}:$RemoteScreenshot" `
-            $ResolvedScreenshotOutput
-        if ($LASTEXITCODE -ne 0) {
-            Write-Error "Greenhouse retry screenshot download failed."
-            exit $LASTEXITCODE
-        }
-        Write-Host "Downloaded retry screenshot to $ResolvedScreenshotOutput"
-    }
 } finally {
     Remove-Item -LiteralPath $PasswordFile -Force -ErrorAction SilentlyContinue
 }

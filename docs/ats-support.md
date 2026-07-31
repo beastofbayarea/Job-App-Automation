@@ -32,4 +32,4 @@ This path detects the provider, selects the configured candidate email, creates 
 
 ## Reporting a compatibility gap
 
-Record the provider, sanitized URL, mode used, current browser visibility, result status, and a redacted screenshot. Never attach OAuth tokens, candidate profile content, resume source data, or an unredacted application page to an issue.
+Record the provider, sanitized URL, mode used, current browser visibility, result status, and a redacted diagnostic log excerpt. Application screenshots are deleted automatically after every terminal attempt. Never attach OAuth tokens, candidate profile content, resume source data, or an unredacted application page to an issue.

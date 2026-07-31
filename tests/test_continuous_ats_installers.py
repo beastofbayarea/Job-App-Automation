@@ -69,4 +69,5 @@ def test_targeted_greenhouse_retry_requires_safe_pre_submit_evidence() -> None:
     assert "greenhouse-targeted-retry" in script
     assert "InspectLatest" in script
     assert "[REDACTED_EMAIL]" in script
-    assert "latest_prefilled_screenshot=" in script
+    assert "ScreenshotOutputPath" not in script
+    assert "latest_prefilled_screenshot=" not in script

@@ -27,7 +27,7 @@ Use `--board-url`, `--boards-file`, `--career-page`, or `--career-pages-file` fo
 # Safe workflow check for one known job.
 python src/job_automation.py apply --url "https://…" --company "Example" --role "Product Manager" --dry-run
 
-# Drive the form without submitting, then inspect the result and screenshots.
+# Drive the form without submitting, then inspect the result and visible browser state.
 python src/job_automation.py apply --url "https://…" --company "Example" --role "Product Manager" --fill-only --headed
 ```
 
@@ -373,10 +373,11 @@ calls the existing orchestrator with `--live-submit`, processes records
 sequentially, and uses `application.vps_max_attempts_per_ats` as its
 per-provider limit.
 
-`output/vps_application_state.json`,
-`output/vps_application_results/`, `output/submission_log.json`, and ATS
-screenshots are private VPS artifacts. They must never be added to
-`vps-search-output`. A prior exact `SUBMITTED & CONFIRMED` log entry is skipped.
+`output/vps_application_state.json`, `output/vps_application_results/`, and
+`output/submission_log.json` are private VPS artifacts. They must never be added
+to `vps-search-output`. ATS screenshots are isolated to the current attempt and
+deleted after every terminal result, including timeout and manual-review
+outcomes. A prior exact `SUBMITTED & CONFIRMED` log entry is skipped.
 Every attempted job is recorded atomically. A result is marked confirmed only
 when the engine result and permanent ledger agree; that URL is then removed
 from the active backlog under an interprocess lock. If cleanup is temporarily
