@@ -187,6 +187,8 @@ def test_dashboard_request_handler_route_mappings():
         ("/generation", "/generation.html"),
         ("/logs", "/logs.html"),
         ("/inspector", "/inspector.html"),
+        ("/system-status", "/system-status.html"),
+        ("/system-status/", "/system-status.html"),
         ("/submissions", "/index.html"),
     ]
 
