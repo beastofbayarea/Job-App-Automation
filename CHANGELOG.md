@@ -30,9 +30,9 @@ All notable user-facing changes are documented here. This project currently uses
   backlog without removing failed or manual-review attempts.
 - Preserve authoritative provider closure when a later application-page check
   is uncertain, and retain unknown/backoff/server-error roles in the backlog.
-- Normalize exact Ashby record URLs during legacy backlog migration so
+- Normalize exact Ashby record URLs from stored and newly discovered jobs so
   board-token case variants collapse without treating shared careers pages as
-  record-specific.
+  record-specific, while retaining authoritative provider metadata.
 - Reconciled the PRD and historical implementation records with the delivered
   cover-letter and VPS-maintenance workflows, and clarified which documents are
   current operating references.

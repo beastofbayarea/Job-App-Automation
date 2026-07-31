@@ -70,8 +70,8 @@ def _scalar(value: object, default: int | str = "") -> int | str:
 
 
 def _ashby_url_proves_provider_identity(job: Job) -> bool:
-    """Recognize an exact Ashby record even when legacy JSON omitted trust flags."""
-    if job.platform != "ashby" or not job.board_token or not job.platform_job_id:
+    """Recognize an exact Ashby record even when its source omitted trust flags."""
+    if job.platform.casefold() != "ashby" or not job.board_token or not job.platform_job_id:
         return False
     for value in (job.job_url, job.apply_url):
         parsed = urlparse(value)
@@ -85,6 +85,36 @@ def _ashby_url_proves_provider_identity(job: Job) -> bool:
         ):
             return True
     return False
+
+
+def _normalize_exact_ashby_identity(job: Job) -> None:
+    if not job.provider_id_trusted and _ashby_url_proves_provider_identity(job):
+        job.provider_id_trusted = True
+        job.url_is_record_specific = True
+
+
+def _prefer_current_ashby_metadata(current: Job, incoming: Job) -> bool:
+    """Keep authoritative Ashby API metadata over duplicate page-discovery rows."""
+    if not (
+        _ashby_url_proves_provider_identity(current)
+        and _ashby_url_proves_provider_identity(incoming)
+    ):
+        return False
+    source_rank = {
+        # Both are provider-authoritative. Equal rank preserves the normal
+        # incoming-wins refresh behavior between current feed observations.
+        "ashby_board_api": 2,
+        "ashby_public_board": 2,
+    }
+    current_rank = source_rank.get(
+        current.live_check_source.casefold(),
+        1 if current.provider_id_trusted else 0,
+    )
+    incoming_rank = source_rank.get(
+        incoming.live_check_source.casefold(),
+        1 if incoming.provider_id_trusted else 0,
+    )
+    return current_rank > incoming_rank
 
 
 def job_from_mapping(value: Mapping[str, object]) -> Job:
@@ -131,8 +161,7 @@ def job_from_mapping(value: Mapping[str, object]) -> Job:
         # Older CSV/JSON-LD artifacts did not serialize provider trust. The
         # exact board-token/job-id URL is itself record-specific evidence and
         # lets the migrated row merge with the authoritative Ashby API row.
-        job.provider_id_trusted = True
-        job.url_is_record_specific = True
+        _normalize_exact_ashby_identity(job)
     return job
 
 
@@ -161,7 +190,11 @@ def _entry_payload(entry: BacklogEntry) -> dict[str, object]:
 
 def canonical_job_aliases(job: Job) -> set[str]:
     """Return ledger-compatible identities for both listing and apply URLs."""
-    if not (job.url_is_record_specific or job.provider_id_trusted):
+    if not (
+        job.url_is_record_specific
+        or job.provider_id_trusted
+        or _ashby_url_proves_provider_identity(job)
+    ):
         # A multi-record JSON-LD page can give several jobs the same generic
         # careers-page URL. Only its scoped source identity can distinguish
         # those records; a URL match must never merge or delete every sibling.
@@ -178,7 +211,12 @@ def canonical_job_aliases(job: Job) -> set[str]:
 
 
 def _provider_identity(job: Job) -> str:
-    if not (job.provider_id_trusted and job.platform and job.board_token and job.platform_job_id):
+    if not (
+        (job.provider_id_trusted or _ashby_url_proves_provider_identity(job))
+        and job.platform
+        and job.board_token
+        and job.platform_job_id
+    ):
         return ""
     return (
         f"provider:{job.platform.casefold()}:{job.board_region.casefold()}:"
@@ -237,14 +275,21 @@ def merge_entries(entries: Iterable[BacklogEntry]) -> list[BacklogEntry]:
         matching = sorted({identity_index[key] for key in keys if key in identity_index})
         if not matching:
             index = len(merged)
+            _normalize_exact_ashby_identity(incoming.job)
             merged.append(incoming)
         else:
             index = matching[0]
             current = merged[index]
             if current is None:
                 raise RuntimeError("backlog identity index referenced an empty entry")
+            selected_job = (
+                current.job
+                if _prefer_current_ashby_metadata(current.job, incoming.job)
+                else incoming.job
+            )
+            _normalize_exact_ashby_identity(selected_job)
             incoming = BacklogEntry(
-                job=incoming.job,
+                job=selected_job,
                 first_seen_at=_earliest(current.first_seen_at, incoming.first_seen_at),
                 last_seen_at=_latest(current.last_seen_at, incoming.last_seen_at),
             )

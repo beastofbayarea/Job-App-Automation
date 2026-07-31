@@ -291,6 +291,82 @@ def test_legacy_ashby_jsonld_record_merges_with_trusted_provider_record() -> Non
     assert entries[0].job.provider_id_trusted is True
 
 
+def test_new_ashby_jsonld_record_merges_without_replacing_provider_api_metadata() -> None:
+    job_id = "2a471f31-9cc8-4ab5-9f6c-921fc1f137d6"
+    trusted = _job(
+        job_id,
+        platform="ashby",
+        board_token="airwallex",
+        board_region="global",
+        job_url=f"https://jobs.ashbyhq.com/airwallex/{job_id}",
+        apply_url=f"https://jobs.ashbyhq.com/airwallex/{job_id}/application",
+        unique_id=f"ashby:airwallex:{job_id}",
+        live_check_source="ashby_board_api",
+    )
+    discovered = _job(
+        job_id,
+        platform="ashby",
+        board_token="Airwallex",
+        board_region="global",
+        job_url=f"https://jobs.ashbyhq.com/Airwallex/{job_id}",
+        apply_url="",
+        provider_id_trusted=False,
+        source_identity=f"jsonld:ashby:{job_id}",
+        url_is_record_specific=False,
+        live_check_source="job_page_jsonld",
+    )
+    seen_at = NOW.isoformat()
+
+    entries = backlog.merge_entries(
+        [
+            backlog.BacklogEntry(trusted, seen_at, seen_at),
+            backlog.BacklogEntry(discovered, seen_at, seen_at),
+        ]
+    )
+
+    assert len(entries) == 1
+    merged = entries[0].job
+    assert merged.provider_id_trusted is True
+    assert merged.live_check_source == "ashby_board_api"
+    assert merged.apply_url.endswith("/application")
+
+
+def test_new_ashby_provider_metadata_replaces_older_api_checked_metadata() -> None:
+    job_id = "2a471f31-9cc8-4ab5-9f6c-921fc1f137d6"
+    existing = _job(
+        job_id,
+        platform="ashby",
+        title="Old title",
+        board_token="airwallex",
+        board_region="global",
+        job_url=f"https://jobs.ashbyhq.com/airwallex/{job_id}",
+        apply_url=f"https://jobs.ashbyhq.com/airwallex/{job_id}/old-application",
+        live_check_source="ashby_board_api",
+    )
+    refreshed = _job(
+        job_id,
+        platform="ashby",
+        title="Updated title",
+        board_token="Airwallex",
+        board_region="global",
+        job_url=f"https://jobs.ashbyhq.com/Airwallex/{job_id}",
+        apply_url=f"https://jobs.ashbyhq.com/Airwallex/{job_id}/application",
+        live_check_source="ashby_public_board",
+    )
+    seen_at = NOW.isoformat()
+
+    entries = backlog.merge_entries(
+        [
+            backlog.BacklogEntry(existing, seen_at, seen_at),
+            backlog.BacklogEntry(refreshed, seen_at, seen_at),
+        ]
+    )
+
+    assert len(entries) == 1
+    assert entries[0].job.title == "Updated title"
+    assert entries[0].job.apply_url.endswith("/application")
+
+
 def test_stale_concurrent_snapshot_cannot_resurrect_a_closed_job(tmp_path: Path) -> None:
     path = tmp_path / "job_backlog.json"
     ledger = tmp_path / "submission_log.json"
