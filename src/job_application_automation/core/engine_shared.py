@@ -646,11 +646,7 @@ def _label_mentions_country(label: str, country: str) -> bool:
 
 def _mentioned_country(label: str) -> str | None:
     return next(
-        (
-            country
-            for country in _COUNTRY_TERM_ALIASES
-            if _label_mentions_country(label, country)
-        ),
+        (country for country in _COUNTRY_TERM_ALIASES if _label_mentions_country(label, country)),
         None,
     )
 
@@ -670,9 +666,7 @@ def _country_scoped_work_authorization(
     if not isinstance(raw_countries, Sequence) or isinstance(raw_countries, (str, bytes)):
         return False, None
     authorized = {
-        _normalized_country(country)
-        for country in raw_countries
-        if _normalized_country(country)
+        _normalized_country(country) for country in raw_countries if _normalized_country(country)
     }
     if not authorized:
         return True, None

@@ -6,6 +6,8 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Added
 
+- Reproducible uv dependency locking, automated uv and GitHub Actions updates,
+  and CI auditing of the synchronized dependency environment.
 - A single persistent `output/job_backlog.json` for active, unsubmitted jobs,
   with atomic merge, conservative liveness pruning, exact confirmed-submission
   removal, legacy search-output migration, and no archive/tombstone file.

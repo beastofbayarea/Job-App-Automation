@@ -570,9 +570,7 @@ def process_one(
     )
     result_status = str(result.get("status", "NO_RESULT"))
     manual_review_required = _requires_manual_review(result, application_outcome)
-    status = (
-        "confirmed" if confirmed else ("manual_review" if manual_review_required else "failed")
-    )
+    status = "confirmed" if confirmed else ("manual_review" if manual_review_required else "failed")
     record.update(
         {
             "status": status,

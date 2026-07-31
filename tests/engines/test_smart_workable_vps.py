@@ -71,7 +71,9 @@ def test_country_scoped_work_rights_and_residence_answers_fail_closed() -> None:
     }
 
     assert configured_answer("Do you have Australian working rights?", profile, rules, {}) == "Yes"
-    assert configured_answer("Do you have the right to work in the UK?", profile, rules, {}) == "Yes"
+    assert (
+        configured_answer("Do you have the right to work in the UK?", profile, rules, {}) == "Yes"
+    )
     assert configured_answer("Are you authorized to work in Canada?", profile, rules, {}) == "No"
     assert configured_answer("Are you currently based in Australia?", profile, rules, {}) == "No"
     assert configured_answer("Are you currently based in the US?", profile, rules, {}) == "Yes"

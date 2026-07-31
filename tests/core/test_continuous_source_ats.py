@@ -182,7 +182,6 @@ def test_sleep_until_next_cycle_handles_keyboard_interrupt(
 
     assert completed is False
     assert (
-        capsys.readouterr().out
-        == "GREENHOUSE_SOURCE_WORKER_STOPPED "
+        capsys.readouterr().out == "GREENHOUSE_SOURCE_WORKER_STOPPED "
         "worker=search signal=keyboard_interrupt\n"
     )

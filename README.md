@@ -34,6 +34,14 @@ python -m pip install -r requirements.txt
 python -m playwright install chromium
 ```
 
+That Pip command is retained as a compatibility path and installs this checkout
+in editable mode. For a reproducible checkout, use the committed lockfile:
+
+```powershell
+uv sync --locked --no-dev
+uv run playwright install chromium
+```
+
 To install the reusable package and the `job-automation` command, use:
 
 ```powershell
@@ -52,6 +60,12 @@ For contributor checks, install the development dependencies as well:
 
 ```powershell
 python -m pip install -r requirements-dev.txt
+```
+
+The preferred reproducible contributor setup uses the committed uv lockfile:
+
+```powershell
+uv sync --locked --dev
 ```
 
 ## Configure local data and credentials

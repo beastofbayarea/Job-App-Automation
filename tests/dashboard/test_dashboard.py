@@ -1,6 +1,5 @@
 """Unit tests for VPS Output Monitor Dashboard server."""
 
-import base64
 import json
 from email.message import Message
 from pathlib import Path

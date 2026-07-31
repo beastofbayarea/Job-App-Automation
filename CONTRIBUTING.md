@@ -11,6 +11,14 @@ python -m playwright install chromium
 python -m pytest
 ```
 
+The preferred reproducible setup uses the committed uv lockfile:
+
+```powershell
+uv sync --locked --dev
+uv run playwright install chromium
+uv run pytest
+```
+
 Run the full local quality suite before committing:
 
 ```powershell
