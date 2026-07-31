@@ -986,12 +986,23 @@ def _resolve_background_page(browser: Browser, marker: str) -> Page:
 def page_has_captcha(page: Page) -> bool:
     """Return whether a visible CAPTCHA is present without interacting with it."""
     try:
-        return (
-            page.locator(
-                'iframe[src*="captcha" i]:visible, iframe[title*="captcha" i]:visible, '
-                '[class*="captcha" i]:visible, [id*="captcha" i]:visible'
-            ).count()
-            > 0
+        challenge = page.locator(
+            'iframe[src*="captcha" i]:visible, iframe[title*="captcha" i]:visible, '
+            'iframe[src*="challenges.cloudflare.com" i]:visible, '
+            'iframe[src*="turnstile" i]:visible, iframe[title*="challenge" i]:visible, '
+            '[class*="captcha" i]:visible, [id*="captcha" i]:visible, '
+            '[class*="turnstile" i]:visible, [id*="turnstile" i]:visible'
+        )
+        if challenge.count() > 0:
+            return True
+        body = page.locator("body").inner_text()
+        return bool(
+            re.search(
+                r"\b(?:verify you are human|complete the security (?:check|challenge)|"
+                r"cloudflare security challenge)\b",
+                body,
+                re.I,
+            )
         )
     except Exception:
         return False

@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from job_application_automation.core.engine_shared import (  # noqa: E402
     navigate_reusing_tab,
+    page_has_captcha,
     text_confirms_submission,
 )
 
@@ -86,6 +87,14 @@ class NavigationTests(unittest.TestCase):
             )
 
         self.assertNotIn(("reload", "domcontentloaded"), page.calls)
+
+    def test_cloudflare_turnstile_is_included_in_captcha_detection(self) -> None:
+        page = FakePage("https://apply.workable.com/example/j/ABC123/apply", captcha_count=1)
+
+        self.assertTrue(page_has_captcha(page))  # type: ignore[arg-type]
+        selector = next(value for kind, value in page.calls if kind == "locator")
+        self.assertIn("challenges.cloudflare.com", selector)
+        self.assertIn("turnstile", selector)
 
 
 if __name__ == "__main__":
