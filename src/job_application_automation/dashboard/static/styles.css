@@ -198,7 +198,7 @@ img { max-width: 100%; height: auto; display: block; }
   align-items: center;
   gap: 0.35rem;
 }
-@media (min-width: 1280px) {
+@media (min-width: 1600px) {
   .desktop-nav { display: flex; }
 }
 
@@ -289,7 +289,7 @@ img { max-width: 100%; height: auto; display: block; }
 .hamburger-btn.is-open span:nth-child(2) { opacity: 0; }
 .hamburger-btn.is-open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
 
-@media (min-width: 1280px) {
+@media (min-width: 1600px) {
   .hamburger-btn { display: none; }
 }
 
@@ -1164,13 +1164,28 @@ img { max-width: 100%; height: auto; display: block; }
 
 @media (max-width: 768px) {
   .app-header { padding: 0.6rem var(--gutter); }
+  .brand { min-width: 0; gap: 0.55rem; }
+  .logo-container, .brand-mark { width: 36px; height: 36px; }
+  .brand-title { font-size: 0.92rem; white-space: nowrap; }
   .brand-subtitle { display: none; }
+  .header-actions { flex: none; gap: 0.4rem; }
+  .header-actions #vpsStatusBadge { display: none !important; }
+  .sync-btn {
+    width: 38px;
+    min-height: 38px;
+    padding: 0;
+    justify-content: center;
+  }
+  .sync-btn span { font-size: 0; }
+  .sync-btn span::before { content: "↻"; font-size: 1.2rem; }
+  .hamburger-btn { width: 38px; height: 38px; }
   .kpi-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); }
   .kpi-card { padding: 1rem; }
   .kpi-value { font-size: 1.6rem; }
   .controls-bar { flex-direction: column; align-items: stretch; }
   .search-input { width: 100%; }
   .section-heading-row { align-items: flex-start; flex-direction: column; }
+  .raw-content-link { white-space: normal; overflow-wrap: anywhere; }
 }
 
 /* --- Print -------------------------------------------------------------- */
