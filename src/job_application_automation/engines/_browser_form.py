@@ -1622,7 +1622,15 @@ def run_browser_form_engine(
                         captcha_blocked = True
                         break
                     if attempt == 0:
-                        _wait_for_application_entry(page, spec, timeout)
+                        retry_entry_kind = _wait_for_application_entry(page, spec, timeout)
+                        if retry_entry_kind == "form":
+                            form_opened = True
+                            break
+                        if page_has_captcha(page):
+                            captcha_blocked = True
+                            break
+                        if retry_entry_kind != "apply":
+                            break
                         apply_button = _first_visible_for(page, spec.apply_selectors)
                         if apply_button is None or not _apply_control_is_ready(apply_button):
                             break

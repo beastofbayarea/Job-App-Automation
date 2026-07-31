@@ -179,6 +179,53 @@ def test_application_entry_waits_when_initial_apply_control_is_late(tmp_path: Pa
     assert result["status"] == "PREFILLED_ONLY"
 
 
+def test_apply_retry_accepts_form_that_opens_during_entry_wait(tmp_path: Path) -> None:
+    session, page = _session()
+    page.url = "https://apply.workable.com/example/j/ABC123/"
+    apply_button = MagicMock()
+    apply_button.evaluate.return_value = "a"
+    apply_button.get_attribute.side_effect = lambda name: (
+        "/example/j/ABC123/apply/" if name == "href" else None
+    )
+    with (
+        patch.object(browser_form, "sync_playwright", return_value=nullcontext(MagicMock())),
+        patch.object(browser_form, "open_chrome_session", return_value=session),
+        patch.object(browser_form, "navigate_reusing_tab"),
+        patch.object(browser_form, "_dismiss_cookie_banner"),
+        patch.object(
+            browser_form,
+            "_wait_for_application_entry",
+            return_value="form",
+        ) as wait_for_entry,
+        patch.object(browser_form, "_wait_for_form", return_value=False),
+        patch.object(browser_form, "_closed_job_reason", return_value=""),
+        patch.object(
+            browser_form,
+            "_first_visible_for",
+            side_effect=[apply_button, apply_button],
+        ),
+        patch.object(browser_form, "_fill_standard_fields", return_value=_successful_fill()),
+        patch.object(browser_form, "_fill_custom_questions", return_value={}),
+        patch.object(browser_form, "_stabilize_email_fields"),
+        patch.object(browser_form, "_repair_forbidden_text_characters", return_value=[]),
+        patch.object(browser_form, "fill_required_consent", return_value=[]),
+        patch.object(browser_form, "page_has_captcha", return_value=False),
+        patch.object(browser_form, "validate_required_fields", return_value=[]),
+        patch.object(browser_form, "capture_screenshot", return_value="proof.png"),
+    ):
+        result = browser_form.run_browser_form_engine(
+            workable.SPEC,
+            url="https://apply.workable.com/example/j/ABC123/",
+            resume=_resume(tmp_path),
+            config=_profile(),
+            live_submit=False,
+            screenshot_dir=tmp_path,
+        )
+
+    wait_for_entry.assert_called_once_with(page, workable.SPEC, 30000)
+    assert result["status"] == "PREFILLED_ONLY"
+
+
 def test_application_entry_waits_for_a_visible_control_not_a_hidden_template() -> None:
     page = MagicMock()
     apply_button = MagicMock()

@@ -604,6 +604,14 @@ class LocationQuestionTests(unittest.TestCase):
             )
         )
 
+    def test_open_ended_relocation_destination_questions_are_location_questions(self) -> None:
+        for question in (
+            "What city are you willing to relocate to?",
+            "Which location are you willing to relocate to?",
+        ):
+            with self.subTest(question=question):
+                self.assertTrue(engine_shared.is_location_question(question))
+
     def test_location_candidates_widen_from_precise_to_country(self) -> None:
         """Country-only dropdowns need the broader fallbacks."""
         candidates = engine_shared.location_answer_candidates(
