@@ -43,6 +43,10 @@ RESUMABLE_STATUSES = frozenset({"preparing", "documents_ready"})
 ATS_PLATFORM_PATTERN = re.compile(r"^[a-z][a-z0-9]*$")
 DEFAULT_CAPTCHA_COOLDOWN_SECONDS = 86_400
 DEFAULT_CAPTCHA_THRESHOLD = 2
+DEFAULT_SPAM_REJECTION_COOLDOWN_SECONDS = 86_400
+DEFAULT_SPAM_REJECTION_THRESHOLD = 1
+DEFAULT_APPLICATION_WINDOW_SECONDS = 86_400
+AMBIGUOUS_SUBMISSION_STATUSES = frozenset({"SUBMIT_ATTEMPT_UNCONFIRMED", "SUBMISSION_UNCONFIRMED"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -513,13 +517,18 @@ def process_one(
     confirmed = (
         application_outcome.return_code == 0 and _strictly_confirmed(result) and ledger_confirmed
     )
-    possibly_submitted = bool(result.get("submitted")) or application_outcome.timed_out
+    result_status = str(result.get("status", "NO_RESULT"))
+    possibly_submitted = (
+        bool(result.get("submitted"))
+        or application_outcome.timed_out
+        or result_status in AMBIGUOUS_SUBMISSION_STATUSES
+    )
     status = "confirmed" if confirmed else ("manual_review" if possibly_submitted else "failed")
     record.update(
         {
             "status": status,
             "stage": "application",
-            "result_status": str(result.get("status", "NO_RESULT")),
+            "result_status": result_status,
             "ledger_confirmed": ledger_confirmed,
             "result": result,
             "updated_at": _now(),
@@ -627,16 +636,17 @@ def _seed_platform_input(
     return len(payload)
 
 
-def _captcha_cooldown_remaining(
+def _outcome_cooldown_remaining(
     state: Mapping[str, Any],
     *,
+    matches: Callable[[Mapping[str, Any]], bool],
     now: datetime | None = None,
-    cooldown_seconds: int = DEFAULT_CAPTCHA_COOLDOWN_SECONDS,
-    threshold: int = DEFAULT_CAPTCHA_THRESHOLD,
+    cooldown_seconds: int,
+    threshold: int,
 ) -> tuple[int, int]:
-    """Return the remaining provider-wide CAPTCHA cooldown and observed count."""
+    """Return a provider-wide cooldown for matching outcomes after the latest success."""
     if cooldown_seconds <= 0 or threshold <= 0:
-        raise ValueError("CAPTCHA cooldown and threshold must be greater than zero")
+        raise ValueError("outcome cooldown and threshold must be greater than zero")
     timestamped: list[tuple[datetime, Mapping[str, Any]]] = []
     records = state.get("jobs", {})
     if not isinstance(records, Mapping):
@@ -658,30 +668,133 @@ def _captcha_cooldown_remaining(
         (timestamp for timestamp, record in timestamped if record.get("status") == "confirmed"),
         default=None,
     )
-    captcha_timestamps = [
+    outcome_timestamps = [
         timestamp
         for timestamp, record in timestamped
-        if (latest_confirmation is None or timestamp > latest_confirmation)
-        and record.get("status") == "manual_review"
-        and isinstance(record.get("result"), Mapping)
-        and record["result"].get("captcha_present") is True
+        if (latest_confirmation is None or timestamp > latest_confirmation) and matches(record)
     ]
-    captcha_count = len(captcha_timestamps)
-    if captcha_count < threshold:
-        return 0, captcha_count
+    outcome_count = len(outcome_timestamps)
+    if outcome_count < threshold:
+        return 0, outcome_count
     current_time = (now or datetime.now(UTC)).astimezone(UTC)
-    elapsed = max(0, int((current_time - max(captcha_timestamps)).total_seconds()))
-    return max(0, cooldown_seconds - elapsed), captcha_count
+    elapsed = max(0, int((current_time - max(outcome_timestamps)).total_seconds()))
+    return max(0, cooldown_seconds - elapsed), outcome_count
+
+
+def _captcha_cooldown_remaining(
+    state: Mapping[str, Any],
+    *,
+    now: datetime | None = None,
+    cooldown_seconds: int = DEFAULT_CAPTCHA_COOLDOWN_SECONDS,
+    threshold: int = DEFAULT_CAPTCHA_THRESHOLD,
+) -> tuple[int, int]:
+    """Return the remaining provider-wide CAPTCHA cooldown and observed count."""
+    return _outcome_cooldown_remaining(
+        state,
+        matches=lambda record: (
+            record.get("status") == "manual_review"
+            and isinstance(record.get("result"), Mapping)
+            and record["result"].get("captcha_present") is True
+        ),
+        now=now,
+        cooldown_seconds=cooldown_seconds,
+        threshold=threshold,
+    )
+
+
+def _spam_rejection_cooldown_remaining(
+    state: Mapping[str, Any],
+    *,
+    now: datetime | None = None,
+    cooldown_seconds: int = DEFAULT_SPAM_REJECTION_COOLDOWN_SECONDS,
+    threshold: int = DEFAULT_SPAM_REJECTION_THRESHOLD,
+) -> tuple[int, int]:
+    """Pause a provider after an explicit possible-spam rejection."""
+    return _outcome_cooldown_remaining(
+        state,
+        matches=lambda record: (
+            record.get("status") == "failed"
+            and record.get("result_status") == "FLAGGED_POSSIBLE_SPAM"
+        ),
+        now=now,
+        cooldown_seconds=cooldown_seconds,
+        threshold=threshold,
+    )
+
+
+def _application_rate_limit_remaining(
+    state: Mapping[str, Any],
+    *,
+    now: datetime | None = None,
+    window_seconds: int = DEFAULT_APPLICATION_WINDOW_SECONDS,
+    limit: int,
+) -> tuple[int, int]:
+    """Return the rolling provider application-limit wait and observed attempts."""
+    if window_seconds <= 0 or limit < 0:
+        raise ValueError("application window must be positive and limit cannot be negative")
+    if limit == 0:
+        return 0, 0
+
+    current_time = (now or datetime.now(UTC)).astimezone(UTC)
+    cutoff = current_time.timestamp() - window_seconds
+    attempts: list[datetime] = []
+    records = state.get("jobs", {})
+    if not isinstance(records, Mapping):
+        return 0, 0
+    for record in records.values():
+        if not isinstance(record, Mapping):
+            continue
+        raw_timestamp = str(record.get("application_started_at", "")).strip()
+        if not raw_timestamp:
+            continue
+        try:
+            timestamp = datetime.fromisoformat(raw_timestamp.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=UTC)
+        timestamp = timestamp.astimezone(UTC)
+        if timestamp.timestamp() > cutoff:
+            attempts.append(timestamp)
+
+    attempt_count = len(attempts)
+    if attempt_count < limit:
+        return 0, attempt_count
+    blocking_timestamp = sorted(attempts, reverse=True)[limit - 1]
+    elapsed = max(0, int((current_time - blocking_timestamp).total_seconds()))
+    return max(0, window_seconds - elapsed), attempt_count
 
 
 def build_parser(ats_platform: str) -> argparse.ArgumentParser:
     ats_platform = _validate_platform(ats_platform)
+    provider_config = RUNTIME_CONFIG.get_section(ats_platform)
+    sleep_min_seconds = int(provider_config.get("continuous_sleep_min_seconds", 120))
+    sleep_max_seconds = int(provider_config.get("continuous_sleep_max_seconds", 300))
+    application_limit = int(provider_config.get("continuous_application_limit", 0))
+    application_window_seconds = int(
+        provider_config.get(
+            "continuous_application_window_seconds",
+            DEFAULT_APPLICATION_WINDOW_SECONDS,
+        )
+    )
+    spam_cooldown_seconds = int(
+        provider_config.get(
+            "spam_rejection_cooldown_seconds",
+            DEFAULT_SPAM_REJECTION_COOLDOWN_SECONDS,
+        )
+    )
+    spam_threshold = int(
+        provider_config.get(
+            "spam_rejection_threshold",
+            DEFAULT_SPAM_REJECTION_THRESHOLD,
+        )
+    )
     parser = argparse.ArgumentParser(
         description=(
             f"Continuously select one verified-live {ats_platform.title()} job, "
             "generate a personalized "
             "resume and cover letter with a random configured email, submit it through the "
-            "guarded orchestrator, then wait 2-5 minutes."
+            "guarded orchestrator, then wait for the provider-specific pacing interval."
         )
     )
     parser.add_argument(
@@ -714,8 +827,14 @@ def build_parser(ats_platform: str) -> argparse.ArgumentParser:
         default=DEFAULT_BACKLOG,
         help="Active-job backlog pruned only after confirmed ledger evidence.",
     )
-    parser.add_argument("--sleep-min-seconds", type=int, default=120)
-    parser.add_argument("--sleep-max-seconds", type=int, default=300)
+    parser.add_argument("--sleep-min-seconds", type=int, default=sleep_min_seconds)
+    parser.add_argument("--sleep-max-seconds", type=int, default=sleep_max_seconds)
+    parser.add_argument("--application-limit", type=int, default=application_limit)
+    parser.add_argument(
+        "--application-window-seconds",
+        type=int,
+        default=application_window_seconds,
+    )
     parser.add_argument("--document-timeout-seconds", type=int, default=1800)
     parser.add_argument(
         "--engine-timeout-seconds",
@@ -733,6 +852,16 @@ def build_parser(ats_platform: str) -> argparse.ArgumentParser:
         "--captcha-threshold",
         type=int,
         default=DEFAULT_CAPTCHA_THRESHOLD,
+    )
+    parser.add_argument(
+        "--spam-rejection-cooldown-seconds",
+        type=int,
+        default=spam_cooldown_seconds,
+    )
+    parser.add_argument(
+        "--spam-rejection-threshold",
+        type=int,
+        default=spam_threshold,
     )
     parser.add_argument(
         "--once",
@@ -763,9 +892,14 @@ def main(
         ("refresh timeout", args.refresh_timeout_seconds),
         ("CAPTCHA cooldown", args.captcha_cooldown_seconds),
         ("CAPTCHA threshold", args.captcha_threshold),
+        ("possible-spam rejection cooldown", args.spam_rejection_cooldown_seconds),
+        ("possible-spam rejection threshold", args.spam_rejection_threshold),
+        ("application window", args.application_window_seconds),
     ):
         if value <= 0:
             raise SystemExit(f"{label} must be greater than zero")
+    if args.application_limit < 0:
+        raise SystemExit("application limit cannot be negative")
     if args.sleep_min_seconds > args.sleep_max_seconds:
         raise SystemExit("sleep minimum cannot exceed sleep maximum")
     for label, path in (
@@ -795,18 +929,47 @@ def main(
     while True:
         try:
             current_state = _load_state(args.state, ats_platform)
-            cooldown_remaining, captcha_count = _captcha_cooldown_remaining(
+            spam_cooldown_remaining, spam_count = _spam_rejection_cooldown_remaining(
+                current_state,
+                cooldown_seconds=args.spam_rejection_cooldown_seconds,
+                threshold=args.spam_rejection_threshold,
+            )
+            captcha_cooldown_remaining, captcha_count = _captcha_cooldown_remaining(
                 current_state,
                 cooldown_seconds=args.captcha_cooldown_seconds,
                 threshold=args.captcha_threshold,
             )
-            if cooldown_remaining:
+            rate_limit_remaining, application_count = _application_rate_limit_remaining(
+                current_state,
+                window_seconds=args.application_window_seconds,
+                limit=args.application_limit,
+            )
+            if spam_cooldown_remaining:
+                print(
+                    f"{ats_platform.upper()}_POSSIBLE_SPAM_CIRCUIT_OPEN "
+                    f"observed={spam_count} "
+                    f"cooldown_remaining={spam_cooldown_remaining}",
+                    flush=True,
+                )
+                cycle_status = "possible_spam_cooldown"
+            elif captcha_cooldown_remaining:
                 print(
                     f"{ats_platform.upper()}_CAPTCHA_CIRCUIT_OPEN "
-                    f"observed={captcha_count} cooldown_remaining={cooldown_remaining}",
+                    f"observed={captcha_count} "
+                    f"cooldown_remaining={captcha_cooldown_remaining}",
                     flush=True,
                 )
                 cycle_status = "captcha_cooldown"
+            elif rate_limit_remaining:
+                print(
+                    f"{ats_platform.upper()}_APPLICATION_RATE_LIMIT_OPEN "
+                    f"observed={application_count} "
+                    f"limit={args.application_limit} "
+                    f"window_seconds={args.application_window_seconds} "
+                    f"cooldown_remaining={rate_limit_remaining}",
+                    flush=True,
+                )
+                cycle_status = "application_rate_limit"
             elif not args.input.is_file():
                 outcome = _refresh_jobs(
                     ats_platform=ats_platform,

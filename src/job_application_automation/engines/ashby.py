@@ -6,22 +6,6 @@ Connects to active Google Chrome debugging session (port 9222).
 
 Usage:
   Internal engine invoked by: python src/job_automation.py apply --url "https://jobs.ashbyhq.com/company/job-id"
-
-==============================================================================
-OUT-OF-THE-BOX ALTERNATE APPROACHES / ARCHITECTURAL OPTIONS:
-1. Direct Native GraphQL API Submission (Headless API Direct POST):
-   - Ashby relies on an unauthenticated public GraphQL API (`https://jobs.ashbyhq.com/api/non-user-graphql?op=ApiJobAppFormSubmit`).
-   - Instead of launching full Playwright CDP browser sessions (which take 20-40 seconds to fill form inputs), fetch the form field schema JSON directly via GraphQL query and send a POST mutation request.
-   - Benefit: Reduces execution time from ~30s to <400ms, completely eliminates browser rendering overhead and CDP connection instability.
-
-2. Self-Healing Generative Form-Fill Agent with Real-Time Reflection:
-   - When an unexpected Ashby custom form component appears or DOM selectors fail, construct a dynamic prompt containing the HTML snippet and candidate state, calling an LLM planner function.
-   - Benefit: Prevents submission failures when Ashby updates their UI design without needing engine code releases.
-
-3. Natural Human-like Biometric Mouse Trajectory & Keystroke Simulation:
-   - Replace instant Playwright `.fill()` calls with humanized typing rhythms (randomized inter-key latencies with typing error/backspace simulation) and Bezier mouse movements.
-   - Benefit: Bypasses subtle client-side behavioral telemetry models analyzing DOM event timing.
-==============================================================================
 """
 
 import base64
@@ -95,7 +79,23 @@ NETWORK_IDLE_TIMEOUT_MS = int(RUNTIME_CONFIG.ashby["network_idle_timeout_ms"])
 MAX_FORM_STEPS = int(RUNTIME_CONFIG.ashby["max_form_steps"])
 MAX_SUBMIT_ATTEMPTS = int(RUNTIME_CONFIG.ashby["max_submit_attempts"])
 SUBMISSION_CONFIRMATION_PHRASES = tuple(RUNTIME_CONFIG.ashby["submission_confirmation_phrases"])
-SUBMISSION_FAILURE_PHRASES = tuple(RUNTIME_CONFIG.ashby["submission_failure_phrases"])
+SUBMISSION_SPAM_PHRASES = tuple(
+    RUNTIME_CONFIG.ashby.get("submission_spam_phrases", ("flagged as possible spam",))
+)
+_CONFIGURED_SUBMISSION_FAILURE_PHRASES = tuple(RUNTIME_CONFIG.ashby["submission_failure_phrases"])
+SUBMISSION_REJECTION_PHRASES = tuple(
+    phrase
+    for phrase in _CONFIGURED_SUBMISSION_FAILURE_PHRASES
+    if phrase not in SUBMISSION_SPAM_PHRASES
+)
+SUBMISSION_FAILURE_PHRASES = SUBMISSION_SPAM_PHRASES + SUBMISSION_REJECTION_PHRASES
+SUBMISSION_RESULT_TIMEOUT_SECONDS = float(
+    RUNTIME_CONFIG.ashby.get("submission_result_timeout_seconds", 15)
+)
+SUBMISSION_RESULT_POLL_SECONDS = float(
+    RUNTIME_CONFIG.ashby.get("submission_result_poll_seconds", 0.5)
+)
+REQUIRED_FIELD_VALIDATION = "REQUIRED_FIELD_VALIDATION"
 
 # Candidate data belongs in candidate_profile_config.json, not in source code. Empty defaults
 # make missing data visible rather than silently submitting someone else's details.
@@ -2168,9 +2168,10 @@ def fill_education_history(
         still_student.set_checked(bool(education.get("still_student", False)))
 
 
-def _page_body_lower(page: Page) -> str:
+def _page_body_lower(page: Page, *, timeout_ms: float | None = None) -> str:
     try:
-        return page.inner_text("body").lower()
+        kwargs = {"timeout": max(1, int(timeout_ms))} if timeout_ms is not None else {}
+        return page.inner_text("body", **kwargs).lower()
     except Exception as exc:
         logger.debug("Could not read page body: %s", exc)
         return ""
@@ -2212,8 +2213,62 @@ def _submission_confirmed(body_text: str) -> bool:
     )
 
 
-def _submission_failed(body_text: str) -> bool:
-    return any(phrase in body_text for phrase in SUBMISSION_FAILURE_PHRASES)
+def _submission_failure_status(body_text: str) -> str | None:
+    """Classify an explicit Ashby rejection without collapsing all failures into spam."""
+    if any(phrase in body_text for phrase in SUBMISSION_SPAM_PHRASES):
+        return "FLAGGED_POSSIBLE_SPAM"
+    if any(phrase in body_text for phrase in SUBMISSION_REJECTION_PHRASES):
+        return "SUBMISSION_REJECTED"
+    return None
+
+
+def _submission_page_outcome(
+    page: Page,
+    *,
+    timeout_ms: float | None = None,
+) -> tuple[str | None, str]:
+    """Observe one Ashby post-submit state, prioritizing terminal outcomes."""
+    body_text = _page_body_lower(page, timeout_ms=timeout_ms)
+    failure_status = _submission_failure_status(body_text)
+    if failure_status is not None:
+        return failure_status, body_text
+    if _submission_confirmed(body_text):
+        try:
+            if not _locate_submit_btn(page).count():
+                return "SUBMITTED & CONFIRMED", body_text
+        except Exception as exc:
+            logger.debug("Post-submit button inspection failed: %s", exc)
+    if "missing entry for required field" in body_text:
+        return REQUIRED_FIELD_VALIDATION, body_text
+    return None, body_text
+
+
+def _wait_for_submission_outcome(
+    page: Page,
+    *,
+    timeout_seconds: float = SUBMISSION_RESULT_TIMEOUT_SECONDS,
+    poll_seconds: float = SUBMISSION_RESULT_POLL_SECONDS,
+) -> tuple[str, str]:
+    """Poll without clicking until Ashby exposes a definitive post-submit state."""
+    if timeout_seconds <= 0 or poll_seconds <= 0:
+        raise ValueError("submission outcome timeout and poll interval must be positive")
+    deadline = time.monotonic() + timeout_seconds
+    last_body_text = ""
+    while True:
+        if _shutdown or page.is_closed():
+            break
+        remaining_seconds = max(0.0, deadline - time.monotonic())
+        outcome, last_body_text = _submission_page_outcome(
+            page,
+            timeout_ms=max(1.0, remaining_seconds * 1000),
+        )
+        if outcome is not None:
+            return outcome, last_body_text
+        remaining_seconds = deadline - time.monotonic()
+        if remaining_seconds <= 0:
+            break
+        time.sleep(min(poll_seconds, remaining_seconds))
+    return "SUBMIT_ATTEMPT_UNCONFIRMED", last_body_text
 
 
 def _fill_current_form(
@@ -2365,12 +2420,21 @@ def _required_field_issues(page: Page) -> list[str]:
     return issues
 
 
-def _capture_verified_submission(
+def _capture_submission_outcome(
     page: Page,
     directory: Path,
     company: str,
+    status: str,
 ) -> None:
-    screenshot_path = directory / (f"{_safe_filename_part(company)}_submitted_verified.png")
+    outcome_label = {
+        "SUBMITTED & CONFIRMED": "submitted_verified",
+        "FLAGGED_POSSIBLE_SPAM": "rejected_possible_spam",
+        "SUBMISSION_REJECTED": "submission_rejected",
+    }.get(status, "submit_unconfirmed")
+    timestamp = datetime.now().strftime("%Y%m%dT%H%M%S%f")
+    screenshot_path = directory / (
+        f"{_safe_filename_part(company)}_{outcome_label}_{timestamp}.png"
+    )
     try:
         cdp = page.context.new_cdp_session(page)
         data = cdp.send(
@@ -2379,7 +2443,7 @@ def _capture_verified_submission(
         )
         screenshot_path.write_bytes(base64.b64decode(data["data"]))
     except Exception as cdp_exc:
-        logger.debug("Verified CDP screenshot failed: %s", cdp_exc)
+        logger.debug("Submission-outcome CDP screenshot failed: %s", cdp_exc)
         try:
             if not page.is_closed():
                 page.screenshot(
@@ -2390,7 +2454,7 @@ def _capture_verified_submission(
                 )
         except Exception as screenshot_exc:
             logger.warning(
-                "Verified submission screenshot failed: %s",
+                "Submission-outcome screenshot failed: %s",
                 screenshot_exc,
             )
 
@@ -2407,7 +2471,7 @@ def _submit_application(
 
     submit = _locate_submit_btn(page)
     expect(submit).to_be_visible(timeout=7000)
-    confirmation_found = False
+    status = "SUBMIT_ATTEMPT_UNCONFIRMED"
 
     for submit_attempt in range(1, MAX_SUBMIT_ATTEMPTS + 1):
         if _shutdown:
@@ -2417,14 +2481,23 @@ def _submit_application(
 
         try:
             submit = _locate_submit_btn(page)
+            pre_click_failure = _submission_failure_status(_page_body_lower(page))
+            if pre_click_failure is not None:
+                status = pre_click_failure
+                logger.warning(
+                    "Ashby already exposes rejection status %s; not clicking.",
+                    status,
+                )
+                break
             if (not submit.count() or not submit.is_visible()) and _submission_confirmed(
                 _page_body_lower(page)
             ):
-                confirmation_found = True
+                status = "SUBMITTED & CONFIRMED"
                 break
         except Exception as locate_exc:
             logger.debug("Submit button inspection failed: %s", locate_exc)
 
+        click_uncertain = False
         try:
             smooth_mouse_move(page, submit)
             human_delay(0.5, 1.0)
@@ -2435,18 +2508,34 @@ def _submit_application(
             )
         except Exception as click_exc:
             logger.warning(
-                "Submit click attempt %d failed: %s",
+                "Submit click attempt %d had an uncertain outcome; not re-clicking: %s",
                 submit_attempt,
                 click_exc,
             )
+            click_uncertain = True
 
-        time.sleep(3.5)
-        body_text = _page_body_lower(page)
-        if (
-            "missing entry for required field" in body_text
-            and repair_dynamic_fields is not None
-            and submit_attempt < MAX_SUBMIT_ATTEMPTS
-        ):
+        outcome, _ = _wait_for_submission_outcome(page)
+        if outcome == "SUBMITTED & CONFIRMED":
+            status = outcome
+            break
+        if outcome in {"FLAGGED_POSSIBLE_SPAM", "SUBMISSION_REJECTED"}:
+            status = outcome
+            logger.warning(
+                "Ashby rejected the submission with status %s; not re-clicking.",
+                status,
+            )
+            break
+        if outcome == REQUIRED_FIELD_VALIDATION:
+            if click_uncertain:
+                logger.warning(
+                    "Required-field validation followed a click exception; "
+                    "the outcome is ambiguous and will not be re-clicked."
+                )
+                status = "SUBMIT_ATTEMPT_UNCONFIRMED"
+                break
+            if repair_dynamic_fields is None or submit_attempt >= MAX_SUBMIT_ATTEMPTS:
+                status = "ABORTED_MISSING_REQUIRED_FIELDS"
+                break
             logger.warning(
                 "Ashby validation rerendered a required field; reapplying "
                 "dynamic answers before retry."
@@ -2454,28 +2543,29 @@ def _submit_application(
             repair_dynamic_fields()
             time.sleep(1.0)
             continue
-        if _submission_failed(body_text):
-            logger.warning(
-                "Submission flagged as possible spam by Ashby. Waiting 5s before retrying..."
-            )
-            time.sleep(5.0)
-            continue
-        if _submission_confirmed(body_text) and not _locate_submit_btn(page).count():
-            confirmation_found = True
-            break
+        status = "SUBMIT_ATTEMPT_UNCONFIRMED"
+        logger.warning(
+            "Ashby did not expose a definitive result after submit attempt %d "
+            "within %.1f seconds; "
+            "not re-clicking an ambiguous submission.",
+            submit_attempt,
+            SUBMISSION_RESULT_TIMEOUT_SECONDS,
+        )
+        break
 
     if _shutdown:
         return "ABORTED_SIGNAL_RECEIVED"
 
-    _capture_verified_submission(page, directory, company)
-    body_text = _page_body_lower(page)
-    if confirmation_found or (
-        _submission_confirmed(body_text) and not _locate_submit_btn(page).count()
-    ):
-        return "SUBMITTED & CONFIRMED"
-    if _submission_failed(body_text):
-        return "FLAGGED_POSSIBLE_SPAM"
-    return "SUBMIT_ATTEMPT_UNCONFIRMED"
+    if status == "SUBMIT_ATTEMPT_UNCONFIRMED":
+        final_outcome, _ = _submission_page_outcome(page)
+        if final_outcome in {
+            "SUBMITTED & CONFIRMED",
+            "FLAGGED_POSSIBLE_SPAM",
+            "SUBMISSION_REJECTED",
+        }:
+            status = final_outcome
+    _capture_submission_outcome(page, directory, company, status)
+    return status
 
 
 # ==============================================================================
@@ -2749,89 +2839,23 @@ def run_job(
         return status
 
 
-def submit_ashby_graphql_direct(
-    url: str,
-    resume_path: Path,
-    company: str,
-    role: str,
-    live: bool,
-    cfg: Mapping[str, Any],
-) -> str:
-    """Alternate capability: Direct Ashby GraphQL API POST submission.
-
-    Directly interacts with Ashby's public GraphQL API endpoint
-    (`https://jobs.ashbyhq.com/api/non-user-graphql?op=ApiJobAppFormSubmit`),
-    bypassing headless browser execution for sub-second form submission.
-    """
-    import urllib.request
-    import json
-
-    logger.info("Executing direct Ashby GraphQL API submission for: %s", url)
-
-    candidate = cfg.get("candidate", {})
-    email = (
-        candidate.get("email_override")
-        or candidate.get("fallback_email")
-        or "applicant@example.com"
-    )
-    first_name = candidate.get("first_name", "Applicant")
-    last_name = candidate.get("last_name", "Candidate")
-
-    payload = {
-        "operationName": "ApiJobAppFormSubmit",
-        "variables": {
-            "applicationForm": {
-                "fieldValues": [
-                    {"fieldId": "name", "value": f"{first_name} {last_name}"},
-                    {"fieldId": "email", "value": email},
-                ],
-                "jobPostingId": url.rstrip("/").split("/")[-1],
-            }
-        },
-        "query": "mutation ApiJobAppFormSubmit($applicationForm: ApiJobAppFormSubmitInput!) { submitApplicationForm(applicationForm: $applicationForm) { success } }",
-    }
-
-    if not live:
-        logger.info(
-            "[DIRECT API - FILL ONLY] Form prefilled successfully via GraphQL mutation payload."
-        )
-        return "PREFILLED_ONLY"
-
-    try:
-        req = urllib.request.Request(
-            "https://jobs.ashbyhq.com/api/non-user-graphql?op=ApiJobAppFormSubmit",
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json", "User-Agent": "JobAppAutomation/1.0"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            if resp.status == 200 and data.get("data", {}).get("submitApplicationForm", {}).get(
-                "success"
-            ):
-                return "SUBMITTED & CONFIRMED"
-    except Exception as exc:
-        logger.warning("Direct GraphQL API attempt failed (%s), status check completed.", exc)
-
-    return "FAILED: DIRECT_GRAPHQL_API_ERROR" if live else "PREFILLED_ONLY"
-
-
 # ==============================================================================
 # ENTRY POINT
 # ==============================================================================
 def build_argument_parser() -> argparse.ArgumentParser:
     parser = build_engine_parser("Ashby Job Application Automation Engine")
-    parser.add_argument(
-        "--direct-api",
-        action="store_true",
-        help="Use direct GraphQL API submission instead of Playwright CDP browser automation",
-    )
     parser.set_defaults(role="AI Product Manager")
     return parser
 
 
 def _engine_result(status: str, is_live: bool) -> dict[str, Any]:
-    return engine_result(status, ats=ATS_NAME, is_live=is_live)
+    result = engine_result(status, ats=ATS_NAME, is_live=is_live)
+    if is_live and status == "SUBMIT_ATTEMPT_UNCONFIRMED":
+        # The click may have reached Ashby even when the browser never observed
+        # the response. Preserve that ambiguity so every orchestrator
+        # quarantines the job instead of treating it as safe to retry.
+        result["submitted"] = True
+    return result
 
 
 def _emit_engine_result(result: Mapping[str, Any]) -> None:
@@ -2848,27 +2872,16 @@ def main(argv: list[str] | None = None) -> int:
         if args.email:
             config["candidate"]["email_override"] = args.email
 
-        if getattr(args, "direct_api", False):
-            logger.info("Opt-in --direct-api enabled: using direct GraphQL API handler")
-            final_status = submit_ashby_graphql_direct(
-                url=args.url,
-                resume_path=args.resume,
-                company=args.company,
-                role=args.role,
-                live=is_live,
-                cfg=config,
-            )
-        else:
-            final_status = run_job(
-                url=args.url,
-                resume_path=args.resume,
-                cover_letter_path=args.cover_letter,
-                company=args.company,
-                role=args.role,
-                essay=args.essay,
-                live=is_live,
-                cfg=config,
-            )
+        final_status = run_job(
+            url=args.url,
+            resume_path=args.resume,
+            cover_letter_path=args.cover_letter,
+            company=args.company,
+            role=args.role,
+            essay=args.essay,
+            live=is_live,
+            cfg=config,
+        )
     except Exception as exc:
         logger.error("Engine initialization failed: %s", exc)
         final_status = f"FAILED: {type(exc).__name__}"

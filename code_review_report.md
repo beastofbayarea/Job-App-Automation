@@ -16,7 +16,7 @@ A comprehensive, multi-vector code review and bug audit was conducted across the
 
 | Category | Severity | Issues Discovered | Status |
 | :--- | :--- | :--- | :--- |
-| **False-Positive Status Reporting** | **High** | Ashby GraphQL Direct API returning `SUBMITTED & CONFIRMED` on network failures | **FIXED** |
+| **False-Positive Status Reporting** | **High** | Ashby GraphQL Direct API returning `SUBMITTED & CONFIRMED` on network failures | **REMOVED** |
 | **Playwright Exception Handling** | **Medium** | Unprotected `input_value()` calls in Lever engine `_fill_location` causing potential crash on detached elements | **FIXED** |
 | **Schema.org Object Traversal** | **Medium** | JSON-LD tree walker restricted to `@graph`, missing nested objects in `mainEntity` | **FIXED** |
 | **Sequence Validation Safety** | **Low** | `select_emails` missing empty sequence check prior to `random.choice` invocation | **FIXED** |
@@ -27,11 +27,11 @@ A comprehensive, multi-vector code review and bug audit was conducted across the
 
 ## Detailed Findings & Remediations
 
-### 1. [HIGH] False-Positive Status in Ashby Direct GraphQL API
+### 1. [HIGH] Removed Ashby Direct GraphQL Submission Path
 - **Location**: `src/job_application_automation/engines/ashby.py`
 - **Issue**: `submit_ashby_graphql_direct` caught network/HTTP exceptions during direct API submission, logged a warning, and then incorrectly returned `"SUBMITTED & CONFIRMED"` if `live=True`. This caused failed applications to be reported as successfully submitted.
 - **Root Cause**: The fallback return statement evaluated `"SUBMITTED & CONFIRMED" if live else "PREFILLED_ONLY"` regardless of whether the try-block succeeded or raised an exception.
-- **Remediation**: Updated return value to `"FAILED: DIRECT_GRAPHQL_API_ERROR"` on exceptions and non-200 responses. Added dedicated unit tests in `test_ashby_direct_graphql.py`.
+- **Remediation**: The direct API function and CLI flag were removed. Ashby submissions now use only the guarded browser workflow, and a regression test verifies that `--direct-api` is not exposed.
 
 ### 2. [MEDIUM] Exception Hazard on Detached Elements in Lever Engine
 - **Location**: `src/job_application_automation/engines/lever.py`
@@ -51,7 +51,7 @@ A comprehensive, multi-vector code review and bug audit was conducted across the
 - **Remediation**: Added explicit `if not emails:` guard raising `ValueError("emails sequence cannot be empty")`.
 
 ### 5. [LOW] Static Code Health & Lint Cleanup
-- **Locations**: Multiple files (`greenhouse.py`, `test_ashby_direct_graphql.py`, `test_ashby_engine.py`, `test_greenhouse_direct_post.py`, `test_lever_engine.py`, `test_mail_pool_select.py`, `test_search_async.py`, `test_search_jsonld.py`).
+- **Locations**: Multiple files (`greenhouse.py`, `test_ashby_engine.py`, `test_greenhouse_direct_post.py`, `test_lever_engine.py`, `test_mail_pool_select.py`, `test_search_async.py`, `test_search_jsonld.py`).
 - **Issue**: 14 unused variable assignments and unused imports were flagged by `ruff`.
 - **Remediation**: Cleaned up all unused imports and variables across `src/` and `tests/`. Running `python -m ruff check src tests` now reports zero issues.
 

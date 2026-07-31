@@ -169,7 +169,7 @@ def test_process_one_uses_one_random_email_and_both_personalized_documents() -> 
         no_apply.assert_not_called()
 
 
-def test_unconfirmed_submitted_result_is_quarantined_and_never_retried() -> None:
+def test_unconfirmed_submit_attempt_is_quarantined_and_never_retried() -> None:
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
         input_path = root / "jobs.json"
@@ -195,9 +195,9 @@ def test_unconfirmed_submitted_result_is_quarantined_and_never_retried() -> None
                     [
                         {
                             "success": False,
-                            "status": "SUBMISSION_UNCONFIRMED",
+                            "status": "SUBMIT_ATTEMPT_UNCONFIRMED",
                             "ats": "ashby",
-                            "submitted": True,
+                            "submitted": False,
                             "confirmed": False,
                             "test_mode": False,
                         }
@@ -228,6 +228,97 @@ def test_unconfirmed_submitted_result_is_quarantined_and_never_retried() -> None
             assert worker.process_one(**kwargs) == "manual_review"
             assert worker.process_one(**kwargs) == "no_work"
         assert apply_call.call_count == 1
+
+
+def test_documents_ready_resume_reuses_saved_email_without_sampling_again() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        job = _job()
+        canonical_url = str(job["job_url"])
+        input_path = root / "jobs.json"
+        input_path.write_text(json.dumps([job]), encoding="utf-8")
+        profile = root / "profile.json"
+        profile.write_text("{}", encoding="utf-8")
+        pool = root / "pool.json"
+        pool.write_text(json.dumps(["different@example.test"]), encoding="utf-8")
+        launcher = root / "launcher.py"
+        launcher.write_text("", encoding="utf-8")
+        documents = root / "documents" / "saved"
+        _pdf(documents / "resume.pdf")
+        _pdf(documents / "cover_letter.pdf")
+        result_path = root / "results" / "saved.json"
+        state_path = root / "state.json"
+        state_path.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "jobs": {
+                        canonical_url: {
+                            "status": "documents_ready",
+                            "stage": "application",
+                            "job_url": canonical_url,
+                            "company": "Example",
+                            "title": "Product Manager",
+                            "platform": "ashby",
+                            "email": "saved@example.test",
+                            "document_dir": str(documents),
+                            "result_path": str(result_path),
+                            "started_at": "2026-07-31T00:00:00+00:00",
+                            "updated_at": "2026-07-31T00:00:00+00:00",
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        def apply(**kwargs: object) -> worker.CommandOutcome:
+            path = Path(str(kwargs["result_path"]))
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "success": False,
+                            "status": "ABORTED_MISSING_REQUIRED_FIELDS",
+                            "ats": "ashby",
+                            "submitted": False,
+                            "confirmed": False,
+                            "test_mode": False,
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            return worker.CommandOutcome(1, "", "")
+
+        with (
+            patch.object(
+                worker.random,
+                "choice",
+                side_effect=AssertionError("saved jobs must not choose another email"),
+            ),
+            patch.object(worker, "_prepare_documents") as prepare,
+            patch.object(worker, "_apply", side_effect=apply) as apply_call,
+        ):
+            status = worker.process_one(
+                ats_platform="ashby",
+                input_path=input_path,
+                profile=profile,
+                email_pool=pool,
+                launcher=launcher,
+                state_path=state_path,
+                results_dir=root / "results",
+                documents_dir=root / "documents",
+                submission_log=root / "submissions.json",
+                document_timeout_seconds=60,
+                engine_timeout_seconds=30,
+                application_timeout_seconds=60,
+            )
+
+        assert status == "failed"
+        prepare.assert_not_called()
+        assert apply_call.call_args.kwargs["email"] == "saved@example.test"
 
 
 def test_interrupted_application_is_quarantined_while_document_stage_can_resume() -> None:
@@ -389,6 +480,117 @@ def test_captcha_circuit_opens_until_cooldown_and_resets_after_confirmation() ->
     assert worker._captcha_cooldown_remaining(state, now=now) == (0, 0)
 
 
+def test_possible_spam_circuit_opens_immediately_and_resets_after_confirmation() -> None:
+    now = datetime(2026, 7, 31, 12, 0, tzinfo=UTC)
+    state = {
+        "jobs": {
+            "rejected": {
+                "status": "failed",
+                "result_status": "FLAGGED_POSSIBLE_SPAM",
+                "updated_at": (now - timedelta(hours=2)).isoformat(),
+            },
+            "generic": {
+                "status": "failed",
+                "result_status": "SUBMISSION_REJECTED",
+                "updated_at": (now - timedelta(hours=1)).isoformat(),
+            },
+        }
+    }
+
+    remaining, observed = worker._spam_rejection_cooldown_remaining(
+        state,
+        now=now,
+        cooldown_seconds=24 * 60 * 60,
+    )
+    assert observed == 1
+    assert remaining == 22 * 60 * 60
+
+    state["jobs"]["confirmed"] = {
+        "status": "confirmed",
+        "updated_at": (now - timedelta(minutes=30)).isoformat(),
+    }
+    assert worker._spam_rejection_cooldown_remaining(state, now=now) == (0, 0)
+
+
+def test_possible_spam_circuit_prevents_application_work(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    input_path = tmp_path / "jobs.json"
+    profile = tmp_path / "profile.json"
+    pool = tmp_path / "pool.json"
+    launcher = tmp_path / "launcher.py"
+    state = tmp_path / "state.json"
+    input_path.write_text("[]", encoding="utf-8")
+    profile.write_text("{}", encoding="utf-8")
+    pool.write_text(json.dumps(["candidate@example.test"]), encoding="utf-8")
+    launcher.write_text("", encoding="utf-8")
+    state.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "jobs": {
+                    "rejected": {
+                        "status": "failed",
+                        "result_status": "FLAGGED_POSSIBLE_SPAM",
+                        "updated_at": datetime.now(UTC).isoformat(),
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with patch.object(worker, "process_one") as process:
+        exit_code = worker.main(
+            [
+                "--input",
+                str(input_path),
+                "--profile",
+                str(profile),
+                "--email-pool",
+                str(pool),
+                "--launcher",
+                str(launcher),
+                "--state",
+                str(state),
+                "--once",
+            ],
+            ats_platform="ashby",
+        )
+
+    assert exit_code == 1
+    process.assert_not_called()
+    assert "ASHBY_POSSIBLE_SPAM_CIRCUIT_OPEN" in capsys.readouterr().out
+
+
+def test_rolling_application_limit_caps_provider_volume() -> None:
+    now = datetime(2026, 7, 31, 12, 0, tzinfo=UTC)
+    state = {
+        "jobs": {
+            str(index): {
+                "application_started_at": (now - timedelta(hours=index)).isoformat(),
+            }
+            for index in range(1, 4)
+        }
+    }
+
+    remaining, observed = worker._application_rate_limit_remaining(
+        state,
+        now=now,
+        window_seconds=24 * 60 * 60,
+        limit=3,
+    )
+    assert observed == 3
+    assert remaining == 21 * 60 * 60
+    assert worker._application_rate_limit_remaining(
+        state,
+        now=now,
+        window_seconds=24 * 60 * 60,
+        limit=4,
+    ) == (0, 3)
+
+
 def test_sleep_between_cycles_handles_service_stop_without_traceback() -> None:
     with patch.object(worker.time, "sleep", side_effect=KeyboardInterrupt):
         assert worker._sleep_between_cycles(120, "ashby") is False
@@ -402,6 +604,17 @@ def test_installed_lever_engine_is_accepted_without_static_provider_registry() -
     assert args.once is True
     assert args.input.name == "continuous_lever_jobs.json"
     assert args.state.name == "continuous_lever_state.json"
+
+
+def test_ashby_uses_conservative_provider_pacing_and_rejection_cooldown() -> None:
+    args = worker.build_parser("ashby").parse_args(["--once"])
+
+    assert args.sleep_min_seconds == 900
+    assert args.sleep_max_seconds == 1800
+    assert args.application_limit == 12
+    assert args.application_window_seconds == 86_400
+    assert args.spam_rejection_cooldown_seconds == 86_400
+    assert args.spam_rejection_threshold == 1
 
 
 def test_invalid_or_missing_engine_platform_is_rejected() -> None:

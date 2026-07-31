@@ -203,9 +203,39 @@ def load_runtime_config(path: Path | None = None) -> RuntimeConfig:
         "max_submit_attempts",
     ):
         _integer(ashby, "ashby", key)
+    for key in (
+        "continuous_sleep_min_seconds",
+        "continuous_sleep_max_seconds",
+        "continuous_application_window_seconds",
+        "spam_rejection_cooldown_seconds",
+        "spam_rejection_threshold",
+    ):
+        if key in ashby:
+            _integer(ashby, "ashby", key)
+    if "continuous_application_limit" in ashby:
+        _nonnegative_integer(ashby, "ashby", "continuous_application_limit")
+    for key in ("submission_result_timeout_seconds", "submission_result_poll_seconds"):
+        if key in ashby:
+            _positive_number(ashby, "ashby", key)
+    sleep_min_seconds = int(ashby.get("continuous_sleep_min_seconds", 120))
+    sleep_max_seconds = int(ashby.get("continuous_sleep_max_seconds", 300))
+    if sleep_min_seconds > sleep_max_seconds:
+        raise ValueError(
+            "runtime config ashby.continuous_sleep_min_seconds cannot exceed "
+            "continuous_sleep_max_seconds"
+        )
+    result_timeout_seconds = float(ashby.get("submission_result_timeout_seconds", 15))
+    result_poll_seconds = float(ashby.get("submission_result_poll_seconds", 0.5))
+    if result_poll_seconds > result_timeout_seconds:
+        raise ValueError(
+            "runtime config ashby.submission_result_poll_seconds cannot exceed "
+            "submission_result_timeout_seconds"
+        )
     _string(ashby, "ashby", "screenshot_dir")
     for key in ("submission_confirmation_phrases", "submission_failure_phrases"):
         _strings(ashby, "ashby", key)
+    if "submission_spam_phrases" in ashby:
+        _strings(ashby, "ashby", "submission_spam_phrases")
 
     for key in ("credentials_file", "token_file", "verification_history_file"):
         _string(gmail, "gmail", key)
