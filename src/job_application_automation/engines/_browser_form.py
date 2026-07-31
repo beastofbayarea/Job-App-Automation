@@ -330,6 +330,22 @@ def _wait_for_form(page: Page, spec: BrowserFormSpec, timeout: int) -> None:
         logger.debug("%s form did not become ready: %s", spec.display_name, exc)
 
 
+def _wait_for_application_entry(page: Page, spec: BrowserFormSpec, timeout: int) -> None:
+    """Wait for either a job-page apply control or a directly rendered form."""
+    selector = ", ".join(
+        spec.apply_selectors + spec.first_name_selectors + spec.full_name_selectors
+    )
+    if not selector:
+        return
+    try:
+        page.locator(selector).first.wait_for(
+            state="attached",
+            timeout=min(timeout, 15_000),
+        )
+    except Exception as exc:
+        logger.debug("%s application entry did not become ready: %s", spec.display_name, exc)
+
+
 def _clean_label(value: object) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip().lstrip("* ").rstrip("* ").strip()
 
@@ -714,7 +730,8 @@ def _select_all_positive_checkbox_answers(
     return bool(
         str(rules.get("interest_checkbox_selection", "")).casefold() == "all"
         and re.search(
-            r"\b(?:interest|interested|areas?|topics?|disciplines?|specialt(?:y|ies))\b",
+            r"\b(?:interest|interested|areas?|topics?|disciplines?|specialt(?:y|ies)|"
+            r"select all that apply|use .{0,80} tools?)\b",
             label,
             re.I,
         )
@@ -1260,6 +1277,10 @@ def run_browser_form_engine(
             _dismiss_cookie_banner(page)
 
             apply_button = _first_visible_for(page, spec.apply_selectors)
+            if apply_button is None:
+                _wait_for_application_entry(page, spec, timeout)
+                _dismiss_cookie_banner(page)
+                apply_button = _first_visible_for(page, spec.apply_selectors)
             closed_reason = _closed_job_reason(page, apply_button)
             if closed_reason:
                 screenshot = capture_screenshot(

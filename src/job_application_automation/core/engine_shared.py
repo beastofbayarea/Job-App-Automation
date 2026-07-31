@@ -839,10 +839,20 @@ def fill_required_consent(page: Page) -> list[str]:
                 re.I,
             ):
                 continue
-            required = (
-                explicit_confirm
-                or box.get_attribute("required") is not None
-                or box.get_attribute("aria-required") == "true"
+            consent_context = bool(
+                re.search(
+                    r"\b(?:acknowledge|agree|consent|privacy|terms|policy|"
+                    r"data (?:processing|protection)|personal data)\b",
+                    context,
+                    re.I,
+                )
+            )
+            required = explicit_confirm or (
+                consent_context
+                and (
+                    box.get_attribute("required") is not None
+                    or box.get_attribute("aria-required") == "true"
+                )
             )
             if required:
                 box.check(force=True)

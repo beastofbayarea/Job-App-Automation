@@ -105,6 +105,43 @@ class EngineSharedConfigTests(unittest.TestCase):
         self.assertEqual(checked, [])
         box.check.assert_not_called()
 
+    def test_required_substantive_checkbox_is_not_treated_as_consent(self) -> None:
+        page = unittest.mock.MagicMock()
+        box = page.locator.return_value.nth.return_value
+        page.locator.return_value.count.return_value = 1
+        box.is_checked.return_value = False
+        box.is_visible.return_value = True
+        box.get_attribute.side_effect = lambda name: "true" if name == "aria-required" else None
+        with unittest.mock.patch.object(
+            engine_shared,
+            "label_for",
+            return_value="I regularly use AI tools to prototype product experiences.",
+        ):
+            checked = engine_shared.fill_required_consent(page)
+
+        self.assertEqual(checked, [])
+        box.check.assert_not_called()
+
+    def test_required_privacy_consent_is_checked(self) -> None:
+        page = unittest.mock.MagicMock()
+        box = page.locator.return_value.nth.return_value
+        page.locator.return_value.count.return_value = 1
+        box.is_checked.side_effect = [False, True]
+        box.is_visible.return_value = True
+        box.get_attribute.side_effect = lambda name: "true" if name == "aria-required" else None
+        with unittest.mock.patch.object(
+            engine_shared,
+            "label_for",
+            return_value="I agree to the privacy policy and processing of my personal data.",
+        ):
+            checked = engine_shared.fill_required_consent(page)
+
+        self.assertEqual(
+            checked,
+            ["I agree to the privacy policy and processing of my personal data."],
+        )
+        box.check.assert_called_once_with(force=True)
+
 
 class ShellValidatorHostTests(unittest.TestCase):
     def test_custom_domain_greenhouse_url_is_accepted_like_the_orchestrator(self) -> None:

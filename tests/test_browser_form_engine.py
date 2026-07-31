@@ -73,7 +73,7 @@ def _run_with_browser_mocks(
     preexisting_confirmation: bool = False,
 ) -> tuple[dict[str, object], SimpleNamespace, MagicMock]:
     session, page = _session()
-    apply_and_submit = [None, submit_button]
+    apply_and_submit = [None, None, submit_button]
     with (
         patch.object(browser_form, "sync_playwright", return_value=nullcontext(MagicMock())),
         patch.object(
@@ -83,6 +83,7 @@ def _run_with_browser_mocks(
         ) as open_session,
         patch.object(browser_form, "navigate_reusing_tab"),
         patch.object(browser_form, "_dismiss_cookie_banner"),
+        patch.object(browser_form, "_wait_for_application_entry"),
         patch.object(browser_form, "_closed_job_reason", return_value=""),
         patch.object(browser_form, "_first_visible_for", side_effect=apply_and_submit),
         patch.object(browser_form, "_fill_standard_fields", return_value=_successful_fill()),
@@ -129,6 +130,47 @@ def test_candidate_fields_uses_profile_fallback_email() -> None:
     assert candidate.city == "San Francisco"
     assert candidate.postcode == "94105"
     assert candidate.country == "United States"
+
+
+def test_application_entry_waits_when_initial_apply_control_is_late(tmp_path: Path) -> None:
+    session, _ = _session()
+    session.page.url = "https://apply.workable.com/example/j/ABC123/"
+    apply_button = MagicMock()
+    apply_button.get_attribute.return_value = "/example/j/ABC123/apply/"
+    with (
+        patch.object(browser_form, "sync_playwright", return_value=nullcontext(MagicMock())),
+        patch.object(browser_form, "open_chrome_session", return_value=session),
+        patch.object(browser_form, "navigate_reusing_tab") as navigate,
+        patch.object(browser_form, "_dismiss_cookie_banner"),
+        patch.object(browser_form, "_wait_for_application_entry") as wait_for_entry,
+        patch.object(browser_form, "_wait_for_form"),
+        patch.object(browser_form, "_closed_job_reason", return_value=""),
+        patch.object(
+            browser_form,
+            "_first_visible_for",
+            side_effect=[None, apply_button, None],
+        ),
+        patch.object(browser_form, "_fill_standard_fields", return_value=_successful_fill()),
+        patch.object(browser_form, "_fill_custom_questions", return_value={}),
+        patch.object(browser_form, "_stabilize_email_fields"),
+        patch.object(browser_form, "_repair_forbidden_text_characters", return_value=[]),
+        patch.object(browser_form, "fill_required_consent", return_value=[]),
+        patch.object(browser_form, "page_has_captcha", return_value=False),
+        patch.object(browser_form, "validate_required_fields", return_value=[]),
+        patch.object(browser_form, "capture_screenshot", return_value="proof.png"),
+    ):
+        result = browser_form.run_browser_form_engine(
+            workable.SPEC,
+            url="https://apply.workable.com/example/j/ABC123/",
+            resume=_resume(tmp_path),
+            config=_profile(),
+            live_submit=False,
+            screenshot_dir=tmp_path,
+        )
+
+    wait_for_entry.assert_called_once_with(session.page, workable.SPEC, 30000)
+    assert navigate.call_count == 2
+    assert result["status"] == "PREFILLED_ONLY"
 
 
 def test_maximum_option_ranking_rejects_no_experience_even_when_list_is_reversed() -> None:
@@ -276,6 +318,10 @@ def test_positive_checkbox_policy_is_not_applied_to_document_declarations() -> N
     )
     assert browser_form._select_all_positive_checkbox_answers(
         "Which areas of product management interest you?",
+        rules,
+    )
+    assert browser_form._select_all_positive_checkbox_answers(
+        "How do you use AI tools in your workflows? Select all that apply.",
         rules,
     )
 
