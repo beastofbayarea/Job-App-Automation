@@ -71,3 +71,16 @@ def test_targeted_greenhouse_retry_requires_safe_pre_submit_evidence() -> None:
     assert "[REDACTED_EMAIL]" in script
     assert "ScreenshotOutputPath" not in script
     assert "latest_prefilled_screenshot=" not in script
+
+
+def test_vps_screenshot_cleanup_is_output_bound_and_application_safe() -> None:
+    script = (SCRIPTS / "cleanup_vps_application_screenshots.ps1").read_text(encoding="utf-8")
+
+    assert 'expected="`$repo/output"' in script
+    assert "readlink -f" in script
+    assert "pgrep -f '[j]ob_automation.py apply'" in script
+    assert "repo_output = Path(sys.argv[2]).resolve()" in script
+    assert '".jpeg", ".jpg", ".png", ".webp"' in script
+    assert "path.relative_to(expected)" in script
+    assert '"screenshots_remaining": len(remaining)' in script
+    assert "-hostkey" in script
