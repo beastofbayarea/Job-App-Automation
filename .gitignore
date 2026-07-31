@@ -41,6 +41,7 @@ config/*.pem
 # Local environment and logs
 .env
 *.log
+node_modules/
 
 # Test and coverage artifacts
 .coverage

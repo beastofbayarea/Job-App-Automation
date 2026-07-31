@@ -1,0 +1,14 @@
+{
+  "name": "job-app-automation-workbook-tools",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Repository-local utilities for maintaining private job URL workbooks.",
+  "type": "module",
+  "scripts": {
+    "workbooks:clean": "node scripts/cleanup_job_url_workbooks.mjs",
+    "workbooks:check": "node scripts/cleanup_job_url_workbooks.mjs --check"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0"
+  }
+}

@@ -14,6 +14,26 @@ The tracker is an `.xlsx` workbook. The orchestrator reads the active worksheet 
 
 Rows without a job-specific URL for a supported provider are skipped. Supported providers are Ashby, Greenhouse, Lever, Workable, and SmartRecruiters. Company-board roots are not application identities. Missing company and role cells fall back to `Company` and `Product Manager`.
 
+### Private job URL inventories
+
+The private, Git-ignored URL inventories in `data/` use these canonical names:
+
+| File | Worksheet(s) |
+| --- | --- |
+| `ashby_product_management_jobs.xlsx` | `Product Management Jobs` |
+| `greenhouse_all_jobs.xlsx` | `All Jobs` |
+| `greenhouse_marketing_jobs.xlsx` | `Marketing Jobs` |
+| `greenhouse_product_management_jobs.xlsx` | `Product Management Jobs` |
+| `lever_product_management_jobs.xlsx` | `Product Management Jobs` |
+| `smartrecruiters_and_workable_jobs.xlsx` | `SmartRecruiters Jobs`, `Workable Jobs` |
+
+Run `npm install` once and then `npm run workbooks:clean` to normalize headers,
+remove unused ranges and confirmed-closed listings, preserve valid HTTPS links,
+and reapply the standard table format. The command validates every generated
+workbook before replacing a source file and moves recoverable originals to
+`output/workbook-backups/<timestamp>/`. Run `npm run workbooks:check` for a
+read-only structural validation of the canonical files.
+
 ## Queue file
 
 The queue is UTF-8 text with one job URL per non-empty line:
