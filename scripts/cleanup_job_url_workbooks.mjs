@@ -36,13 +36,18 @@ const workbookPlans = [
     outputSheets: [{ name: "Lever Product Management" }],
   },
   {
-    source: "smartrecruiters_workable.xlsx",
-    target: "smartrecruiters_and_workable_jobs.xlsx",
+    source: "smartrecruiters_and_workable_jobs.xlsx",
+    sourceAlternates: ["smartrecruiters_workable.xlsx"],
+    target: "smartrecruiters_product_jobs.xlsx",
     splitByPlatform: true,
-    outputSheets: [
-      { name: "SmartRecruiters Product Roles", platform: "smartrecruiters" },
-      { name: "Workable Product Roles", platform: "workable" },
-    ],
+    outputSheets: [{ name: "SmartRecruiters Product Roles", platform: "smartrecruiters" }],
+  },
+  {
+    source: "smartrecruiters_and_workable_jobs.xlsx",
+    sourceAlternates: ["smartrecruiters_workable.xlsx"],
+    target: "workable_product_jobs.xlsx",
+    splitByPlatform: true,
+    outputSheets: [{ name: "Workable Product Roles", platform: "workable" }],
   },
 ];
 
@@ -335,13 +340,18 @@ async function main() {
   const staged = [];
 
   for (const plan of workbookPlans) {
-    const sourcePath = path.resolve(dataDir, plan.source);
     const targetPath = path.resolve(dataDir, plan.target);
-    assertInside(dataDir, sourcePath);
     assertInside(dataDir, targetPath);
-    const sourceExists = await fs.access(sourcePath).then(() => true).catch(() => false);
-    const targetExists = await fs.access(targetPath).then(() => true).catch(() => false);
-    const effectiveSource = sourceExists ? sourcePath : targetExists ? targetPath : null;
+    const sourceCandidates = [plan.source, ...(plan.sourceAlternates ?? []), plan.target]
+      .map((name) => path.resolve(dataDir, name));
+    for (const sourceCandidate of sourceCandidates) assertInside(dataDir, sourceCandidate);
+    let effectiveSource = null;
+    for (const sourceCandidate of sourceCandidates) {
+      if (await fs.access(sourceCandidate).then(() => true).catch(() => false)) {
+        effectiveSource = sourceCandidate;
+        break;
+      }
+    }
     if (!effectiveSource) throw new Error(`Missing source workbook: ${plan.source}`);
 
     const rows = await extractRows(effectiveSource);
@@ -353,16 +363,19 @@ async function main() {
   }
 
   await fs.mkdir(backupDir, { recursive: true });
+  const pathsToBackUp = new Set();
   for (const item of staged) {
-    const pathsToBackUp = new Set([item.sourcePath]);
+    pathsToBackUp.add(item.sourcePath);
     if (item.targetPath !== item.sourcePath && await fs.access(item.targetPath).then(() => true).catch(() => false)) {
       pathsToBackUp.add(item.targetPath);
     }
-    for (const existingPath of pathsToBackUp) {
-      const backupPath = path.resolve(backupDir, path.basename(existingPath));
-      assertInside(backupDir, backupPath);
-      await fs.rename(existingPath, backupPath);
-    }
+  }
+  for (const existingPath of pathsToBackUp) {
+    const backupPath = path.resolve(backupDir, path.basename(existingPath));
+    assertInside(backupDir, backupPath);
+    await fs.rename(existingPath, backupPath);
+  }
+  for (const item of staged) {
     await fs.rename(item.temporaryPath, item.targetPath);
     await validateWorkbook(item.targetPath, item.plan.outputSheets);
   }
