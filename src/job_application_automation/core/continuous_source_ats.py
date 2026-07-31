@@ -357,6 +357,24 @@ def _sync_claim_from_state(
         )
 
 
+def _sleep_until_next_cycle(
+    delay: int,
+    *,
+    ats_platform: str,
+    worker_id: str,
+) -> bool:
+    try:
+        time.sleep(delay)
+    except KeyboardInterrupt:
+        print(
+            f"{ats_platform.upper()}_SOURCE_WORKER_STOPPED "
+            f"worker={worker_id} signal=keyboard_interrupt",
+            flush=True,
+        )
+        return False
+    return True
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Continuously process disjoint ATS jobs from search output or an Excel tracker."
@@ -561,7 +579,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"worker={worker_id} seconds={delay} prior_status={cycle_status}",
             flush=True,
         )
-        time.sleep(delay)
+        if not _sleep_until_next_cycle(
+            delay,
+            ats_platform=ats_platform,
+            worker_id=worker_id,
+        ):
+            return 130
 
 
 if __name__ == "__main__":

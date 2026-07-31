@@ -163,3 +163,26 @@ def test_hydrate_tracker_job_rejects_closed_role(monkeypatch) -> None:
         assert "no longer available" in str(exc)
     else:
         raise AssertionError("closed tracker job should be rejected")
+
+
+def test_sleep_until_next_cycle_handles_keyboard_interrupt(
+    monkeypatch,
+    capsys,
+) -> None:
+    def interrupt_sleep(_delay: int) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(continuous_source_ats.time, "sleep", interrupt_sleep)
+
+    completed = continuous_source_ats._sleep_until_next_cycle(
+        120,
+        ats_platform="greenhouse",
+        worker_id="search",
+    )
+
+    assert completed is False
+    assert (
+        capsys.readouterr().out
+        == "GREENHOUSE_SOURCE_WORKER_STOPPED "
+        "worker=search signal=keyboard_interrupt\n"
+    )
