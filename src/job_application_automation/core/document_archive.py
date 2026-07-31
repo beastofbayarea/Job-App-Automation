@@ -599,7 +599,7 @@ def load_vps_archive_config(
         archive_root=remote_root_override.strip()
         or _optional_text(vps, "document_archive_root")
         or DEFAULT_ARCHIVE_ROOT,
-        ssh_port=port_value,  # type: ignore[arg-type]
+        ssh_port=port_value,
         private_key_file=private_key,
         password=password,
     )

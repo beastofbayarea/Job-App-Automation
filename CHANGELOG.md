@@ -29,6 +29,8 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Changed
 
+- Strict static typing now protects the core runtime-configuration, contract,
+  submission-ledger, document-archive, and search-model boundaries in CI.
 - Continuous ATS applications now run visibly inside their Xvfb session, and
   country-scoped work-authorization answers fail closed unless the candidate's
   profile explicitly lists the target country. Salary answers also retain their

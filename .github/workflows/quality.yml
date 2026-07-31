@@ -40,6 +40,9 @@ jobs:
       - name: Lint
         run: uv run ruff check .
 
+      - name: Check typed persistence and configuration boundaries
+        run: uv run mypy
+
       - name: Run deterministic tests with coverage
         run: uv run pytest
 

@@ -24,6 +24,7 @@ Run the full local quality suite before committing:
 ```powershell
 python -m ruff format --check .
 python -m ruff check .
+python -m mypy
 python -m pytest
 python -m compileall -q src
 python -m pip check

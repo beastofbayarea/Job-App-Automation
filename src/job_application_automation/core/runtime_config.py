@@ -20,7 +20,7 @@ from .paths import CONFIG_DIR, PROJECT_ROOT
 
 RUNTIME_CONFIG_FILE = CONFIG_DIR / "runtime_config.json"
 DEFAULT_RUNTIME_CONFIG_FILE = Path(
-    resources.files("job_application_automation").joinpath("resources/runtime_config.json")
+    str(resources.files("job_application_automation").joinpath("resources/runtime_config.json"))
 )
 
 
