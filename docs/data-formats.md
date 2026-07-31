@@ -27,6 +27,10 @@ The private, Git-ignored URL inventories in `data/` use these canonical names:
 | `lever_product_management_jobs.xlsx` | `Product Management Jobs` |
 | `smartrecruiters_and_workable_jobs.xlsx` | `SmartRecruiters Jobs`, `Workable Jobs` |
 
+The prompt instructions formerly embedded beside the job tables are preserved
+verbatim in the private, Git-ignored `data/job_search_prompts.txt` archive and
+grouped by their original workbook and worksheet.
+
 Run `npm install` once and then `npm run workbooks:clean` to normalize headers,
 remove unused ranges and confirmed-closed listings, preserve valid HTTPS links,
 and reapply the standard table format. The command validates every generated
