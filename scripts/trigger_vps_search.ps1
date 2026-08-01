@@ -7,7 +7,7 @@ param(
     [string]$ConfigPath = "config/vps_config.json"
 )
 
-. "$PSScriptRoot\vps_script_helpers.ps1"
+. "$PSScriptRoot\lib\vps_script_helpers.ps1"
 
 if (-not (Test-Path $ConfigPath)) {
     Write-Error "VPS config not found at $ConfigPath"

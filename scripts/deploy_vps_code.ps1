@@ -7,7 +7,7 @@ param(
     [int]$TimeoutSeconds = 60
 )
 
-. "$PSScriptRoot\vps_script_helpers.ps1"
+. "$PSScriptRoot\lib\vps_script_helpers.ps1"
 
 try {
     $Connection = Read-VpsConnectionConfig -Path $ConfigPath

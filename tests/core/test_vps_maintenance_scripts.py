@@ -84,7 +84,9 @@ class PowerShellMaintenanceTests(unittest.TestCase):
 
     def test_dashboard_installer_provisions_public_loopback_and_restores_nginx(self) -> None:
         installer = (SCRIPTS / "install_vps_dashboard.ps1").read_text(encoding="utf-8")
-        unit = (SCRIPTS / "job-app-dashboard.service.template").read_text(encoding="utf-8")
+        unit = (SCRIPTS / "templates" / "job-app-dashboard.service.template").read_text(
+            encoding="utf-8"
+        )
 
         self.assertIn("-hostkey", installer)
         self.assertIn("-pwfile", installer)
@@ -177,7 +179,9 @@ class PowerShellMaintenanceTests(unittest.TestCase):
 
     def test_continuous_search_installer_uses_supervision_and_replaces_cron(self) -> None:
         installer = (SCRIPTS / "install_vps_continuous_search.ps1").read_text(encoding="utf-8")
-        unit = (SCRIPTS / "job-app-search-sync.service.template").read_text(encoding="utf-8")
+        unit = (SCRIPTS / "templates" / "job-app-search-sync.service.template").read_text(
+            encoding="utf-8"
+        )
         runner = (SCRIPTS / "vps_continuous_search_sync.sh").read_text(encoding="utf-8")
 
         self.assertIn("-hostkey", installer)
@@ -201,7 +205,9 @@ class PowerShellMaintenanceTests(unittest.TestCase):
 
     def test_continuous_greenhouse_installer_delegates_to_generic_supervisor(self) -> None:
         wrapper = (SCRIPTS / "install_vps_continuous_greenhouse.ps1").read_text(encoding="utf-8")
-        unit = (SCRIPTS / "job-app-continuous-ats.service.template").read_text(encoding="utf-8")
+        unit = (SCRIPTS / "templates" / "job-app-continuous-ats.service.template").read_text(
+            encoding="utf-8"
+        )
 
         self.assertIn("install_vps_continuous_ats.ps1", wrapper)
         self.assertIn("-AtsPlatform greenhouse", wrapper)
@@ -223,7 +229,7 @@ Write-Output "mock:$Value"
 """.strip(),
                 encoding="utf-8",
             )
-            helper = SCRIPTS / "vps_script_helpers.ps1"
+            helper = SCRIPTS / "lib" / "vps_script_helpers.ps1"
             completed_command = (
                 f". '{helper}';"
                 f"$result=Invoke-ExternalCommandWithTimeout -FilePath '{mock}' "
@@ -268,7 +274,7 @@ Write-Output "mock:$Value"
         command = (
             f"$value=[Text.Encoding]::UTF8.GetString("
             f"[Convert]::FromBase64String('{encoded_value}'));"
-            f". '{SCRIPTS / 'vps_script_helpers.ps1'}';"
+            f". '{SCRIPTS / 'lib' / 'vps_script_helpers.ps1'}';"
             "$normalized=ConvertTo-LfLineEndings $value;"
             "[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($normalized))"
         )
@@ -290,7 +296,7 @@ Write-Output "mock:$Value"
             }
             config_path.write_text(json.dumps(config), encoding="utf-8")
             command = (
-                f". '{SCRIPTS / 'vps_script_helpers.ps1'}';"
+                f". '{SCRIPTS / 'lib' / 'vps_script_helpers.ps1'}';"
                 f"Read-VpsConnectionConfig -Path '{config_path}' | "
                 "ConvertTo-Json -Compress"
             )
@@ -323,7 +329,7 @@ Write-Output "mock:$Value"
         command = (
             f"$value=[Text.Encoding]::UTF8.GetString("
             f"[Convert]::FromBase64String('{encoded_value}'));"
-            f". '{SCRIPTS / 'vps_script_helpers.ps1'}';"
+            f". '{SCRIPTS / 'lib' / 'vps_script_helpers.ps1'}';"
             "ConvertTo-PosixShellLiteral $value"
         )
 
@@ -347,7 +353,8 @@ Write-Output "mock:$Value"
 
     def test_shell_literal_rejects_newlines(self) -> None:
         command = (
-            f". '{SCRIPTS / 'vps_script_helpers.ps1'}';ConvertTo-PosixShellLiteral \"line1`nline2\""
+            f". '{SCRIPTS / 'lib' / 'vps_script_helpers.ps1'}';"
+            'ConvertTo-PosixShellLiteral "line1`nline2"'
         )
 
         result = run([PWSH, "-NoProfile", "-Command", command], cwd=ROOT)

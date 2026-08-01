@@ -6,7 +6,7 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TEMPLATE="$REPO_DIR/scripts/vps-sync.logrotate"
+TEMPLATE="$REPO_DIR/scripts/templates/vps-sync.logrotate"
 LOG_PATH="$REPO_DIR/output/vps_sync.log"
 DESTINATION="/etc/logrotate.d/vps-sync"
 PRINT_ONLY=false

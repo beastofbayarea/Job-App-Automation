@@ -4,10 +4,10 @@ param(
     [string]$AtsPlatform,
     [string]$RemoteRepoPath = "/root/Job-App-Automation",
     [string]$ConfigPath = "config/vps_config.json",
-    [string]$ServiceTemplatePath = "scripts/job-app-continuous-ats.service.template"
+    [string]$ServiceTemplatePath = "scripts/templates/job-app-continuous-ats.service.template"
 )
 
-. "$PSScriptRoot\vps_script_helpers.ps1"
+. "$PSScriptRoot\lib\vps_script_helpers.ps1"
 
 $AtsPlatform = $AtsPlatform.Trim().ToLowerInvariant()
 if ($AtsPlatform -notmatch "^[a-z][a-z0-9]*$") {

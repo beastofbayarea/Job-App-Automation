@@ -6,7 +6,7 @@ param(
     [int]$TimeoutSeconds = 60
 )
 
-. "$PSScriptRoot\vps_script_helpers.ps1"
+. "$PSScriptRoot\lib\vps_script_helpers.ps1"
 
 if (-not (Test-Path -LiteralPath $ConfigPath)) {
     Write-Error "VPS config not found at $ConfigPath"

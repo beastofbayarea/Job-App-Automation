@@ -8,7 +8,7 @@ param(
     [int]$TimeoutSeconds = 30
 )
 
-. "$PSScriptRoot\vps_script_helpers.ps1"
+. "$PSScriptRoot\lib\vps_script_helpers.ps1"
 
 if (-not $RemoteRepoPath.StartsWith("/")) {
     Write-Error "RemoteRepoPath must be an absolute POSIX path."

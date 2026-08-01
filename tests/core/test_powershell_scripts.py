@@ -23,7 +23,7 @@ def test_installer_script_safety_guards() -> None:
 
 
 def test_service_templates_exist() -> None:
-    templates = list(SCRIPTS_DIR.glob("*.service.template"))
+    templates = list((SCRIPTS_DIR / "templates").glob("*.service.template"))
     assert len(templates) >= 3
     for tmpl in templates:
         content = tmpl.read_text(encoding="utf-8")

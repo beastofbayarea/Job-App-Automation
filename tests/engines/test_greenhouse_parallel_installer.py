@@ -20,9 +20,9 @@ def test_parallel_greenhouse_installer_has_transactional_service_order() -> None
 
 
 def test_greenhouse_source_template_has_independent_supervision_and_limits() -> None:
-    template = (ROOT / "scripts" / "job-app-greenhouse-source.service.template").read_text(
-        encoding="utf-8"
-    )
+    template = (
+        ROOT / "scripts" / "templates" / "job-app-greenhouse-source.service.template"
+    ).read_text(encoding="utf-8")
 
     assert "Restart=always" in template
     assert "continuous_source_ats" in template

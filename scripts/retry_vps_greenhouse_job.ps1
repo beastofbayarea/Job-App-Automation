@@ -6,7 +6,7 @@ param(
     [string]$ConfigPath = "config/vps_config.json"
 )
 
-. "$PSScriptRoot\vps_script_helpers.ps1"
+. "$PSScriptRoot\lib\vps_script_helpers.ps1"
 
 if (-not $InspectLatest -and -not $JobId) {
     Write-Error "JobId is required unless -InspectLatest is used."

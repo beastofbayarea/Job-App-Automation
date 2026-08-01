@@ -4,12 +4,12 @@ param(
     [string]$WorkbookPath = "data/greenhouse_roles.xlsx",
     [string]$RemoteRepoPath = "/root/Job-App-Automation",
     [string]$ConfigPath = "config/vps_config.json",
-    [string]$ServiceTemplatePath = "scripts/job-app-greenhouse-source.service.template",
+    [string]$ServiceTemplatePath = "scripts/templates/job-app-greenhouse-source.service.template",
     [ValidateRange(30, 1800)]
     [int]$TimeoutSeconds = 900
 )
 
-. "$PSScriptRoot\vps_script_helpers.ps1"
+. "$PSScriptRoot\lib\vps_script_helpers.ps1"
 
 foreach ($RequiredPath in @($WorkbookPath, $ConfigPath, $ServiceTemplatePath)) {
     if (-not (Test-Path -LiteralPath $RequiredPath)) {

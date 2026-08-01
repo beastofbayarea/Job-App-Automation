@@ -2,7 +2,7 @@
 param(
     [string]$RemoteRepoPath = "/root/Job-App-Automation",
     [string]$ConfigPath = "config/vps_config.json",
-    [string]$ServiceTemplatePath = "scripts/job-app-continuous-ats.service.template"
+    [string]$ServiceTemplatePath = "scripts/templates/job-app-continuous-ats.service.template"
 )
 
 & "$PSScriptRoot\install_vps_continuous_ats.ps1" `

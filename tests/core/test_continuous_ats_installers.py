@@ -14,7 +14,9 @@ def test_all_provider_wrappers_use_guarded_generic_supervision() -> None:
     )
     lever_wrapper = (SCRIPTS / "install_vps_continuous_lever.ps1").read_text(encoding="utf-8")
     installer = (SCRIPTS / "install_vps_continuous_ats.ps1").read_text(encoding="utf-8")
-    unit = (SCRIPTS / "job-app-continuous-ats.service.template").read_text(encoding="utf-8")
+    unit = (SCRIPTS / "templates" / "job-app-continuous-ats.service.template").read_text(
+        encoding="utf-8"
+    )
 
     assert "-AtsPlatform ashby" in ashby_wrapper
     assert "-AtsPlatform greenhouse" in greenhouse_wrapper
@@ -37,10 +39,10 @@ def test_all_provider_wrappers_use_guarded_generic_supervision() -> None:
 
 def test_all_unattended_worker_units_load_optional_observability_environment() -> None:
     for filename in (
-        "job-app-continuous-ats.service.template",
-        "job-app-greenhouse-source.service.template",
-        "job-app-greenhouse.service.template",
-        "job-app-search-sync.service.template",
+        "templates/job-app-continuous-ats.service.template",
+        "templates/job-app-greenhouse-source.service.template",
+        "templates/job-app-greenhouse.service.template",
+        "templates/job-app-search-sync.service.template",
     ):
         unit = (SCRIPTS / filename).read_text(encoding="utf-8")
         assert "EnvironmentFile=-/etc/job-application-automation/observability.env" in unit

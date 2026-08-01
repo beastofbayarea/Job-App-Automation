@@ -4,10 +4,10 @@
 param(
     [string]$RemoteRepoPath = "/root/Job-App-Automation",
     [string]$ConfigPath = "config/vps_config.json",
-    [string]$ServiceTemplatePath = "scripts/job-app-dashboard.service.template"
+    [string]$ServiceTemplatePath = "scripts/templates/job-app-dashboard.service.template"
 )
 
-. "$PSScriptRoot\vps_script_helpers.ps1"
+. "$PSScriptRoot\lib\vps_script_helpers.ps1"
 
 foreach ($RequiredPath in @($ConfigPath, $ServiceTemplatePath)) {
     if (-not (Test-Path -LiteralPath $RequiredPath)) {
