@@ -25,10 +25,11 @@ from .continuous_ats import (
     RESUMABLE_STATUSES,
     SHARED_INPUT,
     _eligible_jobs,
-    _cycle_event_level,
     _validate_platform,
     process_one,
 )
+from .continuous_worker_models import SOURCE_ONCE_EXIT_POLICY, CycleStatus
+from .continuous_worker_runtime import WorkerRuntime, run_worker
 from .continuous_worker_state import (
     load_worker_state,
     read_worker_state_records,
@@ -36,7 +37,7 @@ from .continuous_worker_state import (
     save_worker_state,
 )
 from .identity import canonical_job_url
-from .observability import initialize_observability
+from .observability import OperationalTelemetry, initialize_observability
 from .orchestrator import load_jobs_from_tracker
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from ..resume.ai_client import scrape_job
@@ -362,6 +363,48 @@ def _sync_claim_from_state(
         )
 
 
+def _process_selected_job(
+    *,
+    job: Mapping[str, Any],
+    selected_input: Path,
+    ats_platform: str,
+    profile: Path,
+    email_pool: Path,
+    launcher: Path,
+    state_path: Path,
+    results_dir: Path,
+    documents_dir: Path,
+    submission_log: Path,
+    document_timeout_seconds: int,
+    engine_timeout_seconds: int,
+    application_timeout_seconds: int,
+    backlog_path: Path,
+    telemetry: OperationalTelemetry,
+) -> CycleStatus:
+    selected_input.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_text(
+        selected_input,
+        json.dumps([job], indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    return process_one(
+        ats_platform=ats_platform,
+        input_path=selected_input,
+        profile=profile,
+        email_pool=email_pool,
+        launcher=launcher,
+        state_path=state_path,
+        results_dir=results_dir,
+        documents_dir=documents_dir,
+        submission_log=submission_log,
+        document_timeout_seconds=document_timeout_seconds,
+        engine_timeout_seconds=engine_timeout_seconds,
+        application_timeout_seconds=application_timeout_seconds,
+        backlog_path=backlog_path,
+        telemetry=telemetry,
+    )
+
+
 def _sleep_until_next_cycle(
     delay: int,
     *,
@@ -470,161 +513,150 @@ def main(argv: Sequence[str] | None = None) -> int:
             flush=True,
         )
 
-    while True:
-        try:
-            jobs = _source_jobs(
-                source=args.source,
-                ats_platform=ats_platform,
-                input_path=args.input,
-                tracker_path=args.tracker,
+    def run_cycle() -> CycleStatus:
+        jobs = _source_jobs(
+            source=args.source,
+            ats_platform=ats_platform,
+            input_path=args.input,
+            tracker_path=args.tracker,
+        )
+        selected = _claim_next_job(
+            jobs,
+            ats_platform=ats_platform,
+            worker_id=worker_id,
+            state_path=args.state,
+            peer_states=args.peer_state,
+            claims_path=args.claims,
+            submission_log=args.submission_log,
+        )
+        if selected is None:
+            print(
+                f"{ats_platform.upper()}_SOURCE_IDLE "
+                f"worker={worker_id} source={args.source} candidates={len(jobs)}",
+                flush=True,
             )
-            selected = _claim_next_job(
-                jobs,
-                ats_platform=ats_platform,
-                worker_id=worker_id,
-                state_path=args.state,
-                peer_states=args.peer_state,
-                claims_path=args.claims,
-                submission_log=args.submission_log,
-            )
-            if selected is None:
-                cycle_status = "no_work"
-                print(
-                    f"{ats_platform.upper()}_SOURCE_IDLE "
-                    f"worker={worker_id} source={args.source} candidates={len(jobs)}",
-                    flush=True,
-                )
-            else:
-                job = selected
-                if args.source == "tracker":
-                    try:
-                        job = _hydrate_tracker_job(selected, ats_platform)
-                    except Exception as exc:
-                        _record_source_failure(
-                            job=selected,
-                            ats_platform=ats_platform,
-                            state_path=args.state,
-                            result_status="JOB_CONTEXT_UNAVAILABLE",
-                            detail=f"{type(exc).__name__}: {exc}",
-                        )
-                        cycle_status = "failed"
-                        print(
-                            f"{ats_platform.upper()}_SOURCE_FAILED "
-                            f"worker={worker_id} stage=context "
-                            f"detail={str(exc)[:300]!r}",
-                            file=sys.stderr,
-                            flush=True,
-                        )
-                        telemetry.emit(
-                            "source_context_failed",
-                            provider=ats_platform,
-                            stage="source_context",
-                            cycle_status="failed",
-                            error_type=type(exc),
-                        )
-                    else:
-                        args.selected_input.parent.mkdir(parents=True, exist_ok=True)
-                        atomic_write_text(
-                            args.selected_input,
-                            json.dumps([job], indent=2, ensure_ascii=False) + "\n",
-                            encoding="utf-8",
-                        )
-                        cycle_status = process_one(
-                            ats_platform=ats_platform,
-                            input_path=args.selected_input,
-                            profile=args.profile,
-                            email_pool=args.email_pool,
-                            launcher=args.launcher,
-                            state_path=args.state,
-                            results_dir=args.results_dir,
-                            documents_dir=args.documents_dir,
-                            submission_log=args.submission_log,
-                            document_timeout_seconds=args.document_timeout_seconds,
-                            engine_timeout_seconds=args.engine_timeout_seconds,
-                            application_timeout_seconds=args.application_timeout_seconds,
-                            backlog_path=args.backlog,
-                            telemetry=telemetry,
-                        )
-                else:
-                    args.selected_input.parent.mkdir(parents=True, exist_ok=True)
-                    atomic_write_text(
-                        args.selected_input,
-                        json.dumps([job], indent=2, ensure_ascii=False) + "\n",
-                        encoding="utf-8",
-                    )
-                    cycle_status = process_one(
-                        ats_platform=ats_platform,
-                        input_path=args.selected_input,
-                        profile=args.profile,
-                        email_pool=args.email_pool,
-                        launcher=args.launcher,
-                        state_path=args.state,
-                        results_dir=args.results_dir,
-                        documents_dir=args.documents_dir,
-                        submission_log=args.submission_log,
-                        document_timeout_seconds=args.document_timeout_seconds,
-                        engine_timeout_seconds=args.engine_timeout_seconds,
-                        application_timeout_seconds=args.application_timeout_seconds,
-                        backlog_path=args.backlog,
-                        telemetry=telemetry,
-                    )
-                _sync_claim_from_state(
+            return "no_work"
+
+        job = selected
+        cycle_status: CycleStatus
+        if args.source == "tracker":
+            try:
+                job = _hydrate_tracker_job(selected, ats_platform)
+            except Exception as exc:
+                _record_source_failure(
                     job=selected,
                     ats_platform=ats_platform,
-                    worker_id=worker_id,
                     state_path=args.state,
-                    claims_path=args.claims,
-                    fallback_status=cycle_status,
+                    result_status="JOB_CONTEXT_UNAVAILABLE",
+                    detail=f"{type(exc).__name__}: {exc}",
                 )
-        except KeyboardInterrupt:
-            print(
-                f"{ats_platform.upper()}_SOURCE_WORKER_STOPPED "
-                f"worker={worker_id} signal=keyboard_interrupt",
-                flush=True,
-            )
-            telemetry.flush()
-            return 130
-        except Exception as exc:
-            cycle_status = "exception"
-            print(
-                f"{ats_platform.upper()}_SOURCE_EXCEPTION "
-                f"worker={worker_id} type={type(exc).__name__} detail={str(exc)[:500]!r}",
-                file=sys.stderr,
-                flush=True,
-            )
-            telemetry.emit(
-                "worker_cycle_exception",
-                provider=ats_platform,
-                stage="source_cycle",
-                cycle_status="exception",
-                error_type=type(exc),
-            )
-        telemetry.emit(
-            "worker_cycle_complete",
-            level=_cycle_event_level(cycle_status),
-            provider=ats_platform,
-            stage="source_cycle",
-            cycle_status=cycle_status,
-        )
-        if args.once:
-            telemetry.flush()
-            return 0 if cycle_status in {"confirmed", "no_work"} else 1
-        if cycle_status == "no_work":
-            delay = random.randint(args.sleep_min_seconds, args.sleep_max_seconds)
+                cycle_status = "failed"
+                print(
+                    f"{ats_platform.upper()}_SOURCE_FAILED "
+                    f"worker={worker_id} stage=context "
+                    f"detail={str(exc)[:300]!r}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                telemetry.emit(
+                    "source_context_failed",
+                    provider=ats_platform,
+                    stage="source_context",
+                    cycle_status="failed",
+                    error_type=type(exc),
+                )
+            else:
+                cycle_status = _process_selected_job(
+                    job=job,
+                    selected_input=args.selected_input,
+                    ats_platform=ats_platform,
+                    profile=args.profile,
+                    email_pool=args.email_pool,
+                    launcher=args.launcher,
+                    state_path=args.state,
+                    results_dir=args.results_dir,
+                    documents_dir=args.documents_dir,
+                    submission_log=args.submission_log,
+                    document_timeout_seconds=args.document_timeout_seconds,
+                    engine_timeout_seconds=args.engine_timeout_seconds,
+                    application_timeout_seconds=args.application_timeout_seconds,
+                    backlog_path=args.backlog,
+                    telemetry=telemetry,
+                )
         else:
-            delay = min(args.sleep_min_seconds, args.sleep_max_seconds)
+            cycle_status = _process_selected_job(
+                job=job,
+                selected_input=args.selected_input,
+                ats_platform=ats_platform,
+                profile=args.profile,
+                email_pool=args.email_pool,
+                launcher=args.launcher,
+                state_path=args.state,
+                results_dir=args.results_dir,
+                documents_dir=args.documents_dir,
+                submission_log=args.submission_log,
+                document_timeout_seconds=args.document_timeout_seconds,
+                engine_timeout_seconds=args.engine_timeout_seconds,
+                application_timeout_seconds=args.application_timeout_seconds,
+                backlog_path=args.backlog,
+                telemetry=telemetry,
+            )
+        _sync_claim_from_state(
+            job=selected,
+            ats_platform=ats_platform,
+            worker_id=worker_id,
+            state_path=args.state,
+            claims_path=args.claims,
+            fallback_status=cycle_status,
+        )
+        return cycle_status
+
+    def delay_for(cycle_status: CycleStatus) -> int:
+        if cycle_status == "no_work":
+            return random.randint(args.sleep_min_seconds, args.sleep_max_seconds)
+        return min(args.sleep_min_seconds, args.sleep_max_seconds)
+
+    def announce_sleep(delay: int, cycle_status: CycleStatus) -> None:
         print(
             f"{ats_platform.upper()}_SOURCE_SLEEP "
             f"worker={worker_id} seconds={delay} prior_status={cycle_status}",
             flush=True,
         )
-        if not _sleep_until_next_cycle(
-            delay,
-            ats_platform=ats_platform,
-            worker_id=worker_id,
-        ):
-            telemetry.flush()
-            return 130
+
+    def report_interrupt() -> None:
+        print(
+            f"{ats_platform.upper()}_SOURCE_WORKER_STOPPED "
+            f"worker={worker_id} signal=keyboard_interrupt",
+            flush=True,
+        )
+
+    def report_exception(exc: Exception) -> None:
+        print(
+            f"{ats_platform.upper()}_SOURCE_EXCEPTION "
+            f"worker={worker_id} type={type(exc).__name__} detail={str(exc)[:500]!r}",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    return run_worker(
+        WorkerRuntime(
+            provider=ats_platform,
+            cycle_stage="source_cycle",
+            once=args.once,
+            once_exit_policy=SOURCE_ONCE_EXIT_POLICY,
+            telemetry=telemetry,
+            run_cycle=run_cycle,
+            delay_for=delay_for,
+            announce_sleep=announce_sleep,
+            sleep=lambda delay: _sleep_until_next_cycle(
+                delay,
+                ats_platform=ats_platform,
+                worker_id=worker_id,
+            ),
+            report_interrupt=report_interrupt,
+            report_exception=report_exception,
+        )
+    )
 
 
 if __name__ == "__main__":

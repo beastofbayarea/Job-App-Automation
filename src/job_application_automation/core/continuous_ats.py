@@ -22,7 +22,12 @@ from collections.abc import Callable, Mapping, Sequence
 from .application_candidates import application_url, eligible_application_jobs
 from .artifacts import atomic_write_text, read_json
 from .contracts import EngineResult
-from .continuous_worker_models import CommandOutcome
+from .continuous_worker_models import (
+    DIRECT_ONCE_EXIT_POLICY,
+    CommandOutcome,
+    CycleStatus,
+)
+from .continuous_worker_runtime import WorkerRuntime, cycle_event_level, run_worker
 from .continuous_worker_state import (
     load_worker_state,
     reconcile_interrupted_submissions,
@@ -201,17 +206,7 @@ def _sleep_between_cycles(delay: int, ats_platform: str) -> bool:
     return True
 
 
-def _cycle_event_level(status: str) -> str:
-    if status in {"confirmed", "no_work", "refreshed"}:
-        return "info"
-    if status in {
-        "application_rate_limit",
-        "captcha_cooldown",
-        "manual_review",
-        "possible_spam_cooldown",
-    }:
-        return "warning"
-    return "error"
+_cycle_event_level = cycle_event_level
 
 
 def _job_digest(canonical_url: str) -> str:
@@ -378,7 +373,7 @@ def process_one(
     application_timeout_seconds: int,
     backlog_path: Path | None = None,
     telemetry: OperationalTelemetry | None = None,
-) -> str:
+) -> CycleStatus:
     telemetry = telemetry or NOOP_TELEMETRY
     state = _load_state(state_path, ats_platform)
     jobs = _eligible_jobs(_load_json(input_path), ats_platform)
@@ -963,169 +958,170 @@ def main(
             flush=True,
         )
 
-    while True:
-        try:
-            current_state = _load_state(args.state, ats_platform)
-            spam_cooldown_remaining, spam_count = _spam_rejection_cooldown_remaining(
-                current_state,
-                cooldown_seconds=args.spam_rejection_cooldown_seconds,
-                threshold=args.spam_rejection_threshold,
+    def run_cycle() -> CycleStatus:
+        current_state = _load_state(args.state, ats_platform)
+        spam_cooldown_remaining, spam_count = _spam_rejection_cooldown_remaining(
+            current_state,
+            cooldown_seconds=args.spam_rejection_cooldown_seconds,
+            threshold=args.spam_rejection_threshold,
+        )
+        captcha_cooldown_remaining, captcha_count = _captcha_cooldown_remaining(
+            current_state,
+            cooldown_seconds=args.captcha_cooldown_seconds,
+            threshold=args.captcha_threshold,
+        )
+        rate_limit_remaining, application_count = _application_rate_limit_remaining(
+            current_state,
+            window_seconds=args.application_window_seconds,
+            limit=args.application_limit,
+        )
+        if spam_cooldown_remaining:
+            print(
+                f"{ats_platform.upper()}_POSSIBLE_SPAM_CIRCUIT_OPEN "
+                f"observed={spam_count} "
+                f"cooldown_remaining={spam_cooldown_remaining}",
+                flush=True,
             )
-            captcha_cooldown_remaining, captcha_count = _captcha_cooldown_remaining(
-                current_state,
-                cooldown_seconds=args.captcha_cooldown_seconds,
-                threshold=args.captcha_threshold,
+            cycle_status: CycleStatus = "possible_spam_cooldown"
+        elif captcha_cooldown_remaining:
+            print(
+                f"{ats_platform.upper()}_CAPTCHA_CIRCUIT_OPEN "
+                f"observed={captcha_count} "
+                f"cooldown_remaining={captcha_cooldown_remaining}",
+                flush=True,
             )
-            rate_limit_remaining, application_count = _application_rate_limit_remaining(
-                current_state,
-                window_seconds=args.application_window_seconds,
-                limit=args.application_limit,
+            cycle_status = "captcha_cooldown"
+        elif rate_limit_remaining:
+            print(
+                f"{ats_platform.upper()}_APPLICATION_RATE_LIMIT_OPEN "
+                f"observed={application_count} "
+                f"limit={args.application_limit} "
+                f"window_seconds={args.application_window_seconds} "
+                f"cooldown_remaining={rate_limit_remaining}",
+                flush=True,
             )
-            if spam_cooldown_remaining:
+            cycle_status = "application_rate_limit"
+        elif not args.input.is_file():
+            outcome = _refresh_jobs(
+                ats_platform=ats_platform,
+                launcher=args.launcher,
+                input_path=args.input,
+                backlog_path=args.backlog,
+                submission_log=args.submission_log,
+                timeout_seconds=args.refresh_timeout_seconds,
+            )
+            if outcome.return_code != 0:
                 print(
-                    f"{ats_platform.upper()}_POSSIBLE_SPAM_CIRCUIT_OPEN "
-                    f"observed={spam_count} "
-                    f"cooldown_remaining={spam_cooldown_remaining}",
+                    f"{ats_platform.upper()}_REFRESH_FAILED "
+                    f"exit_code={outcome.return_code} timed_out={outcome.timed_out}",
                     flush=True,
                 )
-                cycle_status = "possible_spam_cooldown"
-            elif captcha_cooldown_remaining:
-                print(
-                    f"{ats_platform.upper()}_CAPTCHA_CIRCUIT_OPEN "
-                    f"observed={captcha_count} "
-                    f"cooldown_remaining={captcha_cooldown_remaining}",
-                    flush=True,
+                cycle_status = "refresh_failed"
+            else:
+                cycle_status = "refreshed"
+        else:
+            cycle_status = process_one(
+                ats_platform=ats_platform,
+                input_path=args.input,
+                profile=args.profile,
+                email_pool=args.email_pool,
+                launcher=args.launcher,
+                state_path=args.state,
+                results_dir=args.results_dir,
+                documents_dir=args.documents_dir,
+                submission_log=args.submission_log,
+                document_timeout_seconds=args.document_timeout_seconds,
+                engine_timeout_seconds=args.engine_timeout_seconds,
+                application_timeout_seconds=args.application_timeout_seconds,
+                backlog_path=args.backlog,
+                telemetry=telemetry,
+            )
+            if cycle_status == "no_work" and not args.once:
+                shared_count = _seed_platform_input(
+                    args.input,
+                    ats_platform,
+                    overwrite=True,
                 )
-                cycle_status = "captcha_cooldown"
-            elif rate_limit_remaining:
-                print(
-                    f"{ats_platform.upper()}_APPLICATION_RATE_LIMIT_OPEN "
-                    f"observed={application_count} "
-                    f"limit={args.application_limit} "
-                    f"window_seconds={args.application_window_seconds} "
-                    f"cooldown_remaining={rate_limit_remaining}",
-                    flush=True,
-                )
-                cycle_status = "application_rate_limit"
-            elif not args.input.is_file():
-                outcome = _refresh_jobs(
-                    ats_platform=ats_platform,
-                    launcher=args.launcher,
-                    input_path=args.input,
-                    backlog_path=args.backlog,
-                    submission_log=args.submission_log,
-                    timeout_seconds=args.refresh_timeout_seconds,
-                )
-                if outcome.return_code != 0:
+                if shared_count:
                     print(
-                        f"{ats_platform.upper()}_REFRESH_FAILED "
+                        f"{ats_platform.upper()}_INPUT_REFRESHED_FROM_SHARED "
+                        f"count={shared_count}",
+                        flush=True,
+                    )
+                    cycle_status = process_one(
+                        ats_platform=ats_platform,
+                        input_path=args.input,
+                        profile=args.profile,
+                        email_pool=args.email_pool,
+                        launcher=args.launcher,
+                        state_path=args.state,
+                        results_dir=args.results_dir,
+                        documents_dir=args.documents_dir,
+                        submission_log=args.submission_log,
+                        document_timeout_seconds=args.document_timeout_seconds,
+                        engine_timeout_seconds=args.engine_timeout_seconds,
+                        application_timeout_seconds=args.application_timeout_seconds,
+                        backlog_path=args.backlog,
+                        telemetry=telemetry,
+                    )
+                if cycle_status == "no_work":
+                    outcome = _refresh_jobs(
+                        ats_platform=ats_platform,
+                        launcher=args.launcher,
+                        input_path=args.input,
+                        backlog_path=args.backlog,
+                        submission_log=args.submission_log,
+                        timeout_seconds=args.refresh_timeout_seconds,
+                    )
+                    print(
+                        f"{ats_platform.upper()}_REFRESH_FINISHED "
                         f"exit_code={outcome.return_code} timed_out={outcome.timed_out}",
                         flush=True,
                     )
-                    cycle_status = "refresh_failed"
-                else:
-                    cycle_status = "refreshed"
-            else:
-                cycle_status = process_one(
-                    ats_platform=ats_platform,
-                    input_path=args.input,
-                    profile=args.profile,
-                    email_pool=args.email_pool,
-                    launcher=args.launcher,
-                    state_path=args.state,
-                    results_dir=args.results_dir,
-                    documents_dir=args.documents_dir,
-                    submission_log=args.submission_log,
-                    document_timeout_seconds=args.document_timeout_seconds,
-                    engine_timeout_seconds=args.engine_timeout_seconds,
-                    application_timeout_seconds=args.application_timeout_seconds,
-                    backlog_path=args.backlog,
-                    telemetry=telemetry,
-                )
-                if cycle_status == "no_work" and not args.once:
-                    shared_count = _seed_platform_input(
-                        args.input,
-                        ats_platform,
-                        overwrite=True,
+                    cycle_status = (
+                        "refreshed" if outcome.return_code == 0 else "refresh_failed"
                     )
-                    if shared_count:
-                        print(
-                            f"{ats_platform.upper()}_INPUT_REFRESHED_FROM_SHARED "
-                            f"count={shared_count}",
-                            flush=True,
-                        )
-                        cycle_status = process_one(
-                            ats_platform=ats_platform,
-                            input_path=args.input,
-                            profile=args.profile,
-                            email_pool=args.email_pool,
-                            launcher=args.launcher,
-                            state_path=args.state,
-                            results_dir=args.results_dir,
-                            documents_dir=args.documents_dir,
-                            submission_log=args.submission_log,
-                            document_timeout_seconds=args.document_timeout_seconds,
-                            engine_timeout_seconds=args.engine_timeout_seconds,
-                            application_timeout_seconds=args.application_timeout_seconds,
-                            backlog_path=args.backlog,
-                            telemetry=telemetry,
-                        )
-                    if cycle_status == "no_work":
-                        outcome = _refresh_jobs(
-                            ats_platform=ats_platform,
-                            launcher=args.launcher,
-                            input_path=args.input,
-                            backlog_path=args.backlog,
-                            submission_log=args.submission_log,
-                            timeout_seconds=args.refresh_timeout_seconds,
-                        )
-                        print(
-                            f"{ats_platform.upper()}_REFRESH_FINISHED "
-                            f"exit_code={outcome.return_code} timed_out={outcome.timed_out}",
-                            flush=True,
-                        )
-                        cycle_status = "refreshed" if outcome.return_code == 0 else "refresh_failed"
-        except KeyboardInterrupt:
-            print(
-                f"{ats_platform.upper()}_WORKER_STOPPED signal=keyboard_interrupt",
-                flush=True,
-            )
-            telemetry.flush()
-            return 130
-        except Exception as exc:
-            print(
-                f"{ats_platform.upper()}_CYCLE_EXCEPTION "
-                f"type={type(exc).__name__} detail={str(exc)[:500]!r}",
-                file=sys.stderr,
-                flush=True,
-            )
-            telemetry.emit(
-                "worker_cycle_exception",
-                provider=ats_platform,
-                stage="worker_cycle",
-                cycle_status="exception",
-                error_type=type(exc),
-            )
-            cycle_status = "exception"
+        return cycle_status
 
-        telemetry.emit(
-            "worker_cycle_complete",
-            level=_cycle_event_level(cycle_status),
-            provider=ats_platform,
-            stage="worker_cycle",
-            cycle_status=cycle_status,
-        )
-        if args.once:
-            telemetry.flush()
-            return 0 if cycle_status in {"confirmed", "refreshed"} else 1
-        delay = random.randint(args.sleep_min_seconds, args.sleep_max_seconds)
+    def report_interrupt() -> None:
         print(
-            f"{ats_platform.upper()}_CYCLE_SLEEP seconds={delay} prior_status={cycle_status}",
+            f"{ats_platform.upper()}_WORKER_STOPPED signal=keyboard_interrupt",
             flush=True,
         )
-        if not _sleep_between_cycles(delay, ats_platform):
-            telemetry.flush()
-            return 130
+
+    def report_exception(exc: Exception) -> None:
+        print(
+            f"{ats_platform.upper()}_CYCLE_EXCEPTION "
+            f"type={type(exc).__name__} detail={str(exc)[:500]!r}",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    def announce_sleep(delay: int, cycle_status: CycleStatus) -> None:
+        print(
+            f"{ats_platform.upper()}_CYCLE_SLEEP seconds={delay} "
+            f"prior_status={cycle_status}",
+            flush=True,
+        )
+
+    return run_worker(
+        WorkerRuntime(
+            provider=ats_platform,
+            cycle_stage="worker_cycle",
+            once=args.once,
+            once_exit_policy=DIRECT_ONCE_EXIT_POLICY,
+            telemetry=telemetry,
+            run_cycle=run_cycle,
+            delay_for=lambda _status: random.randint(
+                args.sleep_min_seconds,
+                args.sleep_max_seconds,
+            ),
+            announce_sleep=announce_sleep,
+            sleep=lambda delay: _sleep_between_cycles(delay, ats_platform),
+            report_interrupt=report_interrupt,
+            report_exception=report_exception,
+        )
+    )
 
 
 if __name__ == "__main__":
