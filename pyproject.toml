@@ -51,7 +51,7 @@ where = ["src"]
 py-modules = ["job_automation"]
 
 [tool.setuptools.package-data]
-job_application_automation = ["resources/*.json"]
+job_application_automation = ["resources/*.json", "resources/runtime/*.json"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"

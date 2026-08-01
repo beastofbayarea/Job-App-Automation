@@ -1,0 +1,12 @@
+{
+  "resume": {
+    "cache_file": "output/llm_cache_v2.json",
+    "llm_min_interval_seconds": 5,
+    "max_retries": 5,
+    "minimum_score": 90,
+    "minimum_total_bullets": 14,
+    "original_character_count": 5953,
+    "original_page_height": 792,
+    "persistent_cache_enabled": false
+  }
+}

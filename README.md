@@ -52,9 +52,10 @@ python -m job_application_automation --help
 ```
 
 Installed commands look for local candidate files and an optional
-`config/runtime_config.json` in the directory where they are run. When that
-file is absent, they use the package's safe default operational settings; copy
-the tracked runtime config to customize paths or timeouts.
+`config/runtime/` directory in the project where they are run. When that
+directory is absent, they use the package's equivalent split defaults; copy
+the tracked runtime directory to customize paths or timeouts. Explicit callers
+may still pass a legacy monolithic runtime JSON file to the Python loader.
 
 For contributor checks, install the development dependencies as well:
 
@@ -93,7 +94,7 @@ Tracked examples are safe templates. Copy and personalize them; the resulting fi
 | Candidate profile and answer policy | `config/candidate_profile_config.json` | `config/candidate_profile_config.example.json` |
 | Candidate email addresses | `config/candidate_email_pool.json` | `config/candidate_email_pool.example.json` |
 | Resume source material | `data/base_resume.txt` | Create from the candidate's resume; this is required for tailored resumes. |
-| Runtime defaults | `config/runtime_config.json` | Already tracked; adjust paths, timeouts, model, and quality thresholds when needed. |
+| Runtime defaults | `config/runtime/*.json` | Already tracked by domain; adjust the relevant section file when needed. |
 | Vertex service account | `config/vertex_service_account.json` | `config/vertex_service_account.example.json` |
 | Gmail desktop OAuth client and token | `config/credentials.json`, `config/token.json` | Download OAuth desktop-client credentials from Google Cloud; the token is created during authorization. |
 | Private VPS archive | `config/vps_config.json` | Copy `config/vps_config.example.json`, then add a trusted host-key fingerprint and dedicated archive authentication. |
@@ -264,7 +265,7 @@ python src/job_automation.py apply `
   --role "Product Manager" `
   --dry-run
 
-# A tracker-driven run. The default tracker and resume paths come from runtime_config.json.
+# A tracker-driven run. Default tracker and resume paths come from config/runtime/application.json.
 python src/job_automation.py apply --limit 1 --dry-run
 ```
 

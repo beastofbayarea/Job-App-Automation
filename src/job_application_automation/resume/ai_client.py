@@ -188,7 +188,7 @@ def project_id_for(settings: VertexSettings, credentials_path: Path) -> str:
     project_id = payload.get("project_id") if isinstance(payload, dict) else None
     if not isinstance(project_id, str) or not project_id.strip():
         raise RuntimeError(
-            "Vertex service-account JSON must contain project_id when runtime_config.json uses "
+            "Vertex service-account JSON must contain project_id when runtime/vertex.json uses "
             "'from-service-account'."
         )
     return project_id.strip()

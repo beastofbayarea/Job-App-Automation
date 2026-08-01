@@ -1,0 +1,39 @@
+{
+  "ashby": {
+    "default_timeout_ms": 11000,
+    "navigation_timeout_ms": 40000,
+    "network_idle_timeout_ms": 14000,
+    "max_form_steps": 5,
+    "max_submit_attempts": 3,
+    "continuous_sleep_min_seconds": 900,
+    "continuous_sleep_max_seconds": 1800,
+    "continuous_application_limit": 12,
+    "continuous_application_window_seconds": 86400,
+    "spam_rejection_cooldown_seconds": 86400,
+    "spam_rejection_threshold": 1,
+    "submission_result_timeout_seconds": 15,
+    "submission_result_poll_seconds": 0.5,
+    "screenshot_dir": "output/ashby_screenshots",
+    "submission_confirmation_phrases": [
+      "application submitted",
+      "application has been submitted",
+      "thank you for applying",
+      "thank you for your submission",
+      "thank you for submitting your application",
+      "thank you so much for your interest",
+      "thanks for applying",
+      "received your application",
+      "package received",
+      "application received",
+      "application has been received",
+      "successfully submitted",
+      "thanks for your interest in joining our team"
+    ],
+    "submission_spam_phrases": [
+      "flagged as possible spam"
+    ],
+    "submission_failure_phrases": [
+      "couldn't submit"
+    ]
+  }
+}

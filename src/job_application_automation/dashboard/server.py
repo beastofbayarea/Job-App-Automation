@@ -233,11 +233,30 @@ def _is_repository_admin_file(path: Path) -> bool:
     if lowered_parts[0] == "config":
         safe_config_names = {
             "config.js",
-            "runtime_config.json",
             "seo_config.example.json",
             "seo_config.json",
         }
-        return lowered_name.endswith(".example.json") or lowered_name in safe_config_names
+        safe_runtime_names = {
+            "application.json",
+            "ashby.json",
+            "browser.json",
+            "cover_letter.json",
+            "gmail.json",
+            "resume.json",
+            "schema_version.json",
+            "search.json",
+            "vertex.json",
+        }
+        is_runtime_section = (
+            len(lowered_parts) == 3
+            and lowered_parts[1] == "runtime"
+            and lowered_name in safe_runtime_names
+        )
+        return (
+            is_runtime_section
+            or lowered_name.endswith(".example.json")
+            or lowered_name in safe_config_names
+        )
     return True
 
 

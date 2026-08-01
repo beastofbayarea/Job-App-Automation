@@ -7,7 +7,7 @@ Copy the tracked examples before adding personal data. Local candidate data, cre
 | Application answers and browser policy | `config/candidate_profile_config.json` | `config/candidate_profile_config.example.json` |
 | Candidate email addresses | `config/candidate_email_pool.json` | `config/candidate_email_pool.example.json` |
 | Resume source material | `data/base_resume.txt` | Create from candidate-approved material |
-| Runtime settings | `config/runtime_config.json` | Tracked default configuration |
+| Runtime settings | `config/runtime/*.json` | Tracked configuration split by domain |
 | Vertex service account | `config/vertex_service_account.json` | `config/vertex_service_account.example.json` |
 | Gmail OAuth client and token | `config/credentials.json`, `config/token.json` | Google Cloud OAuth desktop-client credentials; token is created during authorization |
 | Private VPS document archive | `config/vps_config.json` | `config/vps_config.example.json` |
@@ -29,7 +29,8 @@ answers are used only when the country list is absent.
 
 ## Runtime configuration
 
-`config/runtime_config.json` is the shared default for operational paths and limits. Its main sections are:
+`config/runtime/` contains the shared operational defaults. Each domain is kept
+in its own JSON file, while `schema_version.json` versions the complete set:
 
 - `application`: tracker, resume source, output artifact locations, email pool,
   application/queue timeouts, bounded VPS document work
@@ -44,14 +45,18 @@ answers are used only when the country list is absent.
 - `ashby`: navigation and form limits plus confirmation and failure phrases.
 - `gmail`: OAuth credential/token locations and verification polling settings.
 
-Paths are resolved from the project root. Keep secrets in the local files named above; never put them in runtime configuration committed to Git.
+Every section file must contain exactly one top-level object matching its file
+name. The loader rejects missing or unexpected JSON files so partial deployments
+cannot silently mix old and new defaults. Paths are resolved from the project
+root. Keep secrets in the local files named above; never put them in runtime
+configuration committed to Git.
 
 ## Optional operational telemetry
 
 Install the `observability` package extra and set `SENTRY_DSN` only in the
 worker's external environment when centralized worker diagnostics are wanted.
 `SENTRY_ENVIRONMENT` and `SENTRY_RELEASE` are optional bounded labels. These
-values do not belong in `config/runtime_config.json`; on the VPS they belong in
+values do not belong in `config/runtime/`; on the VPS they belong in
 the root-readable `/etc/job-application-automation/observability.env` file.
 Without `SENTRY_DSN`, the application does not import or initialize the Sentry
 SDK.

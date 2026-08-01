@@ -6,7 +6,7 @@ Run commands from the repository root after activating the virtual environment. 
 
 ## Browser automation cannot start
 
-Install Chromium with `python -m playwright install chromium`. If using an existing browser through CDP, verify the configured endpoint in `runtime_config.json` is running and reachable. Retry in `--headed` mode to inspect the provider page.
+Install Chromium with `python -m playwright install chromium`. If using an existing browser through CDP, verify the endpoint in `config/runtime/browser.json` is running and reachable. Retry in `--headed` mode to inspect the provider page.
 
 ## Gmail authorization fails
 

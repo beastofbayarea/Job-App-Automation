@@ -1,0 +1,10 @@
+{
+  "gmail": {
+    "credentials_file": "config/credentials.json",
+    "token_file": "config/token.json",
+    "verification_history_file": "output/used_verification_messages.json",
+    "verification_poll_timeout_seconds": 30,
+    "greenhouse_security_code_poll_timeout_seconds": 120,
+    "greenhouse_security_code_wait_ms": 12000
+  }
+}

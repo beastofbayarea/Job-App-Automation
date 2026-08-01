@@ -1,0 +1,8 @@
+{
+  "cover_letter": {
+    "cache_file": "output/cover_letter_cache.json",
+    "max_retries": 3,
+    "minimum_words": 120,
+    "maximum_words": 380
+  }
+}

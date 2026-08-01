@@ -59,6 +59,14 @@ def test_load_vps_config_exposes_only_operational_metadata(tmp_path):
         assert data == {"vps": {"hostname": "example-vps", "memory_gb": 4}}
 
 
+def test_split_runtime_config_files_are_visible_to_repository_inventory():
+    runtime_dir = server.PROJECT_ROOT / "config" / "runtime"
+
+    assert server._is_repository_admin_file(runtime_dir / "application.json")
+    assert server._is_repository_admin_file(runtime_dir / "schema_version.json")
+    assert not server._is_repository_admin_file(runtime_dir / "unexpected.json")
+
+
 def test_dashboard_server_has_no_password_authentication():
     """Verify that password authentication methods and constants are permanently removed from server.py."""
     source = Path(server.__file__).read_text(encoding="utf-8")

@@ -1,4 +1,4 @@
-"""Validated non-secret operational settings loaded from ``config/runtime_config.json``.
+"""Validated non-secret operational settings loaded from ``config/runtime/``.
 
 Candidate identity and application-answer policies remain in the ignored
 candidate profile.  This module owns the separately tracked, deployment-level
@@ -18,10 +18,71 @@ from collections.abc import Mapping
 from .paths import CONFIG_DIR, PROJECT_ROOT
 
 
+RUNTIME_SECTION_NAMES = (
+    "application",
+    "browser",
+    "vertex",
+    "resume",
+    "cover_letter",
+    "search",
+    "ashby",
+    "gmail",
+)
+RUNTIME_CONFIG_DIR = CONFIG_DIR / "runtime"
+DEFAULT_RUNTIME_CONFIG_DIR = Path(
+    str(resources.files("job_application_automation").joinpath("resources/runtime"))
+)
+# Compatibility paths for callers that explicitly provide a legacy monolithic file.
 RUNTIME_CONFIG_FILE = CONFIG_DIR / "runtime_config.json"
 DEFAULT_RUNTIME_CONFIG_FILE = Path(
     str(resources.files("job_application_automation").joinpath("resources/runtime_config.json"))
 )
+
+
+def _read_json_file(path: Path) -> Mapping[str, Any]:
+    try:
+        with path.open("r", encoding="utf-8") as stream:
+            document = json.load(stream)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(
+            f"runtime config contains invalid JSON or cannot be read: {path}"
+        ) from exc
+    if not isinstance(document, Mapping):
+        raise ValueError(f"runtime config file root must be an object: {path}")
+    return document
+
+
+def _load_split_document(directory: Path) -> Mapping[str, Any]:
+    expected_files = {"schema_version.json", *(f"{name}.json" for name in RUNTIME_SECTION_NAMES)}
+    try:
+        actual_files = {path.name for path in directory.glob("*.json") if path.is_file()}
+    except OSError as exc:
+        raise ValueError(f"runtime config directory cannot be read: {directory}") from exc
+    missing = expected_files - actual_files
+    unexpected = actual_files - expected_files
+    if missing:
+        raise ValueError(f"runtime config directory is missing: {', '.join(sorted(missing))}")
+    if unexpected:
+        raise ValueError(
+            f"runtime config directory has unexpected JSON files: {', '.join(sorted(unexpected))}"
+        )
+
+    schema = _read_json_file(directory / "schema_version.json")
+    document: dict[str, Any] = dict(schema)
+    for section_name in RUNTIME_SECTION_NAMES:
+        section_document = _read_json_file(directory / f"{section_name}.json")
+        if set(section_document) != {section_name}:
+            raise ValueError(
+                f"runtime config {section_name}.json must contain only the {section_name} object"
+            )
+        document[section_name] = section_document[section_name]
+    return document
+
+
+def _load_runtime_document(path: Path) -> Mapping[str, Any]:
+    if path.is_dir():
+        return _load_split_document(path)
+    return _read_json_file(path)
 
 
 def _mapping(document: Mapping[str, Any], key: str) -> Mapping[str, Any]:
@@ -102,31 +163,16 @@ class RuntimeConfig:
 def load_runtime_config(path: Path | None = None) -> RuntimeConfig:
     """Load local settings, falling back to the packaged safe defaults.
 
-    Source checkouts normally provide ``config/runtime_config.json``. Installed
-    commands instead look for that file in the current working directory and
-    use the bundled defaults when a local override has not been created yet.
+    Source checkouts normally provide section files under ``config/runtime``.
+    Installed commands use equivalent bundled defaults. An explicitly supplied
+    legacy monolithic JSON file remains supported for compatibility.
     """
-    requested_path = RUNTIME_CONFIG_FILE if path is None else Path(path)
+    requested_path = RUNTIME_CONFIG_DIR if path is None else Path(path)
     config_path = requested_path.expanduser().resolve()
-    if path is None and not config_path.is_file():
-        config_path = DEFAULT_RUNTIME_CONFIG_FILE
-    try:
-        with config_path.open("r", encoding="utf-8") as stream:
-            document = json.load(stream)
-    except (OSError, json.JSONDecodeError) as exc:
-        if (
-            path is None
-            and config_path != DEFAULT_RUNTIME_CONFIG_FILE
-            and DEFAULT_RUNTIME_CONFIG_FILE.is_file()
-        ):
-            with DEFAULT_RUNTIME_CONFIG_FILE.open("r", encoding="utf-8") as stream:
-                document = json.load(stream)
-        else:
-            raise ValueError(
-                f"runtime config contains invalid JSON or cannot be read: {config_path}"
-            ) from exc
-    if not isinstance(document, Mapping):
-        raise ValueError("runtime config root must be an object")
+    if path is None and not config_path.is_dir():
+        legacy_path = RUNTIME_CONFIG_FILE.expanduser().resolve()
+        config_path = legacy_path if legacy_path.is_file() else DEFAULT_RUNTIME_CONFIG_DIR
+    document = _load_runtime_document(config_path)
     if document.get("schema_version") != 1:
         raise ValueError("runtime config schema_version must be 1")
 
@@ -343,4 +389,4 @@ def resolve_runtime_path(value: str | Path) -> Path:
 try:
     RUNTIME_CONFIG = load_runtime_config()
 except Exception:
-    RUNTIME_CONFIG = load_runtime_config(DEFAULT_RUNTIME_CONFIG_FILE)
+    RUNTIME_CONFIG = load_runtime_config(DEFAULT_RUNTIME_CONFIG_DIR)
