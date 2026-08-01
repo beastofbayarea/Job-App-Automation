@@ -14,7 +14,6 @@ import subprocess
 import sys
 import tempfile
 import time
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -23,6 +22,13 @@ from collections.abc import Callable, Mapping, Sequence
 from .application_candidates import application_url, eligible_application_jobs
 from .artifacts import atomic_write_text, read_json
 from .contracts import EngineResult
+from .continuous_worker_models import CommandOutcome
+from .continuous_worker_state import (
+    load_worker_state,
+    reconcile_interrupted_submissions,
+    save_worker_state,
+    utc_now_iso,
+)
 from .identity import canonical_job_url, normalize_email
 from .observability import NOOP_TELEMETRY, OperationalTelemetry, initialize_observability
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
@@ -56,16 +62,7 @@ DEFAULT_APPLICATION_WINDOW_SECONDS = 86_400
 AMBIGUOUS_SUBMISSION_STATUSES = frozenset({"SUBMIT_ATTEMPT_UNCONFIRMED", "SUBMISSION_UNCONFIRMED"})
 
 
-@dataclass(frozen=True, slots=True)
-class CommandOutcome:
-    return_code: int
-    stdout: str
-    stderr: str
-    timed_out: bool = False
-
-
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
+_now = utc_now_iso
 
 
 def _load_json(path: Path) -> Any:
@@ -73,24 +70,8 @@ def _load_json(path: Path) -> Any:
         return json.load(handle)
 
 
-def _load_state(path: Path, ats_platform: str) -> dict[str, Any]:
-    if not path.exists():
-        return {"version": 1, "jobs": {}}
-    payload = _load_json(path)
-    if not isinstance(payload, dict) or not isinstance(payload.get("jobs"), dict):
-        raise ValueError(f"invalid continuous {ats_platform} state: {path}")
-    if payload.get("version") != 1:
-        raise ValueError(f"unsupported continuous {ats_platform} state version: {path}")
-    return payload
-
-
-def _save_state(path: Path, state: dict[str, Any]) -> None:
-    state["updated_at"] = _now()
-    atomic_write_text(
-        path,
-        json.dumps(state, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
+_load_state = load_worker_state
+_save_state = save_worker_state
 
 
 def _eligible_jobs(payload: Any, ats_platform: str) -> list[dict[str, Any]]:
@@ -151,22 +132,7 @@ def _select_job(
     return choice(fresh) if fresh else None
 
 
-def _reconcile_interrupted_submissions(state: dict[str, Any]) -> int:
-    """Quarantine attempts that may have submitted before the process stopped."""
-    reconciled = 0
-    for record in state["jobs"].values():
-        if not isinstance(record, dict) or record.get("status") != "application_started":
-            continue
-        record.update(
-            {
-                "status": "manual_review",
-                "stage": "application",
-                "result_status": "INTERRUPTED_AFTER_APPLICATION_START",
-                "updated_at": _now(),
-            }
-        )
-        reconciled += 1
-    return reconciled
+_reconcile_interrupted_submissions = reconcile_interrupted_submissions
 
 
 def _run_command(

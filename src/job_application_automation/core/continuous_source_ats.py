@@ -26,11 +26,14 @@ from .continuous_ats import (
     SHARED_INPUT,
     _eligible_jobs,
     _cycle_event_level,
-    _load_state,
-    _reconcile_interrupted_submissions,
-    _save_state,
     _validate_platform,
     process_one,
+)
+from .continuous_worker_state import (
+    load_worker_state,
+    read_worker_state_records,
+    reconcile_interrupted_submissions,
+    save_worker_state,
 )
 from .identity import canonical_job_url
 from .observability import initialize_observability
@@ -80,15 +83,7 @@ def _load_claims(path: Path) -> dict[str, Any]:
     return payload
 
 
-def _state_records(path: Path) -> dict[str, Mapping[str, Any]]:
-    if not path.is_file():
-        return {}
-    payload = read_json(path)
-    if not isinstance(payload, dict) or not isinstance(payload.get("jobs"), dict):
-        raise ValueError(f"invalid continuous ATS state: {path}")
-    return {
-        str(url): record for url, record in payload["jobs"].items() if isinstance(record, Mapping)
-    }
+_state_records = read_worker_state_records
 
 
 def _seed_claims_from_state(
@@ -320,7 +315,7 @@ def _record_source_failure(
     result_status: str,
     detail: str,
 ) -> None:
-    state = _load_state(state_path, ats_platform)
+    state = load_worker_state(state_path, ats_platform)
     canonical_url = canonical_job_url(job["job_url"])
     state["jobs"][canonical_url] = {
         "status": "failed",
@@ -334,7 +329,7 @@ def _record_source_failure(
         "started_at": _now(),
         "updated_at": _now(),
     }
-    _save_state(state_path, state)
+    save_worker_state(state_path, state)
 
 
 def _sync_claim_from_state(
@@ -465,10 +460,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         worker_id=worker_id,
     )
 
-    state = _load_state(args.state, ats_platform)
-    reconciled = _reconcile_interrupted_submissions(state)
+    state = load_worker_state(args.state, ats_platform)
+    reconciled = reconcile_interrupted_submissions(state)
     if reconciled:
-        _save_state(args.state, state)
+        save_worker_state(args.state, state)
         print(
             f"{ats_platform.upper()}_SOURCE_INTERRUPTED_QUARANTINED "
             f"worker={worker_id} count={reconciled}",
