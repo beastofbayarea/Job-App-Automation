@@ -45,6 +45,11 @@ from ..core.engine_shared import (
     validate_required_fields,
 )
 from ..core.paths import OUTPUT_DIR
+from .browser_controls import (
+    fill_and_blur as _shared_fill_and_blur,
+    first_visible_for as _shared_first_visible_for,
+    upload_first as _shared_upload_first,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -168,25 +173,13 @@ def candidate_fields(
 
 
 def _first_visible_for(page: Page, selectors: Sequence[str]) -> Any | None:
-    for selector in selectors:
-        target = first_visible(page.locator(selector))
-        if target is not None:
-            return target
-    return None
+    """Compatibility wrapper preserving the local visibility patch seam."""
+    return _shared_first_visible_for(page, selectors, visible_resolver=first_visible)
 
 
 def _upload_first(page: Page, selectors: Sequence[str], path: Path) -> bool:
     """Upload to the first matching attached input, including hidden controls."""
-    for selector in selectors:
-        locator = page.locator(selector)
-        for index in range(locator.count()):
-            control = locator.nth(index)
-            try:
-                control.set_input_files(str(path))
-                return True
-            except Exception:
-                continue
-    return False
+    return _shared_upload_first(page, selectors, path)
 
 
 def _document_text(path: Path) -> str:
@@ -205,18 +198,12 @@ def _fill_cover_letter(page: Page, spec: BrowserFormSpec, path: Path) -> bool:
 
 def _fill_and_blur(page: Page, selectors: Sequence[str], value: str) -> bool:
     """Fill a React-managed text control and force its validation lifecycle."""
-    if not value:
-        return False
-    control = _first_visible_for(page, selectors)
-    if control is None:
-        return False
-    try:
-        control.fill(value)
-        control.blur()
-        page.wait_for_timeout(250)
-        return control.input_value().strip() == value.strip()
-    except Exception:
-        return False
+    return _shared_fill_and_blur(
+        page,
+        selectors,
+        value,
+        control_resolver=_first_visible_for,
+    )
 
 
 def _stabilize_email_fields(

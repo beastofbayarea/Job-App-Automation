@@ -59,6 +59,7 @@ from .paths import DATA_DIR
 from .profile import AutomationProfile
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from .screenshots import active_screenshot_directory
+from ..engines import browser_controls as _browser_controls
 
 logger = logging.getLogger("ATSEngineCommon")
 
@@ -88,11 +89,7 @@ DEFAULT_FAILURE_PHRASES = (
 )
 # Matches EEO/demographic field labels so consent auto-fill logic can leave them
 # untouched instead of guessing an answer to a legally sensitive question.
-SENSITIVE_FIELD_PATTERN = re.compile(
-    r"eeo|gender|race|racial|ethnic|hispanic|latino|veteran|disability|"
-    r"sexual|\bsex\b|orientation|transgender|demographic|identity|pronoun",
-    re.IGNORECASE,
-)
+SENSITIVE_FIELD_PATTERN = _browser_controls.SENSITIVE_FIELD_PATTERN
 
 
 @dataclass
@@ -352,64 +349,33 @@ def mask_email(email: str) -> str:
 
 
 def first_visible(locator: Locator) -> Locator | None:
-    for index in range(locator.count()):
-        candidate = locator.nth(index)
-        try:
-            if candidate.is_visible():
-                return candidate
-        except Exception:
-            continue
-    return None
+    """Compatibility facade for the provider-neutral control primitive."""
+    return _browser_controls.first_visible(locator)
 
 
 def fill_first(page: Page, selectors: Sequence[str] | str, value: str) -> bool:
-    if not value:
-        return False
-    selector_list = (
-        [s.strip() for s in selectors.split(",") if s.strip()]
-        if isinstance(selectors, str)
-        else list(selectors)
+    """Compatibility facade preserving the patchable ``first_visible`` seam."""
+    return _browser_controls.fill_first(
+        page,
+        selectors,
+        value,
+        visible_resolver=first_visible,
     )
-    for selector in selector_list:
-        target = first_visible(page.locator(selector))
-        if target is None:
-            continue
-        try:
-            target.fill(value)
-            return target.input_value().strip() == value.strip()
-        except Exception:
-            continue
-    return False
 
 
 def label_for(page: Page, control: Locator) -> str:
-    control_id = control.get_attribute("id") or ""
-    if control_id:
-        label = page.locator(f'label[for="{control_id}"]').first
-        if label.count():
-            return " ".join(label.inner_text().split()).rstrip("* ").strip()
-    labelled_by = control.get_attribute("aria-labelledby") or ""
-    if labelled_by:
-        label = page.locator(f"#{labelled_by}").first
-        if label.count():
-            return " ".join(label.inner_text().split()).rstrip("* ").strip()
-    ancestor = control.locator("xpath=ancestor::label[1]")
-    if ancestor.count():
-        return " ".join(ancestor.first.inner_text().split()).rstrip("* ").strip()
-    return ""
+    """Compatibility facade for accessible-label resolution."""
+    return _browser_controls.label_for(page, control)
 
 
 def fill_labeled(page: Page, label_pattern: str, value: str) -> bool:
-    if not value:
-        return False
-    try:
-        target = first_visible(page.get_by_label(re.compile(label_pattern, re.IGNORECASE)))
-        if target is not None:
-            target.fill(value)
-            return bool(target.input_value().strip())
-    except Exception:
-        pass
-    return False
+    """Compatibility facade preserving the patchable visibility resolver."""
+    return _browser_controls.fill_labeled(
+        page,
+        label_pattern,
+        value,
+        visible_resolver=first_visible,
+    )
 
 
 def answer_variants(
@@ -899,76 +865,20 @@ def generate_essay_answer(
 
 
 def _consent_control_is_checked(control: Locator) -> bool:
-    if (control.get_attribute("role") or "").casefold() == "checkbox":
-        return (control.get_attribute("aria-checked") or "").casefold() == "true"
-    return control.is_checked()
+    return _browser_controls._consent_control_is_checked(control)
 
 
 def _check_consent_control(control: Locator) -> None:
-    if (control.get_attribute("role") or "").casefold() == "checkbox":
-        control.click(force=True)
-    else:
-        control.check(force=True)
+    _browser_controls._check_consent_control(control)
 
 
 def fill_required_consent(page: Page) -> list[str]:
-    checked: list[str] = []
-    boxes = page.locator('input[type="checkbox"], [role="checkbox"]')
-    for index in range(boxes.count()):
-        box = boxes.nth(index)
-        try:
-            if _consent_control_is_checked(box):
-                continue
-            label = label_for(page, box)
-            context = label or box.evaluate(
-                "el => (el.closest('fieldset,div') || el.parentElement)?.innerText || ''"
-            )
-            explicit_confirm = bool(
-                re.search(
-                    r"\b(?:i|you)\b.{0,120}"
-                    r"\b(?:acknowledge|agree|consent|accept|confirm|declare)\b",
-                    context,
-                    re.I,
-                )
-            )
-            consent_context = bool(
-                re.search(
-                    r"\b(?:acknowledge|agree|consent|privacy|terms|policy|"
-                    r"data (?:processing|protection)|personal data)\b",
-                    context,
-                    re.I,
-                )
-            )
-            if not box.is_visible() and not (explicit_confirm or consent_context):
-                continue
-            # Skip EEO/demographic checkboxes unless the surrounding text is an
-            # explicit self-attestation ("I confirm...") rather than a disclosure question.
-            if SENSITIVE_FIELD_PATTERN.search(context) and not explicit_confirm:
-                continue
-            # A required checkbox can be a promise that supporting records have
-            # been attached, rather than consent to an application policy. Do
-            # not make that factual declaration unless it is already selected
-            # by an upstream document-aware workflow.
-            if re.search(
-                r"\b(?:provide|upload|attach|submit)\b.{0,140}"
-                r"\b(?:copy|scan|document|attachment|certificate|degree|"
-                r"reference|record)\b",
-                context,
-                re.I,
-            ):
-                continue
-            required = consent_context and (
-                explicit_confirm
-                or box.get_attribute("required") is not None
-                or box.get_attribute("aria-required") == "true"
-            )
-            if required:
-                _check_consent_control(box)
-                if _consent_control_is_checked(box):
-                    checked.append(" ".join(context.split())[:160])
-        except Exception:
-            continue
-    return checked
+    """Compatibility facade preserving the patchable ``label_for`` seam."""
+    return _browser_controls.fill_required_consent(
+        page,
+        label_resolver=label_for,
+        sensitive_field_pattern=SENSITIVE_FIELD_PATTERN,
+    )
 
 
 def confirmation_visible(
@@ -999,8 +909,8 @@ def validate_required_fields(
     page: Page,
     inspector: Callable[[Page], Sequence[str]],
 ) -> list[str]:
-    """Run an ATS-specific required-field adapter and normalize its result."""
-    return sorted({str(issue).strip() for issue in inspector(page) if str(issue).strip()})
+    """Compatibility facade for normalized ATS-specific field inspection."""
+    return _browser_controls.validate_required_fields(page, inspector)
 
 
 def capture_screenshot(page: Page, directory: Path, company: str, tag: str) -> str:
