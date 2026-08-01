@@ -126,7 +126,9 @@ def fetch_jobs(
                         criteria=criteria,
                     )
                 except Exception as exc:
-                    services.logger.warning("Lever date fallback failed for %s: %s", hosted_url, exc)
+                    services.logger.warning(
+                        "Lever date fallback failed for %s: %s", hosted_url, exc
+                    )
                     fallback_jobs = []
                 fallback = fallback_jobs[0] if fallback_jobs else None
                 if fallback is not None:

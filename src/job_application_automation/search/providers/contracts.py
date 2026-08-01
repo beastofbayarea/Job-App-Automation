@@ -117,4 +117,3 @@ class LivenessServices:
 
 
 ProviderFetcher = Callable[[requests.Session, Board, FetchContext], list[Job]]
-

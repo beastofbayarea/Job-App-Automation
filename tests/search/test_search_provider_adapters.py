@@ -209,9 +209,7 @@ def test_provider_modules_do_not_import_the_compatibility_facade() -> None:
     for path in provider_dir.glob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         imported_modules = {
-            node.module or ""
-            for node in ast.walk(tree)
-            if isinstance(node, ast.ImportFrom)
+            node.module or "" for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)
         }
         imported_modules.update(
             alias.name

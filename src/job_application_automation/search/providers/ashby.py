@@ -83,11 +83,7 @@ def fetch_jobs(
         job_url = clean_whitespace(item.get("jobUrl"))
         apply_url = clean_whitespace(item.get("applyUrl"))
         item_id = clean_whitespace(item.get("id"))
-        unique = (
-            f"ashby:{board.token}:{item_id}"
-            if item_id
-            else services.canonical_url(job_url)
-        )
+        unique = f"ashby:{board.token}:{item_id}" if item_id else services.canonical_url(job_url)
 
         normalized.append(
             Job(
