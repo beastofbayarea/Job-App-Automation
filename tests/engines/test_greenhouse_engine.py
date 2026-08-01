@@ -141,6 +141,10 @@ def test_greenhouse_semantic_answers_prevent_observed_matcher_collisions() -> No
     profile = {
         "current_company": "Current Company",
         "portfolio": "https://example.test/portfolio",
+        "education_history": {
+            "school": "Example University",
+            "field_of_study": "Computer Science",
+        },
     }
     rules = {"notice_period": "2 weeks"}
 
@@ -168,6 +172,8 @@ def test_greenhouse_semantic_answers_prevent_observed_matcher_collisions() -> No
         )
         == "https://example.test/portfolio"
     )
+    assert _greenhouse_semantic_answer("School", profile, rules) == "Example University"
+    assert _greenhouse_semantic_answer("Discipline", profile, rules) == "Computer Science"
 
 
 def test_greenhouse_option_matching_does_not_treat_no_as_none() -> None:

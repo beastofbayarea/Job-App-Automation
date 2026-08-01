@@ -454,6 +454,15 @@ def _greenhouse_semantic_answer(
         return str(profile.get("current_company") or "").strip() or None
     if re.search(r"\b(?:samples?\s+of\s+your\s+work|work\s+samples?)\b", normalized):
         return str(profile.get("website") or profile.get("portfolio") or "").strip() or None
+    education = profile.get("education_history")
+    if isinstance(education, Mapping):
+        if re.fullmatch(r"(?:school|school name|university|college)", normalized):
+            return str(education.get("school") or "").strip() or None
+        if re.fullmatch(
+            r"(?:discipline|field of study|major|area of study)",
+            normalized,
+        ):
+            return str(education.get("field_of_study") or "").strip() or None
     return None
 
 
