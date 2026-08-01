@@ -14,6 +14,38 @@ from job_application_automation.core import engine_shared  # noqa: E402
 
 
 class EngineSharedConfigTests(unittest.TestCase):
+    def test_personalized_resume_evidence_is_preferred_over_base_resume(self) -> None:
+        document = unittest.mock.MagicMock()
+        page = unittest.mock.MagicMock()
+        page.get_text.return_value = "Personalized product leadership evidence"
+        document.__enter__.return_value = [page]
+        document.__exit__.return_value = None
+
+        with unittest.mock.patch("pymupdf.open", return_value=document):
+            evidence = engine_shared.load_personalized_resume_evidence(
+                Path("personalized.pdf"),
+                {"base_resume_text_path": "base_resume.txt"},
+            )
+
+        self.assertEqual(evidence, "Personalized product leadership evidence")
+
+    def test_personalized_resume_evidence_falls_back_for_unreadable_pdf(self) -> None:
+        with (
+            unittest.mock.patch("pymupdf.open", side_effect=ValueError("bad pdf")),
+            unittest.mock.patch.object(
+                engine_shared,
+                "load_candidate_evidence",
+                return_value="Base resume fallback",
+            ) as fallback,
+        ):
+            evidence = engine_shared.load_personalized_resume_evidence(
+                Path("broken.pdf"),
+                {},
+            )
+
+        self.assertEqual(evidence, "Base resume fallback")
+        fallback.assert_called_once_with({})
+
     def test_screenshot_falls_back_to_viewport_when_full_page_capture_times_out(
         self,
     ) -> None:

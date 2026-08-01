@@ -318,6 +318,24 @@ def load_candidate_evidence(config: Mapping[str, Any]) -> str:
         return ""
 
 
+def load_personalized_resume_evidence(
+    resume: Path,
+    config: Mapping[str, Any],
+) -> str:
+    """Extract evidence from the exact resume attached to an application."""
+    try:
+        import pymupdf
+
+        with pymupdf.open(resume) as document:
+            evidence = "\n".join(page.get_text("text") for page in document).strip()
+        if evidence:
+            return evidence
+        logger.warning("Personalized resume contained no extractable text: %s", resume)
+    except Exception as exc:
+        logger.warning("Could not extract personalized resume evidence from %s: %s", resume, exc)
+    return load_candidate_evidence(config)
+
+
 def validate_ats_url(url: str, ats: str) -> bool:
     if ats not in ATS_HOST_MARKERS:
         return False

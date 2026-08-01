@@ -50,6 +50,7 @@ from ..core.engine_shared import (
     load_json_config,
     location_answer_candidates,
     load_candidate_evidence as _shared_candidate_evidence,
+    load_personalized_resume_evidence as _shared_personalized_resume_evidence,
     orchestrated_config_path,
     resolve_candidate_email,
     open_chrome_session,
@@ -461,19 +462,7 @@ def _load_personalized_resume_evidence(
     config: Mapping[str, Any],
 ) -> str:
     """Extract evidence from the exact resume attached to this application."""
-    try:
-        import pymupdf
-
-        with pymupdf.open(resume) as document:
-            evidence = "\n".join(page.get_text("text") for page in document).strip()
-        if evidence:
-            return evidence
-        logger.warning("Personalized resume contained no extractable text: %s", resume)
-    except Exception as exc:
-        logger.warning("Could not extract personalized resume evidence from %s: %s", resume, exc)
-    # Keep a bounded fallback for malformed/image-only PDFs. The personalized
-    # resume remains the normal and preferred source.
-    return _load_candidate_evidence(config)
+    return _shared_personalized_resume_evidence(resume, config)
 
 
 def _greenhouse_semantic_answer(

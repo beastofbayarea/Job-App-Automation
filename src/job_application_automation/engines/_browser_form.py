@@ -29,7 +29,7 @@ from ..core.engine_shared import (
     generate_essay_answer,
     is_essay_question,
     is_location_question,
-    load_candidate_evidence,
+    load_personalized_resume_evidence,
     load_json_config,
     location_answer_candidates,
     navigate_reusing_tab,
@@ -1001,6 +1001,7 @@ def _fill_custom_questions(
     *,
     company: str,
     role: str,
+    candidate_evidence: str,
     standard_selectors: Sequence[str] = (),
     job_context: str = "",
 ) -> dict[str, bool]:
@@ -1010,7 +1011,6 @@ def _fill_custom_questions(
     eeo = _mapping(config.get("eeo_defaults"))
     matchers = _mapping(config.get("field_matchers"))
     variants = _mapping(config.get("answer_variants"))
-    candidate_evidence = load_candidate_evidence(config)
     form_text = page.locator("body").inner_text()
     job_text = f"{job_context}\n{form_text}"[:30_000]
     results: dict[str, bool] = {}
@@ -1090,6 +1090,10 @@ def _fill_custom_questions(
                 continue
             if label.casefold() == "search" and control.get_attribute("required") is None:
                 continue
+            placeholder = control.get_attribute("placeholder") or ""
+            narrative_control = tag == "textarea" or bool(
+                re.search(r"type here", placeholder, re.I)
+            )
             desired = configured_answer(
                 label,
                 profile,
@@ -1106,6 +1110,13 @@ def _fill_custom_questions(
                 desired = "N/A"
             if not desired and _is_professional_binary_question(label):
                 desired = str(rules.get("experience_requirement") or "")
+            if (
+                narrative_control
+                and desired
+                and len(str(desired).split()) <= 3
+                and is_essay_question(label)
+            ):
+                desired = None
             option_labels: list[str] = []
             if effective_type in {"radio", "checkbox"}:
                 group = _group_controls(page, control, effective_type)
@@ -1116,7 +1127,7 @@ def _fill_custom_questions(
                     option_labels,
                     job_context,
                 )
-            if not desired and is_essay_question(label):
+            if not desired and (narrative_control or is_essay_question(label)):
                 desired = generate_essay_answer(
                     label,
                     job_text,
@@ -1524,6 +1535,7 @@ def run_browser_form_engine(
     if cover_letter is not None:
         cover_letter = validate_nonempty_file(cover_letter, "cover letter")
     candidate = candidate_fields(config, email_override)
+    candidate_evidence = load_personalized_resume_evidence(resume, config)
 
     with sync_playwright() as playwright:
         session = open_chrome_session(
@@ -1690,6 +1702,7 @@ def run_browser_form_engine(
                 config,
                 company=company or spec.display_name,
                 role=role,
+                candidate_evidence=candidate_evidence,
                 standard_selectors=_standard_control_selectors(spec),
                 job_context=job_context,
             )
@@ -1731,6 +1744,7 @@ def run_browser_form_engine(
                         config,
                         company=company or spec.display_name,
                         role=role,
+                        candidate_evidence=candidate_evidence,
                         standard_selectors=_standard_control_selectors(spec),
                         job_context=job_context,
                     )

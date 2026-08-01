@@ -46,7 +46,7 @@ from ..core.engine_shared import (
     is_essay_question,
     is_location_question,
     load_json_config,
-    load_candidate_evidence,
+    load_personalized_resume_evidence,
     location_answer_candidates,
     orchestrated_config_path,
     resolve_candidate_email,
@@ -384,6 +384,11 @@ def _fill_custom_questions(
             if not label:
                 continue
             normalized_label = label.lower()
+            tag = control.evaluate("el => el.tagName.toLowerCase()")
+            placeholder = control.get_attribute("placeholder") or ""
+            narrative_control = tag == "textarea" or bool(
+                re.search(r"type here", placeholder, re.I)
+            )
             # Lever's "which location are you applying for" dropdown lists the
             # office options already named in the posting header, so it is
             # answered from that context (_select_posting_location) instead of
@@ -420,7 +425,13 @@ def _fill_custom_questions(
                 and re.search(r"\b(?:hold|require|specify)\b", normalized_label)
             ):
                 desired = "Employer-sponsored work authorization"
-            tag = control.evaluate("el => el.tagName.toLowerCase()")
+            if (
+                narrative_control
+                and desired
+                and len(str(desired).split()) <= 3
+                and is_essay_question(label)
+            ):
+                desired = None
             success = False
             if tag == "select" and not desired and posting_location_question:
                 success = _select_posting_location(page, control)
@@ -455,7 +466,7 @@ def _fill_custom_questions(
                     )
             elif tag == "textarea" or control_type in {"text", "", "date"}:
                 answer = desired
-                if not answer and is_essay_question(label):
+                if not answer and (narrative_control or is_essay_question(label)):
                     answer = _generate_essay(label, job_text, company, role, candidate_evidence)
                 if answer:
                     control.fill(answer)
@@ -577,7 +588,7 @@ def run(
         config.get("download_root", OUTPUT_DIR),
         OUTPUT_DIR,
     )
-    candidate_evidence = load_candidate_evidence(config)
+    candidate_evidence = load_personalized_resume_evidence(resume, config)
     with sync_playwright() as playwright:
         # Lever job postings and their application forms are separate pages;
         # the form only lives at the "/apply" path off the posting URL.
