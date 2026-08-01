@@ -9,7 +9,7 @@ CLI
 ├── cover-letter: claims, AI generation, validation, rendering, cache
 ├── documents: paired generation, immutable manifests, pinned PuTTY transport
 ├── apply / queue: profile, runtime config, orchestration, submission log
-├── engines: nine provider adapters plus guarded shared browser-form runtime
+├── engines: five provider adapters plus guarded shared browser-form runtime
 └── mail: Gmail OAuth/messages/persistence and email-pool selection
 ```
 
@@ -28,7 +28,7 @@ CLI
   ledger reconciliation, liveness-capable identity round trips, migration, and
   immediate confirmed-job pruning. It never owns an archive.
 
-The detailed component diagram is maintained in [architecture.mmd](../architecture.mmd). The PRD is a living roadmap with per-feature implementation status; use the CLI reference and current code for delivered behavior.
+The CLI reference and current code define delivered behavior; the ATS support guide distinguishes active adapters from roadmap candidates.
 
 ## Extension points
 

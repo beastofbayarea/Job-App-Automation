@@ -34,6 +34,13 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Changed
 
+- Centralized supported-ATS URL ownership and live candidate normalization so
+  every application entrypoint rejects provider mismatches before generating
+  documents or opening a browser.
+- Built distributions now include every dashboard static asset and CI smoke
+  tests the installed wheel rather than relying only on source-tree imports.
+- Removed superseded private compatibility implementations and historical
+  one-off design plans from the active repository documentation.
 - Strict static typing now protects the core runtime-configuration, contract,
   submission-ledger, document-archive, and search-model boundaries in CI.
 - Continuous ATS applications now run visibly inside their Xvfb session, and
@@ -67,6 +74,14 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Fixed
 
+- Live applications now fail closed on a corrupt submission ledger. A confirmed
+  submission whose ledger write fails is durably quarantined for manual review,
+  reported as non-success, and never retried automatically.
+- Present but invalid runtime configuration now stops startup instead of being
+  silently replaced with packaged defaults.
+- Corrected dashboard installer remote-variable rendering, made the PowerShell
+  timeout helper clean up child processes deterministically, and made runtime
+  restart/status snapshots cover the enabled service topology.
 - Corrected the Gmail API and authentication/configuration exit-code mapping in
   the CLI reference.
 - Report missing, non-file, symlinked, unreadable, or invalidly encoded

@@ -70,17 +70,17 @@ graph TD
 
 ### Component Integration Touchpoints:
 
-1. **Domain Detection ([engine_shared.py](file:///c:/Users/Nagarro/Downloads/Job%20App%20Automation/src/job_application_automation/core/engine_shared.py))**:
+1. **Domain Detection ([ats_urls.py](../src/job_application_automation/core/ats_urls.py))**:
    Register domain tuples in `ATS_HOST_MARKERS` (e.g. `"workable": ("workable.com", "apply.workable.com")`).
-2. **Canonical Job Identity ([job_identity.py](file:///c:/Users/Nagarro/Downloads/Job%20App%20Automation/src/job_application_automation/core/job_identity.py))**:
+2. **Canonical Job Identity ([identity.py](../src/job_application_automation/core/identity.py))**:
    Add URL regex patterns to extract `provider_job_id` and `company_token`.
-3. **Engine Implementation ([src/job_application_automation/engines/](file:///c:/Users/Nagarro/Downloads/Job%20App%20Automation/src/job_application_automation/engines/))**:
-   Create a dedicated `<ats_name>.py` module exposing `main(argv)` and `run_<ats_name>_engine(...)` that returns an [EngineResult](file:///c:/Users/Nagarro/Downloads/Job%20App%20Automation/src/job_application_automation/core/contracts.py).
-4. **CLI Dispatcher ([cli.py](file:///c:/Users/Nagarro/Downloads/Job%20App%20Automation/src/job_application_automation/cli.py))**:
+3. **Engine Implementation ([engines](../src/job_application_automation/engines/))**:
+   Create a dedicated `<ats_name>.py` module exposing `main(argv)` and `run_<ats_name>_engine(...)` that returns an [EngineResult](../src/job_application_automation/core/contracts.py).
+4. **CLI Dispatcher ([cli.py](../src/job_application_automation/cli.py))**:
    Register module entry in `ENGINE_MODULES` dictionary (`"<ats_name>": "job_application_automation.engines.<ats_name>"`).
-5. **Orchestrator & Queue Runner ([orchestrator.py](file:///c:/Users/Nagarro/Downloads/Job%20App%20Automation/src/job_application_automation/core/orchestrator.py))**:
+5. **Orchestrator & Queue Runner ([orchestrator.py](../src/job_application_automation/core/orchestrator.py))**:
    Include engine path in `DEFAULT_ENGINE_FILES` mapping.
-6. **Search Board Discovery ([job_boards.py](file:///c:/Users/Nagarro/Downloads/Job%20App%20Automation/src/job_application_automation/search/job_boards.py))**:
+6. **Search Board Discovery ([job_boards.py](../src/job_application_automation/search/job_boards.py))**:
    Implement a board parser query method (e.g. `query_workable_board`) to fetch public listings.
 
 ---
@@ -231,8 +231,8 @@ $$\text{RICE Score} = \frac{\text{Reach} \times \text{Impact} \times \text{Confi
 
 | Rank | ATS Engine / Proposal | Target Engine File | Reach (1-100) | Impact (1.0-3.0) | Confidence (%) | Effort (Days) | **RICE Score** | Tier / Status |
 | :---: | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
-| **Baseline** | **Ashby (Direct GraphQL POST)** | [ashby.py](file:///c:/Users/Nagarro/Downloads/Job%20App%20Automation/src/job_application_automation/engines/ashby.py) | 80 | 3.0 | 100% | 1.0 | **240.0** | Delivered (Optimization) |
-| **Baseline** | **Greenhouse (Multipart API POST)** | [greenhouse.py](file:///c:/Users/Nagarro/Downloads/Job%20App%20Automation/src/job_application_automation/engines/greenhouse.py) | 80 | 3.0 | 90% | 1.2 | **180.0** | Delivered (Optimization) |
+| **Baseline** | **Ashby (Direct GraphQL POST)** | [ashby.py](../src/job_application_automation/engines/ashby.py) | 80 | 3.0 | 100% | 1.0 | **240.0** | Delivered (Optimization) |
+| **Baseline** | **Greenhouse (Multipart API POST)** | [greenhouse.py](../src/job_application_automation/engines/greenhouse.py) | 80 | 3.0 | 90% | 1.2 | **180.0** | Delivered (Optimization) |
 | **1** | **Workable Engine** | `engines/workable.py` | 85 | 3.0 | 95% | 1.0 | **242.3** | **Tier 1 (Immediate)** |
 | **2** | **SmartRecruiters Engine** | `engines/smartrecruiters.py` | 80 | 3.0 | 90% | 1.2 | **180.0** | **Tier 1 (Immediate)** |
 | **3** | **BambooHR Engine** | `engines/bamboohr.py` | 70 | 2.5 | 95% | 1.0 | **166.3** | Removed / not supported |
@@ -251,14 +251,14 @@ $$\text{RICE Score} = \frac{\text{Reach} \times \text{Impact} \times \text{Confi
 ## 5. Detailed Breakdown of High-Priority Candidate ATS Engines
 
 ### 1. Workable Engine (RICE Score: 242.3)
-* **Target File**: [workable.py](file:///c:/Users/Nagarro/Downloads/Job%20App%20Automation/src/job_application_automation/engines/workable.py)
+* **Target File**: [workable.py](../src/job_application_automation/engines/workable.py)
 * **Reach (85)**: Workable is used by thousands of growing tech companies globally.
 * **Impact (3.0)**: Supports direct JSON/multipart REST API candidate submission (`/api/v1/accounts/{company}/jobs/{job_id}/candidates`). Application time drops from ~30s (Playwright) to <500ms (HTTP POST).
 * **Confidence (95%)**: High technical certainty due to public REST API specification.
 * **Effort (1.0 day)**: Simple API payload constructor with Playwright fallback.
 
 ### 2. SmartRecruiters Engine (RICE Score: 180.0)
-* **Target File**: [smartrecruiters.py](file:///c:/Users/Nagarro/Downloads/Job%20App%20Automation/src/job_application_automation/engines/smartrecruiters.py)
+* **Target File**: [smartrecruiters.py](../src/job_application_automation/engines/smartrecruiters.py)
 * **Reach (80)**: Widely used by enterprise technology brands (Visa, Ubisoft, LinkedIn partners).
 * **Impact (3.0)**: Direct public posting REST API (`POST /v1/companies/{company}/postings/{job_id}/candidates`) allows instant submission without rendering heavy JavaScript.
 * **Confidence (90%)**: Proven public candidate application API.
@@ -279,7 +279,7 @@ $$\text{RICE Score} = \frac{\text{Reach} \times \text{Impact} \times \text{Confi
 * **Effort (1.0 day)**: Standard Playwright DOM engine.
 
 ### 5. Workday Engine (RICE Score: 79.8)
-* **Target File**: [workday.py](file:///c:/Users/Nagarro/Downloads/Job%20App%20Automation/src/job_application_automation/engines/workday.py)
+* **Target File**: `engines/workday.py` (planned; not currently present)
 * **Reach (95)**: Highest reach among Fortune 500 corporations (Adobe, Salesforce, Target, Walmart).
 * **Impact (3.0)**: Automates the most painful, multi-step application workflow in the job market.
 * **Confidence (70%)**: Lower technical confidence due to frequent DOM schema updates, mandatory user registration screens, dynamic ARIA drop-downs, and anti-bot checks.

@@ -1,6 +1,6 @@
 # Job Application Automation
 
-A local, safety-first toolkit for discovering public ATS vacancies, generating tailored PDF resumes and cover letters, privately archiving those documents on a VPS, and filling applications on nine supported ATS providers. It also includes a Gmail OAuth utility and a candidate-email pool selector.
+A local, safety-first toolkit for discovering public ATS vacancies, generating tailored PDF resumes and cover letters, privately archiving those documents on a VPS, and filling applications on five supported ATS providers. It also includes a Gmail OAuth utility and a candidate-email pool selector.
 
 The public entry point is `src/job_automation.py`. The implementation under `src/job_application_automation/` is a reusable Python package; ATS engine commands are primarily diagnostics used by the orchestrator.
 
@@ -322,8 +322,8 @@ pwsh scripts\pull_search_output.ps1
 # Privately download the confirmed-submission list and latest failure report.
 pwsh scripts\pull_vps_application_reports.ps1
 
-# Inspect the active VPS process and recent log without starting a run.
-pwsh scripts\check_vps_automation_status.ps1
+# Inspect every supervised ATS/search worker without starting a run.
+pwsh scripts\check_vps_parallel_ats.ps1
 
 # Check output/job_search_coverage.json age (24 hours by default).
 pwsh scripts\check_sync_freshness.ps1 -ThresholdHours 24
@@ -373,7 +373,7 @@ Audit all persistent and scheduled VPS workloads without changing remote state:
 pwsh scripts\audit_vps_runtime.ps1
 ```
 
-Repair the dashboard as an authenticated loopback service behind Nginx:
+Repair the public, unauthenticated dashboard as a loopback service behind Nginx:
 
 ```powershell
 pwsh scripts\install_vps_dashboard.ps1
@@ -391,6 +391,12 @@ Installing one worker does not stop or restart another or the search service.
 Ashby, Greenhouse, Lever, SmartRecruiters, Workable, and continuous job
 discovery therefore run in parallel, and a future installed ATS engine can use
 the same supervisor:
+
+For the coordinated two-source Greenhouse topology, use
+`scripts/install_vps_greenhouse_excel_parallel.ps1`. It installs the search-backed
+and tracker-backed Greenhouse workers with shared claims, verifies both services,
+and then disables the competing Ashby worker. This topology is intentionally an
+alternative to running every provider worker simultaneously.
 
 ```powershell
 pwsh scripts\install_vps_continuous_ats.ps1 -AtsPlatform providername
@@ -474,7 +480,7 @@ job_automation.py
       └─ engine <ATS>               guarded provider-specific browser engine
 ```
 
-See [architecture.mmd](architecture.mmd) for the detailed Mermaid diagram. `PRD.md` is a living roadmap with explicit implementation status. Files under `docs/superpowers/` are historical design and implementation records, not current command references.
+See the maintained [architecture guide](docs/architecture.md) for component boundaries and extension points.
 
 ## Documentation
 

@@ -155,8 +155,8 @@ pwsh scripts\install_vps_continuous_workable.ps1
 These installations replace the marked daily cron entry with the systemd
 units `job-app-search-sync.service`, `job-app-ashby.service`,
 `job-app-greenhouse.service`, `job-app-lever.service`,
-`job-app-smartrecruiters.service`, and `job-app-workable.service`. All six run
-in parallel. The search service continuously refreshes verified Greenhouse,
+`job-app-smartrecruiters.service`, and `job-app-workable.service`. In the standard
+topology all six run in parallel. The search service continuously refreshes verified Greenhouse,
 Lever, Ashby, SmartRecruiters, and Workable job discovery, publishes only the
 safe coverage/jobs/board-cache/backlog snapshot, waits five minutes, and
 repeats. It does not generate documents or submit applications.
@@ -179,6 +179,13 @@ pwsh scripts\install_vps_continuous_ats.ps1 -AtsPlatform providername
 
 The provider must have an installed engine module and search support for the
 same lowercase platform name.
+
+For two independent Greenhouse sources, run
+`scripts/install_vps_greenhouse_excel_parallel.ps1`. It brings up the regular
+search-backed Greenhouse worker and an Excel-tracker-backed Greenhouse worker,
+coordinates both through shared provider job-ID claims, verifies them, and only
+then disables `job-app-ashby.service`. Treat this as a deliberate alternative
+topology; do not describe it as the all-provider parallel layout.
 
 Each cycle selects exactly one unattempted, verified-live record for the
 configured ATS from `output/continuous_<ats>_jobs.json`, initially seeded from
@@ -284,7 +291,7 @@ from a shell on your workstation:
 
 ```powershell
 pwsh scripts\pull_vps_application_reports.ps1 -Overwrite
-pwsh scripts\check_vps_automation_status.ps1 -LogLines 50
+pwsh scripts\check_vps_parallel_ats.ps1 -LogLines 50
 ```
 
 If the shared VPS's Cent Capital backend is active but not listening on port
@@ -469,7 +476,7 @@ is contacted.
 Check a live run without acquiring its lock or starting another workflow:
 
 ```powershell
-pwsh scripts\check_vps_automation_status.ps1 -LogLines 120
+pwsh scripts\check_vps_parallel_ats.ps1 -LogLines 120
 ```
 
 This read-only command has a bounded SSH timeout and prints the installed cron

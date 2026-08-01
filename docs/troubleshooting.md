@@ -42,7 +42,7 @@ until then.
 
 ## VPS cron is installed but search output is stale
 
-Run `pwsh scripts\check_vps_automation_status.ps1`. Compare the cron entry,
+Run `pwsh scripts\check_vps_parallel_ats.ps1`. Compare the service state,
 process list, repository commit, `vps_run_status.json`, artifact timestamps,
 and log tail. Search publication now precedes bounded document generation, so
 an old public snapshot with a run stuck in `documents` usually means the VPS is
