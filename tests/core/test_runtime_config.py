@@ -44,6 +44,9 @@ class RuntimeConfigTests(unittest.TestCase):
         self.assertEqual(config.ashby["submission_result_poll_seconds"], 0.5)
         self.assertGreater(config.gmail["greenhouse_security_code_poll_timeout_seconds"], 30)
         self.assertGreater(config.resume["original_character_count"], 0)
+        self.assertIn("greenhouse", config.search["ats_hosts"])
+        self.assertIn("AI", config.search["ai_terms"])
+        self.assertEqual(config.search["defaults"]["max_discovery_queries"], 400)
         self.assertEqual(config.application["vps_max_document_jobs"], 10)
         self.assertEqual(config.application["vps_document_retry_jobs"], 2)
         self.assertEqual(config.application["vps_max_attempts_per_ats"], 10)
@@ -76,6 +79,16 @@ class RuntimeConfigTests(unittest.TestCase):
             path = Path(directory) / "runtime_config.json"
             path.write_text(json.dumps(document), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "ashby.max_form_steps"):
+                load_runtime_config(path)
+
+    def test_invalid_search_setting_is_rejected_before_workflow_startup(self) -> None:
+        document = json.loads(RUNTIME_CONFIG_FILE.read_text(encoding="utf-8"))
+        document["search"]["defaults"]["results_per_query"] = 0
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "runtime_config.json"
+            path.write_text(json.dumps(document), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "search.defaults.results_per_query"):
                 load_runtime_config(path)
 
     def test_older_schema_one_config_remains_valid_without_new_ashby_controls(self) -> None:

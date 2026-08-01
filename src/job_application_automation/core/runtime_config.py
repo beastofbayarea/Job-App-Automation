@@ -87,6 +87,7 @@ class RuntimeConfig:
     cover_letter: Mapping[str, Any]
     ashby: Mapping[str, Any]
     gmail: Mapping[str, Any]
+    search: Mapping[str, Any]
 
     def get_section(self, name: str) -> Mapping[str, Any]:
         """Return a named top-level config section or an empty mapping if unknown."""
@@ -136,6 +137,7 @@ def load_runtime_config(path: Path | None = None) -> RuntimeConfig:
     cover_letter = _mapping(document, "cover_letter")
     ashby = _mapping(document, "ashby")
     gmail = _mapping(document, "gmail")
+    search = _mapping(document, "search")
 
     for key in (
         "tracker_file",
@@ -246,6 +248,80 @@ def load_runtime_config(path: Path | None = None) -> RuntimeConfig:
     ):
         _integer(gmail, "gmail", key)
 
+    for key in (
+        "search_phrase_templates",
+        "ai_terms",
+        "ai_discovery_terms",
+        "default_locations",
+        "generic_ats_host_suffixes",
+        "ddgs_backends",
+        "dead_role_markers",
+        "restricted_url_patterns",
+    ):
+        _strings(search, "search", key)
+    for key in ("role_families", "role_family_input_aliases", "location_aliases", "ats_hosts"):
+        nested = _mapping(search, key)
+        if not nested:
+            raise ValueError(f"runtime config search.{key} must be a non-empty object")
+        for nested_key, nested_value in nested.items():
+            if not isinstance(nested_key, str) or not nested_key.strip():
+                raise ValueError(f"runtime config search.{key} keys must be non-empty strings")
+            if (
+                not isinstance(nested_value, list)
+                or not nested_value
+                or any(not isinstance(item, str) or not item.strip() for item in nested_value)
+            ):
+                raise ValueError(
+                    f"runtime config search.{key}.{nested_key} must be a non-empty string array"
+                )
+    _string(search, "search", "workable_short_link_board")
+    provider_api_urls = _mapping(search, "provider_api_urls")
+    for key in ("greenhouse", "lever_global", "lever_eu", "ashby", "smartrecruiters", "workable"):
+        _string(provider_api_urls, "search.provider_api_urls", key)
+    restricted_board_tokens = _mapping(search, "restricted_board_tokens")
+    for platform, tokens in restricted_board_tokens.items():
+        if (
+            not isinstance(platform, str)
+            or not platform.strip()
+            or not isinstance(tokens, list)
+            or not tokens
+            or any(not isinstance(token, str) or not token.strip() for token in tokens)
+        ):
+            raise ValueError(
+                "runtime config search.restricted_board_tokens must map platform names "
+                "to non-empty string arrays"
+            )
+    defaults = _mapping(search, "defaults")
+    for key in (
+        "discovery_mode",
+        "discovery_timelimit",
+        "match_mode",
+        "scrape_discovered_pages",
+        "live_check_target",
+        "output_file",
+        "coverage_report_file",
+        "cache_file",
+        "discovery_region",
+        "search_backend",
+        "user_agent",
+    ):
+        _string(defaults, "search.defaults", key)
+    for key in (
+        "days",
+        "max_discovery_queries",
+        "max_career_pages",
+        "search_retries",
+        "results_per_query",
+        "max_lever_pages",
+        "max_fallback_pages",
+        "show_results",
+    ):
+        _nonnegative_integer(defaults, "search.defaults", key)
+    if defaults["results_per_query"] == 0:
+        raise ValueError("runtime config search.defaults.results_per_query must be positive")
+    for key in ("timeout_seconds", "delay_seconds", "async_timeout_seconds"):
+        _positive_number(defaults, "search.defaults", key)
+
     return RuntimeConfig(
         application=application,
         browser=browser,
@@ -254,6 +330,7 @@ def load_runtime_config(path: Path | None = None) -> RuntimeConfig:
         cover_letter=cover_letter,
         ashby=ashby,
         gmail=gmail,
+        search=search,
     )
 
 

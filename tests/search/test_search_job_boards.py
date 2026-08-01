@@ -253,6 +253,16 @@ class SearchJobBoardsTests(unittest.TestCase):
         self.assertEqual(search.OUTPUT_DIR / "ai_jobs.csv", args.output)
         self.assertIsNone(args.backlog_output)
 
+    def test_parser_defaults_are_loaded_from_runtime_configuration(self) -> None:
+        args = search.build_parser().parse_args(
+            ["--role-type", "Product Manager", "--ats-platform", "greenhouse"]
+        )
+
+        self.assertEqual(search.DEFAULTS.max_discovery_queries, args.max_discovery_queries)
+        self.assertEqual(search.DEFAULTS.results_per_query, args.results_per_query)
+        self.assertEqual(search.DEFAULTS.timeout_seconds, args.timeout)
+        self.assertEqual(search.DEFAULTS.cache_file, args.cache)
+
     def test_parser_allows_default_locations_when_location_is_omitted(self) -> None:
         args = search.build_parser().parse_args(
             [

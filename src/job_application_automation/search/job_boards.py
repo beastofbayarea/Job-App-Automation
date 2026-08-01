@@ -65,6 +65,24 @@ from . import serialization as _search_serialization
 from . import terms as _search_terms
 from ..core.artifacts import atomic_write_text, read_json, write_json as atomic_write_json
 from ..core.paths import OUTPUT_DIR
+from .config import (
+    AI_DISCOVERY_TERMS,
+    ALL_DDGS_BACKENDS,
+    ATS_SEARCH_HOSTS,
+    DEAD_ROLE_MARKERS,
+    DEFAULTS,
+    DEFAULT_AI_TERMS,
+    DEFAULT_LOCATION_TERMS,
+    GENERIC_ATS_HOST_SUFFIXES,
+    LOCATION_ALIAS_MAP,
+    PROVIDER_API_URLS,
+    RESTRICTED_BOARD_KEYS,
+    RESTRICTED_URL_PATTERNS,
+    ROLE_ALIAS_MAP,
+    SEARCH_PHRASE_TEMPLATES,
+    SUPPORTED_ATS_PLATFORMS,
+    WORKABLE_SHORT_LINK_BOARD,
+)
 
 try:
     from ddgs import DDGS
@@ -96,248 +114,7 @@ except ImportError:
 LOGGER = logging.getLogger("search_job_boards")
 UTC = timezone.utc
 
-SEARCH_PHRASE_TEMPLATES = (
-    '"AI" {role} jobs',
-    '"artificial intelligence" {role} jobs',
-    '"generative AI" {role} jobs',
-)
-
-DEFAULT_AI_TERMS = (
-    "AI",
-    "artificial intelligence",
-    "generative AI",
-    "GenAI",
-    "machine learning",
-    "ML",
-    "large language model",
-    "large language models",
-    "LLM",
-    "LLMs",
-    "A.I.",
-    "Gen AI",
-    "AI/ML",
-    "machine-learning",
-    "foundation model",
-    "foundation models",
-    "natural language processing",
-    "NLP",
-)
-
-# Used only when the caller does not supply any ``--location`` parameters.
-# Keep region-specific remote preferences separate from generic ``Remote`` so
-# a default search does not silently include roles that can be performed from
-# any country.
-DEFAULT_LOCATION_TERMS = (
-    "US Remote",
-    "UK",
-    "Ireland",
-    "India Remote",
-    "Delhi",
-    "Noida",
-    "France",
-    "Europe Remote",
-    "UAE",
-    "Saudi Arabia",
-    "Singapore",
-    "Australia",
-    "New Zealand",
-    "Hong Kong",
-)
-
-# Queries deliberately use a smaller, diverse vocabulary than final matching to
-# avoid spending most of a discovery run on near-identical search-engine queries.
-AI_DISCOVERY_TERMS = (
-    "AI",
-    "artificial intelligence",
-    "generative AI",
-    "GenAI",
-    "AI/ML",
-    "machine learning",
-    "LLM",
-    "foundation models",
-)
-
-# Curated role families let users use the names they commonly see in job
-# searches while still requiring a title-level match.  Keep adjacent but
-# materially different functions out of these groups (for example, Business
-# Development is not Corporate Development, and Revenue Operations is not
-# Marketing Operations) to avoid silently broadening the final results.
-ROLE_FAMILY_VARIANTS: dict[str, tuple[str, ...]] = {
-    "growth_marketing": (
-        "Growth Marketing",
-        "Growth Marketer",
-        "Growth Mkt",
-    ),
-    "performance_marketing": (
-        "Performance Marketing",
-        "Performance Marketer",
-        "Performance Mkt",
-    ),
-    "paid_media": (
-        "Paid Media",
-        "Paid Social",
-        "Paid Search",
-        "Search Engine Marketing",
-        "SEM",
-        "PPC",
-        "Media Buyer",
-    ),
-    "marketing_operations": (
-        "Marketing Operations",
-        "Marketing Ops",
-        "Marketing Automation",
-    ),
-    "management_consulting": (
-        "Management Consulting",
-        "Management Consultant",
-        "Strategy Consulting",
-        "Strategy Consultant",
-    ),
-    "corporate_development": (
-        "Corporate Development",
-        "Corp Dev",
-        "Corporate Strategy & Development",
-        "Mergers and Acquisitions",
-        "Mergers & Acquisitions",
-        "M&A",
-    ),
-    "venture_capital": (
-        "Venture Capital",
-        "Venture Capitalist",
-        "Venture Investing",
-        "Venture Investor",
-        "VC Associate",
-        "VC Analyst",
-        "VC Principal",
-        "VC Investment",
-        "Venture Partner",
-    ),
-}
-
-# Keys are deliberately normalized so they can be looked up by
-# ``normalize_match_text`` without separately maintaining a parallel map.
-ROLE_FAMILY_INPUT_ALIASES: dict[str, tuple[str, ...]] = {
-    "growth_marketing": (
-        "growth marketing",
-        "growth marketer",
-        "growth mkt",
-        "grwoth marketing",
-        "grwoth mkt",
-    ),
-    "performance_marketing": (
-        "performance marketing",
-        "performance marketer",
-        "performance mkt",
-        "performace marketing",
-        "performace mkt",
-    ),
-    "paid_media": (
-        "paid media",
-        "paid social",
-        "paid search",
-        "search engine marketing",
-        "sem",
-        "ppc",
-        "media buyer",
-    ),
-    "marketing_operations": (
-        "marketing operations",
-        "marketing ops",
-        "marketing automation",
-    ),
-    "management_consulting": (
-        "management consulting",
-        "management consultant",
-        "strategy consulting",
-        "strategy consultant",
-        "management consukting",
-    ),
-    "corporate_development": (
-        "corporate development",
-        "corp dev",
-        "corporate strategy development",
-        "mergers and acquisitions",
-        "mergers acquisitions",
-        "m a",
-    ),
-    "venture_capital": (
-        "venture capital",
-        "venture capitalist",
-        "venture investing",
-        "venture investor",
-        "vc",
-        "vc associate",
-        "vc analyst",
-        "vc principal",
-        "venture partner",
-    ),
-}
-
-
-def build_role_alias_map() -> dict[str, tuple[str, ...]]:
-    """Build role aliases from one family declaration to prevent drift."""
-    aliases = {
-        "program": ("Program", "Programme"),
-        "programme": ("Program", "Programme"),
-    }
-    for family_name, input_aliases in ROLE_FAMILY_INPUT_ALIASES.items():
-        aliases.update(
-            {input_alias: ROLE_FAMILY_VARIANTS[family_name] for input_alias in input_aliases}
-        )
-    return aliases
-
-
-ROLE_ALIAS_MAP = build_role_alias_map()
-
-LOCATION_ALIAS_MAP = {
-    "new york": ("New York", "New York City", "NYC"),
-    "new york city": ("New York", "New York City", "NYC"),
-    "nyc": ("New York", "New York City", "NYC"),
-    "san francisco": ("San Francisco", "Bay Area", "SF"),
-    "bay area": ("San Francisco", "Bay Area", "SF"),
-    "remote": ("Remote", "Anywhere", "Distributed", "Work from home"),
-    "united states": ("United States", "USA", "US"),
-    "usa": ("United States", "USA", "US"),
-}
-
-GENERIC_ATS_HOST_SUFFIXES = (
-    "myworkdayjobs.com",
-    "icims.com",
-    "jobvite.com",
-    "teamtailor.com",
-    "recruitee.com",
-    "personio.com",
-    "bamboohr.com",
-    "pinpoint.com",
-)
-ATS_SEARCH_HOSTS = {
-    "greenhouse": (
-        "site:boards.greenhouse.io",
-        "site:job-boards.greenhouse.io",
-        "site:job-boards.eu.greenhouse.io",
-    ),
-    "lever": ("site:jobs.lever.co", "site:jobs.eu.lever.co"),
-    "ashby": ("site:jobs.ashbyhq.com",),
-    "smartrecruiters": ("site:jobs.smartrecruiters.com",),
-    "workable": ("site:apply.workable.com",),
-    # Public pages for these providers are parsed through JobPosting JSON-LD.
-    "web": tuple(f"site:{suffix}" for suffix in GENERIC_ATS_HOST_SUFFIXES),
-}
-SUPPORTED_ATS_PLATFORMS = tuple(ATS_SEARCH_HOSTS)
-WORKABLE_SHORT_LINK_BOARD = "apply.workable.com"
-ALL_DDGS_BACKENDS = ("auto", "duckduckgo", "bing", "brave", "google", "yahoo", "mojeek")
-DEFAULT_COVERAGE_REPORT = OUTPUT_DIR / "job_search_coverage.json"
-
-DEAD_ROLE_MARKERS = (
-    "job is no longer available",
-    "this job is no longer available",
-    "job posting is no longer available",
-    "position has been filled",
-    "position is no longer available",
-    "job has expired",
-    "this role has been filled",
-    "job not found",
-)
+DEFAULT_COVERAGE_REPORT = DEFAULTS.coverage_report_file
 
 CSV_FIELDS = _search_models.CSV_FIELDS
 Board = _search_models.Board
@@ -939,24 +716,6 @@ def discovery_url_key(url: str) -> str:
     return urlunparse((parsed.scheme.lower(), parsed.netloc.lower(), path, "", parsed.query, ""))
 
 
-RESTRICTED_URL_PATTERNS = (
-    "jobgether.com",
-    "jobtogether.com",
-    "jobs.lever.co/jobgether",
-    "jobs.eu.lever.co/jobgether",
-    "jobs.lever.co/jobtogether",
-    "jobs.eu.lever.co/jobtogether",
-)
-
-RESTRICTED_BOARD_KEYS = {
-    ("lever", "jobgether"),
-    ("lever", "jobtogether"),
-    ("web", "jobgether.com"),
-    ("web", "jobtogether.com"),
-    ("web", "www.jobgether.com"),
-    ("web", "www.jobtogether.com"),
-}
-
 
 def is_restricted_url(url: str) -> bool:
     """Check if a URL points to a restricted domain/board such as jobgether or jobtogether."""
@@ -1524,7 +1283,7 @@ def scrape_jsonld_job(
 def greenhouse_base_url(board: Board) -> str:
     # Greenhouse's documented public Job Board API uses this base URL. The board
     # token remains the same even when the hosted board URL is regional.
-    return f"https://boards-api.greenhouse.io/v1/boards/{quote(board.token, safe='')}"
+    return PROVIDER_API_URLS["greenhouse"].format(token=quote(board.token, safe=""))
 
 
 def fetch_greenhouse_jobs(
@@ -1654,8 +1413,8 @@ def fetch_greenhouse_jobs(
 
 
 def lever_api_base(board: Board) -> str:
-    host = "api.eu.lever.co" if board.region == "eu" else "api.lever.co"
-    return f"https://{host}/v0/postings/{quote(board.token, safe='')}"
+    key = "lever_eu" if board.region == "eu" else "lever_global"
+    return PROVIDER_API_URLS[key].format(token=quote(board.token, safe=""))
 
 
 def format_lever_salary(value: Any) -> str:
@@ -1830,7 +1589,7 @@ def fetch_ashby_jobs(
     criteria = context.criteria
     now = context.now
     timeout = context.timeout
-    url = f"https://api.ashbyhq.com/posting-api/job-board/{quote(board.token, safe='')}"
+    url = PROVIDER_API_URLS["ashby"].format(token=quote(board.token, safe=""))
     payload = get_json(
         session,
         url,
@@ -1913,7 +1672,9 @@ def fetch_ashby_jobs(
 
 
 def smartrecruiters_api_base(board: Board) -> str:
-    return f"https://api.smartrecruiters.com/v1/companies/{quote(board.token, safe='')}/postings"
+    return PROVIDER_API_URLS["smartrecruiters"].format(
+        token=quote(board.token, safe="")
+    )
 
 
 def smartrecruiters_description(value: Any) -> str:
@@ -2062,7 +1823,7 @@ def fetch_smartrecruiters_jobs(
 
 
 def workable_api_url(board: Board) -> str:
-    return f"https://www.workable.com/api/accounts/{quote(board.token, safe='')}?details=true"
+    return PROVIDER_API_URLS["workable"].format(token=quote(board.token, safe=""))
 
 
 def workable_location(item: dict[str, Any]) -> str:
@@ -2409,7 +2170,7 @@ def verify_ashby_jobs_live(
                     job, status="unknown", source="ashby_board_api", now=now, reason="missing_board"
                 )
             continue
-        url = f"https://api.ashbyhq.com/posting-api/job-board/{quote(board_token, safe='')}"
+        url = PROVIDER_API_URLS["ashby"].format(token=quote(board_token, safe=""))
         response = response_or_none(session, url, timeout=timeout)
         if response is None:
             for job in board_jobs:
@@ -3144,7 +2905,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--days",
         type=int,
-        default=0,
+        default=DEFAULTS.days,
         help=(
             "Keep jobs posted within this many days; 0 disables rolling date "
             "filtering. Ignored when an explicit posted-date filter is supplied "
@@ -3189,7 +2950,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--discovery-mode",
         choices=("focused", "expanded", "exhaustive"),
-        default="exhaustive",
+        default=DEFAULTS.discovery_mode,
         help=(
             "Breadth of board discovery. Exhaustive adds role-only and careers "
             "queries, while final results still use all required filters "
@@ -3204,7 +2965,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max-discovery-queries",
         type=int,
-        default=400,
+        default=DEFAULTS.max_discovery_queries,
         help=(
             "Maximum backend/region/site discovery queries; 0 means unlimited. "
             "The coverage report shows planned versus attempted queries (default: 400)."
@@ -3213,7 +2974,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--discovery-timelimit",
         choices=("auto", "none"),
-        default="none",
+        default=DEFAULTS.discovery_timelimit,
         help=(
             "DDGS date limit for board discovery. Use none for maximum board "
             "coverage; ATS feeds enforce the final posted-date filter (default: none)."
@@ -3234,7 +2995,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--match-mode",
         choices=("strict", "expanded"),
-        default="expanded",
+        default=DEFAULTS.match_mode,
         help="Use punctuation/alias-aware matching or literal matching (default: expanded).",
     )
     parser.add_argument(
@@ -3288,7 +3049,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max-career-pages",
         type=int,
-        default=25,
+        default=DEFAULTS.max_career_pages,
         help="Maximum explicitly supplied career pages to scan; 0 means unlimited (default: 25).",
     )
     parser.add_argument(
@@ -3308,7 +3069,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--scrape-discovered-pages",
         choices=("none", "failed-feed", "all"),
-        default="all",
+        default=DEFAULTS.scrape_discovered_pages,
         help=(
             "Parse discovered job pages as an additive JSON-LD source. failed-feed "
             "also includes page-based ATS candidates; all gives the highest coverage "
@@ -3328,7 +3089,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--live-check-target",
         choices=("listing", "application", "both"),
-        default="both",
+        default=DEFAULTS.live_check_target,
         help=(
             "Verify the provider listing, job/application page, or both. Generic "
             "JSON-LD roles use their page when no provider listing ID is trusted "
@@ -3343,7 +3104,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output",
         type=Path,
-        default=OUTPUT_DIR / "ai_jobs.csv",
+        default=DEFAULTS.output_file,
         help="CSV output path (default: output/ai_jobs.csv).",
     )
     parser.add_argument(
@@ -3401,7 +3162,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--cache",
         type=Path,
-        default=OUTPUT_DIR / "ats_boards_cache.json",
+        default=DEFAULTS.cache_file,
         help="Discovered-board cache path (default: output/ats_boards_cache.json).",
     )
     parser.add_argument(
@@ -3429,43 +3190,43 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--search-retries",
         type=int,
-        default=1,
+        default=DEFAULTS.search_retries,
         help="Retries for each failed DDGS query (default: 1).",
     )
     parser.add_argument(
         "--results-per-query",
         type=int,
-        default=50,
+        default=DEFAULTS.results_per_query,
         help="Maximum web results per discovery query (default: 50).",
     )
     parser.add_argument(
         "--timeout",
         type=float,
-        default=20.0,
+        default=DEFAULTS.timeout_seconds,
         help="HTTP/search timeout in seconds (default: 20).",
     )
     parser.add_argument(
         "--delay",
         type=float,
-        default=0.25,
+        default=DEFAULTS.delay_seconds,
         help="Polite delay between searches/API detail calls (default: 0.25).",
     )
     parser.add_argument(
         "--max-lever-pages",
         type=int,
-        default=0,
+        default=DEFAULTS.max_lever_pages,
         help="Maximum 100-job Lever pages per company; 0 means unlimited (default: 0).",
     )
     parser.add_argument(
         "--max-fallback-pages",
         type=int,
-        default=0,
+        default=DEFAULTS.max_fallback_pages,
         help="Maximum discovered job pages to parse; 0 means unlimited (default: 0).",
     )
     parser.add_argument(
         "--show",
         type=int,
-        default=20,
+        default=DEFAULTS.show_results,
         help="Number of matches to print in the terminal (default: 20).",
     )
     parser.add_argument(
@@ -3482,7 +3243,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 async def search_job_boards_async(
-    urls: Sequence[str], timeout: float = 10.0
+    urls: Sequence[str], timeout: float = DEFAULTS.async_timeout_seconds
 ) -> list[dict[str, Any]]:
     """Alternate capability: Asyncio HTTP/2 multiplexed search feed crawler.
 
@@ -3611,7 +3372,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     raw_backends = split_repeated_terms(args.search_backend)
     search_backends: list[str] = []
-    for backend in raw_backends or ["auto"]:
+    for backend in raw_backends or [DEFAULTS.search_backend]:
         search_backends.extend(ALL_DDGS_BACKENDS if backend.casefold() == "all" else [backend])
     search_backends = list(dict.fromkeys(backend.casefold() for backend in search_backends))
     discovery_regions = list(
@@ -3620,7 +3381,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             for region in args.discovery_regions
             if clean_whitespace(region)
         )
-    ) or ["wt-wt"]
+    ) or [DEFAULTS.discovery_region]
 
     if not role_terms:
         raise SystemExit("Provide at least one non-empty --role-type value")
@@ -3658,8 +3419,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "include_unknown_dates": include_unknown_dates,
     }
 
-    user_agent = "Mozilla/5.0 (compatible; AccountFreeATSJobSearch/1.0; +https://github.com/)"
-    session = make_session(user_agent)
+    session = make_session(DEFAULTS.user_agent)
 
     catalog = DiscoveryCache() if args.clear_cache else load_discovery_cache(args.cache)
     cached_board_count = len(catalog.boards)

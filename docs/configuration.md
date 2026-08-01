@@ -38,6 +38,9 @@ answers are used only when the country list is absent.
 - `browser`: the optional Chromium CDP endpoint.
 - `vertex`: project, service-account path, model, retry, and job-text limits. `project_id: "from-service-account"` reads the project from the service-account file. Application Default Credentials can instead be supplied through `GOOGLE_APPLICATION_CREDENTIALS`.
 - `resume` and `cover_letter`: caches, retry limits, quality threshold, and word limits.
+- `search`: default AI/location vocabulary, role and location aliases, ATS discovery
+  hosts, liveness markers, provider backends, output paths, and CLI/network defaults.
+  Command-line arguments still override these defaults for an individual run.
 - `ashby`: navigation and form limits plus confirmation and failure phrases.
 - `gmail`: OAuth credential/token locations and verification polling settings.
 
