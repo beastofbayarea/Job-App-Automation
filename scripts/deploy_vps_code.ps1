@@ -40,6 +40,7 @@ if (-not $PlinkCmd) {
     exit 1
 }
 
+$PlinkPath = if ($PlinkCmd.Path) { $PlinkCmd.Path } else { [string]$PlinkCmd.Source }
 $Repo = ConvertTo-PosixShellLiteral $RemoteRepoPath.TrimEnd("/")
 $RemoteCommand = "git -C $Repo pull --ff-only origin main"
 
@@ -53,7 +54,7 @@ try {
         [Text.UTF8Encoding]::new($false)
     )
     $Execution = Invoke-ExternalCommandWithTimeout `
-        -FilePath $PlinkCmd.Source `
+        -FilePath $PlinkPath `
         -ArgumentList @(
             "-ssh",
             "-batch",
