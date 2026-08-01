@@ -13,6 +13,8 @@ automation paths remain stable. Supporting files are separated from those comman
 - `install_vps_*` installs or repairs VPS services and scheduled operations.
 - `check_*` and `audit_*` perform read-only health and state checks.
 - `deploy_*`, `trigger_*`, `retry_*`, and `quarantine_*` perform explicit VPS actions.
+- `restart_vps_runtime.ps1` validates the deployed split configuration, then
+  restarts and verifies all repository-backed VPS services.
 - `pull_*`, `cleanup_*`, and `prune_*` maintain local or remote artifacts.
 - `vps_*.sh` implements the persistent and scheduled VPS runtime workflows.
 - `cleanup_job_url_workbooks.mjs` and `create_new_ats_tracker.py` maintain job-source
