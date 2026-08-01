@@ -14,6 +14,7 @@ from job_application_automation.engines.greenhouse import (
     _fill_pre_submit_security_challenge,
     _fill_source_checkbox,
     _greenhouse_semantic_answer,
+    _option_text_matches,
     _required_empty_fields,
     _submit_control_enabled,
     _upload_cover_letter,
@@ -169,6 +170,13 @@ def test_greenhouse_semantic_answers_prevent_observed_matcher_collisions() -> No
     )
 
 
+def test_greenhouse_option_matching_does_not_treat_no_as_none() -> None:
+    assert _option_text_matches("No", "No")
+    assert _option_text_matches("No", "No, I do not require sponsorship")
+    assert not _option_text_matches("No", "None of the above")
+    assert _option_text_matches("LinkedIn", "LinkedIn profile")
+
+
 def test_fill_all_visible_populates_duplicate_standard_fields() -> None:
     page = MagicMock()
     controls = MagicMock()
@@ -280,6 +288,34 @@ def test_required_empty_fields_mocked() -> None:
     ):
         empty_labels = _required_empty_fields(page)
         assert "First Name *" in empty_labels
+
+
+def test_required_empty_fields_accepts_selected_checkbox_question_group() -> None:
+    page = MagicMock()
+    controls = MagicMock()
+    controls.count.return_value = 2
+    first = MagicMock()
+    second = MagicMock()
+    for control in (first, second):
+        control.is_visible.return_value = True
+        control.is_checked.return_value = False
+        control.get_attribute.side_effect = lambda attr: {
+            "type": "checkbox",
+            "name": "distinct-option-name",
+        }.get(attr)
+        control.evaluate.return_value = True
+    controls.nth.side_effect = [first, second]
+    page.locator.side_effect = lambda selector: (
+        MagicMock(count=MagicMock(return_value=0))
+        if selector == 'input[name="distinct-option-name"]:checked'
+        else controls
+    )
+
+    with patch(
+        "job_application_automation.engines.greenhouse._label_for",
+        side_effect=["LinkedIn", "Indeed"],
+    ):
+        assert _required_empty_fields(page) == []
 
 
 def test_upload_resume_valid_and_invalid(tmp_path: Path) -> None:

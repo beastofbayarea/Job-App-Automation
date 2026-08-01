@@ -264,12 +264,27 @@ def _select_native(page: Page, label_pattern: str, preferred: Sequence[str]) -> 
         ]
         for desired in preferred:
             for value, label in available:
-                if desired.lower() in label.lower() and value:
+                if _option_text_matches(desired, label) and value:
                     target.select_option(value=value)
                     return True
     except Exception:
         pass
     return False
+
+
+def _option_text_matches(desired: str, option_text: str) -> bool:
+    """Match a configured choice without letting short answers hit other words."""
+    desired_normalized = " ".join(str(desired).lower().split())
+    option_normalized = " ".join(str(option_text).lower().split())
+    if not desired_normalized or not option_normalized:
+        return False
+    if desired_normalized == option_normalized:
+        return True
+    if len(desired_normalized) <= 3:
+        return bool(
+            re.search(rf"(?<!\w){re.escape(desired_normalized)}(?!\w)", option_normalized)
+        )
+    return desired_normalized in option_normalized
 
 
 def _select_greenhouse_combobox(
@@ -413,7 +428,7 @@ def _fill_radio_or_checkbox_group(
             if label is not None and label.count()
             else (item.get_attribute("value") or "")
         )
-        if desired.lower() in option_text.lower():
+        if _option_text_matches(desired, option_text):
             item.check(force=True)
             return item.is_checked()
     return False
@@ -812,6 +827,22 @@ def _required_empty_fields(page: Page) -> list[str]:
                 if not control.is_checked():
                     name = control.get_attribute("name")
                     if name and page.locator(f'input[name="{name}"]:checked').count():
+                        continue
+                    if control.evaluate(
+                        """el => {
+                            const container = el.closest(
+                                'fieldset, [role="group"], [role="radiogroup"], [data-testid*="question"]'
+                            );
+                            if (!container) return false;
+                            return Boolean(container.querySelector(
+                                'input[type="checkbox"]:checked, input[type="radio"]:checked'
+                            ));
+                        }"""
+                    ):
+                        # Greenhouse frequently gives every option in a
+                        # checkbox group a distinct name while marking each
+                        # option aria-required. One selected option satisfies
+                        # the question; the unchecked choices are not missing.
                         continue
                     missing.append(label or name or f"choice-{index}")
             elif control.get_attribute("role") == "combobox":
