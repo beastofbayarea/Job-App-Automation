@@ -8,6 +8,7 @@ from job_application_automation.engines.greenhouse import (
     _valid_greenhouse_url,
     _fill_all_visible,
     _load_candidate_evidence,
+    _load_personalized_resume_evidence,
     _fill_explicit_required_consents,
     _fill_export_control_questions,
     _fill_custom_questions,
@@ -15,7 +16,9 @@ from job_application_automation.engines.greenhouse import (
     _fill_source_checkbox,
     _greenhouse_semantic_answer,
     _option_text_matches,
+    _resume_employer_answer,
     _required_empty_fields,
+    _skip_application_topic,
     _submit_control_enabled,
     _upload_cover_letter,
     _upload_resume,
@@ -137,6 +140,79 @@ def test_custom_text_question_blurs_to_commit_greenhouse_validation_state() -> N
     control.blur.assert_called_once()
 
 
+def test_greenhouse_essay_uses_personalized_resume_instead_of_short_default() -> None:
+    page = MagicMock()
+    body = MagicMock()
+    body.inner_text.return_value = "Role description"
+    controls = MagicMock()
+    controls.count.return_value = 1
+    control = MagicMock()
+    controls.nth.return_value = control
+    control.is_visible.return_value = True
+    control.get_attribute.side_effect = lambda name: {
+        "id": "question_essay",
+        "type": "text",
+        "name": "question_essay",
+        "role": "",
+        "placeholder": "Type here",
+        "aria-required": "true",
+    }.get(name)
+    control.evaluate.return_value = "textarea"
+    control.input_value.return_value = "Resume-grounded narrative"
+    page.locator.side_effect = lambda selector: body if selector == "body" else controls
+
+    with (
+        patch(
+            "job_application_automation.engines.greenhouse._label_for",
+            return_value="Describe your relevant product experience",
+        ),
+        patch(
+            "job_application_automation.engines.greenhouse._configured_answer",
+            return_value="Yes",
+        ),
+        patch(
+            "job_application_automation.engines.greenhouse._generate_essay",
+            return_value="Resume-grounded narrative",
+        ) as generate,
+    ):
+        result = _fill_custom_questions(
+            page,
+            {},
+            {},
+            {},
+            {},
+            {},
+            "Example",
+            "Product Manager",
+            "Personalized resume evidence",
+        )
+
+    assert result == {"Describe your relevant product experience": True}
+    generate.assert_called_once_with(
+        "Describe your relevant product experience",
+        "Role description",
+        "Example",
+        "Product Manager",
+        "Personalized resume evidence",
+    )
+
+
+def test_load_personalized_resume_evidence_extracts_attached_pdf(tmp_path: Path) -> None:
+    import pymupdf
+
+    resume = tmp_path / "personalized.pdf"
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_text((72, 72), "Personalized Product Manager evidence")
+    document.save(resume)
+    document.close()
+
+    assert "Personalized Product Manager evidence" in _load_personalized_resume_evidence(
+        resume,
+        {"candidate_evidence_file": "missing.txt"},
+    )
+
+
 def test_greenhouse_semantic_answers_prevent_observed_matcher_collisions() -> None:
     profile = {
         "current_company": "Current Company",
@@ -181,6 +257,48 @@ def test_greenhouse_option_matching_does_not_treat_no_as_none() -> None:
     assert _option_text_matches("No", "No, I do not require sponsorship")
     assert not _option_text_matches("No", "None of the above")
     assert _option_text_matches("LinkedIn", "LinkedIn profile")
+
+
+def test_greenhouse_policy_answers_cover_user_supplied_screening_defaults() -> None:
+    rules = {
+        "security_clearance": "No",
+        "government_relationship": "No",
+        "conflict_of_interest": "No",
+        "outside_activities": "No",
+        "employment_restrictions": "No",
+        "hourly_rate": "$50/hour",
+        "referral_default": "N/A",
+        "consent_default": "Yes",
+        "relocation": "Yes",
+        "permit_status": "Yes",
+        "visa_sponsorship": "No",
+        "target_country_work_authorization": "Yes",
+    }
+    assert _greenhouse_semantic_answer("Do you hold a security clearance?", {}, rules) == "No"
+    assert _greenhouse_semantic_answer("What is your expected hourly rate?", {}, rules) == "$50/hour"
+    assert _greenhouse_semantic_answer("Will you relocate to London?", {}, rules) == "Yes"
+    assert _greenhouse_semantic_answer("Are you authorized to work in France?", {}, rules) == "Yes"
+    assert _greenhouse_semantic_answer("Do you require visa sponsorship?", {}, rules) == "No"
+
+
+def test_resume_employer_answer_uses_generated_resume_companies() -> None:
+    evidence = "[COMPANY] AWS\n[COMPANY] Microsoft\n"
+    assert _resume_employer_answer("Have you worked at Microsoft before?", evidence) == "Yes"
+    assert _resume_employer_answer("Have you worked at MongoDB before?", evidence) == "No"
+
+
+def test_skip_application_topic_matches_configured_high_school_policy() -> None:
+    page = MagicMock()
+    page.locator.return_value.inner_text.return_value = (
+        "How did you perform in mathematics at high school?"
+    )
+    assert (
+        _skip_application_topic(
+            page,
+            {"skip_application_question_topics": ["mathematics at high school"]},
+        )
+        == "mathematics at high school"
+    )
 
 
 def test_fill_all_visible_populates_duplicate_standard_fields() -> None:

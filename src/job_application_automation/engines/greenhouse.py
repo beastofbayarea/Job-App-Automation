@@ -80,7 +80,8 @@ CUSTOM_QUESTION_CONTROL_SELECTOR = (
     'button[role="combobox"][id^="question_"], '
     'input[role="combobox"][id^="degree"], '
     'input[role="combobox"][id^="school"], '
-    'input[role="combobox"][id^="discipline"]'
+    'input[role="combobox"][id^="discipline"], '
+    'textarea, input[placeholder*="type here" i]'
 )
 
 logging.basicConfig(
@@ -410,6 +411,23 @@ def _select_greenhouse_combobox(
     return False
 
 
+def _select_greenhouse_combobox_max(page: Page, control: Locator) -> bool:
+    """Select the last visible option for explicitly configured maximum policies."""
+    try:
+        control.click()
+        control.press("ArrowDown")
+        page.wait_for_timeout(300)
+        options = page.locator('[role="option"], [id*="-option-"]')
+        visible = [options.nth(index) for index in range(options.count()) if options.nth(index).is_visible()]
+        if not visible:
+            control.press("Escape")
+            return False
+        visible[-1].click()
+        return True
+    except Exception:
+        return False
+
+
 def _fill_radio_or_checkbox_group(
     page: Page,
     control: Locator,
@@ -438,6 +456,26 @@ def _load_candidate_evidence(config: Mapping[str, Any]) -> str:
     return _shared_candidate_evidence(config)
 
 
+def _load_personalized_resume_evidence(
+    resume: Path,
+    config: Mapping[str, Any],
+) -> str:
+    """Extract evidence from the exact resume attached to this application."""
+    try:
+        import pymupdf
+
+        with pymupdf.open(resume) as document:
+            evidence = "\n".join(page.get_text("text") for page in document).strip()
+        if evidence:
+            return evidence
+        logger.warning("Personalized resume contained no extractable text: %s", resume)
+    except Exception as exc:
+        logger.warning("Could not extract personalized resume evidence from %s: %s", resume, exc)
+    # Keep a bounded fallback for malformed/image-only PDFs. The personalized
+    # resume remains the normal and preferred source.
+    return _load_candidate_evidence(config)
+
+
 def _greenhouse_semantic_answer(
     label: str,
     profile: Mapping[str, Any],
@@ -445,6 +483,40 @@ def _greenhouse_semantic_answer(
 ) -> str | None:
     """Resolve observed Greenhouse wording before broader aliases can collide."""
     normalized = " ".join(label.lower().split())
+    if re.search(r"\bsecurity clearance\b|\bclearance status\b", normalized):
+        return str(rules.get("security_clearance") or "").strip() or None
+    if re.search(
+        r"\bgovernment official\b|\bgovernment-owned\b|\bgovernment owned\b|"
+        r"\brelative of a government\b",
+        normalized,
+    ):
+        return str(rules.get("government_relationship") or "").strip() or None
+    if re.search(
+        r"\bconflict of interest\b|\bfinancial interest\b|\bpersonal relationship\b|"
+        r"\bfamily members?\b.*\b(?:employee|supplier|partner|vendor)\b",
+        normalized,
+    ):
+        return str(rules.get("conflict_of_interest") or "").strip() or None
+    if re.search(r"\boutside (?:business )?activit|\bside business|\bboard role", normalized):
+        return str(rules.get("outside_activities") or "").strip() or None
+    if re.search(r"\bnon[- ]?compete|\bnon[- ]?solicitation|\bemployment restriction", normalized):
+        return str(rules.get("employment_restrictions") or "").strip() or None
+    if re.search(r"\b(?:hourly|per hour|hourly pay|hourly rate)\b", normalized):
+        return str(rules.get("hourly_rate") or "").strip() or None
+    if re.search(r"\b(?:referr|know anyone|conference|event)\b", normalized):
+        return str(rules.get("referral_default") or "").strip() or None
+    if re.search(r"\b(?:record|transcrib|whatsapp|ai[- ]evaluation|use of ai)\b", normalized):
+        return str(rules.get("consent_default") or "").strip() or None
+    if re.search(r"\b(?:relocat\w*|work in .*office|based out of)\b", normalized):
+        return str(rules.get("relocation") or "").strip() or None
+    if re.search(r"\b(?:require|need|future)\b.*\b(?:visa )?sponsorship\b", normalized):
+        return str(rules.get("visa_sponsorship") or "").strip() or None
+    if re.search(r"\b(?:work permit|visa status|hold a visa|have a visa)\b", normalized):
+        if re.search(r"\b(?:require|sponsor|sponsorship)\b", normalized):
+            return str(rules.get("visa_sponsorship") or "").strip() or None
+        return str(rules.get("permit_status") or "").strip() or None
+    if re.search(r"\b(?:authorized|authorised|eligible|entitled) to work\b", normalized):
+        return str(rules.get("target_country_work_authorization") or "").strip() or None
     if "notice period" in normalized:
         return str(rules.get("notice_period") or "").strip() or None
     if re.search(
@@ -452,6 +524,8 @@ def _greenhouse_semantic_answer(
         normalized,
     ):
         return str(profile.get("current_company") or "").strip() or None
+    if re.search(r"\b(?:current|most recent|previous) (?:job )?title\b", normalized):
+        return str(profile.get("current_job_title") or "").strip() or None
     if re.search(r"\b(?:samples?\s+of\s+your\s+work|work\s+samples?)\b", normalized):
         return str(profile.get("website") or profile.get("portfolio") or "").strip() or None
     education = profile.get("education_history")
@@ -463,6 +537,36 @@ def _greenhouse_semantic_answer(
             normalized,
         ):
             return str(education.get("field_of_study") or "").strip() or None
+    return None
+
+
+def _resume_employer_answer(label: str, candidate_evidence: str) -> str | None:
+    if not re.search(r"\b(?:worked|employed) (?:at|by|for)\b", label, re.I):
+        return None
+    companies = re.findall(r"^\[COMPANY\]\s*(.+)$", candidate_evidence, re.MULTILINE)
+    normalized_label = " ".join(label.casefold().split())
+    if companies:
+        return "Yes" if any(company.casefold() in normalized_label for company in companies) else "No"
+    match = re.search(
+        r"\b(?:worked|employed) (?:at|by|for)\s+(.+?)(?:\s+before|\s+in the past|\?|$)",
+        label,
+        re.I,
+    )
+    if not match:
+        return None
+    company = re.sub(r"\b(?:inc\.?|llc|ltd\.?)\b", "", match.group(1), flags=re.I).strip(" ,.")
+    return "Yes" if company and company.casefold() in candidate_evidence.casefold() else "No"
+
+
+def _skip_application_topic(page: Page, config: Mapping[str, Any]) -> str | None:
+    body = " ".join(page.locator("body").inner_text().casefold().split())
+    topics = config.get("skip_application_question_topics", ())
+    if not isinstance(topics, Sequence) or isinstance(topics, (str, bytes)):
+        return None
+    for topic in topics:
+        normalized = " ".join(str(topic).casefold().split())
+        if normalized and normalized in body:
+            return str(topic)
     return None
 
 
@@ -498,6 +602,8 @@ def _fill_custom_questions(
             semantic_answer = _greenhouse_semantic_answer(label, profile, rules)
             if semantic_answer:
                 desired = semantic_answer
+            if not desired:
+                desired = _resume_employer_answer(label, candidate_evidence)
             # Language proficiency is a configured selection policy. Other
             # experience and relocation answers are resolved by field_matchers.
             language_question = bool(re.search(r"\b(language|fluen|speak\s+\w+)\b", label, re.I))
@@ -510,9 +616,33 @@ def _fill_custom_questions(
             success = False
             role_name = control.get_attribute("role") or ""
             tag = control.evaluate("el => el.tagName.toLowerCase()")
+            placeholder = control.get_attribute("placeholder") or ""
+            essay_control = tag == "textarea" or bool(
+                re.search(r"type here", placeholder, re.I)
+            )
+            if essay_control and desired and len(str(desired).split()) <= 3 and _is_essay_question(label):
+                # Broad binary/experience defaults are useful for choice
+                # controls but must not replace a requested narrative.
+                desired = None
+            experience_question = bool(
+                re.search(
+                    r"\b(?:experience|experienced|familiar|proficien|designed|launched|owned)\b",
+                    label,
+                    re.I,
+                )
+            )
+            maximum_policy = bool(
+                experience_question
+                and str(rules.get("experience_level_selection", "")).casefold()
+                == "max_value"
+            )
+            if not desired and experience_question and control_type in {"radio", "checkbox"}:
+                desired = str(rules.get("experience_requirement") or "").strip() or None
 
             if role_name == "combobox":
-                if desired:
+                if maximum_policy:
+                    success = _select_greenhouse_combobox_max(page, control)
+                elif desired:
                     preferred = (
                         location_answer_candidates(profile)
                         if is_location_question(label)
@@ -546,7 +676,17 @@ def _fill_custom_questions(
                             exc,
                         )
             elif tag == "select":
-                if desired:
+                if maximum_policy:
+                    options = control.locator("option")
+                    available = [
+                        options.nth(item).get_attribute("value")
+                        for item in range(options.count())
+                        if options.nth(item).get_attribute("value")
+                    ]
+                    if available:
+                        control.select_option(value=available[-1])
+                        success = True
+                elif desired:
                     success = _select_native(
                         page, re.escape(label), _answer_variants(label, desired, option_variants)
                     )
@@ -559,7 +699,7 @@ def _fill_custom_questions(
                     )
             elif tag == "textarea":
                 answer = desired
-                if not answer and _is_essay_question(label):
+                if not answer:
                     answer = _generate_essay(label, job_text, company, role, candidate_evidence)
                 if answer:
                     control.fill(answer)
@@ -567,7 +707,13 @@ def _fill_custom_questions(
             elif control_type not in {"file", "hidden", "submit", "button"}:
                 answer = desired
                 is_required = control.get_attribute("aria-required") == "true"
+                if not answer and is_required and re.search(
+                    r"\b(?:how many|number of|years? of experience)\b", label, re.I
+                ):
+                    answer = str(rules.get("numeric_experience_default") or "").strip()
                 if not answer and is_required and _is_essay_question(label):
+                    answer = _generate_essay(label, job_text, company, role, candidate_evidence)
+                if not answer and essay_control:
                     answer = _generate_essay(label, job_text, company, role, candidate_evidence)
                 if answer:
                     control.fill(answer)
@@ -1005,7 +1151,7 @@ def run(
         cover_letter = validate_nonempty_file(cover_letter, "cover letter")
 
     profile = dict(config["candidate"])
-    candidate_evidence = _load_candidate_evidence(config)
+    candidate_evidence = _load_personalized_resume_evidence(resume, config)
     email = resolve_candidate_email(profile, email_override)
 
     timeout = int(config.get("navigation_timeout_ms", 30_000))
@@ -1132,6 +1278,25 @@ def run(
                     "consent_fields": [],
                     "missing_required": [],
                     "screenshot": confirmed_screenshot,
+                }
+            skipped_topic = _skip_application_topic(page, config)
+            if skipped_topic:
+                return {
+                    "success": False,
+                    "status": "SKIPPED_APPLICATION_POLICY",
+                    "ats": ATS_NAME,
+                    "submitted": False,
+                    "confirmed": False,
+                    "test_mode": not live_submit,
+                    "filled_fields": {},
+                    "custom_questions": {},
+                    "eeo_fields": {},
+                    "consent_fields": [],
+                    "missing_required": [],
+                    "skip_topic": skipped_topic,
+                    "screenshot": _screenshot(
+                        page, screenshot_dir, company or "Greenhouse", "skipped_policy"
+                    ),
                 }
             fields = _fill_standard_fields(page, profile, email, resume, cover_letter)
             custom_questions = _fill_custom_questions(
