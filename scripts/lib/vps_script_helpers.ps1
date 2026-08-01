@@ -119,6 +119,7 @@ exit $LASTEXITCODE
         )
     } | ConvertTo-Json -Depth 4
 
+    $Process = $null
     try {
         [IO.File]::WriteAllText(
             $WrapperPath,
@@ -144,40 +145,50 @@ exit $LASTEXITCODE
         $Process = [Diagnostics.Process]::new()
         $Process.StartInfo = $StartInfo
         [void]$Process.Start()
-        $StandardOutput = $Process.StandardOutput.ReadToEndAsync()
-        $StandardError = $Process.StandardError.ReadToEndAsync()
-        $Completed = $Process.WaitForExit($TimeoutSeconds * 1000)
-        if (-not $Completed) {
+        $StandardOutputTask = $Process.StandardOutput.ReadToEndAsync()
+        $StandardErrorTask = $Process.StandardError.ReadToEndAsync()
+        $TimedOut = -not $Process.WaitForExit($TimeoutSeconds * 1000)
+        if ($TimedOut) {
             try {
-                $Process.Kill($true)
+                if (-not $Process.HasExited) {
+                    $Process.Kill($true)
+                }
             } catch {
-                try {
+                if (-not $Process.HasExited) {
                     $Process.Kill()
-                } catch {
-                    # The process may have exited between the timeout and kill request.
                 }
             }
-            [void]$Process.WaitForExit(2000)
-            return [pscustomobject]@{
-                TimedOut = $true
-                ExitCode = 124
-                Output = @()
-            }
         }
+
+        # The parameterless wait guarantees process termination after a timeout and
+        # lets redirected asynchronous readers observe closed stdout/stderr handles.
+        $Process.WaitForExit()
         $Output = @(
-            $StandardOutput.GetAwaiter().GetResult(),
-            $StandardError.GetAwaiter().GetResult()
+            $StandardOutputTask.GetAwaiter().GetResult(),
+            $StandardErrorTask.GetAwaiter().GetResult()
         ) |
             Where-Object { -not [string]::IsNullOrEmpty($_) } |
             ForEach-Object { $_ -split "\r?\n" } |
             Where-Object { $_ -ne "" }
 
         return [pscustomobject]@{
-            TimedOut = $false
-            ExitCode = $Process.ExitCode
+            TimedOut = $TimedOut
+            ExitCode = if ($TimedOut) { 124 } else { $Process.ExitCode }
             Output = @($Output)
         }
     } finally {
+        if ($null -ne $Process) {
+            try {
+                if (-not $Process.HasExited) {
+                    $Process.Kill($true)
+                    $Process.WaitForExit()
+                }
+            } catch {
+                # Best-effort cleanup for failures before normal timeout handling.
+            } finally {
+                $Process.Dispose()
+            }
+        }
         Remove-Item -LiteralPath $WrapperPath -Force -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath $ArgumentsPath -Force -ErrorAction SilentlyContinue
     }

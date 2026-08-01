@@ -51,7 +51,11 @@ where = ["src"]
 py-modules = ["job_automation"]
 
 [tool.setuptools.package-data]
-job_application_automation = ["resources/*.json", "resources/runtime/*.json"]
+job_application_automation = [
+    "dashboard/static/*",
+    "resources/*.json",
+    "resources/runtime/*.json",
+]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
@@ -73,6 +77,8 @@ strict = true
 mypy_path = "src"
 show_error_codes = true
 files = [
+    "src/job_application_automation/core/application_candidates.py",
+    "src/job_application_automation/core/ats_urls.py",
     "src/job_application_automation/core/contracts.py",
     "src/job_application_automation/core/submission_log.py",
     "src/job_application_automation/core/document_archive.py",

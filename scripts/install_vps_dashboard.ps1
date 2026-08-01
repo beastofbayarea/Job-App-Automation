@@ -69,7 +69,7 @@ repo=$Repo
 git -C "`$repo" pull --ff-only origin main
 test -x "`$repo/.venv/bin/python"
 test -f "`$repo/src/job_application_automation/dashboard/server.py"
-install -d -m 0700 "$repo/config"
+install -d -m 0700 "`$repo/config"
 install -m 0644 $UnitStage /etc/systemd/system/vps-dashboard.service
 rm -f $UnitStage
 systemctl daemon-reload

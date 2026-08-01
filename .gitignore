@@ -2,9 +2,13 @@
 __pycache__/
 *.py[cod]
 build/
+dist/
 *.egg-info/
 .venv/
 venv/
+.tox/
+.nox/
+.wheel-smoke/
 
 # Generated artifacts
 output/*
@@ -47,6 +51,15 @@ node_modules/
 .coverage
 coverage.xml
 htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
 
 # Local editor workspace settings
 .vscode/

@@ -18,20 +18,30 @@ git diff --quiet
 git diff --cached --quiet
 test ! -e config/runtime_config.json
 .venv/bin/python - <<'PY'
-from job_application_automation.core.runtime_config import RUNTIME_CONFIG, RUNTIME_CONFIG_DIR
+from job_application_automation.core.runtime_config import (
+    RUNTIME_CONFIG,
+    RUNTIME_CONFIG_DIR,
+    RUNTIME_SECTION_NAMES,
+)
 assert RUNTIME_CONFIG_DIR.is_dir()
-assert len(list(RUNTIME_CONFIG_DIR.glob("*.json"))) == 9
+actual = {path.name for path in RUNTIME_CONFIG_DIR.glob("*.json")}
+expected = {"schema_version.json", *(f"{name}.json" for name in RUNTIME_SECTION_NAMES)}
+assert actual == expected, (actual, expected)
 assert RUNTIME_CONFIG.application["tracker_file"]
 print("RUNTIME_CONFIG_OK")
 PY
-systemctl restart job-app-search-sync.service job-app-greenhouse.service job-app-greenhouse-excel.service job-app-smartrecruiters.service job-app-workable.service vps-dashboard.service
-systemctl is-active --quiet job-app-search-sync.service
-systemctl is-active --quiet job-app-greenhouse.service
-systemctl is-active --quiet job-app-greenhouse-excel.service
-systemctl is-active --quiet job-app-smartrecruiters.service
-systemctl is-active --quiet job-app-workable.service
-systemctl is-active --quiet vps-dashboard.service
-systemctl show job-app-search-sync.service job-app-greenhouse.service job-app-greenhouse-excel.service job-app-smartrecruiters.service job-app-workable.service vps-dashboard.service --property=Id,ActiveState,SubState,MainPID,NRestarts --no-pager
+units=`$(
+  {
+    systemctl list-unit-files 'job-app-*.service' --no-legend --no-pager
+    systemctl list-unit-files 'vps-dashboard.service' --no-legend --no-pager
+  } 2>/dev/null | awk '`$2 == "enabled" { print `$1 }'
+)
+test -n "`$units"
+systemctl restart `$units
+for unit in `$units; do
+  systemctl is-active --quiet "`$unit"
+done
+systemctl show `$units --property=Id,ActiveState,SubState,MainPID,NRestarts --no-pager
 git rev-parse --short=7 HEAD
 git status --porcelain
 "@

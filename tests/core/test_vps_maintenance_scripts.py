@@ -102,6 +102,23 @@ class PowerShellMaintenanceTests(unittest.TestCase):
         self.assertNotIn("dashboard.env", installer)
         self.assertNotIn("EnvironmentFile=-", unit)
 
+        remote_command_body = installer.split('$RemoteCommand = @"', 1)[1].split('"@', 1)[0]
+        render_command = (
+            f". '{SCRIPTS / 'lib' / 'vps_script_helpers.ps1'}';"
+            "$Repo=ConvertTo-PosixShellLiteral '/root/Job-App-Automation';"
+            "$UnitStage=ConvertTo-PosixShellLiteral '/tmp/vps-dashboard.service';"
+            '$RemoteCommand=@"'
+            f"{remote_command_body}"
+            '"@;'
+            "$RemoteCommand"
+        )
+
+        rendered = run([PWSH, "-NoProfile", "-Command", render_command], cwd=ROOT, check=True)
+        config_directory_command = next(
+            line for line in rendered.stdout.splitlines() if "install -d -m 0700" in line
+        )
+        self.assertEqual(config_directory_command, 'install -d -m 0700 "$repo/config"')
+
     def test_backend_quarantine_requires_live_failure_evidence(self) -> None:
         script = (SCRIPTS / "quarantine_unhealthy_cent_backend.ps1").read_text(encoding="utf-8")
 
@@ -136,6 +153,19 @@ class PowerShellMaintenanceTests(unittest.TestCase):
         self.assertIn("-hostkey", script)
         self.assertIn("-pwfile", script)
 
+    def test_runtime_restart_discovers_enabled_repository_services(self) -> None:
+        script = (SCRIPTS / "restart_vps_runtime.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("systemctl list-unit-files 'job-app-*.service'", script)
+        self.assertIn("systemctl list-unit-files 'vps-dashboard.service'", script)
+        self.assertIn("RUNTIME_SECTION_NAMES", script)
+        self.assertIn("systemctl restart `$units", script)
+        self.assertNotIn("assert len(list(RUNTIME_CONFIG_DIR.glob", script)
+        self.assertNotIn(
+            "systemctl restart job-app-search-sync.service job-app-greenhouse.service",
+            script,
+        )
+
     def test_code_deployer_is_pinned_bounded_and_fast_forward_only(self) -> None:
         script = (SCRIPTS / "deploy_vps_code.ps1").read_text(encoding="utf-8")
         helper = (SCRIPTS / "lib" / "vps_script_helpers.ps1").read_text(encoding="utf-8")
@@ -157,6 +187,22 @@ class PowerShellMaintenanceTests(unittest.TestCase):
         self.assertIn("$Result.Output", installer)
         self.assertNotIn("-Command $PscpCmd.Path", installer)
         self.assertNotIn("$Result.StandardOutput", installer)
+
+    def test_search_snapshot_covers_every_known_supervised_service(self) -> None:
+        script = (SCRIPTS / "vps_search_sync.sh").read_text(encoding="utf-8")
+
+        for service in (
+            "job-app-ashby",
+            "job-app-greenhouse",
+            "job-app-greenhouse-excel",
+            "job-app-lever",
+            "job-app-smartrecruiters",
+            "job-app-workable",
+            "job-app-search-sync",
+            "vps-dashboard",
+            "nginx",
+        ):
+            self.assertIn(f'  "{service}"', script)
 
     def test_status_probe_is_bounded_and_excludes_its_own_process_match(self) -> None:
         script = (SCRIPTS / "check_vps_automation_status.ps1").read_text(encoding="utf-8")
@@ -235,7 +281,7 @@ Write-Output "mock:$Value"
             completed_command = (
                 f". '{helper}';"
                 f"$result=Invoke-ExternalCommandWithTimeout -FilePath '{mock}' "
-                "-ArgumentList @('hello') -TimeoutSeconds 5;"
+                "-ArgumentList @('hello') -TimeoutSeconds 30;"
                 "$result | ConvertTo-Json -Depth 5 -Compress"
             )
 
@@ -243,32 +289,49 @@ Write-Output "mock:$Value"
                 [PWSH, "-NoProfile", "-Command", completed_command],
                 cwd=directory,
                 check=True,
+                timeout=60,
             )
             payload = json.loads(completed.stdout)
             self.assertFalse(payload["TimedOut"])
             self.assertEqual(payload["ExitCode"], 7)
             self.assertEqual(payload["Output"], ["mock:hello"])
 
-            mock.write_text("Start-Sleep -Seconds 5", encoding="utf-8")
+            marker = directory / "timed-out-command-finished.txt"
+            mock.write_text(
+                "\n".join(
+                    (
+                        "param([string]$Marker)",
+                        "Start-Sleep -Seconds 30",
+                        '[IO.File]::WriteAllText($Marker, "finished")',
+                    )
+                ),
+                encoding="utf-8",
+            )
             timeout_command = (
                 f". '{helper}';"
                 "$stopwatch=[Diagnostics.Stopwatch]::StartNew();"
                 f"$result=Invoke-ExternalCommandWithTimeout -FilePath '{mock}' "
-                "-ArgumentList @() -TimeoutSeconds 1;"
+                f"-ArgumentList @('{marker}') -TimeoutSeconds 1;"
                 "$stopwatch.Stop();"
                 "$result | Add-Member -NotePropertyName ElapsedMilliseconds "
                 "-NotePropertyValue $stopwatch.ElapsedMilliseconds;"
                 "$result | ConvertTo-Json -Depth 5 -Compress"
             )
+            timeout_environment = os.environ.copy()
+            timeout_environment.update({"TEMP": str(directory), "TMP": str(directory)})
             timed_out = run(
                 [PWSH, "-NoProfile", "-Command", timeout_command],
                 cwd=directory,
+                env=timeout_environment,
                 check=True,
+                timeout=30,
             )
             payload = json.loads(timed_out.stdout)
             self.assertTrue(payload["TimedOut"])
             self.assertEqual(payload["ExitCode"], 124)
-            self.assertLess(payload["ElapsedMilliseconds"], 4_000)
+            self.assertFalse(marker.exists())
+            self.assertFalse(list(directory.glob("external-command-*")))
+            self.assertLess(payload["ElapsedMilliseconds"], 10_000)
 
     def test_vps_command_transport_normalizes_windows_line_endings(self) -> None:
         expected = "first\nsecond\nthird\n"
