@@ -275,7 +275,9 @@ def test_greenhouse_policy_answers_cover_user_supplied_screening_defaults() -> N
         "target_country_work_authorization": "Yes",
     }
     assert _greenhouse_semantic_answer("Do you hold a security clearance?", {}, rules) == "No"
-    assert _greenhouse_semantic_answer("What is your expected hourly rate?", {}, rules) == "$50/hour"
+    assert (
+        _greenhouse_semantic_answer("What is your expected hourly rate?", {}, rules) == "$50/hour"
+    )
     assert _greenhouse_semantic_answer("Will you relocate to London?", {}, rules) == "Yes"
     assert _greenhouse_semantic_answer("Are you authorized to work in France?", {}, rules) == "Yes"
     assert _greenhouse_semantic_answer("Do you require visa sponsorship?", {}, rules) == "No"

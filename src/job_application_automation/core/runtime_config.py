@@ -44,9 +44,7 @@ def _read_json_file(path: Path) -> Mapping[str, Any]:
         with path.open("r", encoding="utf-8") as stream:
             document = json.load(stream)
     except (OSError, json.JSONDecodeError) as exc:
-        raise ValueError(
-            f"runtime config contains invalid JSON or cannot be read: {path}"
-        ) from exc
+        raise ValueError(f"runtime config contains invalid JSON or cannot be read: {path}") from exc
     if not isinstance(document, Mapping):
         raise ValueError(f"runtime config file root must be an object: {path}")
     return document

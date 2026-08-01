@@ -283,9 +283,7 @@ def _option_text_matches(desired: str, option_text: str) -> bool:
     if desired_normalized == option_normalized:
         return True
     if len(desired_normalized) <= 3:
-        return bool(
-            re.search(rf"(?<!\w){re.escape(desired_normalized)}(?!\w)", option_normalized)
-        )
+        return bool(re.search(rf"(?<!\w){re.escape(desired_normalized)}(?!\w)", option_normalized))
     return desired_normalized in option_normalized
 
 
@@ -419,7 +417,11 @@ def _select_greenhouse_combobox_max(page: Page, control: Locator) -> bool:
         control.press("ArrowDown")
         page.wait_for_timeout(300)
         options = page.locator('[role="option"], [id*="-option-"]')
-        visible = [options.nth(index) for index in range(options.count()) if options.nth(index).is_visible()]
+        visible = [
+            options.nth(index)
+            for index in range(options.count())
+            if options.nth(index).is_visible()
+        ]
         if not visible:
             control.press("Escape")
             return False
@@ -535,7 +537,9 @@ def _resume_employer_answer(label: str, candidate_evidence: str) -> str | None:
     companies = re.findall(r"^\[COMPANY\]\s*(.+)$", candidate_evidence, re.MULTILINE)
     normalized_label = " ".join(label.casefold().split())
     if companies:
-        return "Yes" if any(company.casefold() in normalized_label for company in companies) else "No"
+        return (
+            "Yes" if any(company.casefold() in normalized_label for company in companies) else "No"
+        )
     match = re.search(
         r"\b(?:worked|employed) (?:at|by|for)\s+(.+?)(?:\s+before|\s+in the past|\?|$)",
         label,
@@ -606,10 +610,13 @@ def _fill_custom_questions(
             role_name = control.get_attribute("role") or ""
             tag = control.evaluate("el => el.tagName.toLowerCase()")
             placeholder = control.get_attribute("placeholder") or ""
-            essay_control = tag == "textarea" or bool(
-                re.search(r"type here", placeholder, re.I)
-            )
-            if essay_control and desired and len(str(desired).split()) <= 3 and _is_essay_question(label):
+            essay_control = tag == "textarea" or bool(re.search(r"type here", placeholder, re.I))
+            if (
+                essay_control
+                and desired
+                and len(str(desired).split()) <= 3
+                and _is_essay_question(label)
+            ):
                 # Broad binary/experience defaults are useful for choice
                 # controls but must not replace a requested narrative.
                 desired = None
@@ -622,8 +629,7 @@ def _fill_custom_questions(
             )
             maximum_policy = bool(
                 experience_question
-                and str(rules.get("experience_level_selection", "")).casefold()
-                == "max_value"
+                and str(rules.get("experience_level_selection", "")).casefold() == "max_value"
             )
             if not desired and experience_question and control_type in {"radio", "checkbox"}:
                 desired = str(rules.get("experience_requirement") or "").strip() or None
@@ -696,8 +702,10 @@ def _fill_custom_questions(
             elif control_type not in {"file", "hidden", "submit", "button"}:
                 answer = desired
                 is_required = control.get_attribute("aria-required") == "true"
-                if not answer and is_required and re.search(
-                    r"\b(?:how many|number of|years? of experience)\b", label, re.I
+                if (
+                    not answer
+                    and is_required
+                    and re.search(r"\b(?:how many|number of|years? of experience)\b", label, re.I)
                 ):
                     answer = str(rules.get("numeric_experience_default") or "").strip()
                 if not answer and is_required and _is_essay_question(label):

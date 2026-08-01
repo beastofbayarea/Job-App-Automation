@@ -716,7 +716,6 @@ def discovery_url_key(url: str) -> str:
     return urlunparse((parsed.scheme.lower(), parsed.netloc.lower(), path, "", parsed.query, ""))
 
 
-
 def is_restricted_url(url: str) -> bool:
     """Check if a URL points to a restricted domain/board such as jobgether or jobtogether."""
     if not url:
@@ -1672,9 +1671,7 @@ def fetch_ashby_jobs(
 
 
 def smartrecruiters_api_base(board: Board) -> str:
-    return PROVIDER_API_URLS["smartrecruiters"].format(
-        token=quote(board.token, safe="")
-    )
+    return PROVIDER_API_URLS["smartrecruiters"].format(token=quote(board.token, safe=""))
 
 
 def smartrecruiters_description(value: Any) -> str:

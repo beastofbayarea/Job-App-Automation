@@ -138,13 +138,15 @@ class PowerShellMaintenanceTests(unittest.TestCase):
 
     def test_code_deployer_is_pinned_bounded_and_fast_forward_only(self) -> None:
         script = (SCRIPTS / "deploy_vps_code.ps1").read_text(encoding="utf-8")
+        helper = (SCRIPTS / "lib" / "vps_script_helpers.ps1").read_text(encoding="utf-8")
 
         self.assertIn("pull --ff-only origin main", script)
         self.assertIn("Invoke-ExternalCommandWithTimeout", script)
         self.assertIn("[int]$TimeoutSeconds = 60", script)
         self.assertIn("-hostkey", script)
         self.assertIn("-pwfile", script)
-        self.assertIn("invalid vps.ssh_port", script)
+        self.assertIn("Read-VpsConnectionConfig", script)
+        self.assertIn("invalid vps.ssh_port", helper)
         self.assertNotIn("git -C $Repo pull origin main", script)
 
     def test_continuous_search_installer_uses_current_timeout_helper_contract(self) -> None:
@@ -735,6 +737,7 @@ class PullSnapshotTests(unittest.TestCase):
                 str(self.consumer),
             ],
             cwd=self.outside,
+            timeout=60,
         )
 
     def test_pull_restores_complete_snapshot_without_touching_index(self) -> None:

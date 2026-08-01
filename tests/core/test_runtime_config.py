@@ -31,7 +31,9 @@ def _split_document(directory: Path) -> dict[str, object]:
 
 class RuntimeConfigTests(unittest.TestCase):
     def test_packaged_defaults_match_the_tracked_runtime_config(self) -> None:
-        self.assertEqual(_split_document(DEFAULT_RUNTIME_CONFIG_DIR), _split_document(RUNTIME_CONFIG_DIR))
+        self.assertEqual(
+            _split_document(DEFAULT_RUNTIME_CONFIG_DIR), _split_document(RUNTIME_CONFIG_DIR)
+        )
         self.assertEqual(
             {path.name for path in DEFAULT_RUNTIME_CONFIG_DIR.glob("*.json")},
             {path.name for path in RUNTIME_CONFIG_DIR.glob("*.json")},
