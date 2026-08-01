@@ -12,9 +12,9 @@ from pathlib import Path
 from typing import Any
 from collections.abc import Sequence
 
+from .application_candidates import SUPPORTED_PLATFORMS, eligible_application_jobs
 from .artifacts import atomic_write_text, read_json
 from .contracts import EngineResult
-from .engine_shared import ATS_HOST_MARKERS, detect_ats_job_url
 from .identity import canonical_job_url
 from .observability import initialize_observability
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
@@ -22,7 +22,6 @@ from ..search.backlog import load_confirmed_urls, remove_confirmed_job
 
 
 UTC = timezone.utc
-SUPPORTED_PLATFORMS = frozenset(ATS_HOST_MARKERS)
 DEFAULT_MAX_ATTEMPTS_PER_ATS = int(RUNTIME_CONFIG.application["vps_max_attempts_per_ats"])
 DEFAULT_RESULTS_DIR = resolve_runtime_path(
     RUNTIME_CONFIG.application["vps_application_results_dir"]
@@ -86,51 +85,7 @@ def _save_failure_report(
 
 
 def _eligible_jobs(payload: Any) -> list[dict[str, Any]]:
-    if not isinstance(payload, list):
-        raise ValueError("private application input must be a JSON array")
-    eligible: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for value in payload:
-        if not isinstance(value, dict):
-            continue
-        if str(value.get("live_status", "")).strip().lower() != "live":
-            continue
-        if not all(
-            str(value.get(key, "")).strip()
-            for key in ("job_url", "company", "title", "description")
-        ):
-            continue
-        declared_platform = str(value.get("platform", "")).strip().lower()
-        candidate_urls = [
-            str(value.get("apply_url", "")).strip(),
-            str(value.get("job_url", "")).strip(),
-        ]
-        application_url = next(
-            (
-                candidate_url
-                for candidate_url in candidate_urls
-                if detect_ats_job_url(candidate_url)
-            ),
-            "",
-        )
-        platform = detect_ats_job_url(application_url) if application_url else None
-        if platform not in SUPPORTED_PLATFORMS:
-            continue
-        if declared_platform in SUPPORTED_PLATFORMS and declared_platform != platform:
-            continue
-        try:
-            canonical_url = canonical_job_url(application_url)
-        except ValueError:
-            continue
-        if canonical_url in seen:
-            continue
-        seen.add(canonical_url)
-        job = dict(value)
-        job["platform"] = platform
-        job["_canonical_url"] = canonical_url
-        job["_application_url"] = application_url
-        eligible.append(job)
-    return eligible
+    return eligible_application_jobs(payload, input_label="private application input")
 
 
 def _confirmed_urls(submission_log_path: Path) -> set[str]:

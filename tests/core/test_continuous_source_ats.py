@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import openpyxl
+import pytest
 
 from job_application_automation.core import continuous_source_ats
 from job_application_automation.core.artifacts import read_json
@@ -65,6 +66,57 @@ def test_tracker_source_loads_only_recognized_provider_jobs(tmp_path: Path) -> N
             "tracker_row": 2,
         }
     ]
+
+
+def test_tracker_source_rejects_declared_and_detected_provider_mismatch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        continuous_source_ats,
+        "load_jobs_from_tracker",
+        lambda _path: [
+            {
+                "url": "https://jobs.lever.co/example/123",
+                "company": "Example",
+                "role": "Product Manager",
+                "ats": "greenhouse",
+                "row_number": 2,
+            }
+        ],
+    )
+
+    jobs = continuous_source_ats._source_jobs(
+        source="tracker",
+        ats_platform="greenhouse",
+        input_path=tmp_path / "unused.json",
+        tracker_path=tmp_path / "tracker.xlsx",
+    )
+
+    assert jobs == []
+
+
+def test_source_worker_rejects_uninstalled_provider_before_file_access(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="engine is not installed"):
+        continuous_source_ats.main(
+            [
+                "--ats-platform",
+                "futureats",
+                "--source",
+                "search",
+                "--worker-id",
+                "search",
+                "--state",
+                str(tmp_path / "state.json"),
+                "--selected-input",
+                str(tmp_path / "selected.json"),
+                "--results-dir",
+                str(tmp_path / "results"),
+                "--documents-dir",
+                str(tmp_path / "documents"),
+                "--validate-only",
+            ]
+        )
 
 
 def test_claims_prevent_peer_worker_from_selecting_same_greenhouse_job(

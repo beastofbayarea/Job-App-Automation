@@ -190,11 +190,29 @@ class SubmissionLog:
                     matches[submission_id] = dict(entry)
             return matches
 
-    def load(self, path: Path) -> int:
-        """Merge entries from an existing JSON log and return their count."""
+    def load(self, path: Path, *, strict: bool = False) -> int:
+        """Merge entries from an existing JSON log and return their count.
+
+        The default remains permissive for legacy readers that historically
+        ignored non-object entries.  Live-submission preflight uses ``strict``
+        so a malformed record cannot make the ledger appear empty and allow a
+        duplicate application attempt.
+        """
         payload = read_json(path)
         if not isinstance(payload, dict):
             raise ValueError("submission log root must be an object")
+        if strict:
+            for submission_id, value in payload.items():
+                if not isinstance(submission_id, str) or not isinstance(value, Mapping):
+                    raise ValueError(
+                        "submission log entries must map string IDs to submission objects"
+                    )
+                try:
+                    SubmissionRecord.from_payload(value)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(
+                        f"submission log entry {submission_id!r} is invalid: {exc}"
+                    ) from exc
         valid = {
             str(key): dict(value)
             for key, value in payload.items()

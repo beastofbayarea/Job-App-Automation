@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 from collections.abc import Callable, Mapping, Sequence
 
+from .application_candidates import application_url, eligible_application_jobs
 from .artifacts import atomic_write_text, read_json
 from .contracts import EngineResult
 from .identity import canonical_job_url, normalize_email
@@ -93,33 +94,12 @@ def _save_state(path: Path, state: dict[str, Any]) -> None:
 
 
 def _eligible_jobs(payload: Any, ats_platform: str) -> list[dict[str, Any]]:
-    if not isinstance(payload, list):
-        raise ValueError(f"continuous {ats_platform} input must be a JSON array")
-    eligible: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for value in payload:
-        if not isinstance(value, dict):
-            continue
-        if str(value.get("platform", "")).strip().lower() != ats_platform:
-            continue
-        if str(value.get("live_status", "")).strip().lower() != "live":
-            continue
-        if not all(
-            str(value.get(key, "")).strip()
-            for key in ("job_url", "company", "title", "description")
-        ):
-            continue
-        try:
-            canonical_url = canonical_job_url(value["job_url"])
-        except ValueError:
-            continue
-        if canonical_url in seen:
-            continue
-        seen.add(canonical_url)
-        job = dict(value)
-        job["_canonical_url"] = canonical_url
-        eligible.append(job)
-    return eligible
+    return eligible_application_jobs(
+        payload,
+        expected_platform=ats_platform,
+        require_declared_platform=True,
+        input_label=f"continuous {ats_platform} input",
+    )
 
 
 def _confirmed_urls(path: Path, ats_platform: str) -> set[str]:
@@ -345,7 +325,7 @@ def _prepare_documents(
             "documents",
             "generate",
             "--url",
-            str(job["job_url"]).strip(),
+            application_url(job),
             "--company",
             str(job["company"]).strip(),
             "--role",
@@ -386,7 +366,7 @@ def _apply(
         str(launcher),
         "apply",
         "--url",
-        str(job["job_url"]).strip(),
+        application_url(job),
         "--company",
         str(job["company"]).strip(),
         "--role",
@@ -454,7 +434,7 @@ def process_one(
         record = {
             "status": "preparing",
             "stage": "documents",
-            "job_url": str(job["job_url"]).strip(),
+            "job_url": application_url(job),
             "company": str(job["company"]).strip(),
             "title": str(job["title"]).strip(),
             "platform": ats_platform,
@@ -715,7 +695,7 @@ def _seed_platform_input(
         return 0
     jobs = _eligible_jobs(_load_json(SHARED_INPUT), ats_platform)
     payload = [
-        {key: value for key, value in job.items() if key != "_canonical_url"} for job in jobs
+        {key: value for key, value in job.items() if not key.startswith("_")} for job in jobs
     ]
     atomic_write_text(
         input_path,

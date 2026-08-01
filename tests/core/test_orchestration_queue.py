@@ -443,6 +443,173 @@ class QueueSafetyTests(unittest.TestCase):
         self.assertFalse(results[0]["submitted"])
         runner.run.assert_not_called()
 
+    def test_live_orchestrator_fails_closed_on_a_corrupt_submission_ledger(self) -> None:
+        job_url = "https://apply.workable.com/acme/j/ABC123/"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            resume = root / "base.pdf"
+            resume.write_bytes(b"x" * 5001)
+            profile = root / "profile.json"
+            profile.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 2,
+                        "candidate": {
+                            "identity": {"first_name": "Jane", "last_name": "Doe"},
+                            "contact": {"fallback_email": "fallback@example.test"},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            pool = root / "emails.json"
+            pool.write_text('["candidate@example.test"]', encoding="utf-8")
+            ledger_path = root / "submission_log.json"
+            ledger_path.write_text('{"broken": {"status": "SUBMITTED & CONFIRMED"}}')
+            engine = root / "engine.py"
+            engine.write_text("raise RuntimeError('must not run')\n", encoding="utf-8")
+            runner = MagicMock()
+
+            with self.assertRaisesRegex(ValueError, "Could not safely load submission log"):
+                orchestrator.run_orchestrator(
+                    {"workable": engine},
+                    None,
+                    resume,
+                    profile,
+                    root / "results.json",
+                    email_pool_path=pool,
+                    submission_log_path=ledger_path,
+                    live_submit=True,
+                    shuffle=False,
+                    process_runner=runner,
+                    direct_url=job_url,
+                    direct_company="Acme",
+                    direct_role="Product Manager",
+                )
+
+        runner.run.assert_not_called()
+
+    def test_confirmed_ledger_write_failure_is_quarantined_and_not_retried(self) -> None:
+        job_url = "https://apply.workable.com/acme/j/ABC123/"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            resume = root / "prepared.pdf"
+            resume.write_bytes(b"%PDF-" + b"x" * 5001)
+            cover_letter = root / "cover-letter.pdf"
+            cover_letter.write_bytes(b"%PDF-" + b"x" * 1200)
+            profile = root / "profile.json"
+            profile.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 2,
+                        "candidate": {
+                            "identity": {"first_name": "Jane", "last_name": "Doe"},
+                            "contact": {"fallback_email": "candidate@example.test"},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            ledger_path = root / "submission_log.json"
+            engine = root / "engine.py"
+            engine.write_text("# test engine\n", encoding="utf-8")
+            confirmed = EngineResult(
+                success=True,
+                status=EngineStatus.SUBMITTED_CONFIRMED.value,
+                ats="workable",
+                submitted=True,
+                confirmed=True,
+                test_mode=False,
+            )
+            runner = MagicMock()
+            runner.run.return_value = orchestrator.ProcessResult(
+                returncode=0,
+                stdout=confirmed.to_wire_line(),
+                stderr="",
+            )
+            original_save = SubmissionLog.save
+
+            def fail_primary_save(log: SubmissionLog, path: Path) -> None:
+                if path == ledger_path:
+                    raise OSError("simulated ledger write failure")
+                original_save(log, path)
+
+            with (
+                patch.object(
+                    orchestrator, "email_from_resume", return_value="candidate@example.test"
+                ),
+                patch.object(
+                    orchestrator, "current_title_from_resume", return_value="Product Manager"
+                ),
+                patch.object(
+                    orchestrator,
+                    "create_application_screenshot_directory",
+                    return_value=root / "screenshots",
+                ),
+                patch.object(
+                    orchestrator,
+                    "cleanup_application_screenshot_directory",
+                    return_value=(0, 0),
+                ),
+                patch.object(SubmissionLog, "save", autospec=True, side_effect=fail_primary_save),
+            ):
+                results = orchestrator.run_orchestrator(
+                    {"workable": engine},
+                    None,
+                    resume,
+                    profile,
+                    root / "results.json",
+                    prepared_resume_path=resume,
+                    cover_letter_path=cover_letter,
+                    email_override="candidate@example.test",
+                    submission_log_path=ledger_path,
+                    live_submit=True,
+                    shuffle=False,
+                    process_runner=runner,
+                    direct_url=job_url,
+                    direct_company="Acme",
+                    direct_role="Product Manager",
+                )
+
+            self.assertEqual(results[0]["status"], orchestrator.LEDGER_PERSIST_FAILED_STATUS)
+            self.assertFalse(results[0]["success"])
+            self.assertTrue(results[0]["submitted"])
+            self.assertTrue(results[0]["confirmed"])
+            self.assertTrue(results[0]["manual_review_required"])
+            self.assertFalse(results[0]["retry_safe"])
+            quarantine_path = orchestrator._submission_quarantine_path(ledger_path)
+            quarantined = json.loads(quarantine_path.read_text(encoding="utf-8"))
+            self.assertEqual(len(quarantined), 1)
+            self.assertEqual(
+                next(iter(quarantined.values()))["status"],
+                orchestrator.LEDGER_PERSIST_FAILED_STATUS,
+            )
+
+            retry_runner = MagicMock()
+            retry_results = orchestrator.run_orchestrator(
+                {"workable": engine},
+                None,
+                resume,
+                profile,
+                root / "retry-results.json",
+                prepared_resume_path=resume,
+                cover_letter_path=cover_letter,
+                email_override="candidate@example.test",
+                submission_log_path=ledger_path,
+                live_submit=True,
+                shuffle=False,
+                process_runner=retry_runner,
+                direct_url=job_url,
+                direct_company="Acme",
+                direct_role="Product Manager",
+            )
+
+        self.assertEqual(
+            retry_results[0]["status"],
+            orchestrator.LEDGER_PERSIST_FAILED_STATUS,
+        )
+        retry_runner.run.assert_not_called()
+
     def test_queue_rejects_invalid_indexes_and_timeouts_before_starting(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             queue_path = Path(directory) / "queue.txt"

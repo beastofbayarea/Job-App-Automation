@@ -15,6 +15,7 @@ from urllib.parse import parse_qsl, urlsplit
 from collections.abc import Mapping, Sequence
 
 from .artifacts import atomic_write_text, interprocess_file_lock, read_json
+from .ats_urls import detect_ats_job_url
 from .continuous_ats import (
     DEFAULT_BACKLOG,
     DEFAULT_EMAIL_POOL,
@@ -28,6 +29,7 @@ from .continuous_ats import (
     _load_state,
     _reconcile_interrupted_submissions,
     _save_state,
+    _validate_platform,
     process_one,
 )
 from .identity import canonical_job_url
@@ -165,17 +167,23 @@ def _source_jobs(
     if tracker_path is None:
         raise ValueError("--tracker is required for tracker source workers")
     jobs = load_jobs_from_tracker(tracker_path)
-    return [
-        {
-            "job_url": str(job["url"]),
-            "company": str(job["company"]),
-            "title": str(job["role"]),
-            "platform": ats_platform,
-            "tracker_row": int(job["row_number"]),
-        }
-        for job in jobs
-        if str(job["ats"]).strip().lower() == ats_platform
-    ]
+    eligible: list[dict[str, Any]] = []
+    for job in jobs:
+        job_url = str(job["url"]).strip()
+        if str(job["ats"]).strip().lower() != ats_platform:
+            continue
+        if detect_ats_job_url(job_url) != ats_platform:
+            continue
+        eligible.append(
+            {
+                "job_url": job_url,
+                "company": str(job["company"]),
+                "title": str(job["role"]),
+                "platform": ats_platform,
+                "tracker_row": int(job["row_number"]),
+            }
+        )
+    return eligible
 
 
 def _candidate_url(job: Mapping[str, Any]) -> str:
@@ -421,7 +429,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    ats_platform = str(args.ats_platform).strip().lower()
+    ats_platform = _validate_platform(args.ats_platform)
     worker_id = str(args.worker_id).strip().lower()
     if not WORKER_ID_PATTERN.fullmatch(worker_id):
         raise SystemExit(

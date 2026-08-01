@@ -152,6 +152,14 @@ class SubmissionLogTests(unittest.TestCase):
         self.assertEqual(count, 1)
         self.assertIsNone(restored.get("bad"))
 
+    def test_strict_load_rejects_a_malformed_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "submission_log.json"
+            path.write_text('{"not-a-submission": {"status": "SUBMITTED & CONFIRMED"}}')
+
+            with self.assertRaisesRegex(ValueError, "not-a-submission.*invalid"):
+                SubmissionLog().load(path, strict=True)
+
 
 if __name__ == "__main__":
     unittest.main()

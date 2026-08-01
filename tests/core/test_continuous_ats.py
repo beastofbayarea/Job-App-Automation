@@ -410,6 +410,29 @@ def test_eligibility_is_platform_specific_live_complete_and_deduplicated() -> No
     assert jobs[0]["_canonical_url"] == "https://jobs.ashbyhq.com/example/123"
 
 
+def test_eligibility_rejects_declared_and_detected_provider_mismatch() -> None:
+    jobs = worker._eligible_jobs(
+        [_job("https://jobs.lever.co/example/123", platform="ashby")],
+        "ashby",
+    )
+
+    assert jobs == []
+
+
+def test_eligibility_routes_to_matching_provider_apply_url() -> None:
+    job = _job(
+        "https://boards.greenhouse.io/example/jobs/123",
+        platform="ashby",
+    )
+    job["apply_url"] = "https://jobs.ashbyhq.com/example/456/application"
+
+    jobs = worker._eligible_jobs([job], "ashby")
+
+    assert len(jobs) == 1
+    assert jobs[0]["_application_url"] == job["apply_url"]
+    assert jobs[0]["_canonical_url"] == "https://jobs.ashbyhq.com/example/456"
+
+
 def test_provider_refresh_uses_shared_backlog_and_isolated_search_artifacts(
     tmp_path: Path,
 ) -> None:

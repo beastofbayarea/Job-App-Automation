@@ -42,11 +42,17 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 from collections.abc import Callable, Mapping, Sequence
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
 
 from playwright.sync_api import Browser, Locator, Page, Playwright
 from pypdf import PdfReader
 
+from .ats_urls import (
+    ATS_HOST_MARKERS,
+    detect_ats_job_url,
+    validate_ats_job_url,
+    validate_ats_url as validate_ats_url,
+)
 from .contracts import ENGINE_RESULT_PREFIX, EngineResult
 from .identity import normalize_email
 from .paths import DATA_DIR
@@ -87,28 +93,6 @@ SENSITIVE_FIELD_PATTERN = re.compile(
     r"sexual|\bsex\b|orientation|transgender|demographic|identity|pronoun",
     re.IGNORECASE,
 )
-
-ATS_HOST_MARKERS: Mapping[str, tuple[str, ...]] = {
-    "ashby": ("ashbyhq.com",),
-    "greenhouse": ("greenhouse.io",),
-    "lever": ("lever.co",),
-    "workable": ("workable.com", "apply.workable.com"),
-    "smartrecruiters": ("smartrecruiters.com", "jobs.smartrecruiters.com"),
-}
-
-# Requiring provider-owned job path shapes prevents a company board root from
-# being mistaken for an individual application. Greenhouse embedded and custom
-# domain forms are handled separately in ``validate_ats_job_url``.
-ATS_JOB_PATH_PATTERNS: Mapping[str, tuple[re.Pattern[str], ...]] = {
-    "ashby": (re.compile(r"^/[^/]+/[^/]+(?:/application)?/?$", re.I),),
-    "greenhouse": (re.compile(r"^/[^/]+/jobs/[^/]+/?$", re.I),),
-    "lever": (re.compile(r"^/[^/]+/[^/]+(?:/apply)?/?$", re.I),),
-    "workable": (re.compile(r"^/(?:[^/]+/)?(?:j|jobs)/[^/]+(?:/(?:apply|application))?/?$", re.I),),
-    "smartrecruiters": (
-        re.compile(r"^/[^/]+/[^/]+/?$", re.I),
-        re.compile(r"^/oneclick-ui/company/[^/]+/publication/[^/]+/?$", re.I),
-    ),
-}
 
 
 @dataclass
@@ -334,68 +318,6 @@ def load_personalized_resume_evidence(
     except Exception as exc:
         logger.warning("Could not extract personalized resume evidence from %s: %s", resume, exc)
     return load_candidate_evidence(config)
-
-
-def validate_ats_url(url: str, ats: str) -> bool:
-    if ats not in ATS_HOST_MARKERS:
-        return False
-    try:
-        parsed = urlparse(str(url).strip())
-    except ValueError:
-        return False
-    host = (parsed.hostname or "").lower().rstrip(".")
-    greenhouse_job_id = parse_qs(parsed.query).get("gh_jid", [])
-    # Some companies embed the Greenhouse form on their own career site (not
-    # *.greenhouse.io); a numeric gh_jid query param is the only reliable signal
-    # that such a custom-domain URL is still a genuine Greenhouse posting.
-    custom_greenhouse_url = (
-        ats == "greenhouse" and len(greenhouse_job_id) == 1 and greenhouse_job_id[0].isdigit()
-    )
-    return (
-        parsed.scheme.lower() == "https"
-        and bool(host)
-        and (
-            any(_host_matches(host, marker) for marker in ATS_HOST_MARKERS[ats])
-            or custom_greenhouse_url
-        )
-    )
-
-
-def validate_ats_job_url(url: str, ats: str) -> bool:
-    """Return whether *url* identifies a job, not merely an ATS company board."""
-    if not validate_ats_url(url, ats):
-        return False
-    patterns = ATS_JOB_PATH_PATTERNS.get(ats)
-    if not patterns:
-        return True
-    try:
-        parsed = urlparse(str(url).strip())
-        path = parsed.path or "/"
-    except ValueError:
-        return False
-    if ats == "greenhouse":
-        query = parse_qs(parsed.query)
-        gh_jid = query.get("gh_jid", [])
-        embed_token = query.get("token", [])
-        if len(gh_jid) == 1 and gh_jid[0].isdigit():
-            return True
-        if (
-            path.rstrip("/").casefold() == "/embed/job_app"
-            and len(embed_token) == 1
-            and embed_token[0].isdigit()
-        ):
-            return True
-    return any(pattern.fullmatch(path) for pattern in patterns)
-
-
-def detect_ats_job_url(url: str) -> str | None:
-    """Return the ATS owning a supported job-specific URL."""
-    if not isinstance(url, str) or not url.strip():
-        return None
-    return next(
-        (name for name in ATS_HOST_MARKERS if validate_ats_job_url(url, name)),
-        None,
-    )
 
 
 def valid_email(value: str) -> bool:
@@ -1674,10 +1596,6 @@ def emit_engine_result(payload: Mapping[str, Any]) -> None:
         # the incremental migration, while the orchestrator still validates it.
         wire_line = f"{RESULT_PREFIX}{json.dumps(dict(payload), sort_keys=True)}"
     print(wire_line, flush=True)
-
-
-def _host_matches(host: str, marker: str) -> bool:
-    return host == marker or host.endswith(f".{marker}")
 
 
 def _emit_result(*, ats: str, success: bool, status: str, error: str = "") -> None:

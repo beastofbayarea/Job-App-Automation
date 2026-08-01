@@ -98,6 +98,7 @@ DEFAULT_EMAIL_POOL_FILE = resolve_runtime_path(
 DEFAULT_ENGINE_TIMEOUT_SECONDS = int(RUNTIME_CONFIG.application["engine_timeout_seconds"])
 DEFAULT_RESUME_TIMEOUT_SECONDS = int(RUNTIME_CONFIG.application["resume_timeout_seconds"])
 MIN_COVER_LETTER_BYTES = 1_000
+LEDGER_PERSIST_FAILED_STATUS = "LEDGER_PERSIST_FAILED"
 SUPPORTED_ATS = tuple(ATS_HOSTS)
 
 DEFAULT_ENGINE_FILES: Mapping[str, Path] = {
@@ -122,6 +123,14 @@ class ProcessResult:
     returncode: int
     stdout: str
     stderr: str
+
+
+@dataclass(frozen=True, slots=True)
+class _SubmissionPersistence:
+    persisted: bool
+    error: str = ""
+    quarantine_path: Path | None = None
+    quarantine_error: str = ""
 
 
 class ProcessTimeoutError(TimeoutError):
@@ -463,14 +472,27 @@ def _write_results(
     write_json_artifact(results_path, list(results), indent=2, ensure_ascii=False)
 
 
-def _load_submission_log(path: Path) -> SubmissionLog:
-    """Load an existing submission log, tolerating a missing or corrupt file."""
+def _submission_quarantine_path(path: Path) -> Path:
+    """Return the private sidecar used when confirmed-ledger persistence fails."""
+    suffix = path.suffix or ".json"
+    return path.with_name(f"{path.stem}_quarantine{suffix}")
+
+
+def _load_submission_log(
+    path: Path,
+    *,
+    strict: bool = False,
+    label: str = "submission log",
+) -> SubmissionLog:
+    """Load a ledger-like artifact, failing closed when live safety requires it."""
     log = SubmissionLog()
     if path.exists():
         try:
-            log.load(path)
+            log.load(path, strict=strict)
         except (OSError, ValueError) as exc:
-            logger.warning("Could not load existing submission log %s: %s", path, exc)
+            if strict:
+                raise ValueError(f"Could not safely load {label} {path}: {exc}") from exc
+            logger.warning("Could not load existing %s %s: %s", label, path, exc)
     return log
 
 
@@ -483,26 +505,72 @@ def _record_submission(
     resume_path: Path,
     cover_letter_path: Path | None,
     status: str,
-) -> None:
-    """Best-effort append to the submission log; never fails the orchestration run."""
+) -> _SubmissionPersistence:
+    """Persist a confirmed submission or durably quarantine it for manual review."""
+    submission: SubmissionRecord | None = None
     try:
-        submission_log.record(
-            SubmissionRecord(
-                company=job["company"],
-                role=job["role"],
-                job_url=job["url"],
-                ats=job["ats"],
-                status=status,
-                email_used=email,
-                resume_filename=resume_path.name,
-                cover_letter_filename=(
-                    cover_letter_path.name if cover_letter_path is not None else ""
-                ),
-            )
+        submission = SubmissionRecord(
+            company=job["company"],
+            role=job["role"],
+            job_url=job["url"],
+            ats=job["ats"],
+            status=status,
+            email_used=email,
+            resume_filename=resume_path.name,
+            cover_letter_filename=(cover_letter_path.name if cover_letter_path is not None else ""),
         )
+        submission_log.record(submission)
         submission_log.save(submission_log_path)
     except (OSError, ValueError) as exc:
-        logger.warning("Could not record submission log entry for %s: %s", job["url"], exc)
+        persistence_error = f"{type(exc).__name__}: {exc}"
+        logger.error("Could not persist confirmed submission for %s: %s", job["url"], exc)
+        quarantine_path = _submission_quarantine_path(submission_log_path)
+        if submission is None:
+            return _SubmissionPersistence(
+                persisted=False,
+                error=persistence_error,
+                quarantine_path=quarantine_path,
+                quarantine_error="Submission record validation failed before quarantine persistence",
+            )
+        try:
+            quarantine_log = _load_submission_log(
+                quarantine_path,
+                strict=True,
+                label="submission quarantine",
+            )
+            quarantine_log.record(
+                SubmissionRecord(
+                    company=submission.company,
+                    role=submission.role,
+                    job_url=submission.job_url,
+                    ats=submission.ats,
+                    status=LEDGER_PERSIST_FAILED_STATUS,
+                    email_used=submission.email_used,
+                    resume_filename=submission.resume_filename,
+                    cover_letter_filename=submission.cover_letter_filename,
+                    applied_at=submission.applied_at,
+                )
+            )
+            quarantine_log.save(quarantine_path)
+        except (OSError, ValueError) as quarantine_exc:
+            quarantine_error = f"{type(quarantine_exc).__name__}: {quarantine_exc}"
+            logger.error(
+                "Could not persist submission quarantine for %s: %s",
+                job["url"],
+                quarantine_exc,
+            )
+            return _SubmissionPersistence(
+                persisted=False,
+                error=persistence_error,
+                quarantine_path=quarantine_path,
+                quarantine_error=quarantine_error,
+            )
+        return _SubmissionPersistence(
+            persisted=False,
+            error=persistence_error,
+            quarantine_path=quarantine_path,
+        )
+    return _SubmissionPersistence(persisted=True)
 
 
 def _is_confirmed_submission(outcome: Mapping[str, object]) -> bool:
@@ -930,7 +998,20 @@ def run_orchestrator(
         shuffle,
     )
 
-    submission_log = _load_submission_log(submission_log_path)
+    submission_log = _load_submission_log(
+        submission_log_path,
+        strict=live_submit,
+    )
+    submission_quarantine_path = _submission_quarantine_path(submission_log_path)
+    submission_quarantine = (
+        _load_submission_log(
+            submission_quarantine_path,
+            strict=True,
+            label="submission quarantine",
+        )
+        if live_submit
+        else SubmissionLog()
+    )
     results: list[dict[str, Any]] = []
     for index, job in enumerate(jobs, start=1):
         email = job_emails[index - 1]
@@ -966,6 +1047,50 @@ def run_orchestrator(
                     "confirmed": True,
                     "test_mode": False,
                     "already_submitted": True,
+                },
+                results_path,
+            )
+            continue
+        previous_quarantines = (
+            submission_quarantine.find_by_job_url(job["url"]) if live_submit else {}
+        )
+        if previous_quarantines:
+            latest = max(
+                previous_quarantines.values(),
+                key=lambda entry: str(entry.get("applied_at", "")),
+            )
+            logger.error(
+                "[%d/%d] row=%s ats=%s company=%s role=%s requires manual review; "
+                "a prior confirmed submission could not be written to the ledger",
+                index,
+                len(jobs),
+                job["row_number"],
+                ats,
+                job["company"],
+                job["role"],
+            )
+            _append_and_persist(
+                results,
+                {
+                    **base_result,
+                    "engine": _engine_label(engine_path, ats) if engine_path else "",
+                    "resume": str(latest.get("resume_filename", "")),
+                    "cover_letter": str(latest.get("cover_letter_filename", "")),
+                    "email": _mask_email(str(latest.get("email_used", ""))),
+                    "status": LEDGER_PERSIST_FAILED_STATUS,
+                    "success": False,
+                    "submitted": True,
+                    "confirmed": True,
+                    "test_mode": False,
+                    "ledger_persisted": False,
+                    "manual_review_required": True,
+                    "retry_safe": False,
+                    "quarantine_persisted": True,
+                    "quarantine_path": str(submission_quarantine_path),
+                    "detail": (
+                        "A previous confirmed submission is quarantined because its ledger "
+                        "write failed; automatic retry is disabled."
+                    ),
                 },
                 results_path,
             )
@@ -1160,8 +1285,10 @@ def run_orchestrator(
                         exc,
                     )
 
+        stop_after_ledger_failure = False
         if _is_confirmed_submission(outcome):
-            _record_submission(
+            engine_outcome = dict(outcome)
+            persistence = _record_submission(
                 submission_log,
                 submission_log_path,
                 job=job,
@@ -1170,6 +1297,33 @@ def run_orchestrator(
                 cover_letter_path=target_cover_letter,
                 status=str(outcome["status"]),
             )
+            if not persistence.persisted:
+                outcome = {
+                    **engine_outcome,
+                    "success": False,
+                    "status": LEDGER_PERSIST_FAILED_STATUS,
+                    "ledger_persisted": False,
+                    "manual_review_required": True,
+                    "retry_safe": False,
+                    "ledger_error": persistence.error,
+                    "engine_result": engine_outcome,
+                    "quarantine_persisted": not bool(persistence.quarantine_error),
+                    **(
+                        {"quarantine_path": str(persistence.quarantine_path)}
+                        if persistence.quarantine_path is not None
+                        else {}
+                    ),
+                    **(
+                        {"quarantine_error": persistence.quarantine_error}
+                        if persistence.quarantine_error
+                        else {}
+                    ),
+                    "detail": (
+                        "The engine confirmed submission, but the confirmed ledger could not "
+                        "be persisted. This job requires manual review and must not be retried."
+                    ),
+                }
+                stop_after_ledger_failure = True
         _append_and_persist(
             results,
             {
@@ -1182,6 +1336,12 @@ def run_orchestrator(
             },
             results_path,
         )
+        if stop_after_ledger_failure:
+            logger.error(
+                "Stopping orchestration after confirmed-ledger persistence failure for %s",
+                job["url"],
+            )
+            break
 
     successful = sum(1 for result in results if result.get("success"))
     logger.info(

@@ -50,7 +50,7 @@ from ..core.paths import OUTPUT_DIR as PROJECT_OUTPUT_DIR
 from ..core.paths import SRC_DIR
 from ..core.runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from .ai_client import call_resume_llm, generate_fallback_resume_data, scrape_job
-from .cache import ResumeCache, cache_key
+from .cache import ResumeCache
 from .rendering import CallableResumeRenderer, ResumeRenderer, render_resume
 from .scoring import policy_from_source, score_pdf
 from .source import (
@@ -59,7 +59,6 @@ from .source import (
 )
 from .validation import (
     build_quality_feedback,
-    company_matches,
     enforce_candidate_identity,
     enforce_source_invariants,
     ensure_minimum_bullets,
@@ -169,11 +168,6 @@ _llm_cache: dict[str, dict] = {}
 _resume_cache = ResumeCache(_llm_cache, lock=_cache_lock)
 
 
-def _cache_key(job: JobInfo) -> str:
-    """Backward-compatible facade for the reusable cache-key contract."""
-    return cache_key(job)
-
-
 def _get_cached(job: JobInfo) -> dict | None:
     return _resume_cache.get(job)
 
@@ -222,11 +216,6 @@ def _call_llm(job: JobInfo, feedback: str = "") -> dict[str, Any] | None:
 # ============================================================================
 # STEP 2: DATA NORMALIZATION & REPAIR (No Semicolon Sentence Stitching)
 # ============================================================================
-
-
-def _company_match(llm_name: str, orig_name: str) -> bool:
-    """Backward-compatible facade for source-company matching."""
-    return company_matches(llm_name, orig_name)
 
 
 def _normalize_experience(resume_data: dict[str, Any]) -> dict[str, Any]:

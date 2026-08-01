@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -169,6 +170,21 @@ class RuntimeConfigTests(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "missing: gmail.json"):
                 load_runtime_config(split_dir)
+
+    def test_present_invalid_checkout_config_never_falls_back_to_packaged_defaults(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            split_dir = Path(directory) / "runtime"
+            split_dir.mkdir()
+            (split_dir / "schema_version.json").write_text("not-json", encoding="utf-8")
+
+            with (
+                patch(
+                    "job_application_automation.core.runtime_config.RUNTIME_CONFIG_DIR",
+                    split_dir,
+                ),
+                self.assertRaisesRegex(ValueError, "runtime config directory is missing"),
+            ):
+                load_runtime_config()
 
     def test_explicit_legacy_monolithic_config_remains_supported(self) -> None:
         document = _split_document(RUNTIME_CONFIG_DIR)

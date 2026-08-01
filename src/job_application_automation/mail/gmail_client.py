@@ -126,7 +126,6 @@ from job_application_automation.mail.gmail_messages import (
     poll_for_verification_code as _poll_for_verification_code,
 )
 from job_application_automation.mail.gmail_persistence import (
-    export_rows as _export_rows_impl,
     load_used_verification_message_ids as _load_used_verification_message_ids,
     record_used_verification_message as _record_used_verification_message,
     write_csv as _write_csv,
@@ -334,11 +333,6 @@ def confirm_send(
         print("HTML body supplied.")
     answer = input(f"\n{'Create draft' if draft else 'Send'} this email? [y/N]: ").strip().lower()
     return answer in {"y", "yes"}
-
-
-def _export_rows(records: list[EmailRecord], redact: bool) -> list[dict[str, Any]]:
-    """Return export rows in the historic schema used by CSV and JSON output."""
-    return _export_rows_impl(records, redact)
 
 
 def write_csv(path: Path, records: list[EmailRecord], redact: bool = False) -> None:

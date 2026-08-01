@@ -32,11 +32,8 @@ RUNTIME_CONFIG_DIR = CONFIG_DIR / "runtime"
 DEFAULT_RUNTIME_CONFIG_DIR = Path(
     str(resources.files("job_application_automation").joinpath("resources/runtime"))
 )
-# Compatibility paths for callers that explicitly provide a legacy monolithic file.
+# Compatibility path for callers that explicitly provide a legacy monolithic file.
 RUNTIME_CONFIG_FILE = CONFIG_DIR / "runtime_config.json"
-DEFAULT_RUNTIME_CONFIG_FILE = Path(
-    str(resources.files("job_application_automation").joinpath("resources/runtime_config.json"))
-)
 
 
 def _read_json_file(path: Path) -> Mapping[str, Any]:
@@ -384,7 +381,4 @@ def resolve_runtime_path(value: str | Path) -> Path:
     return path if path.is_absolute() else PROJECT_ROOT / path
 
 
-try:
-    RUNTIME_CONFIG = load_runtime_config()
-except Exception:
-    RUNTIME_CONFIG = load_runtime_config(DEFAULT_RUNTIME_CONFIG_DIR)
+RUNTIME_CONFIG = load_runtime_config()
