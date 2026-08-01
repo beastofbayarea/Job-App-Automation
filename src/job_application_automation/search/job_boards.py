@@ -45,10 +45,9 @@ from collections import deque
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta, timezone
-from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, quote, unquote, urlparse, urlunparse
+from urllib.parse import parse_qs, unquote, urlparse, urlunparse
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -62,6 +61,14 @@ from . import liveness as _search_liveness
 from . import models as _search_models
 from . import serialization as _search_serialization
 from . import terms as _search_terms
+from .providers import ashby as _provider_ashby
+from .providers import common as _provider_common
+from .providers import contracts as _provider_contracts
+from .providers import greenhouse as _provider_greenhouse
+from .providers import lever as _provider_lever
+from .providers import registry as _provider_registry
+from .providers import smartrecruiters as _provider_smartrecruiters
+from .providers import workable as _provider_workable
 from ..core.artifacts import atomic_write_text, read_json, write_json as atomic_write_json
 from ..core.paths import OUTPUT_DIR
 from .config import (
@@ -74,7 +81,6 @@ from .config import (
     DEFAULT_LOCATION_TERMS,
     GENERIC_ATS_HOST_SUFFIXES,
     LOCATION_ALIAS_MAP,
-    PROVIDER_API_URLS,
     RESTRICTED_BOARD_KEYS,
     RESTRICTED_URL_PATTERNS,
     ROLE_ALIAS_MAP,
@@ -171,15 +177,7 @@ class SearchCriteria:
         )
 
 
-@dataclass(frozen=True)
-class FetchContext:
-    """Shared transport and filtering inputs for typed provider adapters."""
-
-    criteria: SearchCriteria
-    now: datetime
-    timeout: float
-    delay: float
-    max_lever_pages: int
+FetchContext = _provider_contracts.FetchContext
 
 
 TextExtractor = _search_jsonld.TextExtractor
@@ -187,24 +185,10 @@ JsonLdExtractor = _search_jsonld.JsonLdExtractor
 LinkExtractor = _search_discovery.LinkExtractor
 
 
-def strip_html(value: Any) -> str:
-    """Compatibility wrapper for the reusable JSON-LD/HTML text extractor."""
-    return _search_jsonld.strip_html(value)
-
-
-def mapping_text(value: Any, key: str = "name") -> str:
-    """Safely read a text field from optional ATS response objects."""
-    return clean_whitespace(value.get(key)) if isinstance(value, dict) else ""
-
-
-def mapping_items(value: Any) -> list[dict[str, Any]]:
-    """Return only mappings from an optional list-like API field."""
-    return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
-
-
-def prettify_slug(slug: str) -> str:
-    value = unquote(slug).replace("-", " ").replace("_", " ")
-    return " ".join(part.capitalize() for part in value.split()) or slug
+strip_html = _provider_common.strip_html
+mapping_text = _provider_common.mapping_text
+mapping_items = _provider_common.mapping_items
+prettify_slug = _provider_common.prettify_slug
 
 
 def make_session(user_agent: str) -> requests.Session:
@@ -232,88 +216,11 @@ def make_session(user_agent: str) -> requests.Session:
     return session
 
 
-def get_json(
-    session: requests.Session,
-    url: str,
-    *,
-    params: dict[str, Any] | None = None,
-    timeout: float,
-) -> Any:
-    response = session.get(url, params=params, timeout=timeout)
-    response.raise_for_status()
-    try:
-        return response.json()
-    except ValueError as exc:
-        content_type = response.headers.get("Content-Type", "unknown")
-        raise RuntimeError(f"Expected JSON from {response.url}, received {content_type}") from exc
-
-
-def parse_datetime(value: Any) -> datetime | None:
-    """Parse an epoch number, ISO 8601, or RFC 2822 timestamp into a UTC datetime."""
-    if value is None or value == "":
-        return None
-
-    if isinstance(value, datetime):
-        dt = value
-    elif isinstance(value, (int, float)):
-        number = float(value)
-        # Lever's createdAt is usually epoch milliseconds.
-        if abs(number) > 10_000_000_000:
-            number /= 1000.0
-        try:
-            dt = datetime.fromtimestamp(number, tz=UTC)
-        except (OverflowError, OSError, ValueError):
-            return None
-    else:
-        raw = str(value).strip()
-        if not raw:
-            return None
-        if re.fullmatch(r"-?\d+(?:\.\d+)?", raw):
-            try:
-                return parse_datetime(float(raw))
-            except ValueError:
-                return None
-
-        normalized = raw[:-1] + "+00:00" if raw.endswith("Z") else raw
-        try:
-            dt = datetime.fromisoformat(normalized)
-        except ValueError:
-            try:
-                dt = parsedate_to_datetime(raw)
-            except (TypeError, ValueError, OverflowError):
-                return None
-
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=UTC)
-    return dt.astimezone(UTC)
-
-
-def parse_expiry_datetime(value: Any) -> datetime | None:
-    """Parse an expiration/deadline value, treating a date as inclusive.
-
-    Schema.org ``validThrough`` values and some Greenhouse deadlines are plain
-    calendar dates. A role should remain eligible for the whole stated date,
-    rather than expiring at its opening midnight.
-    """
-    parsed = parse_datetime(value)
-    if parsed is None:
-        return None
-    if isinstance(value, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", value.strip()):
-        return parsed + timedelta(days=1) - timedelta(microseconds=1)
-    return parsed
-
-
-def iso_or_blank(dt: datetime | None) -> str:
-    if dt is None:
-        return ""
-    return dt.astimezone(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
-
-
-def days_old(dt: datetime | None, now: datetime) -> int | str:
-    if dt is None:
-        return ""
-    seconds = max(0.0, (now - dt).total_seconds())
-    return int(seconds // 86400)
+get_json = _provider_common.get_json
+parse_datetime = _provider_common.parse_datetime
+parse_expiry_datetime = _provider_common.parse_expiry_datetime
+iso_or_blank = _provider_common.iso_or_blank
+days_old = _provider_common.days_old
 
 
 def is_recent(
@@ -501,15 +408,7 @@ def unwrap_search_url(url: str) -> str:
     return url
 
 
-def canonical_url(url: str) -> str:
-    parsed = urlparse(url)
-    # Strip a trailing application path so a job page and its application form
-    # canonicalize to the same key for final-job deduplication.
-    path = re.sub(r"/(?:apply|application)/?$", "", parsed.path, flags=re.IGNORECASE)
-    path = path.rstrip("/") or "/"
-    # Preserve query only for Greenhouse embed URLs where it can identify the job.
-    query = parsed.query if "greenhouse.io/embed/" in url.lower() else ""
-    return urlunparse((parsed.scheme.lower(), parsed.netloc.lower(), path, "", query, ""))
+canonical_url = _provider_common.canonical_url
 
 
 def discovery_url_key(url: str) -> str:
@@ -1086,10 +985,18 @@ def scrape_jsonld_job(
     return jobs[0] if jobs else None
 
 
+def _provider_fetch_services() -> _provider_contracts.FetchServices:
+    return _provider_contracts.FetchServices(
+        get_json=get_json,
+        scrape_jsonld_jobs=scrape_jsonld_jobs,
+        canonical_url=canonical_url,
+        sleep=time.sleep,
+        logger=LOGGER,
+    )
+
+
 def greenhouse_base_url(board: Board) -> str:
-    # Greenhouse's documented public Job Board API uses this base URL. The board
-    # token remains the same even when the hosted board URL is regional.
-    return PROVIDER_API_URLS["greenhouse"].format(token=quote(board.token, safe=""))
+    return _provider_greenhouse.base_url(board)
 
 
 def fetch_greenhouse_jobs(
@@ -1097,144 +1004,20 @@ def fetch_greenhouse_jobs(
     board: Board,
     context: FetchContext,
 ) -> list[Job]:
-    criteria = context.criteria
-    now = context.now
-    timeout = context.timeout
-    delay = context.delay
-    base = greenhouse_base_url(board)
-    payload = get_json(session, f"{base}/jobs", params={"content": "true"}, timeout=timeout)
-    jobs_raw = payload.get("jobs", []) if isinstance(payload, dict) else []
-    normalized: list[Job] = []
-
-    for item in jobs_raw:
-        if not isinstance(item, dict):
-            continue
-        title = clean_whitespace(item.get("title"))
-        description = strip_html(item.get("content"))
-        location = mapping_text(item.get("location"))
-        # Fetch detail before applying location/AI filters. Greenhouse can put
-        # office metadata or richer content only on the detail endpoint.
-        if not matching_terms(title, criteria.role_terms, match_mode=criteria.match_mode):
-            continue
-        if matching_terms(
-            clean_whitespace(f"{title} {description}"),
-            criteria.exclude_terms,
-            match_mode=criteria.match_mode,
-        ):
-            continue
-
-        detail = item
-        date_source = "updated_at_fallback"
-        job_id = item.get("id")
-        if job_id is not None:
-            # The list endpoint doesn't expose first_published; fetch each job's
-            # detail record to get an accurate posting date when possible.
-            try:
-                detail_payload = get_json(session, f"{base}/jobs/{job_id}", timeout=timeout)
-                if isinstance(detail_payload, dict):
-                    detail = {**item, **detail_payload}
-                    date_source = "first_published"
-            except Exception as exc:
-                LOGGER.warning(
-                    "Greenhouse detail failed for %s job %s: %s", board.token, job_id, exc
-                )
-            if delay > 0:
-                time.sleep(delay)
-
-        description = strip_html(detail.get("content") or item.get("content"))
-
-        deadline = parse_expiry_datetime(detail.get("application_deadline"))
-        if deadline is not None and deadline <= now:
-            continue
-
-        posted_dt = parse_datetime(detail.get("first_published"))
-        if posted_dt is None:
-            posted_dt = parse_datetime(detail.get("updated_at"))
-            date_source = "updated_at_fallback"
-        if not criteria.includes_posted_at(posted_dt, now=now):
-            continue
-
-        departments = " | ".join(
-            clean_whitespace(dep.get("name"))
-            for dep in mapping_items(detail.get("departments"))
-            if dep.get("name")
-        )
-        offices = " | ".join(
-            clean_whitespace(office.get("name"))
-            for office in mapping_items(detail.get("offices"))
-            if office.get("name")
-        )
-        detail_location = mapping_text(detail.get("location"))
-        location_full = " | ".join(
-            dict.fromkeys(part for part in (location, detail_location, offices) if part)
-        )
-
-        reason = criteria.matches_job(
-            title=title,
-            description=description,
-            location=location_full,
-        )
-        if reason is None:
-            continue
-
-        company = clean_whitespace(detail.get("company_name")) or prettify_slug(board.token)
-        job_url = clean_whitespace(detail.get("absolute_url") or item.get("absolute_url"))
-        unique = (
-            f"greenhouse:{board.region}:{board.token}:{job_id}"
-            if job_id is not None
-            else canonical_url(job_url)
-        )
-
-        normalized.append(
-            Job(
-                platform="greenhouse",
-                company=company,
-                title=title,
-                posted_at=iso_or_blank(posted_dt),
-                days_old=days_old(posted_dt, now),
-                location=location_full,
-                workplace_type="",
-                employment_type="",
-                department=departments,
-                team="",
-                salary="",
-                job_url=job_url,
-                apply_url=job_url,
-                board_token=board.token,
-                date_source=date_source,
-                match_reason=reason,
-                description=description,
-                platform_job_id=clean_whitespace(job_id),
-                board_region=board.region,
-                provider_id_trusted=True,
-                live_status="listed",
-                live_checked_at=iso_or_blank(now),
-                live_check_source="greenhouse_public_feed",
-                live_check_reason="job_present_in_current_board_feed",
-                unique_id=unique,
-            )
-        )
-
-    return normalized
+    return _provider_greenhouse.fetch_jobs(
+        session,
+        board,
+        context,
+        services=_provider_fetch_services(),
+    )
 
 
 def lever_api_base(board: Board) -> str:
-    key = "lever_eu" if board.region == "eu" else "lever_global"
-    return PROVIDER_API_URLS[key].format(token=quote(board.token, safe=""))
+    return _provider_lever.api_base(board)
 
 
 def format_lever_salary(value: Any) -> str:
-    if not isinstance(value, dict):
-        return ""
-    currency = clean_whitespace(value.get("currency", ""))
-    minimum = value.get("min")
-    maximum = value.get("max")
-    interval = clean_whitespace(value.get("interval", ""))
-    if minimum is not None and maximum is not None:
-        amount = f"{minimum} - {maximum}"
-    else:
-        amount = str(minimum if minimum is not None else maximum or "")
-    return clean_whitespace(" ".join(part for part in (currency, amount, interval) if part))
+    return _provider_lever.format_salary(value)
 
 
 def fetch_lever_jobs(
@@ -1242,149 +1025,16 @@ def fetch_lever_jobs(
     board: Board,
     context: FetchContext,
 ) -> list[Job]:
-    criteria = context.criteria
-    now = context.now
-    timeout = context.timeout
-    delay = context.delay
-    max_pages = context.max_lever_pages
-    base = lever_api_base(board)
-    page_size = 100
-    skip = 0
-    all_items: list[dict[str, Any]] = []
-
-    page_number = 0
-    while max_pages <= 0 or page_number < max_pages:
-        payload = get_json(
-            session,
-            base,
-            params={"mode": "json", "skip": skip, "limit": page_size},
-            timeout=timeout,
-        )
-        if not isinstance(payload, list):
-            raise RuntimeError(f"Unexpected Lever response for {board.token}")
-        page = [item for item in payload if isinstance(item, dict)]
-        all_items.extend(page)
-        if len(page) < page_size:
-            break
-        skip += page_size
-        page_number += 1
-        if delay > 0:
-            time.sleep(delay)
-
-    normalized: list[Job] = []
-    for item in all_items:
-        title = clean_whitespace(item.get("text"))
-        lists_text = " ".join(
-            f"{clean_whitespace(section.get('text'))} {strip_html(section.get('content'))}"
-            for section in mapping_items(item.get("lists"))
-        )
-        description = clean_whitespace(
-            " ".join(
-                part
-                for part in (
-                    item.get("descriptionPlain"),
-                    item.get("openingPlain"),
-                    item.get("descriptionBodyPlain"),
-                    item.get("additionalPlain"),
-                    lists_text,
-                )
-                if part
-            )
-        )
-        categories = item.get("categories") if isinstance(item.get("categories"), dict) else {}
-        locations = categories.get("allLocations") or []
-        if not isinstance(locations, list):
-            locations = [locations]
-        location_parts = [clean_whitespace(part) for part in locations if part]
-        primary_location = clean_whitespace(categories.get("location"))
-        if primary_location and primary_location not in location_parts:
-            location_parts.insert(0, primary_location)
-        location = " | ".join(dict.fromkeys(location_parts))
-        workplace_type = clean_whitespace(item.get("workplaceType"))
-
-        reason = criteria.matches_job(
-            title=title,
-            description=description,
-            location=location,
-            workplace_type=workplace_type,
-        )
-        if reason is None:
-            continue
-
-        posted_dt = parse_datetime(item.get("createdAt"))
-        date_source = "createdAt"
-        if posted_dt is None:
-            hosted_url = clean_whitespace(item.get("hostedUrl"))
-            if hosted_url:
-                candidate = SearchCandidate(url=hosted_url, board=board)
-                try:
-                    fallback_jobs = scrape_jsonld_jobs(
-                        session,
-                        candidate,
-                        timeout=timeout,
-                        now=now,
-                        criteria=criteria,
-                    )
-                except Exception as exc:
-                    LOGGER.warning("Lever date fallback failed for %s: %s", hosted_url, exc)
-                    fallback_jobs = []
-                fallback = fallback_jobs[0] if fallback_jobs else None
-                if fallback is not None:
-                    posted_dt = parse_datetime(fallback.posted_at)
-                    date_source = "jsonld.datePosted"
-
-        if not criteria.includes_posted_at(posted_dt, now=now):
-            continue
-
-        job_id = clean_whitespace(item.get("id"))
-        job_url = clean_whitespace(item.get("hostedUrl"))
-        apply_url = clean_whitespace(item.get("applyUrl"))
-        unique = (
-            f"lever:{board.region}:{board.token}:{job_id}" if job_id else canonical_url(job_url)
-        )
-
-        normalized.append(
-            Job(
-                platform="lever",
-                company=prettify_slug(board.token),
-                title=title,
-                posted_at=iso_or_blank(posted_dt),
-                days_old=days_old(posted_dt, now),
-                location=location,
-                workplace_type=workplace_type,
-                employment_type=clean_whitespace(categories.get("commitment")),
-                department=clean_whitespace(categories.get("department")),
-                team=clean_whitespace(categories.get("team")),
-                salary=format_lever_salary(item.get("salaryRange"))
-                or strip_html(item.get("salaryDescriptionPlain") or item.get("salaryDescription")),
-                job_url=job_url,
-                apply_url=apply_url,
-                board_token=board.token,
-                date_source=date_source,
-                match_reason=reason,
-                description=description,
-                platform_job_id=job_id,
-                board_region=board.region,
-                provider_id_trusted=True,
-                live_status="listed",
-                live_checked_at=iso_or_blank(now),
-                live_check_source="lever_public_feed",
-                live_check_reason="posting_present_in_current_feed",
-                unique_id=unique,
-            )
-        )
-
-    return normalized
+    return _provider_lever.fetch_jobs(
+        session,
+        board,
+        context,
+        services=_provider_fetch_services(),
+    )
 
 
 def ashby_salary(value: Any) -> str:
-    if not isinstance(value, dict):
-        return ""
-    return clean_whitespace(
-        value.get("scrapeableCompensationSalarySummary")
-        or value.get("compensationTierSummary")
-        or ""
-    )
+    return _provider_ashby.format_salary(value)
 
 
 def fetch_ashby_jobs(
@@ -1392,106 +1042,20 @@ def fetch_ashby_jobs(
     board: Board,
     context: FetchContext,
 ) -> list[Job]:
-    criteria = context.criteria
-    now = context.now
-    timeout = context.timeout
-    url = PROVIDER_API_URLS["ashby"].format(token=quote(board.token, safe=""))
-    payload = get_json(
+    return _provider_ashby.fetch_jobs(
         session,
-        url,
-        params={"includeCompensation": "true"},
-        timeout=timeout,
+        board,
+        context,
+        services=_provider_fetch_services(),
     )
-    items = payload.get("jobs", []) if isinstance(payload, dict) else []
-    normalized: list[Job] = []
-
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        if item.get("isListed") is False:
-            continue
-
-        title = clean_whitespace(item.get("title"))
-        description = clean_whitespace(
-            item.get("descriptionPlain") or strip_html(item.get("descriptionHtml"))
-        )
-        primary_location = clean_whitespace(item.get("location"))
-        secondary = [
-            clean_whitespace(location.get("location"))
-            for location in mapping_items(item.get("secondaryLocations"))
-            if location.get("location")
-        ]
-        location = " | ".join(
-            dict.fromkeys(part for part in [primary_location, *secondary] if part)
-        )
-        workplace_type = clean_whitespace(item.get("workplaceType"))
-
-        reason = criteria.matches_job(
-            title=title,
-            description=description,
-            location=location,
-            workplace_type=workplace_type,
-        )
-        if reason is None:
-            continue
-
-        posted_dt = parse_datetime(item.get("publishedAt"))
-        if not criteria.includes_posted_at(posted_dt, now=now):
-            continue
-
-        job_url = clean_whitespace(item.get("jobUrl"))
-        apply_url = clean_whitespace(item.get("applyUrl"))
-        item_id = clean_whitespace(item.get("id"))
-        unique = f"ashby:{board.token}:{item_id}" if item_id else canonical_url(job_url)
-
-        normalized.append(
-            Job(
-                platform="ashby",
-                company=prettify_slug(board.token),
-                title=title,
-                posted_at=iso_or_blank(posted_dt),
-                days_old=days_old(posted_dt, now),
-                location=location,
-                workplace_type=workplace_type,
-                employment_type=clean_whitespace(item.get("employmentType")),
-                department=clean_whitespace(item.get("department")),
-                team=clean_whitespace(item.get("team")),
-                salary=ashby_salary(item.get("compensation")),
-                job_url=job_url,
-                apply_url=apply_url,
-                board_token=board.token,
-                date_source="publishedAt",
-                match_reason=reason,
-                description=description,
-                platform_job_id=item_id,
-                board_region=board.region,
-                provider_id_trusted=True,
-                live_status="listed",
-                live_checked_at=iso_or_blank(now),
-                live_check_source="ashby_public_board",
-                live_check_reason="job_present_in_current_board_response",
-                unique_id=unique,
-            )
-        )
-
-    return normalized
 
 
 def smartrecruiters_api_base(board: Board) -> str:
-    return PROVIDER_API_URLS["smartrecruiters"].format(token=quote(board.token, safe=""))
+    return _provider_smartrecruiters.api_base(board)
 
 
 def smartrecruiters_description(value: Any) -> str:
-    sections = value.get("sections", {}) if isinstance(value, dict) else {}
-    if not isinstance(sections, dict):
-        return ""
-    return clean_whitespace(
-        " ".join(
-            strip_html(section.get("text"))
-            for section in sections.values()
-            if isinstance(section, dict) and section.get("text")
-        )
-    )
+    return _provider_smartrecruiters.description(value)
 
 
 def fetch_smartrecruiters_jobs(
@@ -1499,160 +1063,20 @@ def fetch_smartrecruiters_jobs(
     board: Board,
     context: FetchContext,
 ) -> list[Job]:
-    criteria = context.criteria
-    now = context.now
-    timeout = context.timeout
-    delay = context.delay
-    base = smartrecruiters_api_base(board)
-    page_size = 100
-    offset = 0
-    all_items: list[dict[str, Any]] = []
-
-    while True:
-        payload = get_json(
-            session,
-            base,
-            params={"limit": page_size, "offset": offset},
-            timeout=timeout,
-        )
-        if not isinstance(payload, dict):
-            raise RuntimeError(f"Unexpected SmartRecruiters response for {board.token}")
-        page = mapping_items(payload.get("content"))
-        all_items.extend(page)
-        offset += len(page)
-        try:
-            total_found = int(payload.get("totalFound", offset))
-        except (TypeError, ValueError):
-            total_found = offset
-        if not page or len(page) < page_size or offset >= total_found:
-            break
-        if delay > 0:
-            time.sleep(delay)
-
-    normalized: list[Job] = []
-    for item in all_items:
-        title = clean_whitespace(item.get("name"))
-        if not matching_terms(title, criteria.role_terms, match_mode=criteria.match_mode):
-            continue
-        if matching_terms(title, criteria.exclude_terms, match_mode=criteria.match_mode):
-            continue
-
-        item_id = clean_whitespace(item.get("id"))
-        if not item_id:
-            continue
-        detail = get_json(session, f"{base}/{quote(item_id, safe='')}", timeout=timeout)
-        if not isinstance(detail, dict):
-            LOGGER.warning(
-                "SmartRecruiters detail was not an object for %s job %s",
-                board.token,
-                item_id,
-            )
-            continue
-        if detail.get("active") is False or str(detail.get("visibility", "")).upper() not in {
-            "",
-            "PUBLIC",
-        }:
-            continue
-        if delay > 0:
-            time.sleep(delay)
-
-        description = smartrecruiters_description(detail.get("jobAd"))
-        location_value = detail.get("location") if isinstance(detail.get("location"), dict) else {}
-        location = clean_whitespace(location_value.get("fullLocation"))
-        if not location:
-            location = " | ".join(
-                dict.fromkeys(
-                    clean_whitespace(location_value.get(key))
-                    for key in ("city", "region", "country")
-                    if clean_whitespace(location_value.get(key))
-                )
-            )
-        workplace_type = (
-            "Remote"
-            if location_value.get("remote") is True
-            else "Hybrid"
-            if location_value.get("hybrid") is True
-            else ""
-        )
-        reason = criteria.matches_job(
-            title=title,
-            description=description,
-            location=location,
-            workplace_type=workplace_type,
-        )
-        if reason is None:
-            continue
-
-        posted_dt = parse_datetime(detail.get("releasedDate") or item.get("releasedDate"))
-        if not criteria.includes_posted_at(posted_dt, now=now):
-            continue
-        company = mapping_text(detail.get("company")) or prettify_slug(board.token)
-        job_url = clean_whitespace(detail.get("postingUrl"))
-        apply_url = clean_whitespace(detail.get("applyUrl")) or job_url
-        employment = mapping_text(detail.get("typeOfEmployment"), "label")
-        department = mapping_text(detail.get("department"), "label")
-        function = mapping_text(detail.get("function"), "label")
-
-        normalized.append(
-            Job(
-                platform="smartrecruiters",
-                company=company,
-                title=title,
-                posted_at=iso_or_blank(posted_dt),
-                days_old=days_old(posted_dt, now),
-                location=location,
-                workplace_type=workplace_type,
-                employment_type=employment,
-                department=department,
-                team=function,
-                salary="",
-                job_url=job_url,
-                apply_url=apply_url,
-                board_token=board.token,
-                date_source="releasedDate",
-                match_reason=reason,
-                description=description,
-                platform_job_id=item_id,
-                board_region=board.region,
-                provider_id_trusted=True,
-                live_status="listed",
-                live_checked_at=iso_or_blank(now),
-                live_check_source="smartrecruiters_public_posting_api",
-                live_check_reason="job_present_in_current_company_postings",
-                unique_id=f"smartrecruiters:{board.token}:{item_id}",
-            )
-        )
-
-    return normalized
+    return _provider_smartrecruiters.fetch_jobs(
+        session,
+        board,
+        context,
+        services=_provider_fetch_services(),
+    )
 
 
 def workable_api_url(board: Board) -> str:
-    return PROVIDER_API_URLS["workable"].format(token=quote(board.token, safe=""))
+    return _provider_workable.api_url(board)
 
 
 def workable_location(item: dict[str, Any]) -> str:
-    locations: list[str] = []
-    for location in mapping_items(item.get("locations")):
-        rendered = ", ".join(
-            dict.fromkeys(
-                clean_whitespace(location.get(key))
-                for key in ("city", "region", "country")
-                if clean_whitespace(location.get(key))
-            )
-        )
-        if rendered:
-            locations.append(rendered)
-    if not locations:
-        fallback = ", ".join(
-            dict.fromkeys(
-                clean_whitespace(item.get(key))
-                for key in ("city", "state", "country")
-                if clean_whitespace(item.get(key))
-            )
-        )
-        if fallback:
-            locations.append(fallback)
-    return " | ".join(dict.fromkeys(locations))
+    return _provider_workable.location(item)
 
 
 def fetch_workable_jobs(
@@ -1660,73 +1084,12 @@ def fetch_workable_jobs(
     board: Board,
     context: FetchContext,
 ) -> list[Job]:
-    # A global /j/<shortcode> Workable link does not reveal the account name
-    # needed by the public jobs endpoint. The discovered page remains available
-    # to the additive JSON-LD pass.
-    if board.token == WORKABLE_SHORT_LINK_BOARD:
-        return []
-
-    payload = get_json(session, workable_api_url(board), timeout=context.timeout)
-    if not isinstance(payload, dict):
-        raise RuntimeError(f"Unexpected Workable response for {board.token}")
-    company = clean_whitespace(payload.get("name")) or prettify_slug(board.token)
-    normalized: list[Job] = []
-
-    for item in mapping_items(payload.get("jobs")):
-        title = clean_whitespace(item.get("title"))
-        description = strip_html(item.get("description"))
-        location = workable_location(item)
-        workplace_type = "Remote" if item.get("telecommuting") is True else ""
-        reason = context.criteria.matches_job(
-            title=title,
-            description=description,
-            location=location,
-            workplace_type=workplace_type,
-        )
-        if reason is None:
-            continue
-
-        published_on = item.get("published_on")
-        posted_dt = parse_datetime(published_on or item.get("created_at"))
-        if not context.criteria.includes_posted_at(posted_dt, now=context.now):
-            continue
-        item_id = clean_whitespace(item.get("shortcode"))
-        job_url = clean_whitespace(item.get("shortlink") or item.get("url"))
-        apply_url = clean_whitespace(item.get("application_url")) or job_url
-        if not item_id or not job_url:
-            continue
-
-        normalized.append(
-            Job(
-                platform="workable",
-                company=company,
-                title=title,
-                posted_at=iso_or_blank(posted_dt),
-                days_old=days_old(posted_dt, context.now),
-                location=location,
-                workplace_type=workplace_type,
-                employment_type=clean_whitespace(item.get("employment_type")),
-                department=clean_whitespace(item.get("department")),
-                team=clean_whitespace(item.get("function")),
-                salary="",
-                job_url=job_url,
-                apply_url=apply_url,
-                board_token=board.token,
-                date_source="published_on" if published_on else "created_at",
-                match_reason=reason,
-                description=description,
-                platform_job_id=item_id,
-                board_region=board.region,
-                provider_id_trusted=True,
-                live_status="listed",
-                live_checked_at=iso_or_blank(context.now),
-                live_check_source="workable_public_account_api",
-                live_check_reason="job_present_in_current_account_response",
-                unique_id=f"workable:{board.token}:{item_id}",
-            )
-        )
-
-    return normalized
+    return _provider_workable.fetch_jobs(
+        session,
+        board,
+        context,
+        services=_provider_fetch_services(),
+    )
 
 
 BOARD_FETCHERS: dict[str, Callable[[requests.Session, Board, FetchContext], list[Job]]] = {
@@ -1743,52 +1106,27 @@ def fetch_board_jobs(
     board: Board,
     context: FetchContext,
 ) -> list[Job]:
-    """Dispatch typed adapter inputs without fragile provider-specific kwargs."""
-    if is_restricted_board(board):
-        return []
-    fetcher = BOARD_FETCHERS.get(board.platform)
-    if fetcher is not None:
-        return fetcher(session, board, context)
-    if board.platform == "web":
-        # Generic ATS candidates are handled through the additive JSON-LD pass.
-        return []
-    raise ValueError(f"Unsupported platform: {board.platform}")
+    """Dispatch typed adapter inputs through the compatibility registry."""
+    return _provider_registry.fetch_board_jobs(
+        session,
+        board,
+        context,
+        fetchers=BOARD_FETCHERS,
+        is_restricted_board=is_restricted_board,
+    )
 
 
-def set_live_status(
-    job: Job,
-    *,
-    status: str,
-    source: str,
-    now: datetime,
-    reason: str,
-    http_status: int | str = "",
-    final_url: str = "",
-) -> None:
-    job.live_status = status
-    job.live_checked_at = iso_or_blank(now)
-    job.live_check_source = source
-    job.live_check_reason = reason
-    job.live_check_http_status = http_status
-    job.live_check_final_url = final_url
+set_live_status = _provider_common.set_live_status
 
 
-def response_or_none(
-    session: requests.Session,
-    url: str,
-    *,
-    timeout: float,
-    accept: str = "application/json,text/html;q=0.9,*/*;q=0.8",
-) -> requests.Response | None:
-    try:
-        return session.get(
-            url,
-            timeout=timeout,
-            allow_redirects=True,
-            headers={"Accept": accept},
-        )
-    except requests.RequestException:
-        return None
+response_or_none = _provider_common.response_or_none
+
+
+def _provider_liveness_services() -> _provider_contracts.LivenessServices:
+    return _provider_contracts.LivenessServices(
+        response_or_none=response_or_none,
+        set_live_status=set_live_status,
+    )
 
 
 def verify_greenhouse_job_live(
@@ -1798,80 +1136,12 @@ def verify_greenhouse_job_live(
     timeout: float,
     now: datetime,
 ) -> None:
-    board = Board("greenhouse", job.board_token, job.board_region)
-    if not job.provider_id_trusted or not job.platform_job_id or not job.board_token:
-        set_live_status(
-            job,
-            status="unknown",
-            source="greenhouse_job_api",
-            now=now,
-            reason="untrusted_or_missing_board_or_job_id",
-        )
-        return
-    url = f"{greenhouse_base_url(board)}/jobs/{quote(job.platform_job_id, safe='')}"
-    response = response_or_none(session, url, timeout=timeout)
-    if response is None:
-        set_live_status(
-            job, status="unknown", source="greenhouse_job_api", now=now, reason="request_failed"
-        )
-        return
-    if response.status_code in {404, 410}:
-        set_live_status(
-            job,
-            status="closed",
-            source="greenhouse_job_api",
-            now=now,
-            reason=f"http_{response.status_code}",
-            http_status=response.status_code,
-            final_url=response.url,
-        )
-        return
-    if response.status_code >= 400:
-        set_live_status(
-            job,
-            status="unknown",
-            source="greenhouse_job_api",
-            now=now,
-            reason=f"http_{response.status_code}",
-            http_status=response.status_code,
-            final_url=response.url,
-        )
-        return
-    try:
-        payload = response.json()
-    except ValueError:
-        payload = None
-    if not isinstance(payload, dict) or str(payload.get("id", "")) != str(job.platform_job_id):
-        set_live_status(
-            job,
-            status="unknown",
-            source="greenhouse_job_api",
-            now=now,
-            reason="unexpected_job_response",
-            http_status=response.status_code,
-            final_url=response.url,
-        )
-        return
-    deadline = parse_expiry_datetime(payload.get("application_deadline"))
-    if deadline is not None and deadline <= now:
-        set_live_status(
-            job,
-            status="closed",
-            source="greenhouse_job_api",
-            now=now,
-            reason="application_deadline_elapsed",
-            http_status=response.status_code,
-            final_url=response.url,
-        )
-        return
-    set_live_status(
+    _provider_greenhouse.verify_job_live(
+        session,
         job,
-        status="live",
-        source="greenhouse_job_api",
+        timeout=timeout,
         now=now,
-        reason="job_present_and_deadline_open",
-        http_status=response.status_code,
-        final_url=response.url,
+        services=_provider_liveness_services(),
     )
 
 
@@ -1882,68 +1152,12 @@ def verify_lever_job_live(
     timeout: float,
     now: datetime,
 ) -> None:
-    board = Board("lever", job.board_token, job.board_region)
-    if not job.provider_id_trusted or not job.platform_job_id or not job.board_token:
-        set_live_status(
-            job,
-            status="unknown",
-            source="lever_posting_api",
-            now=now,
-            reason="untrusted_or_missing_board_or_job_id",
-        )
-        return
-    url = f"{lever_api_base(board)}/{quote(job.platform_job_id, safe='')}?mode=json"
-    response = response_or_none(session, url, timeout=timeout)
-    if response is None:
-        set_live_status(
-            job, status="unknown", source="lever_posting_api", now=now, reason="request_failed"
-        )
-        return
-    if response.status_code in {404, 410}:
-        set_live_status(
-            job,
-            status="closed",
-            source="lever_posting_api",
-            now=now,
-            reason=f"http_{response.status_code}",
-            http_status=response.status_code,
-            final_url=response.url,
-        )
-        return
-    if response.status_code >= 400:
-        set_live_status(
-            job,
-            status="unknown",
-            source="lever_posting_api",
-            now=now,
-            reason=f"http_{response.status_code}",
-            http_status=response.status_code,
-            final_url=response.url,
-        )
-        return
-    try:
-        payload = response.json()
-    except ValueError:
-        payload = None
-    if not isinstance(payload, dict) or str(payload.get("id", "")) != str(job.platform_job_id):
-        set_live_status(
-            job,
-            status="unknown",
-            source="lever_posting_api",
-            now=now,
-            reason="unexpected_posting_response",
-            http_status=response.status_code,
-            final_url=response.url,
-        )
-        return
-    set_live_status(
+    _provider_lever.verify_job_live(
+        session,
         job,
-        status="live",
-        source="lever_posting_api",
+        timeout=timeout,
         now=now,
-        reason="posting_present",
-        http_status=response.status_code,
-        final_url=response.url,
+        services=_provider_liveness_services(),
     )
 
 
@@ -1954,93 +1168,13 @@ def verify_ashby_jobs_live(
     timeout: float,
     now: datetime,
 ) -> None:
-    """Verify Ashby roles per board to avoid one request per final job."""
-    by_board: dict[tuple[str, str], list[Job]] = {}
-    for job in jobs:
-        if not job.provider_id_trusted or not job.platform_job_id:
-            set_live_status(
-                job,
-                status="unknown",
-                source="ashby_board_api",
-                now=now,
-                reason="untrusted_or_missing_job_id",
-            )
-            continue
-        by_board.setdefault((job.board_region, job.board_token), []).append(job)
-    for (_board_region, board_token), board_jobs in by_board.items():
-        if not board_token:
-            for job in board_jobs:
-                set_live_status(
-                    job, status="unknown", source="ashby_board_api", now=now, reason="missing_board"
-                )
-            continue
-        url = PROVIDER_API_URLS["ashby"].format(token=quote(board_token, safe=""))
-        response = response_or_none(session, url, timeout=timeout)
-        if response is None:
-            for job in board_jobs:
-                set_live_status(
-                    job,
-                    status="unknown",
-                    source="ashby_board_api",
-                    now=now,
-                    reason="request_failed",
-                )
-            continue
-        if response.status_code in {404, 410}:
-            for job in board_jobs:
-                set_live_status(
-                    job,
-                    status="closed",
-                    source="ashby_board_api",
-                    now=now,
-                    reason=f"http_{response.status_code}",
-                    http_status=response.status_code,
-                    final_url=response.url,
-                )
-            continue
-        if response.status_code >= 400:
-            for job in board_jobs:
-                set_live_status(
-                    job,
-                    status="unknown",
-                    source="ashby_board_api",
-                    now=now,
-                    reason=f"http_{response.status_code}",
-                    http_status=response.status_code,
-                    final_url=response.url,
-                )
-            continue
-        try:
-            payload = response.json()
-        except ValueError:
-            payload = None
-        jobs_payload = payload.get("jobs", []) if isinstance(payload, dict) else []
-        active_ids = {
-            clean_whitespace(item.get("id"))
-            for item in jobs_payload
-            if isinstance(item, dict) and item.get("id") and item.get("isListed") is not False
-        }
-        for job in board_jobs:
-            if job.platform_job_id and job.platform_job_id in active_ids:
-                set_live_status(
-                    job,
-                    status="live",
-                    source="ashby_board_api",
-                    now=now,
-                    reason="job_present_in_current_board_response",
-                    http_status=response.status_code,
-                    final_url=response.url,
-                )
-            else:
-                set_live_status(
-                    job,
-                    status="closed",
-                    source="ashby_board_api",
-                    now=now,
-                    reason="job_missing_from_current_board_response",
-                    http_status=response.status_code,
-                    final_url=response.url,
-                )
+    _provider_ashby.verify_jobs_live(
+        session,
+        jobs,
+        timeout=timeout,
+        now=now,
+        services=_provider_liveness_services(),
+    )
 
 
 def verify_smartrecruiters_job_live(
@@ -2050,88 +1184,12 @@ def verify_smartrecruiters_job_live(
     timeout: float,
     now: datetime,
 ) -> None:
-    if not job.provider_id_trusted or not job.platform_job_id or not job.board_token:
-        set_live_status(
-            job,
-            status="unknown",
-            source="smartrecruiters_posting_api",
-            now=now,
-            reason="untrusted_or_missing_company_or_posting_id",
-        )
-        return
-    board = Board("smartrecruiters", job.board_token, job.board_region)
-    url = f"{smartrecruiters_api_base(board)}/{quote(job.platform_job_id, safe='')}"
-    response = response_or_none(session, url, timeout=timeout)
-    if response is None:
-        set_live_status(
-            job,
-            status="unknown",
-            source="smartrecruiters_posting_api",
-            now=now,
-            reason="request_failed",
-        )
-        return
-    if response.status_code in {404, 410}:
-        set_live_status(
-            job,
-            status="closed",
-            source="smartrecruiters_posting_api",
-            now=now,
-            reason=f"http_{response.status_code}",
-            http_status=response.status_code,
-            final_url=response.url,
-        )
-        return
-    if response.status_code >= 400:
-        set_live_status(
-            job,
-            status="unknown",
-            source="smartrecruiters_posting_api",
-            now=now,
-            reason=f"http_{response.status_code}",
-            http_status=response.status_code,
-            final_url=response.url,
-        )
-        return
-    try:
-        payload = response.json()
-    except ValueError:
-        payload = None
-    if not isinstance(payload, dict) or clean_whitespace(payload.get("id")) != str(
-        job.platform_job_id
-    ):
-        set_live_status(
-            job,
-            status="unknown",
-            source="smartrecruiters_posting_api",
-            now=now,
-            reason="unexpected_posting_response",
-            http_status=response.status_code,
-            final_url=response.url,
-        )
-        return
-    if payload.get("active") is False or str(payload.get("visibility", "")).upper() not in {
-        "",
-        "PUBLIC",
-    }:
-        set_live_status(
-            job,
-            status="closed",
-            source="smartrecruiters_posting_api",
-            now=now,
-            reason="posting_not_active_or_public",
-            http_status=response.status_code,
-            final_url=response.url,
-        )
-        return
-    set_live_status(
+    _provider_smartrecruiters.verify_job_live(
+        session,
         job,
-        status="live",
-        source="smartrecruiters_posting_api",
+        timeout=timeout,
         now=now,
-        reason="active_public_posting_present",
-        http_status=response.status_code,
-        final_url=response.url,
+        services=_provider_liveness_services(),
     )
 
 
@@ -2142,103 +1200,13 @@ def verify_workable_jobs_live(
     timeout: float,
     now: datetime,
 ) -> None:
-    by_board: dict[tuple[str, str], list[Job]] = {}
-    for job in jobs:
-        if (
-            not job.provider_id_trusted
-            or not job.platform_job_id
-            or not job.board_token
-            or job.board_token == WORKABLE_SHORT_LINK_BOARD
-        ):
-            set_live_status(
-                job,
-                status="unknown",
-                source="workable_account_api",
-                now=now,
-                reason="untrusted_or_missing_account_or_shortcode",
-            )
-            continue
-        by_board.setdefault((job.board_region, job.board_token), []).append(job)
-
-    for (board_region, board_token), board_jobs in by_board.items():
-        board = Board("workable", board_token, board_region)
-        response = response_or_none(session, workable_api_url(board), timeout=timeout)
-        if response is None:
-            for job in board_jobs:
-                set_live_status(
-                    job,
-                    status="unknown",
-                    source="workable_account_api",
-                    now=now,
-                    reason="request_failed",
-                )
-            continue
-        if response.status_code in {404, 410}:
-            for job in board_jobs:
-                set_live_status(
-                    job,
-                    status="closed",
-                    source="workable_account_api",
-                    now=now,
-                    reason=f"http_{response.status_code}",
-                    http_status=response.status_code,
-                    final_url=response.url,
-                )
-            continue
-        if response.status_code >= 400:
-            for job in board_jobs:
-                set_live_status(
-                    job,
-                    status="unknown",
-                    source="workable_account_api",
-                    now=now,
-                    reason=f"http_{response.status_code}",
-                    http_status=response.status_code,
-                    final_url=response.url,
-                )
-            continue
-        try:
-            payload = response.json()
-        except ValueError:
-            payload = None
-        if not isinstance(payload, dict):
-            for job in board_jobs:
-                set_live_status(
-                    job,
-                    status="unknown",
-                    source="workable_account_api",
-                    now=now,
-                    reason="unexpected_account_response",
-                    http_status=response.status_code,
-                    final_url=response.url,
-                )
-            continue
-        active_ids = {
-            clean_whitespace(item.get("shortcode"))
-            for item in mapping_items(payload.get("jobs"))
-            if item.get("shortcode")
-        }
-        for job in board_jobs:
-            if job.platform_job_id in active_ids:
-                set_live_status(
-                    job,
-                    status="live",
-                    source="workable_account_api",
-                    now=now,
-                    reason="job_present_in_current_account_response",
-                    http_status=response.status_code,
-                    final_url=response.url,
-                )
-            else:
-                set_live_status(
-                    job,
-                    status="closed",
-                    source="workable_account_api",
-                    now=now,
-                    reason="job_missing_from_current_account_response",
-                    http_status=response.status_code,
-                    final_url=response.url,
-                )
+    _provider_workable.verify_jobs_live(
+        session,
+        jobs,
+        timeout=timeout,
+        now=now,
+        services=_provider_liveness_services(),
+    )
 
 
 def preserve_listing_status_on_page_uncertainty(

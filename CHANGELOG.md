@@ -34,6 +34,8 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Changed
 
+- Split public job-board feed and liveness behavior into typed provider
+  adapters while preserving the established search facade and CLI contracts.
 - Centralized supported-ATS URL ownership and live candidate normalization so
   every application entrypoint rejects provider mismatches before generating
   documents or opening a browser.

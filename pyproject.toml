@@ -83,6 +83,7 @@ files = [
     "src/job_application_automation/core/submission_log.py",
     "src/job_application_automation/core/document_archive.py",
     "src/job_application_automation/search/models.py",
+    "src/job_application_automation/search/providers",
     "src/job_application_automation/core/runtime_config.py",
 ]
 
