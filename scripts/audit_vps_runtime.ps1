@@ -12,34 +12,11 @@ param(
 
 . "$PSScriptRoot\vps_script_helpers.ps1"
 
-if (-not (Test-Path -LiteralPath $ConfigPath)) {
-    Write-Error "VPS config not found at $ConfigPath"
-    exit 1
-}
 try {
-    $Config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
+    $Connection = Read-VpsConnectionConfig -Path $ConfigPath
+    $PlinkPath = Get-RequiredCommandPath -Name "plink"
 } catch {
-    Write-Error "VPS config at $ConfigPath is not valid JSON."
-    exit 1
-}
-
-$VpsHost = [string]$Config.vps.host
-$SshUser = [string]$Config.vps.ssh_user
-$SshPassword = [string]$Config.vps.ssh_password.value
-$SshHostKey = [string]$Config.vps.ssh_host_key
-$SshPort = if ($null -ne $Config.vps.ssh_port) { [int]$Config.vps.ssh_port } else { 22 }
-if (-not $VpsHost -or -not $SshUser -or -not $SshPassword -or -not $SshHostKey) {
-    Write-Error "$ConfigPath is missing required pinned VPS connection settings."
-    exit 1
-}
-if ($SshPort -lt 1 -or $SshPort -gt 65535) {
-    Write-Error "$ConfigPath contains an invalid vps.ssh_port."
-    exit 1
-}
-
-$PlinkCmd = Get-Command plink -ErrorAction SilentlyContinue
-if (-not $PlinkCmd) {
-    Write-Error "plink.exe must be available on PATH."
+    Write-Error $_
     exit 1
 }
 
@@ -183,25 +160,20 @@ if command -v pro >/dev/null 2>&1; then
 fi
 "@
 
-$PasswordFile = Join-Path ([IO.Path]::GetTempPath()) "vps-runtime-audit-$([guid]::NewGuid().ToString('N')).txt"
+$PasswordFile = New-TemporaryPasswordFile -Password $Connection.Password -Prefix "vps-runtime-audit"
 try {
-    [IO.File]::WriteAllText(
-        $PasswordFile,
-        $SshPassword,
-        [Text.UTF8Encoding]::new($false)
-    )
     $Execution = Invoke-ExternalCommandWithTimeout `
-        -FilePath $PlinkCmd.Source `
+        -FilePath $PlinkPath `
         -ArgumentList @(
             "-ssh",
             "-batch",
             "-P",
-            $SshPort,
+            $Connection.Port,
             "-hostkey",
-            $SshHostKey,
+            $Connection.HostKey,
             "-pwfile",
             $PasswordFile,
-            "$SshUser@$VpsHost",
+            "$($Connection.User)@$($Connection.Host)",
             $RemoteCommand
         ) `
         -TimeoutSeconds $TimeoutSeconds

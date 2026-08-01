@@ -277,6 +277,35 @@ Write-Output "mock:$Value"
 
         self.assertEqual(base64.b64decode(result.stdout.strip()).decode(), expected)
 
+    def test_vps_connection_helper_validates_and_defaults_pinned_config(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            config_path = Path(temporary_directory) / "vps.json"
+            config = {
+                "vps": {
+                    "host": "example.test",
+                    "ssh_user": "root",
+                    "ssh_password": {"value": "test-value"},
+                    "ssh_host_key": "ssh-ed25519 test-key",
+                }
+            }
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+            command = (
+                f". '{SCRIPTS / 'vps_script_helpers.ps1'}';"
+                f"Read-VpsConnectionConfig -Path '{config_path}' | "
+                "ConvertTo-Json -Compress"
+            )
+
+            result = run([PWSH, "-NoProfile", "-Command", command], cwd=ROOT, check=True)
+            connection = json.loads(result.stdout)
+            self.assertEqual(connection["Host"], "example.test")
+            self.assertEqual(connection["Port"], 22)
+
+            config["vps"]["ssh_port"] = 70_000
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+            invalid = run([PWSH, "-NoProfile", "-Command", command], cwd=ROOT)
+            self.assertNotEqual(invalid.returncode, 0)
+            self.assertIn("invalid vps.ssh_port", invalid.stderr)
+
     def test_direct_plink_installers_normalize_remote_shell_scripts(self) -> None:
         for name in (
             "install_vps_continuous_ats.ps1",

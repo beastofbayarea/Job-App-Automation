@@ -23,6 +23,73 @@ function ConvertTo-LfLineEndings {
     return $Value.Replace("`r`n", "`n").Replace("`r", "`n")
 }
 
+function Read-VpsConnectionConfig {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "VPS config not found at $Path"
+    }
+
+    try {
+        $Config = Get-Content -LiteralPath $Path -Raw -ErrorAction Stop | ConvertFrom-Json
+    } catch {
+        throw "VPS config at $Path is not valid JSON."
+    }
+
+    $Connection = [pscustomobject]@{
+        Host = [string]$Config.vps.host
+        User = [string]$Config.vps.ssh_user
+        Password = [string]$Config.vps.ssh_password.value
+        HostKey = [string]$Config.vps.ssh_host_key
+        Port = if ($null -ne $Config.vps.ssh_port) { [int]$Config.vps.ssh_port } else { 22 }
+    }
+    if (
+        [string]::IsNullOrWhiteSpace($Connection.Host) -or
+        [string]::IsNullOrWhiteSpace($Connection.User) -or
+        [string]::IsNullOrWhiteSpace($Connection.Password) -or
+        [string]::IsNullOrWhiteSpace($Connection.HostKey)
+    ) {
+        throw "$Path is missing required pinned VPS connection settings."
+    }
+    if ($Connection.Port -lt 1 -or $Connection.Port -gt 65535) {
+        throw "$Path contains an invalid vps.ssh_port."
+    }
+
+    return $Connection
+}
+
+function Get-RequiredCommandPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name
+    )
+
+    $Command = Get-Command $Name -ErrorAction SilentlyContinue
+    if (-not $Command) {
+        throw "$Name must be available on PATH."
+    }
+    if ($Command.Path) {
+        return [string]$Command.Path
+    }
+    return [string]$Command.Source
+}
+
+function New-TemporaryPasswordFile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string]$Password,
+        [string]$Prefix = "job-app-vps"
+    )
+
+    $Path = Join-Path ([IO.Path]::GetTempPath()) "$Prefix-$([guid]::NewGuid().ToString('N')).txt"
+    [IO.File]::WriteAllText($Path, $Password, [Text.UTF8Encoding]::new($false))
+    return $Path
+}
+
 function Invoke-ExternalCommandWithTimeout {
     param(
         [Parameter(Mandatory = $true)]
