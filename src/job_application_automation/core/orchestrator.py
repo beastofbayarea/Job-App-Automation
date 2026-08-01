@@ -37,7 +37,6 @@ import random
 import signal
 import subprocess
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TypedDict
 from collections.abc import Mapping, Sequence
@@ -48,6 +47,16 @@ import openpyxl
 from ..mail.pool import load_email_pool
 from ..resume.cover_letter_ai import PROMPT_TEMPLATE_VERSION
 from .adapters import CommandResult, ProcessRunner, ProcessSettings
+from .application_pipeline import (
+    LEDGER_PERSIST_FAILED_STATUS,
+    ApplicationPipeline,
+    ApplicationTarget,
+    PipelineConfig,
+    PipelineOperations,
+    ProcessResult,
+    ProcessTimeoutError,
+    SubmissionPersistence as _SubmissionPersistence,
+)
 from .artifacts import read_json as read_json_artifact
 from .artifacts import write_json as write_json_artifact
 from .contracts import EngineMode, EngineRequest, EngineResult
@@ -55,9 +64,6 @@ from .engine_shared import (
     ATS_HOST_MARKERS as ATS_HOSTS,
 )
 from .engine_shared import (
-    ORCHESTRATOR_CONFIG_ENV,
-    ORCHESTRATOR_CURRENT_TITLE_ENV,
-    ORCHESTRATOR_INVOCATION_ENV,
     current_title_from_resume,
     detect_ats_job_url,
     email_from_resume,
@@ -72,7 +78,6 @@ from .engine_shared import (
 from .paths import CLI_ENTRYPOINT, CONFIG_DIR, OUTPUT_DIR, SRC_DIR, resolve_existing
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from .screenshots import (
-    APPLICATION_SCREENSHOT_DIR_ENV,
     cleanup_application_screenshot_directory,
     create_application_screenshot_directory,
 )
@@ -98,7 +103,6 @@ DEFAULT_EMAIL_POOL_FILE = resolve_runtime_path(
 DEFAULT_ENGINE_TIMEOUT_SECONDS = int(RUNTIME_CONFIG.application["engine_timeout_seconds"])
 DEFAULT_RESUME_TIMEOUT_SECONDS = int(RUNTIME_CONFIG.application["resume_timeout_seconds"])
 MIN_COVER_LETTER_BYTES = 1_000
-LEDGER_PERSIST_FAILED_STATUS = "LEDGER_PERSIST_FAILED"
 SUPPORTED_ATS = tuple(ATS_HOSTS)
 
 DEFAULT_ENGINE_FILES: Mapping[str, Path] = {
@@ -116,29 +120,6 @@ class JobRecord(TypedDict):
     role: str
     url: str
     ats: str
-
-
-@dataclass(frozen=True, slots=True)
-class ProcessResult:
-    returncode: int
-    stdout: str
-    stderr: str
-
-
-@dataclass(frozen=True, slots=True)
-class _SubmissionPersistence:
-    persisted: bool
-    error: str = ""
-    quarantine_path: Path | None = None
-    quarantine_error: str = ""
-
-
-class ProcessTimeoutError(TimeoutError):
-    def __init__(self, timeout: int, stdout: str = "", stderr: str = "") -> None:
-        super().__init__(f"Process exceeded {timeout} seconds")
-        self.timeout = timeout
-        self.stdout = stdout
-        self.stderr = stderr
 
 
 class SubprocessRunner:
@@ -894,23 +875,106 @@ def _mode_name(*, live_submit: bool, fill_only: bool) -> str:
     return "DRY_RUN"
 
 
-def _job_result_base(job: JobRecord) -> dict[str, Any]:
-    return {
-        "row": job["row_number"],
-        "company": job["company"],
-        "role": job["role"],
-        "url": job["url"],
-        "ats": job["ats"],
-    }
+def _pipeline_operations(
+    *,
+    config_path: Path,
+    resume_timeout_seconds: int,
+    process_runner: ProcessRunner | None,
+) -> PipelineOperations:
+    """Bind the typed pipeline to the established orchestrator patch seams."""
 
+    def generate_resume(target: ApplicationTarget, email: str) -> Path | None:
+        return generate_personalized_resume(
+            target.company,
+            target.role,
+            target.url,
+            resume_timeout_seconds,
+            email,
+            process_runner,
+        )
 
-def _append_and_persist(
-    results: list[dict[str, Any]],
-    result: dict[str, Any],
-    results_path: Path,
-) -> None:
-    results.append(result)
-    _write_results(results_path, results)
+    def generate_cover_letter(target: ApplicationTarget, email: str) -> Path | None:
+        return generate_personalized_cover_letter(
+            target.company,
+            target.role,
+            target.url,
+            email,
+            config_path,
+            resume_timeout_seconds,
+            process_runner,
+        )
+
+    def build_command(
+        engine_path: Path,
+        target: ApplicationTarget,
+        target_resume: Path,
+        target_cover_letter: Path,
+        email: str,
+        mode: EngineMode,
+        headed: bool,
+    ) -> Sequence[str]:
+        return build_engine_command(
+            engine_path,
+            target.url,
+            target_resume,
+            target.company,
+            target.role,
+            email,
+            mode is EngineMode.LIVE_SUBMIT,
+            cover_letter_path=target_cover_letter,
+            headed=headed,
+            fill_only=mode is EngineMode.FILL_ONLY,
+            dry_run=mode is EngineMode.DRY_RUN,
+        )
+
+    def run_process(command: Sequence[str], settings: ProcessSettings) -> CommandResult:
+        return (process_runner or SubprocessRunner()).run(command, settings)
+
+    def create_screenshot_directory(inherited: str | Path | None) -> Path:
+        return create_application_screenshot_directory(inherited=inherited)
+
+    def record_submission(
+        submission_log: SubmissionLog,
+        submission_log_path: Path,
+        target: ApplicationTarget,
+        email: str,
+        target_resume: Path,
+        target_cover_letter: Path,
+        status: str,
+    ) -> _SubmissionPersistence:
+        job: JobRecord = {
+            "row_number": target.row_number,
+            "company": target.company,
+            "role": target.role,
+            "url": target.url,
+            "ats": target.ats,
+        }
+        return _record_submission(
+            submission_log,
+            submission_log_path,
+            job=job,
+            email=email,
+            resume_path=target_resume,
+            cover_letter_path=target_cover_letter,
+            status=status,
+        )
+
+    return PipelineOperations(
+        generate_resume=generate_resume,
+        generate_cover_letter=generate_cover_letter,
+        read_resume_email=email_from_resume,
+        read_current_title=current_title_from_resume,
+        engine_label=_engine_label,
+        build_engine_command=build_command,
+        run_process=run_process,
+        parse_engine_result=parse_engine_result,
+        create_screenshot_directory=create_screenshot_directory,
+        cleanup_screenshot_directory=cleanup_application_screenshot_directory,
+        mask_email=_mask_email,
+        is_confirmed_submission=_is_confirmed_submission,
+        record_submission=record_submission,
+        write_results=_write_results,
+    )
 
 
 def run_orchestrator(
@@ -1012,346 +1076,46 @@ def run_orchestrator(
         if live_submit
         else SubmissionLog()
     )
-    results: list[dict[str, Any]] = []
-    for index, job in enumerate(jobs, start=1):
-        email = job_emails[index - 1]
-        ats = job["ats"]
-        engine_path = engine_paths.get(ats)
-        base_result = _job_result_base(job)
-        previous_submissions = submission_log.find_by_job_url(job["url"]) if live_submit else {}
-        if previous_submissions:
-            latest = max(
-                previous_submissions.values(),
-                key=lambda entry: str(entry.get("applied_at", "")),
-            )
-            logger.info(
-                "[%d/%d] row=%s ats=%s company=%s role=%s already confirmed; skipping",
-                index,
-                len(jobs),
-                job["row_number"],
-                ats,
-                job["company"],
-                job["role"],
-            )
-            _append_and_persist(
-                results,
-                {
-                    **base_result,
-                    "engine": _engine_label(engine_path, ats) if engine_path else "",
-                    "resume": str(latest.get("resume_filename", "")),
-                    "cover_letter": str(latest.get("cover_letter_filename", "")),
-                    "email": _mask_email(str(latest.get("email_used", ""))),
-                    "status": "ALREADY_SUBMITTED",
-                    "success": True,
-                    "submitted": False,
-                    "confirmed": True,
-                    "test_mode": False,
-                    "already_submitted": True,
-                },
-                results_path,
-            )
-            continue
-        previous_quarantines = (
-            submission_quarantine.find_by_job_url(job["url"]) if live_submit else {}
+    targets = [
+        ApplicationTarget(
+            row_number=job["row_number"],
+            company=job["company"],
+            role=job["role"],
+            url=job["url"],
+            ats=job["ats"],
         )
-        if previous_quarantines:
-            latest = max(
-                previous_quarantines.values(),
-                key=lambda entry: str(entry.get("applied_at", "")),
-            )
-            logger.error(
-                "[%d/%d] row=%s ats=%s company=%s role=%s requires manual review; "
-                "a prior confirmed submission could not be written to the ledger",
-                index,
-                len(jobs),
-                job["row_number"],
-                ats,
-                job["company"],
-                job["role"],
-            )
-            _append_and_persist(
-                results,
-                {
-                    **base_result,
-                    "engine": _engine_label(engine_path, ats) if engine_path else "",
-                    "resume": str(latest.get("resume_filename", "")),
-                    "cover_letter": str(latest.get("cover_letter_filename", "")),
-                    "email": _mask_email(str(latest.get("email_used", ""))),
-                    "status": LEDGER_PERSIST_FAILED_STATUS,
-                    "success": False,
-                    "submitted": True,
-                    "confirmed": True,
-                    "test_mode": False,
-                    "ledger_persisted": False,
-                    "manual_review_required": True,
-                    "retry_safe": False,
-                    "quarantine_persisted": True,
-                    "quarantine_path": str(submission_quarantine_path),
-                    "detail": (
-                        "A previous confirmed submission is quarantined because its ledger "
-                        "write failed; automatic retry is disabled."
-                    ),
-                },
-                results_path,
-            )
-            continue
-        if not engine_path or not engine_path.is_file():
-            _append_and_persist(
-                results,
-                {**base_result, "status": "ENGINE_NOT_FOUND", "success": False},
-                results_path,
-            )
-            continue
-        engine_label = _engine_label(engine_path, ats)
-
-        try:
-            generated = prepared_resume_path or generate_personalized_resume(
-                job["company"],
-                job["role"],
-                job["url"],
-                resume_timeout_seconds,
-                email,
-                process_runner,
-            )
-        except Exception as exc:
-            logger.error("Resume identity extraction failed for row %s: %s", job["row_number"], exc)
-            _append_and_persist(
-                results,
-                {**base_result, "status": "RESUME_IDENTITY_EXTRACTION_FAILED", "success": False},
-                results_path,
-            )
-            continue
-        if not generated:
-            logger.error(
-                "Mandatory personalized resume generation failed for %s; "
-                "submission will not be attempted.",
-                job["url"],
-            )
-            _append_and_persist(
-                results,
-                {
-                    **base_result,
-                    "engine": engine_label,
-                    "resume": "",
-                    "email": _mask_email(email),
-                    "confirmed": False,
-                    "submitted": False,
-                    "success": False,
-                    "status": "PERSONALIZED_RESUME_FAILED",
-                },
-                results_path,
-            )
-            continue
-        target_resume = generated
-        try:
-            resume_email = email_from_resume(target_resume, fallback_email).strip().lower()
-            if resume_email != email:
-                raise ValueError(
-                    "Personalized resume email does not match the assigned application email"
-                )
-            current_title = current_title_from_resume(target_resume)
-        except Exception as exc:
-            logger.error(
-                "Generated resume identity extraction failed for row %s: %s", job["row_number"], exc
-            )
-            _append_and_persist(
-                results,
-                {
-                    **base_result,
-                    "engine": engine_label,
-                    "resume": target_resume.name,
-                    "email": _mask_email(email),
-                    "status": "GENERATED_RESUME_IDENTITY_INVALID",
-                    "success": False,
-                },
-                results_path,
-            )
-            continue
-        target_cover_letter = cover_letter_path or generate_personalized_cover_letter(
-            job["company"],
-            job["role"],
-            job["url"],
-            email,
-            config_path,
-            resume_timeout_seconds,
-            process_runner,
-        )
-        if not target_cover_letter:
-            logger.error(
-                "Mandatory personalized cover-letter generation failed for %s; "
-                "submission will not be attempted.",
-                job["url"],
-            )
-            _append_and_persist(
-                results,
-                {
-                    **base_result,
-                    "engine": engine_label,
-                    "resume": target_resume.name,
-                    "cover_letter": "",
-                    "email": _mask_email(email),
-                    "confirmed": False,
-                    "submitted": False,
-                    "success": False,
-                    "status": "PERSONALIZED_COVER_LETTER_FAILED",
-                },
-                results_path,
-            )
-            continue
-        logger.info(
-            "[%d/%d] row=%s ats=%s company=%s role=%s email=%s",
-            index,
-            len(jobs),
-            job["row_number"],
-            ats,
-            job["company"],
-            job["role"],
-            _mask_email(email),
-        )
-
-        command = build_engine_command(
-            engine_path,
-            job["url"],
-            target_resume,
-            job["company"],
-            job["role"],
-            email,
-            live_submit,
-            cover_letter_path=target_cover_letter,
+        for job in jobs
+    ]
+    pipeline = ApplicationPipeline(
+        targets=targets,
+        emails=job_emails,
+        config=PipelineConfig(
+            engine_paths=engine_paths,
+            results_path=results_path,
+            submission_log_path=submission_log_path,
+            submission_quarantine_path=submission_quarantine_path,
+            config_path=config_path,
+            prepared_resume_path=prepared_resume_path,
+            prepared_cover_letter_path=cover_letter_path,
+            mode=_engine_mode(
+                live_submit=live_submit,
+                fill_only=fill_only,
+                dry_run=dry_run,
+            ),
+            live_submit=live_submit,
             headed=headed,
-            fill_only=fill_only,
-            dry_run=dry_run,
-        )
-
-        screenshot_dir: Path | None = None
-        try:
-            inherited_screenshot_dir = os.environ.get(APPLICATION_SCREENSHOT_DIR_ENV, "")
-            screenshot_dir = create_application_screenshot_directory(
-                inherited=inherited_screenshot_dir or None,
-            )
-            engine_env = dict(os.environ)
-            # Required so the engine's require_orchestrated_invocation() guard
-            # (engine_shared.py) lets the run through; engines
-            # refuse to process a job URL unless launched via this orchestrator.
-            engine_env[ORCHESTRATOR_INVOCATION_ENV] = "1"
-            if config_path is None:
-                raise RuntimeError("A profile configuration is required for engine execution.")
-            engine_env[ORCHESTRATOR_CONFIG_ENV] = str(config_path)
-            engine_env[ORCHESTRATOR_CURRENT_TITLE_ENV] = current_title
-            engine_env[APPLICATION_SCREENSHOT_DIR_ENV] = str(screenshot_dir)
-            command_result = (process_runner or SubprocessRunner()).run(
-                command,
-                ProcessSettings(
-                    timeout_seconds=timeout_seconds,
-                    environment=engine_env,
-                ),
-            )
-            process_result = ProcessResult(
-                command_result.returncode,
-                command_result.stdout,
-                command_result.stderr,
-            )
-            outcome = parse_engine_result(process_result, live_submit)
-            if not outcome.get("success"):
-                logger.error(
-                    "Engine diagnostics:\n%s",
-                    (process_result.stdout + "\n" + process_result.stderr)[-8000:],
-                )
-        except ProcessTimeoutError as exc:
-            outcome = {
-                "success": False,
-                "status": "TIMED_OUT",
-                "timeout_seconds": exc.timeout,
-            }
-        except Exception as exc:
-            logger.error("Engine execution failed: %s", exc)
-            outcome = {"success": False, "status": "ENGINE_EXECUTION_ERROR", "detail": str(exc)}
-        finally:
-            if screenshot_dir is not None:
-                try:
-                    files_deleted, bytes_deleted = cleanup_application_screenshot_directory(
-                        screenshot_dir
-                    )
-                    logger.info(
-                        "Application screenshots cleaned: files=%d bytes=%d directory=%s",
-                        files_deleted,
-                        bytes_deleted,
-                        screenshot_dir,
-                    )
-                except (OSError, ValueError) as exc:
-                    logger.warning(
-                        "Could not clean application screenshot directory %s: %s",
-                        screenshot_dir,
-                        exc,
-                    )
-
-        stop_after_ledger_failure = False
-        if _is_confirmed_submission(outcome):
-            engine_outcome = dict(outcome)
-            persistence = _record_submission(
-                submission_log,
-                submission_log_path,
-                job=job,
-                email=email,
-                resume_path=target_resume,
-                cover_letter_path=target_cover_letter,
-                status=str(outcome["status"]),
-            )
-            if not persistence.persisted:
-                outcome = {
-                    **engine_outcome,
-                    "success": False,
-                    "status": LEDGER_PERSIST_FAILED_STATUS,
-                    "ledger_persisted": False,
-                    "manual_review_required": True,
-                    "retry_safe": False,
-                    "ledger_error": persistence.error,
-                    "engine_result": engine_outcome,
-                    "quarantine_persisted": not bool(persistence.quarantine_error),
-                    **(
-                        {"quarantine_path": str(persistence.quarantine_path)}
-                        if persistence.quarantine_path is not None
-                        else {}
-                    ),
-                    **(
-                        {"quarantine_error": persistence.quarantine_error}
-                        if persistence.quarantine_error
-                        else {}
-                    ),
-                    "detail": (
-                        "The engine confirmed submission, but the confirmed ledger could not "
-                        "be persisted. This job requires manual review and must not be retried."
-                    ),
-                }
-                stop_after_ledger_failure = True
-        _append_and_persist(
-            results,
-            {
-                **base_result,
-                "engine": engine_label,
-                "resume": target_resume.name,
-                "cover_letter": target_cover_letter.name,
-                "email": _mask_email(email),
-                **outcome,
-            },
-            results_path,
-        )
-        if stop_after_ledger_failure:
-            logger.error(
-                "Stopping orchestration after confirmed-ledger persistence failure for %s",
-                job["url"],
-            )
-            break
-
-    successful = sum(1 for result in results if result.get("success"))
-    logger.info(
-        "Orchestration complete: processed=%d successful=%d failed=%d results=%s",
-        len(results),
-        successful,
-        len(results) - successful,
-        results_path,
+            timeout_seconds=timeout_seconds,
+            fallback_email=fallback_email,
+        ),
+        submission_log=submission_log,
+        submission_quarantine=submission_quarantine,
+        operations=_pipeline_operations(
+            config_path=config_path,
+            resume_timeout_seconds=resume_timeout_seconds,
+            process_runner=process_runner,
+        ),
     )
-    return results
+    return pipeline.run()
 
 
 def _build_parser() -> argparse.ArgumentParser:

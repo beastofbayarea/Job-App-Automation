@@ -77,6 +77,7 @@ strict = true
 mypy_path = "src"
 show_error_codes = true
 files = [
+    "src/job_application_automation/core/application_pipeline.py",
     "src/job_application_automation/core/application_candidates.py",
     "src/job_application_automation/core/ats_urls.py",
     "src/job_application_automation/core/contracts.py",

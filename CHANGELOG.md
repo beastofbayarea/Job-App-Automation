@@ -34,6 +34,9 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Changed
 
+- Decomposed application orchestration into typed safety, document-preparation,
+  engine-execution, confirmation, and checkpoint stages while preserving the
+  established CLI, result JSON, ledger, and screenshot-cleanup behavior.
 - Split public job-board feed and liveness behavior into typed provider
   adapters while preserving the established search facade and CLI contracts.
 - Centralized supported-ATS URL ownership and live candidate normalization so
