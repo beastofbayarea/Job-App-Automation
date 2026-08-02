@@ -13,19 +13,25 @@ $Connection = Read-VpsConnectionConfig -Path $ConfigPath
 $PlinkPath = Get-RequiredCommandPath -Name "plink"
 $Repo = ConvertTo-PosixShellLiteral $RemoteRepoPath.TrimEnd("/")
 $WorkerLiteral = ConvertTo-PosixShellLiteral $Worker
+$StatePath = ConvertTo-PosixShellLiteral (
+    "$($RemoteRepoPath.TrimEnd('/'))/output/continuous_greenhouse_excel_${Worker}_state.json"
+)
+$WorkbookName = switch ($Worker) {
+    "all" { "greenhouse_all_jobs.xlsx" }
+    "marketing" { "greenhouse_marketing_jobs.xlsx" }
+    "product-management" { "greenhouse_product_management_jobs.xlsx" }
+}
+$TrackerPath = ConvertTo-PosixShellLiteral (
+    "$($RemoteRepoPath.TrimEnd('/'))/data/$WorkbookName"
+)
 $PasswordFile = New-TemporaryPasswordFile -Password $Connection.Password -Prefix "greenhouse-tracker-retry"
 
 $RemoteCommand = @"
 set -eu
 repo=$Repo
 worker=$WorkerLiteral
-state="`$repo/output/continuous_greenhouse_excel_`$worker`_state.json"
-tracker="`$repo/data/greenhouse_`$(printf '%s' "`$worker" | tr '-' '_')_jobs.xlsx"
-case "`$worker" in
-  all) tracker="`$repo/data/greenhouse_all_jobs.xlsx" ;;
-  marketing) tracker="`$repo/data/greenhouse_marketing_jobs.xlsx" ;;
-  product-management) tracker="`$repo/data/greenhouse_product_management_jobs.xlsx" ;;
-esac
+state=$StatePath
+tracker=$TrackerPath
 retry_root=`$(mktemp -d "`$repo/output/greenhouse-tracker-retry.XXXXXXXX")
 services='job-app-greenhouse.service job-app-greenhouse-excel-all.service job-app-greenhouse-excel-marketing.service job-app-greenhouse-excel-product-management.service'
 
