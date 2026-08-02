@@ -39,8 +39,8 @@ quadrantChart
 
 | ATS Platform | Target Market Segment | Primary Technical Architecture | Interaction Mechanism | Feasibility Tier |
 | :--- | :--- | :--- | :--- | :--- |
-| **Workable** | Tech Scaleups & Mid-Market | Modern React SPA / REST API | Direct REST API / Single-Page DOM | **Tier 1 (Immediate)** |
-| **SmartRecruiters** | Enterprise Tech & Global Brands | React SPA / Public REST API | Direct REST API / Single-Page DOM | **Tier 1 (Immediate)** |
+| **Workable** | Tech Scaleups & Mid-Market | Modern React SPA / Public Feed | Public Feed / Browser DOM | **Delivered** |
+| **SmartRecruiters** | Enterprise Tech & Global Brands | React SPA / Public Listing API | Public Feed / Browser DOM | **Delivered** |
 | **BambooHR** | SMB & Mid-Market | Clean HTML / Form POST | Static DOM / Multipart POST | **Tier 1 (Immediate)** |
 | **Recruitee** | EU & Global Tech Startups | Modern SPA / Public REST API | Direct REST API / Single-Page DOM | **Tier 1 (Immediate)** |
 | **Breezy HR** | Startups & Small Businesses | Single-Page Web App | Single-Page Playwright DOM | **Tier 1 (Immediate)** |
@@ -56,32 +56,42 @@ quadrantChart
 
 ## 2. Standard Codebase Architecture for Adding an ATS Engine
 
-Adding support for any new ATS platform in this repository follows a clean, modular pattern across 6 core components:
+Adding support for any new ATS platform in this repository follows a modular
+pattern across provider identity, search, application, and confirmation
+boundaries:
 
 ```mermaid
 graph TD
-    A[URL Input] --> B[job_identity.py: Canonical URL & ATS Identification]
-    B --> C[engine_shared.py: ATS_HOST_MARKERS Domain Routing]
-    C --> D[search/job_boards.py: Board Feed & Job Discovery]
-    C --> E[src/job_application_automation/engines/<ats_name>.py: Dedicated Engine]
-    E --> F[cli.py & orchestrator.py: Command & Task Dispatch]
-    E --> G[EngineResult: Confirmation & Artifact Persistence]
+    A[URL Input] --> B[core/ats_urls.py: Provider and Record Identification]
+    B --> C[core/identity.py: Canonical Identity]
+    C --> D[search/job_boards.py: Stable Search Facade]
+    D --> E[search/providers/registry.py: Provider Dispatch]
+    E --> F[search/providers/provider.py: Feed and Liveness Adapter]
+    C --> G[engines/provider.py: Dedicated Application Engine]
+    G --> H[core/application_pipeline.py: Typed Application Stages]
+    H --> I[EngineResult and Submission Ledger]
 ```
 
 ### Component Integration Touchpoints:
 
-1. **Domain Detection ([ats_urls.py](../src/job_application_automation/core/ats_urls.py))**:
-   Register domain tuples in `ATS_HOST_MARKERS` (e.g. `"workable": ("workable.com", "apply.workable.com")`).
+1. **Provider URL Ownership ([ats_urls.py](../src/job_application_automation/core/ats_urls.py))**:
+   Register provider hosts and record-specific path shapes in
+   `ATS_HOST_MARKERS` and `ATS_JOB_PATH_PATTERNS`.
 2. **Canonical Job Identity ([identity.py](../src/job_application_automation/core/identity.py))**:
-   Add URL regex patterns to extract `provider_job_id` and `company_token`.
-3. **Engine Implementation ([engines](../src/job_application_automation/engines/))**:
-   Create a dedicated `<ats_name>.py` module exposing `main(argv)` and `run_<ats_name>_engine(...)` that returns an [EngineResult](../src/job_application_automation/core/contracts.py).
-4. **CLI Dispatcher ([cli.py](../src/job_application_automation/cli.py))**:
-   Register module entry in `ENGINE_MODULES` dictionary (`"<ats_name>": "job_application_automation.engines.<ats_name>"`).
-5. **Orchestrator & Queue Runner ([orchestrator.py](../src/job_application_automation/core/orchestrator.py))**:
-   Include engine path in `DEFAULT_ENGINE_FILES` mapping.
-6. **Search Board Discovery ([job_boards.py](../src/job_application_automation/search/job_boards.py))**:
-   Implement a board parser query method (e.g. `query_workable_board`) to fetch public listings.
+   Preserve provider identifiers through the shared canonical URL and lookup
+   normalization contracts.
+3. **Search Provider Adapter ([search/providers](../src/job_application_automation/search/providers/))**:
+   Implement URL recognition, feed normalization, and liveness behavior, then
+   register the typed adapter in `registry.py`. `search/job_boards.py` remains
+   the compatibility facade and CLI entrypoint.
+4. **Engine Implementation ([engines](../src/job_application_automation/engines/))**:
+   Create a dedicated provider module exposing `main(argv)` and a typed engine
+   function that returns an [EngineResult](../src/job_application_automation/core/contracts.py).
+5. **CLI Dispatcher ([cli.py](../src/job_application_automation/cli.py))**:
+   Register the engine module lazily in `ENGINE_MODULES`.
+6. **Application Pipeline ([application_pipeline.py](../src/job_application_automation/core/application_pipeline.py))**:
+   Register the provider with orchestration, preserving typed safety,
+   document, execution, confirmation, checkpoint, and cleanup stages.
 
 ---
 
@@ -92,26 +102,30 @@ graph TD
 * **Domain Markers**: `("workable.com", "apply.workable.com")`
 * **Search Feed Endpoint**: `GET https://apply.workable.com/api/v1/widget/accounts/{company}/jobs`
 * **Application API Endpoint**: `POST https://apply.workable.com/api/v1/accounts/{company}/jobs/{job_id}/candidates`
-* **Changes Required**:
-  1. `src/job_application_automation/core/engine_shared.py`: Add `"workable": ("workable.com", "apply.workable.com")` to `ATS_HOST_MARKERS`.
-  2. `src/job_application_automation/core/job_identity.py`: Parse `https://apply.workable.com/{company}/j/{job_id}/` canonical URLs.
-  3. `src/job_application_automation/engines/workable.py` **[IMPLEMENTED, BROWSER]**: Fill the browser form with guarded required-field, CAPTCHA, and confirmation checks. Direct REST submission is not implemented.
-  4. `src/job_application_automation/cli.py`: Register `"workable"` in `ENGINE_MODULES`.
-  5. `src/job_application_automation/core/orchestrator.py`: Add `"workable"` to `DEFAULT_ENGINE_FILES` and `SUPPORTED_ATS`.
-  6. `src/job_application_automation/search/job_boards.py`: Add `query_workable_board` feed parser.
+* **Delivered Integration**:
+  1. `core/ats_urls.py` owns Workable hosts and record-path validation.
+  2. `search/providers/workable.py` owns public-feed normalization and batched
+     liveness checks; `search/providers/registry.py` dispatches to it.
+  3. `engines/workable.py` fills the browser form with guarded required-field,
+     CAPTCHA, and confirmation checks. Direct REST submission is not
+     implemented.
+  4. `cli.py`, `core/orchestrator.py`, and the typed application pipeline
+     register and execute the provider.
 
 ### 3.2 SmartRecruiters (`smartrecruiters.com`)
 
 * **Domain Markers**: `("smartrecruiters.com", "jobs.smartrecruiters.com")`
 * **Search Feed Endpoint**: `GET https://api.smartrecruiters.com/v1/companies/{company}/postings`
 * **Application API Endpoint**: `POST https://api.smartrecruiters.com/v1/companies/{company}/postings/{job_id}/candidates`
-* **Changes Required**:
-  1. `src/job_application_automation/core/engine_shared.py`: Add `"smartrecruiters": ("smartrecruiters.com", "jobs.smartrecruiters.com")` to `ATS_HOST_MARKERS`.
-  2. `src/job_application_automation/core/job_identity.py`: Extract company ID and job posting ID from `https://jobs.smartrecruiters.com/{company}/{job_id}`.
-  3. `src/job_application_automation/engines/smartrecruiters.py` **[IMPLEMENTED, BROWSER]**: Fill the OneClick browser flow and stop safely on required fields or anti-bot verification. Direct multipart API submission is not implemented.
-  4. `src/job_application_automation/cli.py`: Register `"smartrecruiters"` in `ENGINE_MODULES`.
-  5. `src/job_application_automation/core/orchestrator.py`: Register `"smartrecruiters"` in orchestrator.
-  6. `src/job_application_automation/search/job_boards.py`: Integrate `query_smartrecruiters_board`.
+* **Delivered Integration**:
+  1. `core/ats_urls.py` owns SmartRecruiters hosts and record-path validation.
+  2. `search/providers/smartrecruiters.py` owns public-feed normalization and
+     per-record liveness checks; `search/providers/registry.py` dispatches to it.
+  3. `engines/smartrecruiters.py` fills the OneClick browser flow and stops
+     safely on required fields or anti-bot verification. Direct multipart API
+     submission is not implemented.
+  4. `cli.py`, `core/orchestrator.py`, and the typed application pipeline
+     register and execute the provider.
 
 ### 3.3 BambooHR (`bamboohr.com`)
 
@@ -233,8 +247,8 @@ $$\text{RICE Score} = \frac{\text{Reach} \times \text{Impact} \times \text{Confi
 | :---: | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
 | **Baseline** | **Ashby (Direct GraphQL POST)** | [ashby.py](../src/job_application_automation/engines/ashby.py) | 80 | 3.0 | 100% | 1.0 | **240.0** | Delivered (Optimization) |
 | **Baseline** | **Greenhouse (Multipart API POST)** | [greenhouse.py](../src/job_application_automation/engines/greenhouse.py) | 80 | 3.0 | 90% | 1.2 | **180.0** | Delivered (Optimization) |
-| **1** | **Workable Engine** | `engines/workable.py` | 85 | 3.0 | 95% | 1.0 | **242.3** | **Tier 1 (Immediate)** |
-| **2** | **SmartRecruiters Engine** | `engines/smartrecruiters.py` | 80 | 3.0 | 90% | 1.2 | **180.0** | **Tier 1 (Immediate)** |
+| **1** | **Workable Engine** | `engines/workable.py` | 85 | 3.0 | 95% | 1.0 | **242.3** | Delivered (browser) |
+| **2** | **SmartRecruiters Engine** | `engines/smartrecruiters.py` | 80 | 3.0 | 90% | 1.2 | **180.0** | Delivered (browser) |
 | **3** | **BambooHR Engine** | `engines/bamboohr.py` | 70 | 2.5 | 95% | 1.0 | **166.3** | Removed / not supported |
 | **4** | **Recruitee Engine** | `engines/recruitee.py` | 60 | 2.5 | 95% | 0.8 | **178.1** | Removed / not supported |
 | **5** | **Breezy HR Engine** | `engines/breezy.py` | 55 | 2.0 | 90% | 0.8 | **123.8** | Removed / not supported |
@@ -250,19 +264,19 @@ $$\text{RICE Score} = \frac{\text{Reach} \times \text{Impact} \times \text{Confi
 
 ## 5. Detailed Breakdown of High-Priority Candidate ATS Engines
 
-### 1. Workable Engine (RICE Score: 242.3)
+### 1. Workable Engine (RICE Score: 242.3; delivered)
 * **Target File**: [workable.py](../src/job_application_automation/engines/workable.py)
 * **Reach (85)**: Workable is used by thousands of growing tech companies globally.
-* **Impact (3.0)**: Supports direct JSON/multipart REST API candidate submission (`/api/v1/accounts/{company}/jobs/{job_id}/candidates`). Application time drops from ~30s (Playwright) to <500ms (HTTP POST).
-* **Confidence (95%)**: High technical certainty due to public REST API specification.
-* **Effort (1.0 day)**: Simple API payload constructor with Playwright fallback.
+* **Delivered Scope**: Public-feed discovery, batched liveness checks, and a
+  guarded browser application engine. The direct candidate-submission API
+  remains an unimplemented design option.
 
-### 2. SmartRecruiters Engine (RICE Score: 180.0)
+### 2. SmartRecruiters Engine (RICE Score: 180.0; delivered)
 * **Target File**: [smartrecruiters.py](../src/job_application_automation/engines/smartrecruiters.py)
 * **Reach (80)**: Widely used by enterprise technology brands (Visa, Ubisoft, LinkedIn partners).
-* **Impact (3.0)**: Direct public posting REST API (`POST /v1/companies/{company}/postings/{job_id}/candidates`) allows instant submission without rendering heavy JavaScript.
-* **Confidence (90%)**: Proven public candidate application API.
-* **Effort (1.2 days)**: Standard REST API client module.
+* **Delivered Scope**: Public-feed discovery, per-record liveness checks, and a
+  guarded browser application engine. Direct API submission remains an
+  unimplemented design option.
 
 ### 3. Recruitee Engine (RICE Score: 178.1; removed)
 * **Former Target File**: `engines/recruitee.py` (removed)
@@ -295,9 +309,9 @@ This roadmap is retained as historical prioritization context. Recruitee, Bamboo
 gantt
     title ATS Expansion Engineering Roadmap
     dateFormat  YYYY-MM-DD
-    section Phase 1: High-ROI REST APIs
-    Workable Engine Implementation     :active, p1, 2026-08-01, 1d
-    SmartRecruiters Engine             :p2, after p1, 1d
+    section Phase 1: Supported Browser Integrations
+    Workable Engine Implementation     :done, p1, 2026-08-01, 1d
+    SmartRecruiters Engine             :done, p2, after p1, 1d
     Recruitee Engine                   :p3, after p2, 1d
     BambooHR Engine                    :p4, after p3, 1d
     section Phase 2: Scaleup & Startup DOM
