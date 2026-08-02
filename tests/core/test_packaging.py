@@ -30,6 +30,7 @@ def _build_wheel(output_dir: Path) -> Path:
             "pip",
             "wheel",
             "--no-deps",
+            "--no-build-isolation",
             "--wheel-dir",
             str(output_dir),
             str(PROJECT_ROOT),

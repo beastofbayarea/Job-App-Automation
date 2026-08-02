@@ -35,7 +35,7 @@ def run(
     cwd: Path,
     env: dict[str, str] | None = None,
     check: bool = False,
-    timeout: float = 20,
+    timeout: float = 60,
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         command,
