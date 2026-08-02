@@ -8,9 +8,22 @@ deterministic decisions here for focused testing.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
-from collections.abc import Iterable, Mapping
+
+from .form_sections import FormSectionOutcome, aggregate_section_outcomes
+
+__all__ = [
+    "FormSectionOutcome",
+    "aggregate_section_outcomes",
+    "choice_is_selected",
+    "configured_screening_answer",
+    "normalize_configured_value",
+    "normalize_question_text",
+    "OptionSelectionPlan",
+    "plan_option_selection",
+    "required_field_flag",
+]
 
 
 _SELECTED_CHOICE_CLASS = re.compile(r"(?:^|[_\-\s])(active|selected)(?:[_\-\s]|$)")
@@ -94,21 +107,3 @@ def required_field_flag(
 def choice_is_selected(*, aria_pressed: object, class_name: str = "") -> bool:
     """Recognize Ashby's selected Yes/No button states without DOM access."""
     return aria_pressed == "true" or bool(_SELECTED_CHOICE_CLASS.search(class_name.lower()))
-
-
-@dataclass(frozen=True, slots=True)
-class FormSectionOutcome:
-    """Critical-field flags yielded by one browser-facing form section."""
-
-    section: str
-    critical_fields: Mapping[str, bool] = field(default_factory=dict)
-
-
-def aggregate_section_outcomes(
-    outcomes: Iterable[FormSectionOutcome],
-) -> dict[str, bool]:
-    """Merge section flags in execution order, letting later checks win."""
-    merged: dict[str, bool] = {}
-    for outcome in outcomes:
-        merged.update(outcome.critical_fields)
-    return merged

@@ -50,6 +50,12 @@ from .browser_controls import (
     first_visible_for as _shared_first_visible_for,
     upload_first as _shared_upload_first,
 )
+from .form_sections import (
+    CallableSectionHandler,
+    FormSectionOutcome,
+    FormSectionReport,
+    run_section_handlers,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1433,6 +1439,62 @@ def _standard_control_selectors(spec: BrowserFormSpec) -> tuple[str, ...]:
     )
 
 
+def _run_initial_form_sections(
+    page: Page,
+    spec: BrowserFormSpec,
+    candidate: CandidateFields,
+    resume: Path,
+    cover_letter: Path | None,
+    config: Mapping[str, Any],
+    *,
+    company: str,
+    role: str,
+    candidate_evidence: str,
+    job_context: str,
+) -> FormSectionReport:
+    """Run generic sections in the established standard/custom/consent order."""
+
+    def standard_fields() -> FormSectionOutcome:
+        fields, missing = _fill_standard_fields(
+            page,
+            spec,
+            candidate,
+            resume,
+            cover_letter,
+        )
+        return FormSectionOutcome(
+            "standard_fields",
+            fields,
+            missing=tuple(missing),
+        )
+
+    def custom_questions() -> FormSectionOutcome:
+        fields = _fill_custom_questions(
+            page,
+            config,
+            company=company,
+            role=role,
+            candidate_evidence=candidate_evidence,
+            standard_selectors=_standard_control_selectors(spec),
+            job_context=job_context,
+        )
+        return FormSectionOutcome("custom_questions", fields)
+
+    def required_consent() -> FormSectionOutcome:
+        return FormSectionOutcome(
+            "required_consent",
+            completed=tuple(fill_required_consent(page)),
+        )
+
+    return run_section_handlers(
+        (
+            CallableSectionHandler("standard_fields", standard_fields),
+            CallableSectionHandler("custom_questions", custom_questions),
+            CallableSectionHandler("required_consent", required_consent),
+        )
+    )
+
+
 def _result(
     *,
     spec: BrowserFormSpec,
@@ -1677,23 +1739,23 @@ def run_browser_form_engine(
                     )
                 _dismiss_cookie_banner(page)
 
-            filled, missing_critical = _fill_standard_fields(
+            section_report = _run_initial_form_sections(
                 page,
                 spec,
                 candidate,
                 resume,
                 cover_letter,
-            )
-            custom_questions = _fill_custom_questions(
-                page,
                 config,
                 company=company or spec.display_name,
                 role=role,
                 candidate_evidence=candidate_evidence,
-                standard_selectors=_standard_control_selectors(spec),
                 job_context=job_context,
             )
-            consent = fill_required_consent(page)
+            standard_section = section_report.outcome("standard_fields")
+            filled = dict(standard_section.critical_fields)
+            missing_critical = list(standard_section.missing)
+            custom_questions = dict(section_report.outcome("custom_questions").critical_fields)
+            consent = section_report.completed
             # Resume parsing, address selection, and custom React controls can
             # rerender the identity block. Refill email fields only after those
             # dynamic interactions, blur them to trigger validation, and repair

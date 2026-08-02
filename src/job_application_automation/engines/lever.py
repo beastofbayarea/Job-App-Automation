@@ -58,6 +58,7 @@ from ..core.engine_shared import (
     validate_required_fields,
 )
 from ..core.paths import OUTPUT_DIR, resolve_project_dir
+from .browser_controls import upload_matching_file
 
 
 ATS_NAME = "lever"
@@ -112,28 +113,23 @@ def _upload_resume(page: Page, resume: Path) -> bool:
 
 def _upload_cover_letter(page: Page, cover_letter: Path) -> bool | None:
     """Upload a cover letter only when Lever exposes a matching file field."""
-    inputs = page.locator('input[type="file"]')
-    matched = False
-    for index in range(inputs.count()):
-        target = inputs.nth(index)
-        try:
-            context = " ".join(
-                (
-                    _context(target),
-                    target.get_attribute("name") or "",
-                    target.get_attribute("id") or "",
-                    target.get_attribute("aria-label") or "",
-                )
-            ).lower()
-            normalized = context.replace("_", " ").replace("-", " ")
-            if "cover" not in normalized or "letter" not in normalized:
-                continue
-            matched = True
-            target.set_input_files(str(cover_letter))
-            return True
-        except Exception:
-            continue
-    return False if matched else None
+
+    def context(target: Locator) -> str:
+        return " ".join(
+            (
+                _context(target),
+                target.get_attribute("name") or "",
+                target.get_attribute("id") or "",
+                target.get_attribute("aria-label") or "",
+            )
+        )
+
+    return upload_matching_file(
+        page,
+        cover_letter,
+        required_terms=("cover", "letter"),
+        context_resolver=context,
+    )
 
 
 def _fill_location(page: Page, value: str) -> bool:

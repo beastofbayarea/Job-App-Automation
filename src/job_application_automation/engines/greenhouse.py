@@ -69,6 +69,10 @@ from ..mail.gmail_client import (
     poll_for_verification_code,
     record_used_verification_message,
 )
+from .browser_controls import (
+    fill_all_visible as _shared_fill_all_visible,
+    upload_matching_file,
+)
 
 ATS_NAME = "greenhouse"
 SUBMIT_BUTTON_TEXT_PATTERN = re.compile(
@@ -102,23 +106,7 @@ def _valid_greenhouse_url(url: str) -> bool:
 
 def _fill_all_visible(page: Page, selectors: Sequence[str], value: str) -> bool:
     """Fill every visible duplicate of a standard Greenhouse input."""
-    if not value:
-        return False
-    matched = False
-    all_filled = True
-    for selector in selectors:
-        controls = page.locator(selector)
-        for index in range(controls.count()):
-            control = controls.nth(index)
-            try:
-                if not control.is_visible():
-                    continue
-                matched = True
-                control.fill(value)
-                all_filled = all_filled and control.input_value().strip() == value.strip()
-            except Exception:
-                all_filled = False
-    return matched and all_filled
+    return _shared_fill_all_visible(page, selectors, value)
 
 
 def _security_challenge_visible(page: Page) -> bool:
@@ -165,27 +153,24 @@ def _upload_resume(page: Page, resume: Path) -> bool:
 
 def _upload_cover_letter(page: Page, cover_letter: Path) -> bool | None:
     """Upload a cover letter when the Greenhouse form exposes that field."""
-    inputs = page.locator('input[type="file"]')
-    matched = False
-    for index in range(inputs.count()):
-        target = inputs.nth(index)
-        try:
-            context = target.evaluate(
+
+    def context(target: Locator) -> str:
+        return str(
+            target.evaluate(
                 """el => {
                     const root = el.closest('div') || el.parentElement;
                     return (root && root.innerText || '') + ' ' +
                            (el.name || '') + ' ' + (el.id || '');
                 }"""
-            ).lower()
-            normalized = context.replace("_", " ").replace("-", " ")
-            if "cover" not in normalized or "letter" not in normalized:
-                continue
-            matched = True
-            target.set_input_files(str(cover_letter))
-            return True
-        except Exception:
-            continue
-    return False if matched else None
+            )
+        )
+
+    return upload_matching_file(
+        page,
+        cover_letter,
+        required_terms=("cover", "letter"),
+        context_resolver=context,
+    )
 
 
 def _open_application_form(page: Page, timeout: int, source_url: str, company: str) -> None:
