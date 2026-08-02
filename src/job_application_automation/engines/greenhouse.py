@@ -498,6 +498,14 @@ def _greenhouse_semantic_answer(
         return str(rules.get("target_country_work_authorization") or "").strip() or None
     if re.search(r"\b(?:reside|located|based) within the united states\b", normalized):
         return str(rules.get("target_country_residence") or "Yes").strip()
+    if re.search(
+        r"\b(?:current user of|used|use|experience (?:with|using)|familiar with)\b"
+        r".{0,100}\b(?:product|products|platform|software|suite|tool|tools)\b|"
+        r"\b(?:product|products|platform|software|suite|tool|tools)\b"
+        r".{0,100}\b(?:used|use|experience|familiar)\b",
+        normalized,
+    ):
+        return str(rules.get("product_usage") or "Yes").strip()
     if "notice period" in normalized:
         return str(rules.get("notice_period") or "").strip() or None
     if re.search(
