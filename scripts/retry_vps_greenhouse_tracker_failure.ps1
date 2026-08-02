@@ -46,6 +46,7 @@ fi
 
 systemctl stop `$services
 restore_workers() {
+  systemctl reset-failed `$services || true
   systemctl start `$services
 }
 trap restore_workers EXIT INT TERM

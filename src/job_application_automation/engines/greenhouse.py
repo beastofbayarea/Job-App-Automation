@@ -476,7 +476,12 @@ def _greenhouse_semantic_answer(
         return str(rules.get("conflict_of_interest") or "").strip() or None
     if re.search(r"\boutside (?:business )?activit|\bside business|\bboard role", normalized):
         return str(rules.get("outside_activities") or "").strip() or None
-    if re.search(r"\bnon[- ]?compete|\bnon[- ]?solicitation|\bemployment restriction", normalized):
+    if re.search(
+        r"\bnon[- ]?compete|\bnon[- ]?solicitation|"
+        r"\b(?:post[- ]?)?employment\b.{0,100}\brestrictions?\b|"
+        r"\bcontractual\b.{0,100}\brestrictions?\b",
+        normalized,
+    ):
         return str(rules.get("employment_restrictions") or "No").strip()
     if re.search(r"\b(?:hourly|per hour|hourly pay|hourly rate)\b", normalized):
         return str(rules.get("hourly_rate") or "").strip() or None

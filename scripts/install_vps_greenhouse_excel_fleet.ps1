@@ -153,6 +153,7 @@ fi
 systemctl disable --now job-app-greenhouse-excel.service job-app-smartrecruiters.service job-app-workable.service
 systemctl daemon-reload
 systemctl enable $NewServices
+systemctl reset-failed $NewServices || true
 systemctl restart $NewServices
 for unit in $NewServices; do systemctl is-active --quiet "`$unit"; done
 for unit in job-app-greenhouse-excel.service job-app-smartrecruiters.service job-app-workable.service; do
