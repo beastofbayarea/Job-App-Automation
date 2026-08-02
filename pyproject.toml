@@ -86,6 +86,9 @@ files = [
     "src/job_application_automation/search/models.py",
     "src/job_application_automation/search/providers",
     "src/job_application_automation/core/runtime_config.py",
+    "src/job_application_automation/engines/browser_controls.py",
+    "src/job_application_automation/engines/browser_runtime.py",
+    "src/job_application_automation/engines/form_sections.py",
 ]
 
 [tool.ruff]

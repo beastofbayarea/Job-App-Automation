@@ -34,6 +34,9 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Changed
 
+- Extracted provider-neutral browser controls, Playwright session/runtime
+  lifecycle, and typed ordered form-section handlers while retaining
+  provider-specific navigation, widgets, and compatibility entry points.
 - Decomposed application orchestration into typed safety, document-preparation,
   engine-execution, confirmation, and checkpoint stages while preserving the
   established CLI, result JSON, ledger, and screenshot-cleanup behavior.
