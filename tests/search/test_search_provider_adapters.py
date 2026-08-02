@@ -37,7 +37,7 @@ def make_context() -> search.FetchContext:
         now=NOW,
         timeout=1,
         delay=0,
-        max_lever_pages=1,
+        page_limits={"lever": 1},
     )
 
 
@@ -78,6 +78,14 @@ def test_registry_exposes_one_typed_adapter_per_supported_feed() -> None:
         assert adapter.board_from_url is module.board_from_url
         assert adapter.looks_like_job_url is module.looks_like_job_url
         assert (adapter.verify_one is None) != (adapter.verify_many is None)
+
+
+def test_fetch_context_keeps_provider_pagination_out_of_the_shared_schema() -> None:
+    context = make_context()
+
+    assert context.max_pages_for("lever") == 1
+    assert context.max_pages_for("greenhouse") == 0
+    assert not hasattr(context, "max_lever_pages")
 
 
 def test_registry_dispatch_preserves_restricted_web_and_unsupported_semantics() -> None:

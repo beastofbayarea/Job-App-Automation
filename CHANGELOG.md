@@ -49,7 +49,8 @@ All notable user-facing changes are documented here. This project currently uses
 - Split public job-board feed and liveness behavior into typed provider
   adapters whose registry now owns URL recognition, feed dispatch, and
   single/batch liveness dispatch while preserving the established search
-  facade and CLI contracts.
+  facade and CLI contracts; shared fetch context now carries provider-neutral
+  page limits instead of a Lever-specific field.
 - Centralized supported-ATS URL ownership and live candidate normalization so
   every application entrypoint rejects provider mismatches before generating
   documents or opening a browser.

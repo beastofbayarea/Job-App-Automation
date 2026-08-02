@@ -97,7 +97,7 @@ def make_fetch_context(**overrides: object) -> search.FetchContext:
         "now": NOW,
         "timeout": 1,
         "delay": 0,
-        "max_lever_pages": 0,
+        "page_limits": {"lever": 0},
     }
     values.update(overrides)
     return search.FetchContext(**values)  # type: ignore[arg-type]

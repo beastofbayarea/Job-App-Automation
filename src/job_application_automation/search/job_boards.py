@@ -2253,7 +2253,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         now=now,
         timeout=args.timeout,
         delay=args.delay,
-        max_lever_pages=args.max_lever_pages,
+        page_limits={"lever": args.max_lever_pages},
     )
 
     default_logs = [

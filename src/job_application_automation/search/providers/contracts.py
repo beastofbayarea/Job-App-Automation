@@ -6,6 +6,7 @@ import logging
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
+from types import MappingProxyType
 from typing import Any, Protocol
 from urllib.parse import parse_qs, unquote, urlparse
 
@@ -67,7 +68,24 @@ class FetchContext:
     now: datetime
     timeout: float
     delay: float
-    max_lever_pages: int
+    page_limits: Mapping[str, int]
+
+    def __post_init__(self) -> None:
+        normalized: dict[str, int] = {}
+        for platform, maximum in self.page_limits.items():
+            if (
+                not platform
+                or not isinstance(maximum, int)
+                or isinstance(maximum, bool)
+                or maximum < 0
+            ):
+                raise ValueError("provider page limits must be non-negative integers")
+            normalized[platform.lower()] = maximum
+        object.__setattr__(self, "page_limits", MappingProxyType(normalized))
+
+    def max_pages_for(self, platform: str) -> int:
+        """Return a provider's optional pagination cap; zero means unlimited."""
+        return self.page_limits.get(platform.lower(), 0)
 
 
 class JsonGetter(Protocol):

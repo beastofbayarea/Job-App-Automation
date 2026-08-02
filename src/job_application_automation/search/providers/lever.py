@@ -63,7 +63,7 @@ def fetch_jobs(
     now = context.now
     timeout = context.timeout
     delay = context.delay
-    max_pages = context.max_lever_pages
+    max_pages = context.max_pages_for("lever")
     base = api_base(board)
     page_size = 100
     skip = 0
