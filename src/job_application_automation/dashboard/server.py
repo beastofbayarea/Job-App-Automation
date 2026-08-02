@@ -23,7 +23,6 @@ from .routes import (
     ApiRouteMatch,
     DashboardApplication,
     DashboardRouteServices,
-    RouteKey,
     StaticPassthrough,
     StaticRouteMatch,
     match_get_request,
@@ -374,9 +373,6 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
             return
         if isinstance(match, StaticPassthrough):
             super().do_GET()
-            return
-        if match.key is RouteKey.PUBLIC_DOWNLOAD:
-            self._handle_file_download()
             return
         self._handle_api_get()
 

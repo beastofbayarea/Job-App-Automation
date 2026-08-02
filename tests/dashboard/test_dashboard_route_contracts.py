@@ -6,7 +6,7 @@ import http.client
 import json
 import threading
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -229,6 +229,41 @@ def test_local_http_roundtrip_preserves_routes_headers_and_read_only_contract() 
             post_response.read()
             assert post_response.status == 404
             connection.close()
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+
+
+@pytest.mark.enable_socket
+def test_public_download_roundtrip_dispatches_through_dashboard_application() -> None:
+    application = MagicMock(spec=DashboardApplication)
+    application.dispatch.return_value = HttpResponse.binary(
+        b"through-dispatch",
+        content_type="application/octet-stream",
+        disposition='attachment; filename="artifact.json"',
+    )
+    httpd = server.ReuseAddrHTTPServer(("127.0.0.1", 0), server.DashboardRequestHandler)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    host, port = httpd.server_address[:2]
+
+    try:
+        with patch.object(server, "_dashboard_application", return_value=application):
+            connection = http.client.HTTPConnection(str(host), int(port), timeout=5)
+            connection.request("GET", "/api/download/job_backlog.json?cache=1")
+            response = connection.getresponse()
+
+            assert response.status == 200
+            assert response.read() == b"through-dispatch"
+            assert response.getheader("Content-Disposition") == (
+                'attachment; filename="artifact.json"'
+            )
+            connection.close()
+
+        request, match = application.dispatch.call_args.args
+        assert request == DashboardRequest.parse("/api/download/job_backlog.json?cache=1")
+        assert match == ApiRouteMatch(RouteKey.PUBLIC_DOWNLOAD)
     finally:
         httpd.shutdown()
         httpd.server_close()
