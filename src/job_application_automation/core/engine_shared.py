@@ -128,7 +128,7 @@ def normalize_profile_config(config: Mapping[str, Any]) -> dict[str, Any]:
             offset_days = int(
                 normalized_candidate.get(
                     "start_date_offset_days",
-                    RUNTIME_CONFIG.application["default_start_date_offset_days"],
+                    RUNTIME_CONFIG.application.default_start_date_offset_days,
                 )
             )
         except (TypeError, ValueError) as exc:
@@ -269,7 +269,7 @@ def load_candidate_evidence(config: Mapping[str, Any]) -> str:
         configured = Path(str(configured_value)).expanduser()
         path = configured if configured.is_absolute() else DATA_DIR / configured
     else:
-        path = resolve_runtime_path(RUNTIME_CONFIG.application["resume_source_file"])
+        path = resolve_runtime_path(RUNTIME_CONFIG.application.resume_source_file)
     try:
         return path.read_text(encoding="utf-8").strip() if path.is_file() else ""
     except OSError as exc:

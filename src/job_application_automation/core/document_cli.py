@@ -348,7 +348,7 @@ def _generate(args: argparse.Namespace) -> int:
         profile = load_json_config(Path(args.profile))
         narrative = load_career_narrative(profile)
         source = load_resume_source(
-            resolve_runtime_path(RUNTIME_CONFIG.application["resume_source_file"])
+            resolve_runtime_path(RUNTIME_CONFIG.application.resume_source_file)
         )
     except (OSError, ValueError) as exc:
         raise ValueError(f"Could not load generation source/config: {exc}") from exc

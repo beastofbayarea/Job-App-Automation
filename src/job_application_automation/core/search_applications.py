@@ -22,15 +22,13 @@ from ..search.backlog import load_confirmed_urls, remove_confirmed_job
 
 
 UTC = timezone.utc
-DEFAULT_MAX_ATTEMPTS_PER_ATS = int(RUNTIME_CONFIG.application["vps_max_attempts_per_ats"])
-DEFAULT_RESULTS_DIR = resolve_runtime_path(
-    RUNTIME_CONFIG.application["vps_application_results_dir"]
-)
-DEFAULT_STATE_FILE = resolve_runtime_path(RUNTIME_CONFIG.application["vps_application_state_file"])
+DEFAULT_MAX_ATTEMPTS_PER_ATS = RUNTIME_CONFIG.application.vps_max_attempts_per_ats
+DEFAULT_RESULTS_DIR = resolve_runtime_path(RUNTIME_CONFIG.application.vps_application_results_dir)
+DEFAULT_STATE_FILE = resolve_runtime_path(RUNTIME_CONFIG.application.vps_application_state_file)
 DEFAULT_FAILURE_REPORT = resolve_runtime_path(
-    RUNTIME_CONFIG.application["vps_application_failure_report"]
+    RUNTIME_CONFIG.application.vps_application_failure_report
 )
-DEFAULT_BACKLOG = resolve_runtime_path(RUNTIME_CONFIG.application["vps_job_backlog_file"])
+DEFAULT_BACKLOG = resolve_runtime_path(RUNTIME_CONFIG.application.vps_job_backlog_file)
 
 
 def _load_json(path: Path) -> Any:
@@ -159,7 +157,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--timeout",
         type=int,
-        default=int(RUNTIME_CONFIG.application["queue_timeout_seconds"]),
+        default=RUNTIME_CONFIG.application.queue_timeout_seconds,
     )
     return parser
 

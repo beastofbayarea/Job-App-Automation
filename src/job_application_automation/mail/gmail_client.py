@@ -142,8 +142,8 @@ from .gmail_auth import (
 SCOPES = list(GMAIL_SCOPES)
 READONLY_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
-DEFAULT_CREDENTIALS_FILE = str(resolve_runtime_path(RUNTIME_CONFIG.gmail["credentials_file"]))
-DEFAULT_TOKEN_FILE = str(resolve_runtime_path(RUNTIME_CONFIG.gmail["token_file"]))
+DEFAULT_CREDENTIALS_FILE = str(resolve_runtime_path(RUNTIME_CONFIG.gmail.credentials_file))
+DEFAULT_TOKEN_FILE = str(resolve_runtime_path(RUNTIME_CONFIG.gmail.token_file))
 
 
 def classify_application_email(record: EmailRecord) -> str:

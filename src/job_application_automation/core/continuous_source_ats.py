@@ -377,6 +377,7 @@ def _sleep_until_next_cycle(
 
 
 def build_parser() -> argparse.ArgumentParser:
+    source_config = RUNTIME_CONFIG.continuous_worker.source
     parser = argparse.ArgumentParser(
         description="Continuously process disjoint ATS jobs from search output or an Excel tracker."
     )
@@ -400,15 +401,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--launcher", type=Path, default=DEFAULT_LAUNCHER)
     parser.add_argument("--submission-log", type=Path, default=DEFAULT_SUBMISSION_LOG)
     parser.add_argument("--backlog", type=Path, default=DEFAULT_BACKLOG)
-    parser.add_argument("--sleep-min-seconds", type=int, default=5)
-    parser.add_argument("--sleep-max-seconds", type=int, default=15)
-    parser.add_argument("--document-timeout-seconds", type=int, default=1800)
+    parser.add_argument("--sleep-min-seconds", type=int, default=source_config.sleep_min_seconds)
+    parser.add_argument("--sleep-max-seconds", type=int, default=source_config.sleep_max_seconds)
+    parser.add_argument(
+        "--document-timeout-seconds",
+        type=int,
+        default=source_config.document_timeout_seconds,
+    )
     parser.add_argument(
         "--engine-timeout-seconds",
         type=int,
-        default=int(RUNTIME_CONFIG.application["queue_timeout_seconds"]),
+        default=source_config.engine_timeout_seconds,
     )
-    parser.add_argument("--application-timeout-seconds", type=int, default=420)
+    parser.add_argument(
+        "--application-timeout-seconds",
+        type=int,
+        default=source_config.application_timeout_seconds,
+    )
     parser.add_argument("--once", action="store_true")
     parser.add_argument(
         "--validate-only",

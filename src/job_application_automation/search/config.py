@@ -5,45 +5,37 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
-from ..core.runtime_config import RUNTIME_CONFIG, resolve_runtime_path
-
-
-def _tuple(key: str) -> tuple[str, ...]:
-    return tuple(RUNTIME_CONFIG.search[key])
+from ..core.runtime_config import RUNTIME_CONFIG, SearchDefaultsSettings, resolve_runtime_path
 
 
-def _tuple_map(key: str) -> dict[str, tuple[str, ...]]:
-    values: Mapping[str, list[str]] = RUNTIME_CONFIG.search[key]
-    return {name: tuple(items) for name, items in values.items()}
+SEARCH_SETTINGS = RUNTIME_CONFIG.search
 
-
-SEARCH_PHRASE_TEMPLATES = _tuple("search_phrase_templates")
-DEFAULT_AI_TERMS = _tuple("ai_terms")
-AI_DISCOVERY_TERMS = _tuple("ai_discovery_terms")
-DEFAULT_LOCATION_TERMS = _tuple("default_locations")
-ROLE_FAMILY_VARIANTS = _tuple_map("role_families")
-ROLE_FAMILY_INPUT_ALIASES = _tuple_map("role_family_input_aliases")
-LOCATION_ALIAS_MAP = _tuple_map("location_aliases")
-GENERIC_ATS_HOST_SUFFIXES = _tuple("generic_ats_host_suffixes")
-ATS_SEARCH_HOSTS = _tuple_map("ats_hosts")
+SEARCH_PHRASE_TEMPLATES = SEARCH_SETTINGS.search_phrase_templates
+DEFAULT_AI_TERMS = SEARCH_SETTINGS.ai_terms
+AI_DISCOVERY_TERMS = SEARCH_SETTINGS.ai_discovery_terms
+DEFAULT_LOCATION_TERMS = SEARCH_SETTINGS.default_locations
+ROLE_FAMILY_VARIANTS = dict(SEARCH_SETTINGS.role_families)
+ROLE_FAMILY_INPUT_ALIASES = dict(SEARCH_SETTINGS.role_family_input_aliases)
+LOCATION_ALIAS_MAP = dict(SEARCH_SETTINGS.location_aliases)
+GENERIC_ATS_HOST_SUFFIXES = SEARCH_SETTINGS.generic_ats_host_suffixes
+ATS_SEARCH_HOSTS = dict(SEARCH_SETTINGS.ats_hosts)
 SUPPORTED_ATS_PLATFORMS = tuple(ATS_SEARCH_HOSTS)
-ALL_DDGS_BACKENDS = _tuple("ddgs_backends")
-DEAD_ROLE_MARKERS = _tuple("dead_role_markers")
-RESTRICTED_URL_PATTERNS = _tuple("restricted_url_patterns")
-WORKABLE_SHORT_LINK_BOARD = str(RUNTIME_CONFIG.search["workable_short_link_board"])
-PROVIDER_API_URLS = dict(RUNTIME_CONFIG.search["provider_api_urls"])
+ALL_DDGS_BACKENDS = SEARCH_SETTINGS.ddgs_backends
+DEAD_ROLE_MARKERS = SEARCH_SETTINGS.dead_role_markers
+RESTRICTED_URL_PATTERNS = SEARCH_SETTINGS.restricted_url_patterns
+WORKABLE_SHORT_LINK_BOARD = SEARCH_SETTINGS.workable_short_link_board
+PROVIDER_API_URLS = dict(SEARCH_SETTINGS.provider_api_urls)
 RESTRICTED_BOARD_KEYS = {
     (platform, token)
-    for platform, tokens in RUNTIME_CONFIG.search["restricted_board_tokens"].items()
+    for platform, tokens in SEARCH_SETTINGS.restricted_board_tokens.items()
     for token in tokens
 }
 
 
 def build_role_alias_map() -> dict[str, tuple[str, ...]]:
     """Build role aliases from configured families to prevent drift."""
-    aliases = {
+    aliases: dict[str, tuple[str, ...]] = {
         "program": ("Program", "Programme"),
         "programme": ("Program", "Programme"),
     }
@@ -83,13 +75,37 @@ class SearchDefaults:
     user_agent: str
 
     @classmethod
-    def from_mapping(cls, values: Mapping[str, Any]) -> SearchDefaults:
-        path_keys = {"output_file", "coverage_report_file", "cache_file"}
-        normalized = {
-            key: resolve_runtime_path(value) if key in path_keys else value
-            for key, value in values.items()
-        }
-        return cls(**normalized)
+    def from_settings(cls, values: SearchDefaultsSettings) -> SearchDefaults:
+        """Resolve typed runtime defaults into command-ready values."""
+        return cls(
+            days=values.days,
+            discovery_mode=values.discovery_mode,
+            max_discovery_queries=values.max_discovery_queries,
+            discovery_timelimit=values.discovery_timelimit,
+            match_mode=values.match_mode,
+            max_career_pages=values.max_career_pages,
+            scrape_discovered_pages=values.scrape_discovered_pages,
+            live_check_target=values.live_check_target,
+            output_file=resolve_runtime_path(values.output_file),
+            coverage_report_file=resolve_runtime_path(values.coverage_report_file),
+            cache_file=resolve_runtime_path(values.cache_file),
+            discovery_region=values.discovery_region,
+            search_backend=values.search_backend,
+            search_retries=values.search_retries,
+            results_per_query=values.results_per_query,
+            timeout_seconds=values.timeout_seconds,
+            delay_seconds=values.delay_seconds,
+            max_lever_pages=values.max_lever_pages,
+            max_fallback_pages=values.max_fallback_pages,
+            show_results=values.show_results,
+            async_timeout_seconds=values.async_timeout_seconds,
+            user_agent=values.user_agent,
+        )
+
+    @classmethod
+    def from_mapping(cls, values: Mapping[str, object]) -> SearchDefaults:
+        """Retain the version-one mapping constructor during migration."""
+        return cls.from_settings(SearchDefaultsSettings.from_mapping(values))
 
 
-DEFAULTS = SearchDefaults.from_mapping(RUNTIME_CONFIG.search["defaults"])
+DEFAULTS = SearchDefaults.from_settings(SEARCH_SETTINGS.defaults)

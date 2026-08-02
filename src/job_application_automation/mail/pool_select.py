@@ -56,7 +56,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--file",
         type=str,
-        default=str(resolve_runtime_path(RUNTIME_CONFIG.application["candidate_email_pool_file"])),
+        default=str(resolve_runtime_path(RUNTIME_CONFIG.application.candidate_email_pool_file)),
         help="Path to candidate_email_pool.json",
     )
     parser.add_argument(

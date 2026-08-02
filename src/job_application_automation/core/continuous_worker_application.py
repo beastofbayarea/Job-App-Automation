@@ -39,10 +39,10 @@ from .screenshots import (
 
 SHARED_INPUT = resolve_runtime_path("output/vps_generation_jobs.json")
 DEFAULT_INPUT = SHARED_INPUT
-DEFAULT_SUBMISSION_LOG = resolve_runtime_path(RUNTIME_CONFIG.application["submission_log_file"])
-DEFAULT_BACKLOG = resolve_runtime_path(RUNTIME_CONFIG.application["vps_job_backlog_file"])
+DEFAULT_SUBMISSION_LOG = resolve_runtime_path(RUNTIME_CONFIG.application.submission_log_file)
+DEFAULT_BACKLOG = resolve_runtime_path(RUNTIME_CONFIG.application.vps_job_backlog_file)
 DEFAULT_PROFILE = resolve_runtime_path("config/candidate_profile_config.json")
-DEFAULT_EMAIL_POOL = resolve_runtime_path(RUNTIME_CONFIG.application["candidate_email_pool_file"])
+DEFAULT_EMAIL_POOL = resolve_runtime_path(RUNTIME_CONFIG.application.candidate_email_pool_file)
 DEFAULT_LAUNCHER = resolve_runtime_path("src/job_automation.py")
 AMBIGUOUS_SUBMISSION_STATUSES = frozenset({"SUBMIT_ATTEMPT_UNCONFIRMED", "SUBMISSION_UNCONFIRMED"})
 ENGINE_CONFIRMATION_FIELDS = (

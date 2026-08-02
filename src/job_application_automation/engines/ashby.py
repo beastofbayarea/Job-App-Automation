@@ -82,29 +82,25 @@ from ..core.screenshots import active_screenshot_directory
 # ==============================================================================
 SCRIPT_DIR = SRC_DIR
 ATS_NAME = "ashby"
-CDP_URL = str(RUNTIME_CONFIG.browser["cdp_endpoint"])
-DEFAULT_TIMEOUT_MS = int(RUNTIME_CONFIG.ashby["default_timeout_ms"])
-NAVIGATION_TIMEOUT_MS = int(RUNTIME_CONFIG.ashby["navigation_timeout_ms"])
-NETWORK_IDLE_TIMEOUT_MS = int(RUNTIME_CONFIG.ashby["network_idle_timeout_ms"])
-MAX_FORM_STEPS = int(RUNTIME_CONFIG.ashby["max_form_steps"])
-MAX_SUBMIT_ATTEMPTS = int(RUNTIME_CONFIG.ashby["max_submit_attempts"])
-SUBMISSION_CONFIRMATION_PHRASES = tuple(RUNTIME_CONFIG.ashby["submission_confirmation_phrases"])
-SUBMISSION_SPAM_PHRASES = tuple(
-    RUNTIME_CONFIG.ashby.get("submission_spam_phrases", ("flagged as possible spam",))
+CDP_URL = RUNTIME_CONFIG.browser.cdp_endpoint
+DEFAULT_TIMEOUT_MS = RUNTIME_CONFIG.ashby.default_timeout_ms
+NAVIGATION_TIMEOUT_MS = RUNTIME_CONFIG.ashby.navigation_timeout_ms
+NETWORK_IDLE_TIMEOUT_MS = RUNTIME_CONFIG.ashby.network_idle_timeout_ms
+MAX_FORM_STEPS = RUNTIME_CONFIG.ashby.max_form_steps
+MAX_SUBMIT_ATTEMPTS = RUNTIME_CONFIG.ashby.max_submit_attempts
+SUBMISSION_CONFIRMATION_PHRASES = RUNTIME_CONFIG.ashby.submission_confirmation_phrases
+SUBMISSION_SPAM_PHRASES = RUNTIME_CONFIG.ashby.submission_spam_phrases or (
+    "flagged as possible spam",
 )
-_CONFIGURED_SUBMISSION_FAILURE_PHRASES = tuple(RUNTIME_CONFIG.ashby["submission_failure_phrases"])
+_CONFIGURED_SUBMISSION_FAILURE_PHRASES = RUNTIME_CONFIG.ashby.submission_failure_phrases
 SUBMISSION_REJECTION_PHRASES = tuple(
     phrase
     for phrase in _CONFIGURED_SUBMISSION_FAILURE_PHRASES
     if phrase not in SUBMISSION_SPAM_PHRASES
 )
 SUBMISSION_FAILURE_PHRASES = SUBMISSION_SPAM_PHRASES + SUBMISSION_REJECTION_PHRASES
-SUBMISSION_RESULT_TIMEOUT_SECONDS = float(
-    RUNTIME_CONFIG.ashby.get("submission_result_timeout_seconds", 15)
-)
-SUBMISSION_RESULT_POLL_SECONDS = float(
-    RUNTIME_CONFIG.ashby.get("submission_result_poll_seconds", 0.5)
-)
+SUBMISSION_RESULT_TIMEOUT_SECONDS = RUNTIME_CONFIG.ashby.submission_result_timeout_seconds or 15.0
+SUBMISSION_RESULT_POLL_SECONDS = RUNTIME_CONFIG.ashby.submission_result_poll_seconds or 0.5
 REQUIRED_FIELD_VALIDATION = "REQUIRED_FIELD_VALIDATION"
 
 # Candidate data belongs in candidate_profile_config.json, not in source code. Empty defaults
@@ -143,7 +139,7 @@ DEFAULT_CONFIG = {
         "screening_answers": {},
     },
     "defaults": {"source": "", "salary": "", "product_area_essay": "", "essay": ""},
-    "paths": {"ashby_dir": str(resolve_runtime_path(RUNTIME_CONFIG.ashby["screenshot_dir"]))},
+    "paths": {"ashby_dir": str(resolve_runtime_path(RUNTIME_CONFIG.ashby.screenshot_dir))},
     "action_timeout_ms": DEFAULT_TIMEOUT_MS,
     "navigation_timeout_ms": NAVIGATION_TIMEOUT_MS,
     "network_idle_timeout_ms": NETWORK_IDLE_TIMEOUT_MS,
@@ -533,7 +529,7 @@ def generate_essay_safely(question: str, jd_text: str, company: str, role: str) 
         return ""
 
     try:
-        evidence_path = resolve_runtime_path(RUNTIME_CONFIG.application["resume_source_file"])
+        evidence_path = resolve_runtime_path(RUNTIME_CONFIG.application.resume_source_file)
         candidate_evidence = (
             evidence_path.read_text(encoding="utf-8") if evidence_path.is_file() else ""
         )
@@ -2719,7 +2715,7 @@ def run_job(
     essay = str(overrides.get("essay", essay or defaults.get("essay", "")) or "")
 
     ashby_dir = active_screenshot_directory(
-        expand(str(paths.get("ashby_dir", RUNTIME_CONFIG.ashby["screenshot_dir"])))
+        expand(str(paths.get("ashby_dir", RUNTIME_CONFIG.ashby.screenshot_dir)))
     )
     ashby_dir.mkdir(parents=True, exist_ok=True)
 

@@ -51,10 +51,10 @@ from .cover_letter_validation import CoverLetterValidationPolicy, validate_cover
 from .source import ResumeSource, load_resume_source
 
 DEFAULT_CONFIG_FILE = CONFIG_DIR / "candidate_profile_config.json"
-COVER_LETTER_CACHE_FILE = resolve_runtime_path(RUNTIME_CONFIG.cover_letter["cache_file"])
-MAX_RETRIES = int(RUNTIME_CONFIG.cover_letter["max_retries"])
-MINIMUM_WORDS = int(RUNTIME_CONFIG.cover_letter["minimum_words"])
-MAXIMUM_WORDS = int(RUNTIME_CONFIG.cover_letter["maximum_words"])
+COVER_LETTER_CACHE_FILE = resolve_runtime_path(RUNTIME_CONFIG.cover_letter.cache_file)
+MAX_RETRIES = RUNTIME_CONFIG.cover_letter.max_retries
+MINIMUM_WORDS = RUNTIME_CONFIG.cover_letter.minimum_words
+MAXIMUM_WORDS = RUNTIME_CONFIG.cover_letter.maximum_words
 
 
 class JDContextUnavailable(RuntimeError):
@@ -333,7 +333,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         source = load_resume_source(
-            resolve_runtime_path(RUNTIME_CONFIG.application["resume_source_file"])
+            resolve_runtime_path(RUNTIME_CONFIG.application.resume_source_file)
         )
     except (OSError, ValueError) as exc:
         print(f"Could not load tagged resume source: {exc}", file=sys.stderr)

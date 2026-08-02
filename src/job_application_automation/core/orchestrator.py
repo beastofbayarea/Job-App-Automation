@@ -90,18 +90,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger("ATSOrchestrator")
 
-DEFAULT_TRACKER_FILE = resolve_runtime_path(RUNTIME_CONFIG.application["tracker_file"])
-DEFAULT_RESUME_FILE = resolve_runtime_path(RUNTIME_CONFIG.application["base_resume_file"])
+DEFAULT_TRACKER_FILE = resolve_runtime_path(RUNTIME_CONFIG.application.tracker_file)
+DEFAULT_RESUME_FILE = resolve_runtime_path(RUNTIME_CONFIG.application.base_resume_file)
 DEFAULT_CONFIG_FILE = CONFIG_DIR / "candidate_profile_config.json"
-DEFAULT_RESULTS_FILE = resolve_runtime_path(RUNTIME_CONFIG.application["results_file"])
-DEFAULT_SUBMISSION_LOG_FILE = resolve_runtime_path(
-    RUNTIME_CONFIG.application["submission_log_file"]
-)
-DEFAULT_EMAIL_POOL_FILE = resolve_runtime_path(
-    RUNTIME_CONFIG.application["candidate_email_pool_file"]
-)
-DEFAULT_ENGINE_TIMEOUT_SECONDS = int(RUNTIME_CONFIG.application["engine_timeout_seconds"])
-DEFAULT_RESUME_TIMEOUT_SECONDS = int(RUNTIME_CONFIG.application["resume_timeout_seconds"])
+DEFAULT_RESULTS_FILE = resolve_runtime_path(RUNTIME_CONFIG.application.results_file)
+DEFAULT_SUBMISSION_LOG_FILE = resolve_runtime_path(RUNTIME_CONFIG.application.submission_log_file)
+DEFAULT_EMAIL_POOL_FILE = resolve_runtime_path(RUNTIME_CONFIG.application.candidate_email_pool_file)
+DEFAULT_ENGINE_TIMEOUT_SECONDS = RUNTIME_CONFIG.application.engine_timeout_seconds
+DEFAULT_RESUME_TIMEOUT_SECONDS = RUNTIME_CONFIG.application.resume_timeout_seconds
 MIN_COVER_LETTER_BYTES = 1_000
 SUPPORTED_ATS = tuple(ATS_HOSTS)
 

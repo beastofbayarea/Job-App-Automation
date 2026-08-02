@@ -72,11 +72,12 @@ RESUMABLE_STATUSES = _RESUMABLE_STATUSES
 APPLICATION_SCREENSHOT_DIR_ENV = _APPLICATION_SCREENSHOT_DIR_ENV
 TERMINAL_STATUSES = frozenset({"confirmed", "failed", "manual_review"})
 ATS_PLATFORM_PATTERN = _WORKER_ATS_PLATFORM_PATTERN
-DEFAULT_CAPTCHA_COOLDOWN_SECONDS = 86_400
-DEFAULT_CAPTCHA_THRESHOLD = 2
-DEFAULT_SPAM_REJECTION_COOLDOWN_SECONDS = 86_400
-DEFAULT_SPAM_REJECTION_THRESHOLD = 1
-DEFAULT_APPLICATION_WINDOW_SECONDS = 86_400
+_WORKER_DEFAULTS = RUNTIME_CONFIG.continuous_worker.defaults
+DEFAULT_CAPTCHA_COOLDOWN_SECONDS = _WORKER_DEFAULTS.captcha_cooldown_seconds
+DEFAULT_CAPTCHA_THRESHOLD = _WORKER_DEFAULTS.captcha_threshold
+DEFAULT_SPAM_REJECTION_COOLDOWN_SECONDS = _WORKER_DEFAULTS.spam_rejection_cooldown_seconds
+DEFAULT_SPAM_REJECTION_THRESHOLD = _WORKER_DEFAULTS.spam_rejection_threshold
+DEFAULT_APPLICATION_WINDOW_SECONDS = _WORKER_DEFAULTS.application_window_seconds
 
 
 _now = utc_now_iso
@@ -530,28 +531,7 @@ def _application_rate_limit_remaining(
 
 def build_parser(ats_platform: str) -> argparse.ArgumentParser:
     ats_platform = _validate_platform(ats_platform)
-    provider_config = RUNTIME_CONFIG.get_section(ats_platform)
-    sleep_min_seconds = int(provider_config.get("continuous_sleep_min_seconds", 120))
-    sleep_max_seconds = int(provider_config.get("continuous_sleep_max_seconds", 300))
-    application_limit = int(provider_config.get("continuous_application_limit", 0))
-    application_window_seconds = int(
-        provider_config.get(
-            "continuous_application_window_seconds",
-            DEFAULT_APPLICATION_WINDOW_SECONDS,
-        )
-    )
-    spam_cooldown_seconds = int(
-        provider_config.get(
-            "spam_rejection_cooldown_seconds",
-            DEFAULT_SPAM_REJECTION_COOLDOWN_SECONDS,
-        )
-    )
-    spam_threshold = int(
-        provider_config.get(
-            "spam_rejection_threshold",
-            DEFAULT_SPAM_REJECTION_THRESHOLD,
-        )
-    )
+    provider_config = RUNTIME_CONFIG.continuous_worker.for_provider(ats_platform)
     parser = argparse.ArgumentParser(
         description=(
             f"Continuously select one verified-live {ats_platform.title()} job, "
@@ -590,41 +570,53 @@ def build_parser(ats_platform: str) -> argparse.ArgumentParser:
         default=DEFAULT_BACKLOG,
         help="Active-job backlog pruned only after confirmed ledger evidence.",
     )
-    parser.add_argument("--sleep-min-seconds", type=int, default=sleep_min_seconds)
-    parser.add_argument("--sleep-max-seconds", type=int, default=sleep_max_seconds)
-    parser.add_argument("--application-limit", type=int, default=application_limit)
+    parser.add_argument("--sleep-min-seconds", type=int, default=provider_config.sleep_min_seconds)
+    parser.add_argument("--sleep-max-seconds", type=int, default=provider_config.sleep_max_seconds)
+    parser.add_argument("--application-limit", type=int, default=provider_config.application_limit)
     parser.add_argument(
         "--application-window-seconds",
         type=int,
-        default=application_window_seconds,
+        default=provider_config.application_window_seconds,
     )
-    parser.add_argument("--document-timeout-seconds", type=int, default=1800)
+    parser.add_argument(
+        "--document-timeout-seconds",
+        type=int,
+        default=provider_config.document_timeout_seconds,
+    )
     parser.add_argument(
         "--engine-timeout-seconds",
         type=int,
-        default=int(RUNTIME_CONFIG.application["queue_timeout_seconds"]),
+        default=provider_config.engine_timeout_seconds,
     )
-    parser.add_argument("--application-timeout-seconds", type=int, default=420)
-    parser.add_argument("--refresh-timeout-seconds", type=int, default=3600)
+    parser.add_argument(
+        "--application-timeout-seconds",
+        type=int,
+        default=provider_config.application_timeout_seconds,
+    )
+    parser.add_argument(
+        "--refresh-timeout-seconds",
+        type=int,
+        default=provider_config.refresh_timeout_seconds,
+    )
     parser.add_argument(
         "--captcha-cooldown-seconds",
         type=int,
-        default=DEFAULT_CAPTCHA_COOLDOWN_SECONDS,
+        default=provider_config.captcha_cooldown_seconds,
     )
     parser.add_argument(
         "--captcha-threshold",
         type=int,
-        default=DEFAULT_CAPTCHA_THRESHOLD,
+        default=provider_config.captcha_threshold,
     )
     parser.add_argument(
         "--spam-rejection-cooldown-seconds",
         type=int,
-        default=spam_cooldown_seconds,
+        default=provider_config.spam_rejection_cooldown_seconds,
     )
     parser.add_argument(
         "--spam-rejection-threshold",
         type=int,
-        default=spam_threshold,
+        default=provider_config.spam_rejection_threshold,
     )
     parser.add_argument(
         "--once",

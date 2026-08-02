@@ -71,10 +71,10 @@ logger = logging.getLogger("ResumeAIUtilities")
 class VertexSettings:
     """Explicit Vertex configuration for a locally credentialed LLM gateway."""
 
-    project_id: str = str(RUNTIME_CONFIG.vertex["project_id"])
-    location: str = str(RUNTIME_CONFIG.vertex["location"])
-    model: str = str(RUNTIME_CONFIG.vertex["model"])
-    service_account_file: Path = resolve_runtime_path(RUNTIME_CONFIG.vertex["service_account_file"])
+    project_id: str = RUNTIME_CONFIG.vertex.project_id
+    location: str = RUNTIME_CONFIG.vertex.location
+    model: str = RUNTIME_CONFIG.vertex.model
+    service_account_file: Path = resolve_runtime_path(RUNTIME_CONFIG.vertex.service_account_file)
 
     def __post_init__(self) -> None:
         for name, value in (
@@ -109,10 +109,10 @@ _ai_lock = threading.Lock()
 _client_lock = threading.Lock()
 _client = None
 _client_settings: VertexSettings | None = None
-LLM_MAX_ATTEMPTS = int(RUNTIME_CONFIG.vertex["max_attempts"])
-LLM_RETRY_DELAY_SECONDS = float(RUNTIME_CONFIG.vertex["retry_delay_seconds"])
-JOB_TEXT_LIMIT = int(RUNTIME_CONFIG.vertex["job_text_limit"])
-JOB_NAVIGATION_TIMEOUT_MS = int(RUNTIME_CONFIG.vertex["job_navigation_timeout_ms"])
+LLM_MAX_ATTEMPTS = RUNTIME_CONFIG.vertex.max_attempts
+LLM_RETRY_DELAY_SECONDS = RUNTIME_CONFIG.vertex.retry_delay_seconds
+JOB_TEXT_LIMIT = RUNTIME_CONFIG.vertex.job_text_limit
+JOB_NAVIGATION_TIMEOUT_MS = RUNTIME_CONFIG.vertex.job_navigation_timeout_ms
 PROJECT_ID_FROM_SERVICE_ACCOUNT = "from-service-account"
 JOB_CONTEXT_BLOCK_MARKERS = (
     "access is temporarily restricted",

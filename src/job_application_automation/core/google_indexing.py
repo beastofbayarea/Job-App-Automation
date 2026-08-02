@@ -25,7 +25,7 @@ from .paths import CONFIG_DIR, PROJECT_ROOT
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 
 
-DEFAULT_SEO_CONFIG = resolve_runtime_path(RUNTIME_CONFIG.application["seo_config_file"])
+DEFAULT_SEO_CONFIG = resolve_runtime_path(RUNTIME_CONFIG.application.seo_config_file)
 DEFAULT_CLOUD_CONFIG = CONFIG_DIR / "cent_capital_config.json"
 INDEXING_SCOPE = "https://www.googleapis.com/auth/indexing"
 SEARCH_CONSOLE_SCOPE = "https://www.googleapis.com/auth/webmasters"

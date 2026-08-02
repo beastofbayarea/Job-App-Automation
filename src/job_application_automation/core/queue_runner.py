@@ -17,10 +17,8 @@ from .paths import CLI_ENTRYPOINT, OUTPUT_DIR, PROJECT_ROOT
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 
 
-DEFAULT_QUEUE_TIMEOUT_SECONDS = int(RUNTIME_CONFIG.application["queue_timeout_seconds"])
-DEFAULT_QUEUE_PROGRESS_FILE = resolve_runtime_path(
-    RUNTIME_CONFIG.application["queue_progress_file"]
-)
+DEFAULT_QUEUE_TIMEOUT_SECONDS = RUNTIME_CONFIG.application.queue_timeout_seconds
+DEFAULT_QUEUE_PROGRESS_FILE = resolve_runtime_path(RUNTIME_CONFIG.application.queue_progress_file)
 
 
 def _slug(url: str) -> str:

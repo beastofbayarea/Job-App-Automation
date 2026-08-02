@@ -587,7 +587,7 @@ def open_chrome_session(
     new_page: Callable[[Browser], Page] = _new_page,
 ) -> PlaywrightBrowserSession:
     """Open a reusable, background, or isolated Playwright browser session."""
-    endpoint = cdp_url or str(RUNTIME_CONFIG.browser["cdp_endpoint"])
+    endpoint = cdp_url or RUNTIME_CONFIG.browser.cdp_endpoint
     if background:
         target_id = ""
         try:

@@ -96,16 +96,16 @@ OUTPUT_DIR = PROJECT_OUTPUT_DIR
 # The ignored source material is deliberately loaded only when a caller starts
 # a generation workflow. Importing this module must be safe on fresh clones
 # and in tests that do not have candidate data.
-BASE_RESUME_PATH = resolve_runtime_path(RUNTIME_CONFIG.application["resume_source_file"])
-RESUME_CACHE_FILE = resolve_runtime_path(RUNTIME_CONFIG.resume["cache_file"])
+BASE_RESUME_PATH = resolve_runtime_path(RUNTIME_CONFIG.application.resume_source_file)
+RESUME_CACHE_FILE = resolve_runtime_path(RUNTIME_CONFIG.resume.cache_file)
 BASE_RESUME_TEXT = ""
 
 # ---- Original Resume Baseline Metrics ----
 # A submitted one-page resume is compared with a candidate-specific baseline
 # supplied through the runtime configuration, not the larger master experience
 # bank stored in the resume source.
-ORIG_CHAR_COUNT = int(RUNTIME_CONFIG.resume["original_character_count"])
-ORIG_PAGE_HEIGHT = float(RUNTIME_CONFIG.resume["original_page_height"])
+ORIG_CHAR_COUNT = RUNTIME_CONFIG.resume.original_character_count
+ORIG_PAGE_HEIGHT = RUNTIME_CONFIG.resume.original_page_height
 
 _resume_source: ResumeSource | None = None
 ORIGINAL_EXPERIENCE: list[dict[str, Any]] = []
@@ -151,15 +151,15 @@ _ai_lock = threading.Lock()
 _llm_lock = threading.Lock()
 _cache_lock = threading.Lock()
 _last_llm_call = 0.0
-LLM_MIN_INTERVAL = float(RUNTIME_CONFIG.resume["llm_min_interval_seconds"])
-MAX_RETRIES = int(RUNTIME_CONFIG.resume["max_retries"])
-MIN_SCORE = int(RUNTIME_CONFIG.resume["minimum_score"])
-MIN_TOTAL_BULLETS = int(RUNTIME_CONFIG.resume["minimum_total_bullets"])
+LLM_MIN_INTERVAL = RUNTIME_CONFIG.resume.llm_min_interval_seconds
+MAX_RETRIES = RUNTIME_CONFIG.resume.max_retries
+MIN_SCORE = RUNTIME_CONFIG.resume.minimum_score
+MIN_TOTAL_BULLETS = RUNTIME_CONFIG.resume.minimum_total_bullets
 _persistent_cache_override = os.environ.get("RESUME_PERSIST_CACHE", "").strip()
 PERSISTENT_CACHE_ENABLED = (
     _persistent_cache_override.lower() in {"1", "true", "yes"}
     if _persistent_cache_override
-    else bool(RUNTIME_CONFIG.resume["persistent_cache_enabled"])
+    else RUNTIME_CONFIG.resume.persistent_cache_enabled
 )
 
 

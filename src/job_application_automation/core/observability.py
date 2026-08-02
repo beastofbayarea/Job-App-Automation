@@ -15,10 +15,14 @@ from collections.abc import Mapping
 from contextlib import AbstractContextManager
 from typing import Any, Protocol
 
+from .runtime_config import RUNTIME_CONFIG
+
 
 SENTRY_DSN_ENV = "SENTRY_DSN"
 SENTRY_ENVIRONMENT_ENV = "SENTRY_ENVIRONMENT"
 SENTRY_RELEASE_ENV = "SENTRY_RELEASE"
+DEFAULT_ENVIRONMENT = RUNTIME_CONFIG.observability.default_environment
+DEFAULT_FLUSH_TIMEOUT_SECONDS = RUNTIME_CONFIG.observability.flush_timeout_seconds
 
 EVENT_NAMES = frozenset(
     {
@@ -173,14 +177,14 @@ class OperationalTelemetry:
         safe_level = level if level in LEVELS else "error"
         try:
             with self._sdk.new_scope() as scope:
-                for key, value in tags.items():
-                    scope.set_tag(key, value)
+                for key, tag_value in tags.items():
+                    scope.set_tag(key, tag_value)
                 self._sdk.capture_message(event_name, level=safe_level)
         except Exception:
             # Telemetry must never alter worker behavior or exit status.
             return
 
-    def flush(self, timeout: float = 2.0) -> None:
+    def flush(self, timeout: float = DEFAULT_FLUSH_TIMEOUT_SECONDS) -> None:
         if self._sdk is None:
             return
         try:
@@ -216,12 +220,12 @@ def initialize_observability(
         token = _safe_token(value or "")
         if token:
             base_tags[key] = token
-    environment = _safe_token(os.environ.get(SENTRY_ENVIRONMENT_ENV, "production"))
+    environment = _safe_token(os.environ.get(SENTRY_ENVIRONMENT_ENV, DEFAULT_ENVIRONMENT))
     release = _safe_token(os.environ.get(SENTRY_RELEASE_ENV, ""))
     try:
         sdk.init(
             dsn=dsn,
-            environment=environment or "production",
+            environment=environment or DEFAULT_ENVIRONMENT,
             release=release or None,
             send_default_pii=False,
             default_integrations=False,

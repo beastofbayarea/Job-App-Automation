@@ -1010,8 +1010,8 @@ def _greenhouse_security_code_query(company: str) -> str:
 def _current_greenhouse_verification_message_ids(company: str) -> set[str]:
     try:
         service = get_gmail_read_service(
-            resolve_runtime_path(RUNTIME_CONFIG.gmail["credentials_file"]),
-            resolve_runtime_path(RUNTIME_CONFIG.gmail["token_file"]),
+            resolve_runtime_path(RUNTIME_CONFIG.gmail.credentials_file),
+            resolve_runtime_path(RUNTIME_CONFIG.gmail.token_file),
         )
         return {
             record.message_id
@@ -1041,24 +1041,19 @@ def _fill_security_code_from_gmail(
     try:
         # Gmail can briefly lag the form's code-generation request. Waiting here
         # prevents reusing the previous application's otherwise newest code.
-        page.wait_for_timeout(int(RUNTIME_CONFIG.gmail["greenhouse_security_code_wait_ms"]))
+        page.wait_for_timeout(RUNTIME_CONFIG.gmail.greenhouse_security_code_wait_ms)
         service = get_gmail_read_service(
-            resolve_runtime_path(RUNTIME_CONFIG.gmail["credentials_file"]),
-            resolve_runtime_path(RUNTIME_CONFIG.gmail["token_file"]),
+            resolve_runtime_path(RUNTIME_CONFIG.gmail.credentials_file),
+            resolve_runtime_path(RUNTIME_CONFIG.gmail.token_file),
         )
-        history_path = resolve_runtime_path(RUNTIME_CONFIG.gmail["verification_history_file"])
+        history_path = resolve_runtime_path(RUNTIME_CONFIG.gmail.verification_history_file)
         excluded_ids = load_used_verification_message_ids(history_path)
         excluded_ids.update(excluded_message_ids or ())
         match = poll_for_verification_code(
             service,
             _greenhouse_security_code_query(company),
             r"security code field on your application:\s*([A-Za-z0-9]{8})",
-            timeout_seconds=int(
-                RUNTIME_CONFIG.gmail.get(
-                    "greenhouse_security_code_poll_timeout_seconds",
-                    RUNTIME_CONFIG.gmail["verification_poll_timeout_seconds"],
-                )
-            ),
+            timeout_seconds=int(RUNTIME_CONFIG.gmail.greenhouse_security_code_poll_timeout_seconds),
             sender_domains=("us.greenhouse-mail.io", "eu.greenhouse-mail.io"),
             expected_recipient="",
             excluded_message_ids=excluded_ids,

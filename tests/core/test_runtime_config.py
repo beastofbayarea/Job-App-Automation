@@ -4,6 +4,7 @@ import json
 import sys
 import tempfile
 import unittest
+from dataclasses import FrozenInstanceError
 from pathlib import Path
 from unittest.mock import patch
 
@@ -11,10 +12,12 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
+from job_application_automation.core.exceptions import ConfigurationError  # noqa: E402
 from job_application_automation.core.runtime_config import (  # noqa: E402
     DEFAULT_RUNTIME_CONFIG_DIR,
     RUNTIME_CONFIG_DIR,
     RUNTIME_SECTION_NAMES,
+    RuntimeConfig,
     load_runtime_config,
     resolve_runtime_path,
 )
@@ -43,47 +46,135 @@ class RuntimeConfigTests(unittest.TestCase):
     def test_tracked_runtime_config_loads_all_shared_operational_settings(self) -> None:
         config = load_runtime_config()
 
-        self.assertEqual(config.browser["cdp_endpoint"], "http://localhost:9222")
-        self.assertEqual(config.vertex["project_id"], "from-service-account")
-        self.assertGreater(config.ashby["max_submit_attempts"], 0)
-        self.assertGreaterEqual(config.ashby["continuous_sleep_min_seconds"], 900)
+        self.assertEqual(config.browser.cdp_endpoint, "http://localhost:9222")
+        self.assertEqual(config.vertex.project_id, "from-service-account")
+        self.assertGreater(config.ashby.max_submit_attempts, 0)
+        ashby_worker = config.continuous_worker.for_provider("ashby")
+        self.assertGreaterEqual(ashby_worker.sleep_min_seconds, 900)
         self.assertGreaterEqual(
-            config.ashby["continuous_sleep_max_seconds"],
-            config.ashby["continuous_sleep_min_seconds"],
+            ashby_worker.sleep_max_seconds,
+            ashby_worker.sleep_min_seconds,
         )
-        self.assertEqual(config.ashby["continuous_application_limit"], 12)
-        self.assertEqual(config.ashby["continuous_application_window_seconds"], 86_400)
-        self.assertEqual(config.ashby["spam_rejection_cooldown_seconds"], 86_400)
-        self.assertEqual(config.ashby["spam_rejection_threshold"], 1)
-        self.assertEqual(config.ashby["submission_result_timeout_seconds"], 15)
-        self.assertEqual(config.ashby["submission_result_poll_seconds"], 0.5)
-        self.assertGreater(config.gmail["greenhouse_security_code_poll_timeout_seconds"], 30)
-        self.assertGreater(config.resume["original_character_count"], 0)
-        self.assertIn("greenhouse", config.search["ats_hosts"])
-        self.assertIn("AI", config.search["ai_terms"])
-        self.assertEqual(config.search["defaults"]["max_discovery_queries"], 400)
-        self.assertEqual(config.application["vps_max_document_jobs"], 10)
-        self.assertEqual(config.application["vps_document_retry_jobs"], 2)
-        self.assertEqual(config.application["vps_max_attempts_per_ats"], 10)
+        self.assertEqual(ashby_worker.application_limit, 12)
+        self.assertEqual(ashby_worker.application_window_seconds, 86_400)
+        self.assertEqual(ashby_worker.spam_rejection_cooldown_seconds, 86_400)
+        self.assertEqual(ashby_worker.spam_rejection_threshold, 1)
+        self.assertEqual(config.ashby.submission_result_timeout_seconds, 15)
+        self.assertEqual(config.ashby.submission_result_poll_seconds, 0.5)
+        self.assertGreater(config.gmail.greenhouse_security_code_poll_timeout_seconds, 30)
+        self.assertGreater(config.resume.original_character_count, 0)
+        self.assertIn("greenhouse", config.search.ats_hosts)
+        self.assertIn("AI", config.search.ai_terms)
+        self.assertEqual(config.search.defaults.max_discovery_queries, 400)
+        self.assertEqual(config.application.vps_max_document_jobs, 10)
+        self.assertEqual(config.application.vps_document_retry_jobs, 2)
+        self.assertEqual(config.application.vps_max_attempts_per_ats, 10)
         self.assertEqual(
-            config.application["vps_application_state_file"],
+            config.application.vps_application_state_file,
             "output/vps_application_state.json",
         )
         self.assertEqual(
-            config.application["vps_application_failure_report"],
+            config.application.vps_application_failure_report,
             "output/vps_application_failures.json",
         )
         self.assertEqual(
-            config.application["vps_job_backlog_file"],
+            config.application.vps_job_backlog_file,
             "output/job_backlog.json",
         )
         self.assertEqual(
-            resolve_runtime_path(config.application["resume_source_file"]),
+            resolve_runtime_path(config.application.resume_source_file),
             ROOT / "data" / "base_resume.txt",
         )
         self.assertEqual(
-            resolve_runtime_path(config.application["seo_config_file"]),
+            resolve_runtime_path(config.application.seo_config_file),
             ROOT / "config" / "seo_config.json",
+        )
+        self.assertEqual(config.application["queue_timeout_seconds"], 300)
+        self.assertEqual(config.application.get("queue_timeout_seconds"), 300)
+
+    def test_typed_models_round_trip_and_are_frozen(self) -> None:
+        document = _split_document(RUNTIME_CONFIG_DIR)
+        config = RuntimeConfig.from_mapping(document)
+
+        self.assertEqual(config.to_mapping(), document)
+        self.assertEqual(RuntimeConfig.from_mapping(config.to_mapping()), config)
+        with self.assertRaises(FrozenInstanceError):
+            config.application.queue_timeout_seconds = 1  # type: ignore[misc]
+
+    def test_unknown_and_missing_keys_are_rejected_by_exact_section(self) -> None:
+        unknown = _split_document(RUNTIME_CONFIG_DIR)
+        unknown["application"]["queue_timout_seconds"] = 300
+        with self.assertRaisesRegex(ConfigurationError, "application.*unknown keys"):
+            RuntimeConfig.from_mapping(unknown)
+
+        missing = _split_document(RUNTIME_CONFIG_DIR)
+        missing["gmail"].pop("token_file")
+        with self.assertRaisesRegex(ConfigurationError, "gmail.*missing required keys.*token_file"):
+            RuntimeConfig.from_mapping(missing)
+
+    def test_provider_overrides_merge_with_typed_worker_defaults(self) -> None:
+        document = _split_document(RUNTIME_CONFIG_DIR)
+        document["continuous_worker"]["providers"]["greenhouse"] = {
+            "sleep_min_seconds": 17,
+            "application_limit": 4,
+        }
+
+        config = RuntimeConfig.from_mapping(document)
+        greenhouse = config.continuous_worker.for_provider("greenhouse")
+        lever = config.continuous_worker.for_provider("lever")
+
+        self.assertEqual(greenhouse.sleep_min_seconds, 17)
+        self.assertEqual(greenhouse.sleep_max_seconds, 300)
+        self.assertEqual(greenhouse.application_limit, 4)
+        self.assertEqual(lever.sleep_min_seconds, 120)
+        self.assertEqual(
+            config.continuous_worker["providers"]["greenhouse"],
+            {
+                "sleep_min_seconds": 17,
+                "application_limit": 4,
+            },
+        )
+
+    def test_legacy_schema_one_document_gains_behavior_preserving_typed_sections(self) -> None:
+        document = _split_document(RUNTIME_CONFIG_DIR)
+        document.pop("observability")
+        document.pop("continuous_worker")
+
+        config = RuntimeConfig.from_mapping(document)
+
+        self.assertEqual(config.observability.default_environment, "production")
+        self.assertEqual(config.continuous_worker.source.sleep_min_seconds, 5)
+        self.assertEqual(
+            config.continuous_worker.source.engine_timeout_seconds,
+            config.application.queue_timeout_seconds,
+        )
+        self.assertEqual(
+            config.continuous_worker.for_provider("ashby").sleep_min_seconds,
+            900,
+        )
+
+    def test_representative_consumers_receive_typed_attribute_defaults(self) -> None:
+        from job_application_automation.core import continuous_ats, orchestrator
+        from job_application_automation.engines import browser_runtime
+        from job_application_automation.search import config as search_config
+
+        config = load_runtime_config()
+
+        self.assertEqual(
+            orchestrator.DEFAULT_ENGINE_TIMEOUT_SECONDS,
+            config.application.engine_timeout_seconds,
+        )
+        self.assertEqual(
+            continuous_ats.build_parser("ashby").parse_args(["--once"]).sleep_min_seconds,
+            config.continuous_worker.for_provider("ashby").sleep_min_seconds,
+        )
+        self.assertEqual(
+            browser_runtime.RUNTIME_CONFIG.browser.cdp_endpoint,
+            config.browser.cdp_endpoint,
+        )
+        self.assertEqual(
+            search_config.DEFAULTS.results_per_query,
+            config.search.defaults.results_per_query,
         )
 
     def test_invalid_runtime_setting_is_rejected_before_workflow_startup(self) -> None:
@@ -170,6 +261,20 @@ class RuntimeConfigTests(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "missing: gmail.json"):
                 load_runtime_config(split_dir)
+
+    def test_schema_one_split_config_accepts_omitted_new_optional_sections(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            split_dir = Path(directory)
+            for source in RUNTIME_CONFIG_DIR.glob("*.json"):
+                if source.stem not in {"observability", "continuous_worker"}:
+                    (split_dir / source.name).write_text(
+                        source.read_text(encoding="utf-8"), encoding="utf-8"
+                    )
+
+            config = load_runtime_config(split_dir)
+
+        self.assertEqual(config.observability.flush_timeout_seconds, 2.0)
+        self.assertEqual(config.continuous_worker.for_provider("ashby").sleep_min_seconds, 900)
 
     def test_present_invalid_checkout_config_never_falls_back_to_packaged_defaults(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

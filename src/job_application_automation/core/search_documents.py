@@ -19,8 +19,8 @@ from .runtime_config import RUNTIME_CONFIG
 
 
 UTC = timezone.utc
-DEFAULT_MAX_JOBS = int(RUNTIME_CONFIG.application["vps_max_document_jobs"])
-DEFAULT_RETRY_JOBS = int(RUNTIME_CONFIG.application["vps_document_retry_jobs"])
+DEFAULT_MAX_JOBS = RUNTIME_CONFIG.application.vps_max_document_jobs
+DEFAULT_RETRY_JOBS = RUNTIME_CONFIG.application.vps_document_retry_jobs
 
 
 def _load_json(path: Path) -> Any:
