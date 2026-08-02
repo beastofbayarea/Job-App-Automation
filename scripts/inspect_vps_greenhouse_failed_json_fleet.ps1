@@ -24,7 +24,7 @@ root = Path(sys.argv[1])
 for path in sorted(root.glob("continuous_greenhouse_failed_*_state.json")):
     payload = json.loads(path.read_text(encoding="utf-8"))
     records = list(payload.get("jobs", {}).values())
-    latest = records[-1] if records else {}
+    latest = max(records, key=lambda item: str(item.get("updated_at", ""))) if records else {}
     result = latest.get("result") if isinstance(latest.get("result"), dict) else {}
     print(json.dumps({
         "worker": path.stem,
