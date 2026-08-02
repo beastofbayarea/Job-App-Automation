@@ -174,7 +174,7 @@ PY
 set +e
 PYTHONPATH="`$repo/src" xvfb-run -a --server-args="-screen 0 1280x1024x24" \
   "`$repo/.venv/bin/python" -m job_application_automation.core.continuous_source_ats \
-  --ats-platform greenhouse --source tracker --worker-id targeted-retry --once \
+  --ats-platform greenhouse --source tracker --worker-id targeted-retry --once --skip-cover-letter \
   --tracker "`$retry_root/tracker.xlsx" --state "`$retry_root/state.json" \
   --claims "`$retry_root/claims.json" --selected-input "`$retry_root/selected.json" \
   --results-dir "`$retry_root/results" --documents-dir "`$retry_root/documents"
