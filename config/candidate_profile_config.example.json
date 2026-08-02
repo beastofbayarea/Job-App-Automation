@@ -116,6 +116,7 @@
   },
   "answers": {
     "visa_sponsorship": "No",
+    "visa_type_not_applicable": "N/A",
     "bachelors_degree": "Yes",
     "salary_expectation": "Negotiable",
     "application_certification": "Yes",

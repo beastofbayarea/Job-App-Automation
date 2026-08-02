@@ -487,6 +487,8 @@ def _greenhouse_semantic_answer(
         return str(rules.get("relocation") or "").strip() or None
     if re.search(r"\b(?:require|need|future)\b.*\b(?:visa )?sponsorship\b", normalized):
         return str(rules.get("visa_sponsorship") or "").strip() or None
+    if re.search(r"\b(?:if yes,? )?what type of visa\b", normalized):
+        return str(rules.get("visa_type_not_applicable") or "N/A").strip()
     if re.search(r"\b(?:work permit|visa status|hold a visa|have a visa)\b", normalized):
         if re.search(r"\b(?:require|sponsor|sponsorship)\b", normalized):
             return str(rules.get("visa_sponsorship") or "").strip() or None
@@ -628,6 +630,14 @@ def _fill_custom_questions(
                         if is_location_question(label)
                         else _answer_variants(label, desired, option_variants)
                     )
+                    if (
+                        re.search(r"\b(?:if yes,? )?what type of visa\b", label, re.I)
+                        and str(desired).strip().casefold() in {"n/a", "not applicable"}
+                    ):
+                        # Some employers omit a literal N/A option for a
+                        # conditional visa question. "Other" is the only
+                        # truthful non-visa choice in that fixed dropdown.
+                        preferred = (*preferred, "Not applicable", "Other")
                     success = _select_greenhouse_combobox(
                         page,
                         control,

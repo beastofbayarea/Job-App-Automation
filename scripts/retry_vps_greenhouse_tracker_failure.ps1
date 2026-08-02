@@ -100,6 +100,13 @@ if reconciled:
     temporary.replace(state_path)
     print(f"reconciled_terminal_retries={reconciled}")
 
+ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+entries = ledger.values() if isinstance(ledger, dict) else ledger
+confirmed_urls = {
+    str(item.get("job_url", ""))
+    for item in entries
+    if isinstance(item, dict) and item.get("status") == "SUBMITTED & CONFIRMED"
+}
 candidates = []
 for record in state.get("jobs", {}).values():
     if not isinstance(record, dict):
@@ -110,6 +117,8 @@ for record in state.get("jobs", {}).values():
         continue
     if result.get("submitted") is True or result.get("confirmed") is True:
         continue
+    if str(record.get("job_url", "")) in confirmed_urls:
+        continue
     candidates.append(record)
 if not candidates:
     raise SystemExit("no verified pre-submit REQUIRED_FIELDS_NOT_FILLED record remains")
@@ -118,16 +127,6 @@ record = candidates[0]
 target_url = str(record.get("job_url", ""))
 if not target_url:
     raise SystemExit("selected state record has no job URL")
-
-ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
-entries = ledger.values() if isinstance(ledger, dict) else ledger
-if any(
-    isinstance(item, dict)
-    and item.get("status") == "SUBMITTED & CONFIRMED"
-    and str(item.get("job_url", "")) == target_url
-    for item in entries
-):
-    raise SystemExit("refusing retry: target already exists in confirmed ledger")
 
 jobs = load_jobs_from_tracker(tracker_path)
 job = next((item for item in jobs if str(item.get("url", "")) == target_url), None)
