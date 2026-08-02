@@ -363,8 +363,6 @@ def _process_selected_job(
 
 
 def _requires_clarification(state_path: Path, cycle_status: CycleStatus) -> bool:
-    if cycle_status == "manual_review":
-        return True
     if cycle_status != "failed":
         return False
     records = list(_state_records(state_path).values())
@@ -447,7 +445,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--pause-on-unconfirmed",
         action="store_true",
-        help="Exit successfully after a failed or manual-review attempt for supervised clarification.",
+        help="Exit successfully after a missing-required-field failure for clarification.",
     )
     parser.add_argument(
         "--validate-only",
