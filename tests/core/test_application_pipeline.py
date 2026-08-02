@@ -503,6 +503,20 @@ def test_checkpoints_accumulate_once_per_terminal_job(tmp_path: Path) -> None:
     assert operations.events == ["write_results", "write_results"]
 
 
+def test_empty_pipeline_checkpoints_an_empty_snapshot(tmp_path: Path) -> None:
+    operations = FakeOperations(tmp_path)
+
+    results = _run(
+        targets=[],
+        config=_config(tmp_path, tmp_path / "missing.py"),
+        operations=operations,
+    )
+
+    assert results == []
+    assert operations.snapshots == [[]]
+    assert operations.events == ["write_results"]
+
+
 def test_pipeline_rejects_an_email_assignment_length_mismatch(tmp_path: Path) -> None:
     engine = tmp_path / "engine.py"
     engine.write_text("# engine", encoding="utf-8")
@@ -512,6 +526,17 @@ def test_pipeline_rejects_an_email_assignment_length_mismatch(tmp_path: Path) ->
         ApplicationPipeline(
             targets=[_target()],
             emails=[],
+            config=_config(tmp_path, engine),
+            submission_log=SubmissionLog(),
+            submission_quarantine=SubmissionLog(),
+            operations=operations.bundle(),
+        )
+
+    with pytest.raises(ValueError, match="email-requirement decision"):
+        ApplicationPipeline(
+            targets=[_target()],
+            emails=["candidate@example.test"],
+            email_required=[],
             config=_config(tmp_path, engine),
             submission_log=SubmissionLog(),
             submission_quarantine=SubmissionLog(),

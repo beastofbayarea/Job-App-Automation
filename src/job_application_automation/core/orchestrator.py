@@ -802,6 +802,8 @@ def _random_job_emails(
     fallback_email: str,
 ) -> list[str]:
     """Choose a unique random pool address per job, preserving prepared-document identity."""
+    if not jobs:
+        return []
     if email_override:
         return [email_override] * len(jobs)
     if prepared_resume_path is not None:
@@ -814,6 +816,44 @@ def _random_job_emails(
             "unique random assignment is required."
         )
     return random.sample(pool, len(jobs))
+
+
+def _assign_job_emails(
+    jobs: Sequence[JobRecord],
+    *,
+    engine_paths: Mapping[str, Path],
+    live_submit: bool,
+    submission_log: SubmissionLog,
+    submission_quarantine: SubmissionLog,
+    email_override: str,
+    email_pool_path: Path,
+    prepared_resume_path: Path | None,
+    fallback_email: str,
+) -> tuple[list[str], list[bool]]:
+    """Assign emails only after terminal-ledger and engine-availability gates."""
+    requires_email: list[bool] = []
+    for job in jobs:
+        if live_submit and (
+            submission_log.find_by_job_url(job["url"])
+            or submission_quarantine.find_by_job_url(job["url"])
+        ):
+            requires_email.append(False)
+            continue
+        engine_path = engine_paths.get(job["ats"])
+        requires_email.append(bool(engine_path and engine_path.is_file()))
+
+    actionable_jobs = [job for job, required in zip(jobs, requires_email, strict=True) if required]
+    actionable_emails = iter(
+        _random_job_emails(
+            actionable_jobs,
+            email_override=email_override,
+            email_pool_path=email_pool_path,
+            prepared_resume_path=prepared_resume_path,
+            fallback_email=fallback_email,
+        )
+    )
+    emails = [next(actionable_emails) if required else "" for required in requires_email]
+    return emails, requires_email
 
 
 def _validate_orchestrator_inputs(
@@ -1047,14 +1087,6 @@ def run_orchestrator(
         start_index=start_index,
         limit=limit,
     )
-    job_emails = _random_job_emails(
-        jobs,
-        email_override=normalized_email_override,
-        email_pool_path=email_pool_path,
-        prepared_resume_path=prepared_resume_path,
-        fallback_email=fallback_email,
-    )
-
     logger.info(
         "Loaded %d supported jobs | mode=%s | shuffle=%s",
         len(jobs),
@@ -1076,6 +1108,17 @@ def run_orchestrator(
         if live_submit
         else SubmissionLog()
     )
+    job_emails, email_required = _assign_job_emails(
+        jobs,
+        engine_paths=engine_paths,
+        live_submit=live_submit,
+        submission_log=submission_log,
+        submission_quarantine=submission_quarantine,
+        email_override=normalized_email_override,
+        email_pool_path=email_pool_path,
+        prepared_resume_path=prepared_resume_path,
+        fallback_email=fallback_email,
+    )
     targets = [
         ApplicationTarget(
             row_number=job["row_number"],
@@ -1089,6 +1132,7 @@ def run_orchestrator(
     pipeline = ApplicationPipeline(
         targets=targets,
         emails=job_emails,
+        email_required=email_required,
         config=PipelineConfig(
             engine_paths=engine_paths,
             results_path=results_path,

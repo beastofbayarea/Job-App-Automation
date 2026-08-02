@@ -79,6 +79,9 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Fixed
 
+- Empty application selections now replace stale orchestration results with an
+  atomic empty snapshot, and live ledger/quarantine terminal jobs no longer
+  consume candidate-email pool capacity or require a pool file.
 - Live applications now fail closed on a corrupt submission ledger. A confirmed
   submission whose ledger write fails is durably quarantined for manual review,
   reported as non-success, and never retried automatically.

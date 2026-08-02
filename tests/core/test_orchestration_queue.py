@@ -383,7 +383,7 @@ class QueueSafetyTests(unittest.TestCase):
         self.assertFalse(orchestrator._is_confirmed_submission({**confirmed, "test_mode": True}))
         self.assertFalse(orchestrator._is_confirmed_submission({"status": "SUBMITTED & CONFIRMED"}))
 
-    def test_live_orchestrator_skips_a_url_already_confirmed_in_the_ledger(self) -> None:
+    def test_live_orchestrator_skips_confirmed_url_without_an_email_pool(self) -> None:
         job_url = "https://apply.workable.com/acme/j/ABC123/"
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -402,8 +402,7 @@ class QueueSafetyTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            pool = root / "emails.json"
-            pool.write_text('["candidate@example.test"]', encoding="utf-8")
+            pool = root / "missing-emails.json"
             ledger = SubmissionLog()
             ledger.record(
                 SubmissionRecord(
@@ -592,9 +591,7 @@ class QueueSafetyTests(unittest.TestCase):
                 resume,
                 profile,
                 root / "retry-results.json",
-                prepared_resume_path=resume,
-                cover_letter_path=cover_letter,
-                email_override="candidate@example.test",
+                email_pool_path=root / "missing-emails.json",
                 submission_log_path=ledger_path,
                 live_submit=True,
                 shuffle=False,
@@ -700,6 +697,160 @@ class QueueSafetyTests(unittest.TestCase):
 
 
 class AdditionalOrchestratorCoverageTests(unittest.TestCase):
+    def test_empty_selection_checkpoints_empty_results_without_reading_pool(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tracker = root / "jobs.xlsx"
+            workbook = orchestrator.openpyxl.Workbook()
+            workbook.active.append(["Company", "Title", "URL"])
+            workbook.save(tracker)
+            workbook.close()
+            resume = root / "base.pdf"
+            resume.write_bytes(b"resume")
+            profile = root / "profile.json"
+            profile.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 2,
+                        "candidate": {
+                            "identity": {"first_name": "Jane", "last_name": "Doe"},
+                            "contact": {"fallback_email": "fallback@example.test"},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            results_path = root / "results.json"
+            results_path.write_text('[{"status": "STALE"}]', encoding="utf-8")
+
+            with patch.object(
+                orchestrator,
+                "load_email_pool",
+                side_effect=AssertionError("empty selection must not read the email pool"),
+            ) as load_pool:
+                results = orchestrator.run_orchestrator(
+                    {},
+                    tracker,
+                    resume,
+                    profile,
+                    results_path,
+                    email_pool_path=root / "missing-emails.json",
+                    submission_log_path=root / "submission-log.json",
+                    shuffle=False,
+                )
+
+            self.assertEqual(results, [])
+            self.assertEqual(json.loads(results_path.read_text(encoding="utf-8")), [])
+            load_pool.assert_not_called()
+
+    def test_live_terminal_job_does_not_consume_actionable_pool_capacity(self) -> None:
+        confirmed_url = "https://apply.workable.com/acme/j/CONFIRMED/"
+        actionable_url = "https://apply.workable.com/acme/j/ACTIONABLE/"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tracker = root / "jobs.xlsx"
+            workbook = orchestrator.openpyxl.Workbook()
+            sheet = workbook.active
+            sheet.append(["Company", "Title", "URL"])
+            sheet.append(["Confirmed Co", "Product Manager", confirmed_url])
+            sheet.append(["Actionable Co", "Product Manager", actionable_url])
+            workbook.save(tracker)
+            workbook.close()
+            resume = root / "base.pdf"
+            resume.write_bytes(b"resume")
+            profile = root / "profile.json"
+            profile.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 2,
+                        "candidate": {
+                            "identity": {"first_name": "Jane", "last_name": "Doe"},
+                            "contact": {"fallback_email": "fallback@example.test"},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            pool = root / "emails.json"
+            pool.write_text('["only-actionable@example.test"]', encoding="utf-8")
+            ledger = SubmissionLog()
+            ledger.record(
+                SubmissionRecord(
+                    company="Confirmed Co",
+                    role="Product Manager",
+                    job_url=confirmed_url,
+                    ats="workable",
+                    status=EngineStatus.SUBMITTED_CONFIRMED.value,
+                    email_used="confirmed@example.test",
+                    resume_filename="confirmed.pdf",
+                )
+            )
+            ledger_path = root / "submission-log.json"
+            ledger.save(ledger_path)
+            runner = MagicMock()
+            engine = root / "engine.py"
+            engine.write_text("# engine", encoding="utf-8")
+
+            with patch.object(orchestrator, "generate_personalized_resume", return_value=None):
+                results = orchestrator.run_orchestrator(
+                    {"workable": engine},
+                    tracker,
+                    resume,
+                    profile,
+                    root / "results.json",
+                    email_pool_path=pool,
+                    submission_log_path=ledger_path,
+                    live_submit=True,
+                    shuffle=False,
+                    process_runner=runner,
+                )
+
+        self.assertEqual(
+            [result["status"] for result in results],
+            ["ALREADY_SUBMITTED", "PERSONALIZED_RESUME_FAILED"],
+        )
+        runner.run.assert_not_called()
+
+    def test_missing_engine_does_not_require_an_email_pool(self) -> None:
+        job_url = "https://apply.workable.com/acme/j/MISSING/"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            resume = root / "base.pdf"
+            resume.write_bytes(b"resume")
+            profile = root / "profile.json"
+            profile.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 2,
+                        "candidate": {
+                            "identity": {"first_name": "Jane", "last_name": "Doe"},
+                            "contact": {"fallback_email": "fallback@example.test"},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            runner = MagicMock()
+
+            results = orchestrator.run_orchestrator(
+                {"workable": root / "missing-engine.py"},
+                None,
+                resume,
+                profile,
+                root / "results.json",
+                email_pool_path=root / "missing-emails.json",
+                submission_log_path=root / "submission-log.json",
+                live_submit=True,
+                shuffle=False,
+                process_runner=runner,
+                direct_url=job_url,
+                direct_company="Acme",
+                direct_role="Product Manager",
+            )
+
+        self.assertEqual(results[0]["status"], "ENGINE_NOT_FOUND")
+        runner.run.assert_not_called()
+
     def test_random_job_emails_assigns_a_unique_pool_address_per_job(self) -> None:
         jobs = [{"row_number": number} for number in range(1, 4)]
         with tempfile.TemporaryDirectory() as directory:

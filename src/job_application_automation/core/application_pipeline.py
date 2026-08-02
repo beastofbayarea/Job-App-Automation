@@ -105,6 +105,7 @@ class ApplicationContext:
     ordinal: int
     total: int
     email: str
+    email_required: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +205,7 @@ class ApplicationPipeline:
         *,
         targets: Sequence[ApplicationTarget],
         emails: Sequence[str],
+        email_required: Sequence[bool] | None = None,
         config: PipelineConfig,
         submission_log: SubmissionLog,
         submission_quarantine: SubmissionLog,
@@ -211,8 +213,13 @@ class ApplicationPipeline:
     ) -> None:
         if len(targets) != len(emails):
             raise ValueError("Every application target must have one assigned email")
+        if email_required is not None and len(targets) != len(email_required):
+            raise ValueError("Every application target must have one email-requirement decision")
         self._targets = tuple(targets)
         self._emails = tuple(emails)
+        self._email_required = (
+            tuple(email_required) if email_required is not None else (True,) * len(targets)
+        )
         self._config = config
         self._submission_log = submission_log
         self._submission_quarantine = submission_quarantine
@@ -322,7 +329,7 @@ class ApplicationPipeline:
                 },
             )
 
-        if not engine_path or not engine_path.is_file():
+        if not context.email_required or not engine_path or not engine_path.is_file():
             return self._completion(
                 target,
                 {"status": "ENGINE_NOT_FOUND", "success": False},
@@ -592,6 +599,8 @@ class ApplicationPipeline:
 
     def run(self) -> list[dict[str, Any]]:
         """Run every target, checkpointing exactly once per terminal outcome."""
+        if not self._targets:
+            self._operations.write_results(self._config.results_path, [])
         for index, target in enumerate(self._targets, start=1):
             completion = self._run_application(
                 ApplicationContext(
@@ -599,6 +608,7 @@ class ApplicationPipeline:
                     ordinal=index,
                     total=len(self._targets),
                     email=self._emails[index - 1],
+                    email_required=self._email_required[index - 1],
                 )
             )
             self._checkpoint(completion)
