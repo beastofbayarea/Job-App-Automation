@@ -75,9 +75,17 @@ for prior_path in state_path.parent.glob("greenhouse-tracker-retry.*/state.json"
         prior_result = prior.get("result") if isinstance(prior.get("result"), dict) else {}
         prior_status = prior.get("result_status") or prior_result.get("status")
         prior_url = str(prior.get("job_url", ""))
+        if prior.get("status") == "application_started" and not prior_status:
+            prior_status = "SUBMISSION_UNCONFIRMED"
+            prior_result = {
+                "status": prior_status,
+                "submitted": None,
+                "confirmed": None,
+                "detail": "Isolated retry ended without a terminal application result",
+            }
         if prior_status == "REQUIRED_FIELDS_NOT_FILLED" and prior_url:
             required_retry_counts[prior_url] = required_retry_counts.get(prior_url, 0) + 1
-        if prior_status != "JOB_CONTEXT_UNAVAILABLE":
+        if prior_status not in {"JOB_CONTEXT_UNAVAILABLE", "SUBMISSION_UNCONFIRMED"}:
             continue
         for source_record in state.get("jobs", {}).values():
             if not isinstance(source_record, dict) or source_record.get("job_url") != prior_url:
@@ -85,7 +93,7 @@ for prior_path in state_path.parent.glob("greenhouse-tracker-retry.*/state.json"
             source_record.update({
                 "status": "failed",
                 "stage": "application",
-                "result_status": "JOB_CONTEXT_UNAVAILABLE",
+                "result_status": prior_status,
                 "result": prior_result,
                 "exit_code": prior.get("exit_code"),
                 "timed_out": prior.get("timed_out", False),
