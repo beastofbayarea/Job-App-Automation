@@ -373,6 +373,30 @@ def _select_greenhouse_combobox(
             option = options.nth(index)
             if option.is_visible():
                 visible_options.append(" ".join(option.inner_text().split()))
+                option.click()
+                logger.info(
+                    "Greenhouse best-assumption fallback selected first available option=%r preferred=%s",
+                    visible_options[-1],
+                    list(preferred),
+                )
+                return True
+        try:
+            control.click()
+            control.press("ArrowDown")
+            control.press("Enter")
+            container_text = control.evaluate(
+                "el => (el.parentElement?.parentElement?.innerText || '').trim()"
+            )
+            if container_text and not re.fullmatch(
+                r"(?:select|choose)(?:\.\.\.)?", container_text, re.I
+            ):
+                logger.info(
+                    "Greenhouse best-assumption keyboard fallback selected an option preferred=%s",
+                    list(preferred),
+                )
+                return True
+        except Exception:
+            pass
         visible_listboxes = []
         listboxes = page.locator('[role="listbox"]')
         for index in range(listboxes.count()):
@@ -684,7 +708,26 @@ def _fill_custom_questions(
                             label,
                             available,
                         )
-                        control.press("Escape")
+                        if available:
+                            success = _select_greenhouse_combobox(
+                                page,
+                                control,
+                                (available[0],),
+                            )
+                        else:
+                            control.press("ArrowDown")
+                            control.press("Enter")
+                            container_text = control.evaluate(
+                                "el => (el.parentElement?.parentElement?.innerText || '').trim()"
+                            )
+                            success = bool(
+                                container_text
+                                and not re.fullmatch(
+                                    r"(?:select|choose)(?:\.\.\.)?", container_text, re.I
+                                )
+                            )
+                        if not success:
+                            control.press("Escape")
                     except Exception as exc:
                         logger.debug(
                             "Required combobox option discovery failed for %r: %s",

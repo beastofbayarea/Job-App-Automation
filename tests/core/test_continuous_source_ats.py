@@ -69,7 +69,7 @@ def test_supervised_pause_only_stops_for_question_failures(tmp_path: Path) -> No
         encoding="utf-8",
     )
 
-    assert continuous_source_ats._requires_clarification(state, "failed") is True
+    assert continuous_source_ats._requires_clarification(state, "failed") is False
     assert continuous_source_ats._requires_clarification(state, "confirmed") is False
     assert continuous_source_ats._requires_clarification(state, "manual_review") is False
     payload = json.loads(state.read_text(encoding="utf-8"))

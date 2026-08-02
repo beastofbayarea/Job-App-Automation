@@ -43,7 +43,7 @@ try {
         })
         $Args = (
             "--ats-platform greenhouse --source failed-json --worker-id failed-$($Source.Replace('_', '-')) " +
-            "--skip-cover-letter --pause-on-unconfirmed --input $RemoteSource " +
+            "--skip-cover-letter --input $RemoteSource " +
             "--sleep-min-seconds 5 --sleep-max-seconds 15 --state $State " +
             ($PeerArgs -join " ") + " --claims $RepoPath/output/continuous_greenhouse_failed_claims.json " +
             "--selected-input $RepoPath/output/continuous_greenhouse_failed_${Source}_selected.json " +
@@ -86,7 +86,7 @@ systemctl reset-failed $UnitNames || true
 systemctl restart $UnitNames
 sleep 10
 systemctl show $UnitNames --property=Id,LoadState,UnitFileState,ActiveState,SubState,MainPID,NRestarts,ExecMainStatus
-for unit in $UnitNames; do systemctl cat "`$unit" | grep -F -- '--skip-cover-letter --pause-on-unconfirmed'; done
+for unit in $UnitNames; do systemctl cat "`$unit" | grep -F -- '--skip-cover-letter'; done
 "@
     $Execution = Invoke-ExternalCommandWithTimeout -FilePath $PlinkPath -ArgumentList @(
         "-ssh", "-batch", "-P", $Connection.Port, "-hostkey", $Connection.HostKey,
