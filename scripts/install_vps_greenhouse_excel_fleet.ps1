@@ -55,6 +55,31 @@ $Transfers = [Collections.Generic.List[object]]::new()
 $TemporaryFiles = [Collections.Generic.List[string]]::new()
 $ServiceNames = [Collections.Generic.List[string]]::new()
 
+$SearchPeerArguments = foreach ($Worker in $Workers) {
+    "--peer-state $RemoteRepoPath/output/continuous_greenhouse_excel_$($Worker.Id)_state.json"
+}
+$SearchArgs = (
+    "--ats-platform greenhouse --source search --worker-id search --skip-cover-letter " +
+    "--sleep-min-seconds 5 --sleep-max-seconds 15 " +
+    "--state $RemoteRepoPath/output/continuous_greenhouse_state.json " +
+    ($SearchPeerArguments -join " ") + " " +
+    "--claims $RemoteRepoPath/output/continuous_greenhouse_claims.json " +
+    "--selected-input $RemoteRepoPath/output/continuous_greenhouse_selected.json " +
+    "--results-dir $RemoteRepoPath/output/continuous_greenhouse_results " +
+    "--documents-dir $RemoteRepoPath/output/continuous_greenhouse_documents"
+)
+$SearchUnit = $Template.Replace(
+    "__DESCRIPTION__", "Continuous guarded Greenhouse search application worker"
+).Replace("__REPO_DIR__", $RemoteRepoPath).Replace(
+    "__SOURCE_PRECHECK__", ""
+).Replace("__SOURCE_ARGS__", $SearchArgs).Replace(
+    "__SYSLOG_IDENTIFIER__", "job-app-greenhouse"
+)
+$LocalSearchUnit = Join-Path ([IO.Path]::GetTempPath()) "job-app-greenhouse.service-$Token"
+[IO.File]::WriteAllText($LocalSearchUnit, $SearchUnit, [Text.UTF8Encoding]::new($false))
+$TemporaryFiles.Add($LocalSearchUnit)
+$Transfers.Add([pscustomobject]@{ Local = $LocalSearchUnit; Remote = "/tmp/job-app-greenhouse.service-$Token" })
+
 foreach ($Worker in $Workers) {
     $ServiceName = "job-app-greenhouse-excel-$($Worker.Id).service"
     $ServiceNames.Add($ServiceName)
@@ -88,6 +113,7 @@ foreach ($Worker in $Workers) {
 $Repo = ConvertTo-PosixShellLiteral $RemoteRepoPath
 $InstallLines = [Collections.Generic.List[string]]::new()
 $ValidateLines = [Collections.Generic.List[string]]::new()
+$InstallLines.Add("install -m 0644 '/tmp/job-app-greenhouse.service-$Token' '/etc/systemd/system/job-app-greenhouse.service'")
 foreach ($Worker in $Workers) {
     $ServiceName = "job-app-greenhouse-excel-$($Worker.Id).service"
     $InstallLines.Add("install -m 0600 '/tmp/$($Worker.RemoteWorkbook)-$Token' ""`$repo/data/$($Worker.RemoteWorkbook)""")
@@ -102,7 +128,7 @@ foreach ($Worker in $Workers) {
 }
 $InstallBlock = $InstallLines -join "`n"
 $ValidateBlock = $ValidateLines -join "`n"
-$NewServices = $ServiceNames -join " "
+$NewServices = (@("job-app-greenhouse.service") + $ServiceNames) -join " "
 $RemoteCommand = @"
 set -eu
 repo=$Repo
@@ -113,7 +139,7 @@ test -r "`$repo/config/candidate_email_pool.json"
 test -r "`$repo/config/vertex_service_account.json"
 install -d -m 0700 "`$repo/data" "`$repo/output"
 $InstallBlock
-rm -f /tmp/greenhouse_*_jobs.xlsx-$Token /tmp/job-app-greenhouse-excel-*.service-$Token
+rm -f /tmp/greenhouse_*_jobs.xlsx-$Token /tmp/job-app-greenhouse.service-$Token /tmp/job-app-greenhouse-excel-*.service-$Token
 $ValidateBlock
 systemd-analyze verify $NewServices
 for attempt in `$(seq 1 120); do
