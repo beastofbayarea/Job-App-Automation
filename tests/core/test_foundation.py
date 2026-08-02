@@ -29,6 +29,7 @@ from job_application_automation.core.contracts import (  # noqa: E402
     EngineStatus,
     result_from_legacy_payload,
 )
+from job_application_automation.core.exceptions import InputContractError  # noqa: E402
 from job_application_automation.core.profile import AutomationProfile  # noqa: E402
 
 
@@ -127,7 +128,7 @@ class ContractTests(unittest.TestCase):
                 confirmed=True,
                 test_mode=False,
             )
-        with self.assertRaisesRegex(ValueError, "pipeline-owned|reserved result fields"):
+        with self.assertRaisesRegex(InputContractError, "pipeline-owned|reserved result fields"):
             EngineResult(
                 success=False,
                 status="FAILED",
@@ -135,7 +136,7 @@ class ContractTests(unittest.TestCase):
                 extra={"company": "wrong company"},
             )
 
-        with self.assertRaisesRegex(ValueError, "reserved result fields"):
+        with self.assertRaisesRegex(InputContractError, "reserved result fields"):
             EngineResult.from_payload(
                 {
                     "success": False,

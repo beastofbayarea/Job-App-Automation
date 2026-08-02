@@ -225,33 +225,42 @@ def _raw_browser_cdp_command(
     params: Mapping[str, Any],
 ) -> Mapping[str, Any]:
     """Send one browser-level CDP command without activating a Chrome target."""
-    from websockets.sync.client import connect
+    try:
+        from websockets.sync.client import connect
 
-    version_url = f"{endpoint.rstrip('/')}/json/version"
-    with urllib.request.urlopen(version_url, timeout=5) as response:  # noqa: S310
-        version = json.load(response)
-    web_socket_url = str(version.get("webSocketDebuggerUrl", ""))
-    if not web_socket_url:
-        raise BrowserAutomationError("Chrome CDP endpoint did not expose a browser WebSocket URL")
-    request_id = 1
-    with connect(web_socket_url, open_timeout=5, close_timeout=2) as socket:
-        socket.send(
-            json.dumps(
-                {
-                    "id": request_id,
-                    "method": method,
-                    "params": dict(params),
-                }
+        version_url = f"{endpoint.rstrip('/')}/json/version"
+        with urllib.request.urlopen(version_url, timeout=5) as response:  # noqa: S310
+            version = json.load(response)
+        web_socket_url = str(version.get("webSocketDebuggerUrl", ""))
+        if not web_socket_url:
+            raise BrowserAutomationError(
+                "Chrome CDP endpoint did not expose a browser WebSocket URL"
             )
-        )
-        while True:
-            message = json.loads(socket.recv(timeout=5))
-            if message.get("id") != request_id:
-                continue
-            if message.get("error"):
-                raise BrowserAutomationError(f"Chrome CDP command failed: {message['error']}")
-            result = message.get("result", {})
-            return result if isinstance(result, Mapping) else {}
+        request_id = 1
+        with connect(web_socket_url, open_timeout=5, close_timeout=2) as socket:
+            socket.send(
+                json.dumps(
+                    {
+                        "id": request_id,
+                        "method": method,
+                        "params": dict(params),
+                    }
+                )
+            )
+            while True:
+                message = json.loads(socket.recv(timeout=5))
+                if message.get("id") != request_id:
+                    continue
+                if message.get("error"):
+                    raise BrowserAutomationError(f"Chrome CDP command failed: {message['error']}")
+                result = message.get("result", {})
+                return result if isinstance(result, Mapping) else {}
+    except BrowserAutomationError:
+        raise
+    except Exception as exc:
+        raise BrowserAutomationError(
+            f"Chrome CDP transport failed while executing {method}: {exc}"
+        ) from exc
 
 
 def _create_background_target(

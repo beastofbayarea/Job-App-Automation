@@ -42,7 +42,7 @@ from typing import Any, TypedDict
 from collections.abc import Mapping, Sequence
 from urllib.parse import unquote, urlparse
 
-import openpyxl
+import openpyxl  # type: ignore[import-untyped]
 
 from ..mail.pool import load_email_pool
 from ..resume.cover_letter_ai import PROMPT_TEMPLATE_VERSION
@@ -60,13 +60,11 @@ from .application_pipeline import (
 )
 from .artifacts import read_json as read_json_artifact
 from .artifacts import write_json as write_json_artifact
+from .ats_urls import ATS_HOST_MARKERS as ATS_HOSTS
+from .ats_urls import detect_ats_job_url
 from .contracts import EngineMode, EngineRequest, EngineResult
 from .engine_shared import (
-    ATS_HOST_MARKERS as ATS_HOSTS,
-)
-from .engine_shared import (
     current_title_from_resume,
-    detect_ats_job_url,
     email_from_resume,
     load_json_config,
 )
@@ -76,6 +74,7 @@ from .engine_shared import (
 from .engine_shared import (
     mask_email as _mask_email,
 )
+from .exceptions import InputContractError
 from .paths import CLI_ENTRYPOINT, CONFIG_DIR, OUTPUT_DIR, SRC_DIR, resolve_existing
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from .screenshots import (
@@ -325,11 +324,11 @@ def _terminate_process_tree(process: subprocess.Popen[str]) -> None:
                 timeout=15,
             )
         else:
-            os.killpg(process.pid, signal.SIGTERM)
+            os.killpg(process.pid, signal.SIGTERM)  # type: ignore[attr-defined]
             try:
                 process.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                os.killpg(process.pid, signal.SIGKILL)
+                os.killpg(process.pid, signal.SIGKILL)  # type: ignore[attr-defined]
     except Exception as exc:
         logger.warning("Could not terminate process tree %s: %s", process.pid, exc)
     finally:
@@ -884,7 +883,7 @@ def _validate_orchestrator_inputs(
         required_files.append(("Cover letter", cover_letter_path))
     if require_tracker:
         if tracker_path is None:
-            raise ValueError("Tracker path is required when --url is not provided")
+            raise InputContractError("Tracker path is required when --url is not provided")
         required_files.insert(0, ("Tracker", tracker_path))
     for label, path in required_files:
         if not path.is_file():
@@ -892,9 +891,9 @@ def _validate_orchestrator_inputs(
     if config_path and not config_path.is_file():
         raise FileNotFoundError(f"Config file not found: {config_path}")
     if timeout_seconds <= 0:
-        raise ValueError("Engine timeout must be greater than zero")
+        raise InputContractError("Engine timeout must be greater than zero")
     if resume_timeout_seconds <= 0:
-        raise ValueError("Resume timeout must be greater than zero")
+        raise InputContractError("Resume timeout must be greater than zero")
 
 
 def _select_jobs(
@@ -1051,7 +1050,9 @@ def run_orchestrator(
 ) -> list[dict[str, Any]]:
     """Run the ATS-aware application loop and persist progress."""
     if not personalize_resume:
-        raise ValueError("Resume personalization is mandatory for every orchestrated application.")
+        raise InputContractError(
+            "Resume personalization is mandatory for every orchestrated application."
+        )
     _validate_orchestrator_inputs(
         tracker_path=tracker_path,
         require_tracker=not bool(direct_url),
@@ -1063,16 +1064,16 @@ def run_orchestrator(
         resume_timeout_seconds=resume_timeout_seconds,
     )
     if config_path is None:
-        raise ValueError("A profile configuration is required.")
+        raise InputContractError("A profile configuration is required.")
     if prepared_resume_path is not None and not direct_url:
-        raise ValueError("--prepared-resume can only be used with --url")
+        raise InputContractError("--prepared-resume can only be used with --url")
     if cover_letter_path is not None and prepared_resume_path is None:
-        raise ValueError("--cover-letter requires --prepared-resume")
+        raise InputContractError("--cover-letter requires --prepared-resume")
     normalized_email_override = email_override.strip().lower()
     if normalized_email_override and (
         "@" not in normalized_email_override or normalized_email_override.startswith("@")
     ):
-        raise ValueError("Email override must contain a local part and @")
+        raise InputContractError("Email override must contain a local part and @")
     profile_config = load_json_config(config_path)
     fallback_email = str(profile_config["candidate"].get("fallback_email", "")).strip()
 

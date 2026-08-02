@@ -111,7 +111,7 @@ def atomic_write_text(path: str | Path, text: str, *, encoding: str = "utf-8") -
             os.fsync(stream.fileno())
         os.replace(temporary_name, target)
         temporary_name = None
-    except OSError as exc:
+    except (OSError, UnicodeError) as exc:
         raise ArtifactError(f"could not write artifact {target}: {exc}") from exc
     finally:
         if temporary_name:
@@ -128,7 +128,7 @@ def read_json(path: str | Path) -> object:
     try:
         with target.open("r", encoding="utf-8") as stream:
             return json.load(stream)
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise ArtifactError(f"could not read JSON artifact {target}: {exc}") from exc
 
 
