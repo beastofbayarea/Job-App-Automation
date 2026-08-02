@@ -81,6 +81,8 @@ files = [
     "src/job_application_automation/core/application_candidates.py",
     "src/job_application_automation/core/ats_urls.py",
     "src/job_application_automation/core/contracts.py",
+    "src/job_application_automation/core/continuous_worker_application.py",
+    "src/job_application_automation/core/continuous_worker_candidates.py",
     "src/job_application_automation/core/continuous_worker_models.py",
     "src/job_application_automation/core/continuous_worker_runtime.py",
     "src/job_application_automation/core/continuous_worker_sources.py",
