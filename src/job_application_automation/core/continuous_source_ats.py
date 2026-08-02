@@ -228,7 +228,19 @@ def _claim_next_job(
 
         claim_records: dict[str, Any] = claims["jobs"]
         selected: dict[str, Any] | None = None
+        for job in jobs:
+            identity = candidate_identity(job)
+            claim = claim_records.get(identity)
+            if (
+                isinstance(claim, Mapping)
+                and claim.get("owner") == worker_id
+                and claim.get("status") == "retry_requested"
+            ):
+                selected = job
+                break
         for job in resumable:
+            if selected is not None:
+                break
             identity = candidate_identity(job)
             claim = claim_records.get(identity)
             if not isinstance(claim, Mapping) or claim.get("owner") == worker_id:
