@@ -63,6 +63,7 @@ state = json.loads(state_path.read_text(encoding="utf-8"))
 # choosing the next workbook failure. The services are stopped while this
 # source state is updated, preventing concurrent state-writer races.
 reconciled = 0
+required_retry_counts = {}
 for prior_path in state_path.parent.glob("greenhouse-tracker-retry.*/state.json"):
     try:
         prior_state = json.loads(prior_path.read_text(encoding="utf-8"))
@@ -73,9 +74,11 @@ for prior_path in state_path.parent.glob("greenhouse-tracker-retry.*/state.json"
             continue
         prior_result = prior.get("result") if isinstance(prior.get("result"), dict) else {}
         prior_status = prior.get("result_status") or prior_result.get("status")
+        prior_url = str(prior.get("job_url", ""))
+        if prior_status == "REQUIRED_FIELDS_NOT_FILLED" and prior_url:
+            required_retry_counts[prior_url] = required_retry_counts.get(prior_url, 0) + 1
         if prior_status != "JOB_CONTEXT_UNAVAILABLE":
             continue
-        prior_url = str(prior.get("job_url", ""))
         for source_record in state.get("jobs", {}).values():
             if not isinstance(source_record, dict) or source_record.get("job_url") != prior_url:
                 continue
@@ -91,6 +94,29 @@ for prior_path in state_path.parent.glob("greenhouse-tracker-retry.*/state.json"
                 "updated_at": prior.get("updated_at", source_record.get("updated_at")),
             })
             reconciled += 1
+
+# A second verified pre-submit required-field failure occurs only after the
+# operator has supplied the requested clarification and explicitly advanced.
+# Quarantine that incompatible form instead of selecting it indefinitely.
+for source_record in state.get("jobs", {}).values():
+    if not isinstance(source_record, dict):
+        continue
+    source_url = str(source_record.get("job_url", ""))
+    if required_retry_counts.get(source_url, 0) < 2:
+        continue
+    source_record.update({
+        "status": "failed",
+        "stage": "application",
+        "result_status": "SKIPPED_APPLICATION_POLICY",
+        "result": {
+            "status": "SKIPPED_APPLICATION_POLICY",
+            "submitted": False,
+            "confirmed": False,
+            "detail": "Required fixed-choice field remained incompatible after clarification",
+        },
+        "timed_out": False,
+    })
+    reconciled += 1
 if reconciled:
     temporary = state_path.with_suffix(state_path.suffix + ".reconcile.tmp")
     temporary.write_text(
