@@ -114,6 +114,44 @@ def test_tracker_strategy_requires_declared_and_detected_provider_match(
     ]
 
 
+def test_failed_json_strategy_normalizes_retry_records(tmp_path: Path) -> None:
+    source = tmp_path / "failed.json"
+    source.write_text("[]\n", encoding="utf-8")
+    payload = [
+        {
+            "company": "Example",
+            "role": "Product Manager",
+            "job_url": "https://boards.greenhouse.io/example/jobs/12345",
+            "status": "REQUIRED_FIELDS_NOT_FILLED",
+            "missing_required": "Are you willing to travel?",
+        },
+        {"job_url": "https://jobs.lever.co/example/abc"},
+    ]
+
+    jobs = load_source_jobs(
+        source="failed-json",
+        ats_platform="greenhouse",
+        input_path=source,
+        tracker_path=None,
+        services=SourceServices(
+            read_json=lambda _path: payload,
+            read_tracker=lambda _path: (),
+            detect_ats=lambda url: "greenhouse" if "greenhouse.io" in url else "lever",
+        ),
+    )
+
+    assert jobs == [
+        {
+            "job_url": "https://boards.greenhouse.io/example/jobs/12345",
+            "company": "Example",
+            "title": "Product Manager",
+            "platform": "greenhouse",
+            "prior_status": "REQUIRED_FIELDS_NOT_FILLED",
+            "prior_missing_required": "Are you willing to travel?",
+        }
+    ]
+
+
 def test_tracker_and_source_contracts_fail_closed(tmp_path: Path) -> None:
     services = SourceServices(
         read_json=_unused,

@@ -386,7 +386,9 @@ def build_parser() -> argparse.ArgumentParser:
         description="Continuously process disjoint ATS jobs from search output or an Excel tracker."
     )
     parser.add_argument("--ats-platform", required=True)
-    parser.add_argument("--source", choices=("search", "tracker"), required=True)
+    parser.add_argument(
+        "--source", choices=("search", "tracker", "failed-json"), required=True
+    )
     parser.add_argument("--worker-id", required=True)
     parser.add_argument("--input", type=Path, default=SHARED_INPUT)
     parser.add_argument("--tracker", type=Path)
@@ -427,6 +429,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--skip-cover-letter",
         action="store_true",
         help="Generate and submit a tailored resume without generating a cover letter.",
+    )
+    parser.add_argument(
+        "--pause-on-unconfirmed",
+        action="store_true",
+        help="Exit successfully after a failed or manual-review attempt for supervised clarification.",
     )
     parser.add_argument(
         "--validate-only",
@@ -529,7 +536,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         job = selected
         cycle_status: CycleStatus
-        if args.source == "tracker":
+        if args.source in {"tracker", "failed-json"}:
             try:
                 job = _hydrate_tracker_job(selected, ats_platform)
             except Exception as exc:
@@ -621,6 +628,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             ),
             report_interrupt=report_interrupt,
             report_exception=report_exception,
+            stop_after_cycle=(
+                (lambda status: status in {"failed", "manual_review"})
+                if args.pause_on_unconfirmed
+                else None
+            ),
         )
     )
 

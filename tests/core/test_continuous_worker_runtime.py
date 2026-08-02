@@ -180,3 +180,25 @@ def test_runtime_delegates_non_once_pacing_and_stop_behavior() -> None:
     assert sleeps == [17]
     assert telemetry.events[0][1]["level"] == "warning"
     assert telemetry.flush_count == 1
+
+
+def test_runtime_can_pause_cleanly_after_supervised_failure() -> None:
+    telemetry = RecordingTelemetry()
+    runtime = WorkerRuntime(
+        provider="greenhouse",
+        cycle_stage="worker_cycle",
+        once=False,
+        once_exit_policy=SOURCE_ONCE_EXIT_POLICY,
+        telemetry=telemetry,
+        run_cycle=lambda: "failed",
+        delay_for=lambda _status: pytest.fail("paused worker must not pace"),
+        announce_sleep=lambda _delay, _status: pytest.fail("paused worker must not sleep"),
+        sleep=lambda _delay: pytest.fail("paused worker must not sleep"),
+        report_interrupt=lambda: pytest.fail("cycle did not interrupt"),
+        report_exception=lambda _exc: pytest.fail("cycle did not fail"),
+        stop_after_cycle=lambda status: status in {"failed", "manual_review"},
+    )
+
+    assert run_worker(runtime) == 0
+    assert telemetry.flush_count == 1
+    assert telemetry.events[0][1]["cycle_status"] == "failed"

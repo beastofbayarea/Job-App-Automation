@@ -47,6 +47,7 @@ class WorkerRuntime:
     sleep: Callable[[int], bool]
     report_interrupt: Callable[[], None]
     report_exception: Callable[[Exception], None]
+    stop_after_cycle: Callable[[CycleStatus], bool] | None = None
 
 
 def cycle_event_level(status: CycleStatus) -> EventLevel:
@@ -93,6 +94,9 @@ def run_worker(runtime: WorkerRuntime) -> int:
         if runtime.once:
             runtime.telemetry.flush()
             return runtime.once_exit_policy.exit_code(cycle_status)
+        if runtime.stop_after_cycle is not None and runtime.stop_after_cycle(cycle_status):
+            runtime.telemetry.flush()
+            return 0
 
         delay = runtime.delay_for(cycle_status)
         runtime.announce_sleep(delay, cycle_status)
