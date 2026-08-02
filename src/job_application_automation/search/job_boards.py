@@ -92,7 +92,7 @@ try:
     from ddgs import DDGS
 
     try:
-        from ddgs.exceptions import DDGSException, RatelimitException  # type: ignore
+        from ddgs.exceptions import DDGSException, RatelimitException
     except ImportError:
         DDGSException = Exception  # type: ignore[assignment,misc]
         RatelimitException = Exception  # type: ignore[assignment,misc]
@@ -587,7 +587,7 @@ def merge_candidates(
 
 def load_discovery_cache(path: Path) -> DiscoveryCache:
     """Load legacy/current cache data through the reusable cache boundary."""
-    cache = _search_cache.load_discovery_cache(
+    loaded: object = _search_cache.load_discovery_cache(
         path,
         make_cache=DiscoveryCache,
         decode=lambda payload: _search_cache.decode_discovery_cache(
@@ -600,6 +600,9 @@ def load_discovery_cache(path: Path) -> DiscoveryCache:
         ),
         on_error=lambda exc: LOGGER.warning("Could not read discovery cache %s: %s", path, exc),
     )
+    if not isinstance(loaded, DiscoveryCache):
+        raise TypeError("discovery cache decoder returned an unexpected model")
+    cache = loaded
     cache.boards = {board for board in cache.boards if not is_restricted_board(board)}
     purged_candidates: dict[str, list[SearchCandidate]] = {}
     for key, candidates in cache.candidates_by_board.items():
@@ -831,7 +834,7 @@ def scrape_jsonld_jobs(
     *,
     timeout: float,
     now: datetime,
-    criteria: SearchCriteria,
+    criteria: _provider_contracts.JobCriteria,
 ) -> list[Job]:
     """Parse candidate JSON-LD through an injectable, network-free adapter."""
     return _search_jsonld.scrape_jsonld_jobs(
@@ -1923,11 +1926,11 @@ async def search_job_boards_async(
         import httpx
 
         async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-            tasks = [client.get(u) for u in urls]
-            responses = await asyncio.gather(*tasks, return_exceptions=True)
-            results = []
+            http_tasks = [client.get(u) for u in urls]
+            responses = await asyncio.gather(*http_tasks, return_exceptions=True)
+            results: list[dict[str, Any]] = []
             for u, resp in zip(urls, responses):
-                if isinstance(resp, Exception):
+                if isinstance(resp, BaseException):
                     results.append({"url": u, "status": 0, "error": str(resp)})
                 elif resp.status_code == 200:
                     results.append({"url": u, "status": resp.status_code, "text": resp.text[:500]})
@@ -1957,8 +1960,8 @@ async def search_job_boards_async(
             except Exception as e:
                 return {"url": u, "status": 0, "error": str(e)}
 
-        tasks = [loop.run_in_executor(None, _fetch_sync, u) for u in urls]
-        return await asyncio.gather(*tasks)
+        thread_tasks = [loop.run_in_executor(None, _fetch_sync, u) for u in urls]
+        return list(await asyncio.gather(*thread_tasks))
 
 
 def main(argv: Sequence[str] | None = None) -> int:

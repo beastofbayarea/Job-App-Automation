@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 import ast
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+import requests
 
 from job_application_automation.search import job_boards as search
 from job_application_automation.search.providers import ashby, greenhouse, lever, registry
 from job_application_automation.search.providers import smartrecruiters, workable
-from job_application_automation.search.providers.contracts import FetchContext
+from job_application_automation.search.providers.contracts import FetchContext, FetchServices
 
 
 NOW = datetime(2026, 7, 28, tzinfo=timezone.utc)
@@ -144,6 +146,67 @@ def test_registry_dispatch_preserves_restricted_web_and_unsupported_semantics() 
             services=search._provider_fetch_services(),
             is_restricted_board=lambda _board: False,
         )
+
+
+def test_search_main_dispatches_through_facade_registry_and_provider_adapter() -> None:
+    adapter = registry.PROVIDER_ADAPTERS["greenhouse"]
+    adapter_calls: list[tuple[search.Board, FetchContext]] = []
+
+    def fetch_from_adapter(
+        _session: requests.Session,
+        board: search.Board,
+        context: FetchContext,
+        *,
+        services: FetchServices,
+    ) -> list[search.Job]:
+        assert services is not None
+        adapter_calls.append((board, context))
+        return [make_job(live_status="listed")]
+
+    replacement = registry.ProviderAdapter(
+        platform=adapter.platform,
+        matches_url=adapter.matches_url,
+        board_from_url=adapter.board_from_url,
+        looks_like_job_url=adapter.looks_like_job_url,
+        fetch=fetch_from_adapter,
+        verify_one=adapter.verify_one,
+        verify_many=adapter.verify_many,
+    )
+    with tempfile.TemporaryDirectory() as temporary_directory:
+        root = Path(temporary_directory)
+        with (
+            patch.dict(registry.PROVIDER_ADAPTERS, {"greenhouse": replacement}),
+            patch.object(search, "fetch_board_jobs", wraps=search.fetch_board_jobs) as facade,
+        ):
+            exit_code = search.main(
+                [
+                    "--role-type",
+                    "Product Manager",
+                    "--ats-platform",
+                    "greenhouse",
+                    "--location",
+                    "New York",
+                    "--skip-search",
+                    "--board-url",
+                    "https://boards.greenhouse.io/example",
+                    "--scrape-discovered-pages",
+                    "none",
+                    "--no-exclude-logged",
+                    "--cache",
+                    str(root / "cache.json"),
+                    "--output",
+                    str(root / "jobs.csv"),
+                    "--no-coverage-report",
+                ]
+            )
+
+        assert exit_code == 0
+        assert facade.call_count == 1
+        assert len(adapter_calls) == 1
+        board, context = adapter_calls[0]
+        assert board == search.Board("greenhouse", "example")
+        assert context.criteria.role_terms[0] == "Product Manager"
+        assert "Product Manager" in (root / "jobs.csv").read_text(encoding="utf-8-sig")
 
 
 @pytest.mark.parametrize(

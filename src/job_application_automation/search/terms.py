@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from typing import Any
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 
 def clean_whitespace(value: Any) -> str:
@@ -77,7 +77,7 @@ def matching_terms(
 
 def expand_aliases(
     terms: Sequence[str],
-    aliases: dict[str, Sequence[str]],
+    aliases: Mapping[str, Sequence[str]],
     custom_aliases: Sequence[str] = (),
 ) -> list[str]:
     """Return user terms plus safe configured aliases, deduplicated in order."""
@@ -96,7 +96,7 @@ def expand_aliases(
 
 def canonical_discovery_terms(
     terms: Sequence[str],
-    aliases: dict[str, Sequence[str]],
+    aliases: Mapping[str, Sequence[str]],
     custom_aliases: Sequence[str] = (),
 ) -> list[str]:
     """Return one canonical discovery phrase per requested role family."""

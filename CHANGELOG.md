@@ -38,6 +38,10 @@ All notable user-facing changes are documented here. This project currently uses
   including dedicated non-secret observability settings and direct/source worker
   controls with sparse provider overrides. Production consumers use typed fields
   while legacy schema-one monolithic documents remain supported.
+- Extended strict static typing across the production orchestrator, direct and
+  source workers, and search facade, with executable tests proving that search
+  reaches the provider registry/adapter and direct work reaches the shared
+  selected-job application service.
 - Split the unauthenticated, read-only dashboard into typed artifact,
   operations, metrics, download, and declarative route services while
   preserving every public URL alias, response schema, header, static asset,

@@ -375,7 +375,7 @@ def _validate_platform(ats_platform: str) -> str:
     """Accept installed ATS engines without maintaining a second provider registry."""
     return validate_worker_platform(
         ats_platform,
-        find_module=importlib.util.find_spec,
+        find_module=lambda module_name: importlib.util.find_spec(module_name),
     )
 
 

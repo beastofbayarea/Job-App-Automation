@@ -38,15 +38,32 @@ class ProviderUrl:
 class JobCriteria(Protocol):
     """Filtering behavior required by provider feed normalizers."""
 
-    role_terms: tuple[str, ...]
-    ai_terms: tuple[str, ...]
-    exclude_terms: tuple[str, ...]
-    location_terms: tuple[str, ...]
-    days: int
-    include_unknown_dates: bool
-    posted_since: date | None
-    posted_until: date | None
-    match_mode: str
+    @property
+    def role_terms(self) -> tuple[str, ...]: ...
+
+    @property
+    def ai_terms(self) -> tuple[str, ...]: ...
+
+    @property
+    def exclude_terms(self) -> tuple[str, ...]: ...
+
+    @property
+    def location_terms(self) -> tuple[str, ...]: ...
+
+    @property
+    def days(self) -> int: ...
+
+    @property
+    def include_unknown_dates(self) -> bool: ...
+
+    @property
+    def posted_since(self) -> date | None: ...
+
+    @property
+    def posted_until(self) -> date | None: ...
+
+    @property
+    def match_mode(self) -> str: ...
 
     def matches_job(
         self,

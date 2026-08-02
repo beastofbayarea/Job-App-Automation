@@ -679,6 +679,77 @@ def test_once_does_not_replace_a_custom_input_after_no_work(tmp_path: Path) -> N
     refresh_jobs.assert_not_called()
 
 
+def test_direct_main_processes_selected_job_through_shared_application_service(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    input_path = tmp_path / "jobs.json"
+    input_path.write_text(json.dumps([_job()]), encoding="utf-8")
+    profile = tmp_path / "profile.json"
+    profile.write_text("{}\n", encoding="utf-8")
+    email_pool = tmp_path / "emails.json"
+    email_pool.write_text('["candidate@example.test"]\n', encoding="utf-8")
+    launcher = tmp_path / "job_automation.py"
+    launcher.write_text("", encoding="utf-8")
+    state_path = tmp_path / "state.json"
+    submission_log = tmp_path / "submission_log.json"
+    submission_log.write_text("{}\n", encoding="utf-8")
+    processed: list[dict[str, object]] = []
+    service_configs: list[worker.SelectedJobApplicationConfig] = []
+
+    def process_selected(
+        service: worker.SelectedJobApplicationService,
+        job: dict[str, object],
+    ) -> worker.CycleStatus:
+        service_configs.append(service.config)
+        processed.append(dict(job))
+        return "confirmed"
+
+    monkeypatch.setattr(
+        worker.SelectedJobApplicationService,
+        "process",
+        process_selected,
+    )
+    monkeypatch.setattr(
+        worker,
+        "initialize_observability",
+        lambda **_kwargs: worker.NOOP_TELEMETRY,
+    )
+
+    exit_code = worker.main(
+        [
+            "--input",
+            str(input_path),
+            "--profile",
+            str(profile),
+            "--email-pool",
+            str(email_pool),
+            "--launcher",
+            str(launcher),
+            "--state",
+            str(state_path),
+            "--results-dir",
+            str(tmp_path / "results"),
+            "--documents-dir",
+            str(tmp_path / "documents"),
+            "--submission-log",
+            str(submission_log),
+            "--backlog",
+            str(tmp_path / "backlog.json"),
+            "--once",
+        ],
+        ats_platform="ashby",
+    )
+
+    assert exit_code == 0
+    assert len(processed) == 1
+    assert processed[0]["_canonical_url"] == "https://jobs.ashbyhq.com/example/123"
+    assert len(service_configs) == 1
+    assert service_configs[0].ats_platform == "ashby"
+    assert service_configs[0].state_path == state_path
+    assert service_configs[0].submission_log == submission_log
+
+
 def test_rolling_application_limit_caps_provider_volume() -> None:
     now = datetime(2026, 7, 31, 12, 0, tzinfo=UTC)
     state = {

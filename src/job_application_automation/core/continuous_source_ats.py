@@ -49,7 +49,7 @@ from .observability import initialize_observability
 from .orchestrator import load_jobs_from_tracker
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from ..resume.ai_client import scrape_job
-from ..search.job_boards import DEAD_ROLE_MARKERS
+from ..search.config import DEAD_ROLE_MARKERS
 
 
 UTC = timezone.utc
@@ -148,6 +148,10 @@ def _source_jobs(
     tracker_path: Path | None,
 ) -> list[dict[str, Any]]:
     """Compatibility facade over the shared search/tracker source strategies."""
+
+    def read_tracker(path: Path) -> Sequence[Mapping[str, Any]]:
+        return [dict(record) for record in load_jobs_from_tracker(path)]
+
     return load_source_jobs(
         source=source,
         ats_platform=ats_platform,
@@ -155,7 +159,7 @@ def _source_jobs(
         tracker_path=tracker_path,
         services=SourceServices(
             read_json=read_json,
-            read_tracker=load_jobs_from_tracker,
+            read_tracker=read_tracker,
             detect_ats=detect_ats_job_url,
         ),
     )
@@ -570,7 +574,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     def delay_for(cycle_status: CycleStatus) -> int:
         if cycle_status == "no_work":
             return random.randint(args.sleep_min_seconds, args.sleep_max_seconds)
-        return min(args.sleep_min_seconds, args.sleep_max_seconds)
+        return int(min(args.sleep_min_seconds, args.sleep_max_seconds))
 
     def announce_sleep(delay: int, cycle_status: CycleStatus) -> None:
         print(

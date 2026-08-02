@@ -40,22 +40,27 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 
 import pypdf
 from playwright.sync_api import sync_playwright
 
 from ..core.adapters import LLMClient, LLMSettings
+from ..core.ats_urls import detect_ats_job_url
 from ..core.engine_shared import (
     close_browser_session,
-    detect_ats_job_url,
     open_chrome_session,
 )
 from ..core.runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 
+genai: Any
+types: Any
 try:
-    from google import genai
-    from google.genai import types
+    from google import genai as imported_genai
+    from google.genai import types as imported_types
+
+    genai = imported_genai
+    types = imported_types
 except ImportError:
     genai = None
     types = None
@@ -209,9 +214,10 @@ def build_client(settings: VertexSettings = VERTEX_SETTINGS) -> Any:
     try:
         from google.oauth2 import service_account
 
-        credentials = service_account.Credentials.from_service_account_file(
-            str(credentials_path), scopes=list(VERTEX_AUTH_SCOPES)
+        credential_loader: Callable[..., Any] = (
+            service_account.Credentials.from_service_account_file
         )
+        credentials = credential_loader(str(credentials_path), scopes=list(VERTEX_AUTH_SCOPES))
         project_id = project_id_for(settings, credentials_path)
         logger.info(
             "Auth: Vertex service account | project=%s | location=%s",
@@ -258,20 +264,19 @@ class VertexGateway:
         last_error: Exception | None = None
         for attempt in range(1, settings.max_attempts + 1):
             try:
-                config_kwargs = {
-                    "system_instruction": system,
-                    "temperature": settings.temperature,
-                }
-                if json_mode:
-                    config_kwargs["response_mime_type"] = "application/json"
+                config = types.GenerateContentConfig(
+                    system_instruction=system,
+                    temperature=settings.temperature,
+                    response_mime_type="application/json" if json_mode else None,
+                )
                 response = get_client(self.vertex).models.generate_content(
                     model=settings.model,
                     contents=prompt,
-                    config=types.GenerateContentConfig(**config_kwargs),
+                    config=config,
                 )
                 if not response or not response.text:
                     raise ValueError("Gemini returned an empty response.")
-                return response.text.strip()
+                return str(response.text).strip()
             except Exception as exc:
                 last_error = exc
                 logger.warning(
@@ -654,7 +659,7 @@ except ImportError:
 
 def call_resume_llm_structured(
     user_prompt: str,
-    schema_cls: type = None,
+    schema_cls: object | None = None,
     system_prompt: str = "",
 ) -> dict[str, Any]:
     """Alternate capability: Constrained JSON Schema Decoding via Pydantic / Google GenAI SDK.
@@ -665,17 +670,32 @@ def call_resume_llm_structured(
     if not HAS_PYDANTIC:
         logger.warning("Pydantic not installed; falling back to standard JSON mode call.")
         raw = ask_gemini(user_prompt, system=system_prompt, temperature=0.3, json_mode=True)
-        return json.loads(_strip_json_fence(raw))
+        decoded: object = json.loads(_strip_json_fence(raw))
+        if not isinstance(decoded, dict):
+            raise ValueError("structured resume response must be a JSON object")
+        return {str(key): value for key, value in decoded.items()}
 
     target_schema = schema_cls or TailoredResumeSchema
+    if target_schema is None:
+        raise RuntimeError("structured resume schema is unavailable")
     logger.info(
-        "Executing constrained structured LLM decoding using schema: %s", target_schema.__name__
+        "Executing constrained structured LLM decoding using schema: %s",
+        getattr(target_schema, "__name__", type(target_schema).__name__),
     )
 
     raw = ask_gemini(user_prompt, system=system_prompt, temperature=0.2, json_mode=True)
     clean_json = _strip_json_fence(raw)
-    parsed_obj = target_schema.model_validate_json(clean_json)
-    return parsed_obj.model_dump()
+    validator = getattr(target_schema, "model_validate_json", None)
+    if not callable(validator):
+        raise TypeError("structured resume schema must provide model_validate_json")
+    parsed_obj = validator(clean_json)
+    model_dump = getattr(parsed_obj, "model_dump", None)
+    if not callable(model_dump):
+        raise TypeError("structured resume model must provide model_dump")
+    payload = model_dump()
+    if not isinstance(payload, Mapping):
+        raise TypeError("structured resume model dump must be a mapping")
+    return {str(key): value for key, value in payload.items()}
 
 
 # Remove a legacy script only when explicitly requested by a caller.

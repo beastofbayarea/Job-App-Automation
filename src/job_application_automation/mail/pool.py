@@ -67,11 +67,23 @@ def load_email_pool(json_file_path: Path) -> list[str]:
 
 
 @overload
-def select_emails(emails: Sequence[str], count: Literal[1] = 1) -> str: ...
+def select_emails(
+    emails: Sequence[str],
+    count: Literal[1] = 1,
+    *,
+    choice: EmailSampler = ...,
+    sample: EmailSample = ...,
+) -> str: ...
 
 
 @overload
-def select_emails(emails: Sequence[str], count: int) -> str | list[str]: ...
+def select_emails(
+    emails: Sequence[str],
+    count: int,
+    *,
+    choice: EmailSampler = ...,
+    sample: EmailSample = ...,
+) -> str | list[str]: ...
 
 
 def select_emails(

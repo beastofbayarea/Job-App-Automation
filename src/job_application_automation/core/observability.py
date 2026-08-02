@@ -153,11 +153,12 @@ class OperationalTelemetry:
         if self._sdk is None or event_name not in EVENT_NAMES:
             return
         tags: dict[str, str | int | bool] = dict(self._base_tags)
-        for key, value in (
+        text_tags: tuple[tuple[str, str | None], ...] = (
             ("provider", provider),
             ("stage", stage),
             ("cycle_status", cycle_status),
-        ):
+        )
+        for key, value in text_tags:
             token = _safe_token(value or "")
             if token:
                 tags[key] = token
@@ -177,8 +178,8 @@ class OperationalTelemetry:
         safe_level = level if level in LEVELS else "error"
         try:
             with self._sdk.new_scope() as scope:
-                for key, tag_value in tags.items():
-                    scope.set_tag(key, tag_value)
+                for tag_key, tag_value in tags.items():
+                    scope.set_tag(tag_key, tag_value)
                 self._sdk.capture_message(event_name, level=safe_level)
         except Exception:
             # Telemetry must never alter worker behavior or exit status.

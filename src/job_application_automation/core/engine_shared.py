@@ -30,11 +30,16 @@ import json
 import logging
 import os
 import re
+import shutil as _shutil
 import subprocess
 import sys
+import tempfile as _tempfile
+import time as _time
+import urllib as _urllib
+import uuid as _uuid
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from collections.abc import Callable, Mapping, Sequence
 from urllib.parse import urlparse
 
@@ -55,13 +60,13 @@ from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from ..engines import browser_controls as _browser_controls
 from ..engines import browser_runtime as _browser_runtime
 
-# Preserve historic module-level patch targets while implementation lives in
-# ``engines.browser_runtime``. These aliases refer to the same module objects.
-shutil = _browser_runtime.shutil
-tempfile = _browser_runtime.tempfile
-time = _browser_runtime.time
-urllib = _browser_runtime.urllib
-uuid = _browser_runtime.uuid
+# Preserve historic module-level patch targets. These aliases retain the same
+# process-global module objects used by ``browser_runtime``.
+shutil = _shutil
+tempfile = _tempfile
+time = _time
+urllib = _urllib
+uuid = _uuid
 
 logger = logging.getLogger("ATSEngineCommon")
 
@@ -194,13 +199,14 @@ def orchestrated_config_path() -> Path:
 
 def email_from_resume(resume_path: Path, fallback_email: str) -> str:
     """Extract the first valid email address from the rendered resume."""
+    text: str
     try:
         reader = PdfReader(str(resume_path))
         text = "\n".join(page.extract_text() or "" for page in reader.pages)
     except Exception as exc:
         logger.warning("Could not extract email from resume %s: %s", resume_path, exc)
         text = ""
-    matches = re.findall(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", text, re.I)
+    matches: list[str] = re.findall(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", text, re.I)
     for address in matches:
         if valid_email(address):
             return address
@@ -285,8 +291,9 @@ def load_personalized_resume_evidence(
     try:
         import pymupdf
 
-        with pymupdf.open(resume) as document:
-            evidence = "\n".join(page.get_text("text") for page in document).strip()
+        open_pdf: Callable[[Path], Any] = pymupdf.open
+        with open_pdf(resume) as document:
+            evidence = "\n".join(str(page.get_text("text")) for page in document).strip()
         if evidence:
             return evidence
         logger.warning("Personalized resume contained no extractable text: %s", resume)
@@ -959,7 +966,7 @@ def navigate_reusing_tab(
     url: str,
     *,
     timeout: int,
-    wait_until: str = "domcontentloaded",
+    wait_until: Literal["commit", "domcontentloaded", "load", "networkidle"] = "domcontentloaded",
 ) -> None:
     """Compatibility facade preserving the patchable CAPTCHA seam."""
     _browser_runtime.navigate_reusing_tab(
