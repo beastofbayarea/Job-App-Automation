@@ -16,6 +16,7 @@ repo=$Repo
 systemctl show 'job-app-greenhouse-failed-*.service' --property=Id,ActiveState,SubState,NRestarts,ExecMainStatus
 python3 - "`$repo/output" <<'PY'
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -35,6 +36,20 @@ for path in sorted(root.glob("continuous_greenhouse_failed_*_state.json")):
         "missing_required": result.get("missing_required", []),
         "detail": result.get("detail") or result.get("error"),
     }, ensure_ascii=False, sort_keys=True))
+    diagnostics = []
+    for field in ("stdout_tail", "stderr_tail"):
+        text = str(latest.get(field, ""))
+        text = re.sub(
+            r"(?i)[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}",
+            "[REDACTED_EMAIL]",
+            text,
+        )
+        diagnostics.extend(
+            line.strip() for line in text.splitlines()
+            if re.search(r"required|missing|question|manual.review", line, re.I)
+        )
+    if diagnostics:
+        print(json.dumps({"worker": path.stem, "diagnostics": diagnostics[-12:]}, ensure_ascii=False))
 PY
 "@
 
