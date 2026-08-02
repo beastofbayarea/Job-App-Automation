@@ -18,7 +18,11 @@ from job_application_automation.core import (
     orchestrator,  # noqa: E402
     queue_runner,  # noqa: E402
 )
-from job_application_automation.core.contracts import EngineResult, EngineStatus  # noqa: E402
+from job_application_automation.core.contracts import (  # noqa: E402
+    EngineMode,
+    EngineResult,
+    EngineStatus,
+)
 from job_application_automation.core.submission_log import (  # noqa: E402
     SubmissionLog,
     SubmissionRecord,
@@ -338,6 +342,25 @@ class EngineResultParsingTests(unittest.TestCase):
         self.assertTrue(parsed["submitted"])
         self.assertTrue(parsed["confirmed"])
         self.assertEqual(parsed["confirmation_url"], "https://jobs.lever.co/acme/123")
+
+    def test_typed_parser_rejects_an_engine_result_for_the_wrong_ats(self) -> None:
+        result = EngineResult(
+            success=False,
+            status="FAILED",
+            ats="lever",
+            extra={"provider_fields": ["email"]},
+        )
+
+        parsed = orchestrator._parse_engine_outcome(
+            orchestrator.ProcessResult(1, result.to_wire_line(), ""),
+            EngineMode.LIVE_SUBMIT,
+            "greenhouse",
+        )
+
+        self.assertFalse(parsed.success)
+        self.assertEqual(parsed.status, EngineStatus.INVALID_ENGINE_RESULT.value)
+        self.assertIn("does not match", parsed.detail)
+        self.assertEqual(parsed.engine_details, {})
 
 
 class OrchestrationPersistenceTests(unittest.TestCase):

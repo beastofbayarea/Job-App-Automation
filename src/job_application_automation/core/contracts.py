@@ -267,7 +267,7 @@ class EngineResult:
         object.__setattr__(self, "extra", extra)
 
     @staticmethod
-    def _reserved_payload_keys() -> tuple[str, ...]:
+    def _wire_payload_keys() -> tuple[str, ...]:
         return (
             "success",
             "status",
@@ -277,6 +277,30 @@ class EngineResult:
             "test_mode",
             "error",
             "detail",
+        )
+
+    @classmethod
+    def _reserved_payload_keys(cls) -> tuple[str, ...]:
+        """Protect engine and pipeline-owned fields from provider extras."""
+        return cls._wire_payload_keys() + (
+            "row",
+            "company",
+            "role",
+            "url",
+            "engine",
+            "resume",
+            "cover_letter",
+            "email",
+            "already_submitted",
+            "ledger_persisted",
+            "manual_review_required",
+            "retry_safe",
+            "quarantine_persisted",
+            "quarantine_path",
+            "ledger_error",
+            "quarantine_error",
+            "engine_result",
+            "engine_details",
         )
 
     @property
@@ -323,7 +347,7 @@ class EngineResult:
         """Parse and validate the established engine-result JSON object."""
         if not isinstance(payload, Mapping):
             raise ValueError("engine result must be an object")
-        known_keys = set(cls._reserved_payload_keys())
+        known_keys = set(cls._wire_payload_keys())
         extras = {key: value for key, value in payload.items() if key not in known_keys}
         return cls(
             success=_require_bool(payload.get("success"), "success"),

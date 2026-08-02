@@ -41,8 +41,11 @@ All notable user-facing changes are documented here. This project currently uses
   lifecycle, and typed ordered form-section handlers while retaining
   provider-specific navigation, widgets, and compatibility entry points.
 - Decomposed application orchestration into typed safety, document-preparation,
-  engine-execution, confirmation, and checkpoint stages while preserving the
-  established CLI, result JSON, ledger, and screenshot-cleanup behavior.
+  engine-execution, confirmation, and checkpoint stages; engine outcomes now
+  stay typed through reconciliation, provider diagnostics are namespaced, live
+  ledger policy derives from the engine mode, and every document/command-stage
+  failure receives a terminal checkpoint while preserving CLI and cleanup
+  behavior.
 - Split public job-board feed and liveness behavior into typed provider
   adapters whose registry now owns URL recognition, feed dispatch, and
   single/batch liveness dispatch while preserving the established search

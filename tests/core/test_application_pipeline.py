@@ -14,6 +14,7 @@ from job_application_automation.core.application_pipeline import (
     LEDGER_PERSIST_FAILED_STATUS,
     ApplicationPipeline,
     ApplicationTarget,
+    EngineOutcome,
     PipelineConfig,
     PipelineOperations,
     ProcessResult,
@@ -38,18 +39,20 @@ class FakeOperations:
         self.generated_resume: Path | None = root / "generated-resume.pdf"
         self.generated_cover_letter: Path | None = root / "generated-cover-letter.pdf"
         self.generate_resume_error: Exception | None = None
+        self.generate_cover_letter_error: Exception | None = None
         self.resume_email = "candidate@example.test"
         self.current_title = "Senior Product Manager"
         self.process_error: Exception | None = None
+        self.build_command_error: Exception | None = None
         self.process_result = CommandResult(returncode=0, stdout="provider output", stderr="")
-        self.parsed_result: dict[str, Any] = {
-            "success": False,
-            "status": "FAILED",
-            "ats": "workable",
-            "submitted": False,
-            "confirmed": False,
-            "test_mode": True,
-        }
+        self.parsed_result = EngineOutcome(
+            success=False,
+            status="FAILED",
+            ats="workable",
+            submitted=False,
+            confirmed=False,
+            test_mode=True,
+        )
         self.persistence = SubmissionPersistence(persisted=True)
         self.events: list[str] = []
         self.process_settings: list[ProcessSettings] = []
@@ -65,6 +68,8 @@ class FakeOperations:
 
     def generate_cover_letter(self, _target: ApplicationTarget, _email: str) -> Path | None:
         self.events.append("generate_cover_letter")
+        if self.generate_cover_letter_error is not None:
+            raise self.generate_cover_letter_error
         return self.generated_cover_letter
 
     def read_resume_email(self, _path: Path, _fallback: str) -> str:
@@ -90,6 +95,8 @@ class FakeOperations:
         _headed: bool,
     ) -> Sequence[str]:
         self.events.append("build_command")
+        if self.build_command_error is not None:
+            raise self.build_command_error
         return ("engine", "--run")
 
     def run_process(
@@ -106,10 +113,11 @@ class FakeOperations:
     def parse_engine_result(
         self,
         _result: ProcessResult,
-        _live_submit: bool,
-    ) -> dict[str, Any]:
+        _mode: EngineMode,
+        _expected_ats: str,
+    ) -> EngineOutcome:
         self.events.append("parse_result")
-        return dict(self.parsed_result)
+        return self.parsed_result
 
     def create_screenshot_directory(self, _inherited: str | Path | None) -> Path:
         self.events.append("create_screenshot")
@@ -171,7 +179,6 @@ class FakeOperations:
             create_screenshot_directory=self.create_screenshot_directory,
             cleanup_screenshot_directory=self.cleanup_screenshot_directory,
             mask_email=self.mask_email,
-            is_confirmed_submission=self.is_confirmed_submission,
             record_submission=self.record_submission,
             write_results=self.write_results,
         )
@@ -203,7 +210,6 @@ def _config(root: Path, engine: Path) -> PipelineConfig:
         prepared_resume_path=resume,
         prepared_cover_letter_path=cover_letter,
         mode=EngineMode.DRY_RUN,
-        live_submit=False,
         headed=False,
         timeout_seconds=30,
         fallback_email="fallback@example.test",
@@ -254,7 +260,7 @@ def test_live_safety_gate_skips_confirmed_job_before_documents(tmp_path: Path) -
     engine = tmp_path / "engine.py"
     engine.write_text("# engine", encoding="utf-8")
     operations = FakeOperations(tmp_path)
-    config = replace(_config(tmp_path, engine), mode=EngineMode.LIVE_SUBMIT, live_submit=True)
+    config = replace(_config(tmp_path, engine), mode=EngineMode.LIVE_SUBMIT)
     submission_log = SubmissionLog()
     submission_log.record(
         SubmissionRecord(
@@ -364,26 +370,66 @@ def test_document_stage_preserves_each_terminal_payload(
     assert operations.events[-1] == "write_results"
 
 
+@pytest.mark.parametrize(
+    ("stage", "expected_status"),
+    [
+        ("cover_letter", "PERSONALIZED_COVER_LETTER_FAILED"),
+        ("command", "ENGINE_EXECUTION_ERROR"),
+    ],
+)
+def test_stage_exceptions_checkpoint_each_target_and_continue(
+    tmp_path: Path,
+    stage: str,
+    expected_status: str,
+) -> None:
+    engine = tmp_path / "engine.py"
+    engine.write_text("# engine", encoding="utf-8")
+    operations = FakeOperations(tmp_path)
+    config = _config(tmp_path, engine)
+    if stage == "cover_letter":
+        config = replace(config, prepared_cover_letter_path=None)
+        operations.generate_cover_letter_error = RuntimeError("cover service unavailable")
+    else:
+        operations.build_command_error = RuntimeError("invalid engine command")
+
+    results = _run(
+        targets=[_target(1), _target(2)],
+        config=config,
+        operations=operations,
+    )
+
+    assert [result["status"] for result in results] == [expected_status, expected_status]
+    assert [len(snapshot) for snapshot in operations.snapshots] == [1, 2]
+    assert operations.events.count("write_results") == 2
+
+
+def test_pipeline_derives_live_ledger_policy_from_engine_mode(tmp_path: Path) -> None:
+    config = _config(tmp_path, tmp_path / "engine.py")
+
+    assert config.live_submit is False
+    assert replace(config, mode=EngineMode.LIVE_SUBMIT).live_submit is True
+
+
 def test_execution_propagates_environment_preserves_extras_and_cleans(
     tmp_path: Path,
 ) -> None:
     engine = tmp_path / "engine.py"
     engine.write_text("# engine", encoding="utf-8")
     operations = FakeOperations(tmp_path)
-    operations.parsed_result = {
-        "success": False,
-        "status": "REQUIRED_FIELDS_NOT_FILLED",
-        "ats": "workable",
-        "submitted": False,
-        "confirmed": False,
-        "test_mode": True,
-        "provider_fields": ["location", "salary"],
-    }
+    operations.parsed_result = EngineOutcome(
+        success=False,
+        status="REQUIRED_FIELDS_NOT_FILLED",
+        ats="workable",
+        submitted=False,
+        confirmed=False,
+        test_mode=True,
+        engine_details={"provider_fields": ["location", "salary"]},
+    )
     config = _config(tmp_path, engine)
 
     results = _run(targets=[_target()], config=config, operations=operations)
 
-    assert results[0]["provider_fields"] == ["location", "salary"]
+    assert results[0]["engine_details"] == {"provider_fields": ["location", "salary"]}
     assert operations.cleanup_paths == [tmp_path / "screenshots-1"]
     settings = operations.process_settings[0]
     assert settings.environment[ORCHESTRATOR_INVOCATION_ENV] == "1"
@@ -431,15 +477,15 @@ def test_confirmed_submission_is_recorded_before_result_checkpoint(tmp_path: Pat
     engine = tmp_path / "engine.py"
     engine.write_text("# engine", encoding="utf-8")
     operations = FakeOperations(tmp_path)
-    operations.parsed_result = {
-        "success": True,
-        "status": EngineStatus.SUBMITTED_CONFIRMED.value,
-        "ats": "workable",
-        "submitted": True,
-        "confirmed": True,
-        "test_mode": False,
-    }
-    config = replace(_config(tmp_path, engine), mode=EngineMode.LIVE_SUBMIT, live_submit=True)
+    operations.parsed_result = EngineOutcome(
+        success=True,
+        status=EngineStatus.SUBMITTED_CONFIRMED.value,
+        ats="workable",
+        submitted=True,
+        confirmed=True,
+        test_mode=False,
+    )
+    config = replace(_config(tmp_path, engine), mode=EngineMode.LIVE_SUBMIT)
 
     results = _run(targets=[_target()], config=config, operations=operations)
 
@@ -452,21 +498,21 @@ def test_ledger_failure_checkpoints_once_and_halts_remaining_jobs(tmp_path: Path
     engine = tmp_path / "engine.py"
     engine.write_text("# engine", encoding="utf-8")
     operations = FakeOperations(tmp_path)
-    operations.parsed_result = {
-        "success": True,
-        "status": EngineStatus.SUBMITTED_CONFIRMED.value,
-        "ats": "workable",
-        "submitted": True,
-        "confirmed": True,
-        "test_mode": False,
-    }
+    operations.parsed_result = EngineOutcome(
+        success=True,
+        status=EngineStatus.SUBMITTED_CONFIRMED.value,
+        ats="workable",
+        submitted=True,
+        confirmed=True,
+        test_mode=False,
+    )
     quarantine_path = tmp_path / "submission-log_quarantine.json"
     operations.persistence = SubmissionPersistence(
         persisted=False,
         error="OSError: disk full",
         quarantine_path=quarantine_path,
     )
-    config = replace(_config(tmp_path, engine), mode=EngineMode.LIVE_SUBMIT, live_submit=True)
+    config = replace(_config(tmp_path, engine), mode=EngineMode.LIVE_SUBMIT)
 
     results = _run(
         targets=[_target(1), _target(2)],

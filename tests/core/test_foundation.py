@@ -127,6 +127,23 @@ class ContractTests(unittest.TestCase):
                 confirmed=True,
                 test_mode=False,
             )
+        with self.assertRaisesRegex(ValueError, "pipeline-owned|reserved result fields"):
+            EngineResult(
+                success=False,
+                status="FAILED",
+                ats="lever",
+                extra={"company": "wrong company"},
+            )
+
+        with self.assertRaisesRegex(ValueError, "reserved result fields"):
+            EngineResult.from_payload(
+                {
+                    "success": False,
+                    "status": "FAILED",
+                    "ats": "lever",
+                    "resume": "wrong.pdf",
+                }
+            )
 
     def test_legacy_adapter_retains_unknown_status_and_defaults(self) -> None:
         result = result_from_legacy_payload(

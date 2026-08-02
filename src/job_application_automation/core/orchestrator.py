@@ -51,6 +51,7 @@ from .application_pipeline import (
     LEDGER_PERSIST_FAILED_STATUS,
     ApplicationPipeline,
     ApplicationTarget,
+    EngineOutcome,
     PipelineConfig,
     PipelineOperations,
     ProcessResult,
@@ -396,37 +397,34 @@ def run_command(
         ) from exc
 
 
-def _invalid_engine_result(detail: str = "") -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        "success": False,
-        "status": "INVALID_ENGINE_RESULT",
-    }
-    if detail:
-        payload["detail"] = detail
-    return payload
+def _invalid_engine_outcome(detail: str = "") -> EngineOutcome:
+    return EngineOutcome(
+        success=False,
+        status="INVALID_ENGINE_RESULT",
+        detail=detail,
+    )
 
 
-def parse_engine_result(result: ProcessResult, live_submit: bool) -> dict[str, Any]:
-    """Parse and validate the structured result marker with a legacy fallback."""
+def _parse_engine_outcome(
+    result: ProcessResult,
+    mode: EngineMode,
+    expected_ats: str,
+) -> EngineOutcome:
+    """Parse child output into the typed pipeline result boundary."""
     combined = f"{result.stdout}\n{result.stderr}"
     for line in reversed(combined.splitlines()):
-        if line.startswith(ENGINE_RESULT_PREFIX):
-            try:
-                contract_result = EngineResult.from_wire_line(line)
-            except ValueError as exc:
-                return _invalid_engine_result(str(exc))
-            payload = dict(contract_result.to_payload())
-            # In live mode, a successful prefill is diagnostic progress, not a
-            # successful application. The result contract makes that safety
-            # distinction explicit while preserving the provider status text.
-            if live_submit and not contract_result.is_confirmed_submission:
-                payload["success"] = False
-            return payload
+        if not line.startswith(ENGINE_RESULT_PREFIX):
+            continue
+        try:
+            contract_result = EngineResult.from_wire_line(line)
+        except ValueError as exc:
+            return _invalid_engine_outcome(str(exc))
+        return EngineOutcome.from_engine_result(
+            contract_result,
+            expected_ats=expected_ats or contract_result.ats,
+            live_submit=mode is EngineMode.LIVE_SUBMIT,
+        )
 
-    # No ENGINE_RESULT_JSON: marker (see emit_engine_result in
-    # engine_shared.py) was found in the child's output, so
-    # fall back to scraping the human-readable "Final Outcome ->" log line
-    # that older/ad-hoc engine invocations may still print.
     final_outcome = ""
     for line in combined.splitlines():
         if "Final Outcome ->" in line:
@@ -434,15 +432,24 @@ def parse_engine_result(result: ProcessResult, live_submit: bool) -> dict[str, A
 
     successful_statuses = {"PREFILLED_ONLY", "SUBMITTED & CONFIRMED"}
     success = result.returncode == 0 and final_outcome in successful_statuses
-    # In live mode, only an actually confirmed submission counts as success;
-    # a merely prefilled form must not be reported as a completed application.
-    if live_submit and final_outcome != "SUBMITTED & CONFIRMED":
+    if mode is EngineMode.LIVE_SUBMIT and final_outcome != "SUBMITTED & CONFIRMED":
         success = False
-    return {
-        "success": success,
-        "status": final_outcome or f"EXIT_{result.returncode}_NO_STRUCTURED_RESULT",
-        "legacy_result": True,
-    }
+    return EngineOutcome(
+        success=success,
+        status=final_outcome or f"EXIT_{result.returncode}_NO_STRUCTURED_RESULT",
+        ats=expected_ats,
+        legacy_result=True,
+    )
+
+
+def parse_engine_result(result: ProcessResult, live_submit: bool) -> dict[str, Any]:
+    """Parse and validate the structured result marker with a legacy fallback."""
+    outcome = _parse_engine_outcome(
+        result,
+        EngineMode.LIVE_SUBMIT if live_submit else EngineMode.DRY_RUN,
+        "",
+    )
+    return dict(outcome.to_payload(include_ats=True, namespace_details=False))
 
 
 def _write_results(
@@ -1007,11 +1014,10 @@ def _pipeline_operations(
         engine_label=_engine_label,
         build_engine_command=build_command,
         run_process=run_process,
-        parse_engine_result=parse_engine_result,
+        parse_engine_result=_parse_engine_outcome,
         create_screenshot_directory=create_screenshot_directory,
         cleanup_screenshot_directory=cleanup_application_screenshot_directory,
         mask_email=_mask_email,
-        is_confirmed_submission=_is_confirmed_submission,
         record_submission=record_submission,
         write_results=_write_results,
     )
@@ -1146,7 +1152,6 @@ def run_orchestrator(
                 fill_only=fill_only,
                 dry_run=dry_run,
             ),
-            live_submit=live_submit,
             headed=headed,
             timeout_seconds=timeout_seconds,
             fallback_email=fallback_email,

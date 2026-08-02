@@ -9,13 +9,13 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from collections.abc import Callable, Mapping, Sequence
 
 from .adapters import CommandResult, ProcessSettings
-from .contracts import EngineMode
+from .contracts import EngineMode, EngineResult, EngineStatus
 from .engine_shared import (
     ORCHESTRATOR_CONFIG_ENV,
     ORCHESTRATOR_CURRENT_TITLE_ENV,
@@ -91,10 +91,166 @@ class PipelineConfig:
     prepared_resume_path: Path | None
     prepared_cover_letter_path: Path | None
     mode: EngineMode
-    live_submit: bool
     headed: bool
     timeout_seconds: int
     fallback_email: str
+
+    @property
+    def live_submit(self) -> bool:
+        """Derive ledger policy from the single authoritative engine mode."""
+        return self.mode is EngineMode.LIVE_SUBMIT
+
+
+@dataclass(frozen=True, slots=True)
+class EngineOutcome:
+    """Typed engine result retained until the application checkpoint boundary."""
+
+    success: bool
+    status: str
+    ats: str = ""
+    submitted: bool | None = None
+    confirmed: bool | None = None
+    test_mode: bool | None = None
+    error: str = ""
+    detail: str = ""
+    engine_details: Mapping[str, object] = field(default_factory=dict)
+    legacy_result: bool | None = None
+    timeout_seconds: int | None = None
+
+    @classmethod
+    def from_engine_result(
+        cls,
+        result: EngineResult,
+        *,
+        expected_ats: str,
+        live_submit: bool,
+    ) -> EngineOutcome:
+        """Validate provider identity and retain provider extras under one namespace."""
+        if result.ats != expected_ats.lower():
+            return cls(
+                success=False,
+                status=EngineStatus.INVALID_ENGINE_RESULT.value,
+                detail=(
+                    f"engine result ATS {result.ats!r} does not match "
+                    f"application target {expected_ats.lower()!r}"
+                ),
+            )
+        success = result.success
+        if live_submit and not result.is_confirmed_submission:
+            success = False
+        return cls(
+            success=success,
+            status=result.status,
+            ats=result.ats,
+            submitted=result.submitted,
+            confirmed=result.confirmed,
+            test_mode=result.test_mode,
+            error=result.error,
+            detail=result.detail,
+            engine_details=result.extra,
+        )
+
+    @property
+    def is_confirmed_submission(self) -> bool:
+        return (
+            self.success
+            and self.status == EngineStatus.SUBMITTED_CONFIRMED.value
+            and self.submitted is True
+            and self.confirmed is True
+            and self.test_mode is False
+        )
+
+    def to_payload(
+        self,
+        *,
+        include_ats: bool = False,
+        namespace_details: bool = True,
+    ) -> dict[str, object]:
+        """Serialize either for a pipeline checkpoint or the compatibility API."""
+        payload: dict[str, object] = {
+            "success": self.success,
+            "status": self.status,
+        }
+        if include_ats and self.ats:
+            payload["ats"] = self.ats
+        optional_fields: tuple[tuple[str, object | None], ...] = (
+            ("submitted", self.submitted),
+            ("confirmed", self.confirmed),
+            ("test_mode", self.test_mode),
+            ("legacy_result", self.legacy_result),
+            ("timeout_seconds", self.timeout_seconds),
+        )
+        for key, value in optional_fields:
+            if value is not None:
+                payload[key] = value
+        if self.error:
+            payload["error"] = self.error
+        if self.detail:
+            payload["detail"] = self.detail
+        if self.engine_details:
+            if namespace_details:
+                payload["engine_details"] = dict(self.engine_details)
+            else:
+                provider_details = dict(self.engine_details)
+                provider_details.update(payload)
+                payload = provider_details
+        return payload
+
+
+@dataclass(frozen=True, slots=True)
+class ApplicationDetails:
+    """Typed non-identity fields for one terminal application result."""
+
+    outcome: EngineOutcome
+    engine: str | None = None
+    resume: str | None = None
+    cover_letter: str | None = None
+    email: str | None = None
+    already_submitted: bool | None = None
+    ledger_persisted: bool | None = None
+    manual_review_required: bool | None = None
+    retry_safe: bool | None = None
+    quarantine_persisted: bool | None = None
+    quarantine_path: str = ""
+    ledger_error: str = ""
+    quarantine_error: str = ""
+    engine_result: EngineOutcome | None = None
+
+    def to_payload(self) -> dict[str, object]:
+        payload: dict[str, object] = {}
+        text_fields: tuple[tuple[str, str | None], ...] = (
+            ("engine", self.engine),
+            ("resume", self.resume),
+            ("cover_letter", self.cover_letter),
+            ("email", self.email),
+        )
+        for key, value in text_fields:
+            if value is not None:
+                payload[key] = value
+        payload.update(self.outcome.to_payload())
+        flag_fields: tuple[tuple[str, bool | None], ...] = (
+            ("already_submitted", self.already_submitted),
+            ("ledger_persisted", self.ledger_persisted),
+            ("manual_review_required", self.manual_review_required),
+            ("retry_safe", self.retry_safe),
+            ("quarantine_persisted", self.quarantine_persisted),
+        )
+        for flag_key, flag_value in flag_fields:
+            if flag_value is not None:
+                payload[flag_key] = flag_value
+        for error_key, error_value in (
+            ("quarantine_path", self.quarantine_path),
+            ("ledger_error", self.ledger_error),
+            ("quarantine_error", self.quarantine_error),
+        ):
+            if error_value:
+                payload[error_key] = error_value
+        if self.engine_result is not None:
+            payload["engine_result"] = self.engine_result.to_payload(
+                include_ats=True,
+                namespace_details=True,
+            )
+        return payload
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,7 +288,7 @@ class ExecutedApplication:
     """A prepared application paired with its lossless engine outcome."""
 
     prepared: PreparedApplication
-    outcome: Mapping[str, Any]
+    outcome: EngineOutcome
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,11 +296,11 @@ class ApplicationResult:
     """One terminal result while retaining the legacy serialized shape."""
 
     target: ApplicationTarget
-    details: Mapping[str, Any]
+    details: ApplicationDetails
 
     def to_payload(self) -> dict[str, Any]:
         """Merge fields in the same order as the legacy orchestrator."""
-        return {**self.target.base_result(), **dict(self.details)}
+        return {**self.target.base_result(), **self.details.to_payload()}
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,11 +321,10 @@ BuildEngineCommand = Callable[
     Sequence[str],
 ]
 RunProcess = Callable[[Sequence[str], ProcessSettings], CommandResult]
-ParseEngineResult = Callable[[ProcessResult, bool], dict[str, Any]]
+ParseEngineResult = Callable[[ProcessResult, EngineMode, str], EngineOutcome]
 CreateScreenshotDirectory = Callable[[str | Path | None], Path]
 CleanupScreenshotDirectory = Callable[[Path], tuple[int, int]]
 MaskEmail = Callable[[str], str]
-IsConfirmedSubmission = Callable[[Mapping[str, object]], bool]
 RecordSubmission = Callable[
     [SubmissionLog, Path, ApplicationTarget, str, Path, Path, str],
     SubmissionPersistence,
@@ -192,7 +347,6 @@ class PipelineOperations:
     create_screenshot_directory: CreateScreenshotDirectory
     cleanup_screenshot_directory: CleanupScreenshotDirectory
     mask_email: MaskEmail
-    is_confirmed_submission: IsConfirmedSubmission
     record_submission: RecordSubmission
     write_results: WriteResults
 
@@ -229,7 +383,7 @@ class ApplicationPipeline:
     @staticmethod
     def _completion(
         target: ApplicationTarget,
-        details: Mapping[str, Any],
+        details: ApplicationDetails,
         *,
         halt_pipeline: bool = False,
     ) -> PipelineCompletion:
@@ -263,22 +417,24 @@ class ApplicationPipeline:
             )
             return self._completion(
                 target,
-                {
-                    "engine": (
+                ApplicationDetails(
+                    engine=(
                         self._operations.engine_label(engine_path, target.ats)
                         if engine_path
                         else ""
                     ),
-                    "resume": str(latest.get("resume_filename", "")),
-                    "cover_letter": str(latest.get("cover_letter_filename", "")),
-                    "email": self._operations.mask_email(str(latest.get("email_used", ""))),
-                    "status": "ALREADY_SUBMITTED",
-                    "success": True,
-                    "submitted": False,
-                    "confirmed": True,
-                    "test_mode": False,
-                    "already_submitted": True,
-                },
+                    resume=str(latest.get("resume_filename", "")),
+                    cover_letter=str(latest.get("cover_letter_filename", "")),
+                    email=self._operations.mask_email(str(latest.get("email_used", ""))),
+                    outcome=EngineOutcome(
+                        success=True,
+                        status="ALREADY_SUBMITTED",
+                        submitted=False,
+                        confirmed=True,
+                        test_mode=False,
+                    ),
+                    already_submitted=True,
+                ),
             )
 
         previous_quarantines = (
@@ -303,36 +459,38 @@ class ApplicationPipeline:
             )
             return self._completion(
                 target,
-                {
-                    "engine": (
+                ApplicationDetails(
+                    engine=(
                         self._operations.engine_label(engine_path, target.ats)
                         if engine_path
                         else ""
                     ),
-                    "resume": str(latest.get("resume_filename", "")),
-                    "cover_letter": str(latest.get("cover_letter_filename", "")),
-                    "email": self._operations.mask_email(str(latest.get("email_used", ""))),
-                    "status": LEDGER_PERSIST_FAILED_STATUS,
-                    "success": False,
-                    "submitted": True,
-                    "confirmed": True,
-                    "test_mode": False,
-                    "ledger_persisted": False,
-                    "manual_review_required": True,
-                    "retry_safe": False,
-                    "quarantine_persisted": True,
-                    "quarantine_path": str(self._config.submission_quarantine_path),
-                    "detail": (
-                        "A previous confirmed submission is quarantined because its ledger "
-                        "write failed; automatic retry is disabled."
+                    resume=str(latest.get("resume_filename", "")),
+                    cover_letter=str(latest.get("cover_letter_filename", "")),
+                    email=self._operations.mask_email(str(latest.get("email_used", ""))),
+                    outcome=EngineOutcome(
+                        success=False,
+                        status=LEDGER_PERSIST_FAILED_STATUS,
+                        submitted=True,
+                        confirmed=True,
+                        test_mode=False,
+                        detail=(
+                            "A previous confirmed submission is quarantined because its ledger "
+                            "write failed; automatic retry is disabled."
+                        ),
                     ),
-                },
+                    ledger_persisted=False,
+                    manual_review_required=True,
+                    retry_safe=False,
+                    quarantine_persisted=True,
+                    quarantine_path=str(self._config.submission_quarantine_path),
+                ),
             )
 
         if not context.email_required or not engine_path or not engine_path.is_file():
             return self._completion(
                 target,
-                {"status": "ENGINE_NOT_FOUND", "success": False},
+                ApplicationDetails(outcome=EngineOutcome(success=False, status="ENGINE_NOT_FOUND")),
             )
         return ResolvedApplication(
             context=context,
@@ -355,7 +513,12 @@ class ApplicationPipeline:
             logger.error("Resume identity extraction failed for row %s: %s", target.row_number, exc)
             return self._completion(
                 target,
-                {"status": "RESUME_IDENTITY_EXTRACTION_FAILED", "success": False},
+                ApplicationDetails(
+                    outcome=EngineOutcome(
+                        success=False,
+                        status="RESUME_IDENTITY_EXTRACTION_FAILED",
+                    )
+                ),
             )
         if not generated:
             logger.error(
@@ -365,15 +528,17 @@ class ApplicationPipeline:
             )
             return self._completion(
                 target,
-                {
-                    "engine": resolved.engine_label,
-                    "resume": "",
-                    "email": self._operations.mask_email(context.email),
-                    "confirmed": False,
-                    "submitted": False,
-                    "success": False,
-                    "status": "PERSONALIZED_RESUME_FAILED",
-                },
+                ApplicationDetails(
+                    engine=resolved.engine_label,
+                    resume="",
+                    email=self._operations.mask_email(context.email),
+                    outcome=EngineOutcome(
+                        success=False,
+                        status="PERSONALIZED_RESUME_FAILED",
+                        submitted=False,
+                        confirmed=False,
+                    ),
+                ),
             )
 
         target_resume = generated
@@ -399,19 +564,29 @@ class ApplicationPipeline:
             )
             return self._completion(
                 target,
-                {
-                    "engine": resolved.engine_label,
-                    "resume": target_resume.name,
-                    "email": self._operations.mask_email(context.email),
-                    "status": "GENERATED_RESUME_IDENTITY_INVALID",
-                    "success": False,
-                },
+                ApplicationDetails(
+                    engine=resolved.engine_label,
+                    resume=target_resume.name,
+                    email=self._operations.mask_email(context.email),
+                    outcome=EngineOutcome(
+                        success=False,
+                        status="GENERATED_RESUME_IDENTITY_INVALID",
+                    ),
+                ),
             )
 
-        target_cover_letter = (
-            self._config.prepared_cover_letter_path
-            or self._operations.generate_cover_letter(target, context.email)
-        )
+        try:
+            target_cover_letter = (
+                self._config.prepared_cover_letter_path
+                or self._operations.generate_cover_letter(target, context.email)
+            )
+        except Exception as exc:
+            logger.error(
+                "Personalized cover-letter generation failed for row %s: %s",
+                target.row_number,
+                exc,
+            )
+            target_cover_letter = None
         if not target_cover_letter:
             logger.error(
                 "Mandatory personalized cover-letter generation failed for %s; "
@@ -420,16 +595,18 @@ class ApplicationPipeline:
             )
             return self._completion(
                 target,
-                {
-                    "engine": resolved.engine_label,
-                    "resume": target_resume.name,
-                    "cover_letter": "",
-                    "email": self._operations.mask_email(context.email),
-                    "confirmed": False,
-                    "submitted": False,
-                    "success": False,
-                    "status": "PERSONALIZED_COVER_LETTER_FAILED",
-                },
+                ApplicationDetails(
+                    engine=resolved.engine_label,
+                    resume=target_resume.name,
+                    cover_letter="",
+                    email=self._operations.mask_email(context.email),
+                    outcome=EngineOutcome(
+                        success=False,
+                        status="PERSONALIZED_COVER_LETTER_FAILED",
+                        submitted=False,
+                        confirmed=False,
+                    ),
+                ),
             )
 
         logger.info(
@@ -452,18 +629,17 @@ class ApplicationPipeline:
     def _execute(self, prepared: PreparedApplication) -> ExecutedApplication:
         context = prepared.resolved.context
         target = context.target
-        command = self._operations.build_engine_command(
-            prepared.resolved.engine_path,
-            target,
-            prepared.resume_path,
-            prepared.cover_letter_path,
-            context.email,
-            self._config.mode,
-            self._config.headed,
-        )
-
         screenshot_dir: Path | None = None
         try:
+            command = self._operations.build_engine_command(
+                prepared.resolved.engine_path,
+                target,
+                prepared.resume_path,
+                prepared.cover_letter_path,
+                context.email,
+                self._config.mode,
+                self._config.headed,
+            )
             inherited_screenshot_dir = os.environ.get(APPLICATION_SCREENSHOT_DIR_ENV, "")
             screenshot_dir = self._operations.create_screenshot_directory(
                 inherited_screenshot_dir or None
@@ -487,26 +663,27 @@ class ApplicationPipeline:
             )
             outcome = self._operations.parse_engine_result(
                 process_result,
-                self._config.live_submit,
+                self._config.mode,
+                target.ats,
             )
-            if not outcome.get("success"):
+            if not outcome.success:
                 logger.error(
                     "Engine diagnostics:\n%s",
                     (process_result.stdout + "\n" + process_result.stderr)[-8000:],
                 )
         except ProcessTimeoutError as exc:
-            outcome = {
-                "success": False,
-                "status": "TIMED_OUT",
-                "timeout_seconds": exc.timeout,
-            }
+            outcome = EngineOutcome(
+                success=False,
+                status="TIMED_OUT",
+                timeout_seconds=exc.timeout,
+            )
         except Exception as exc:
             logger.error("Engine execution failed: %s", exc)
-            outcome = {
-                "success": False,
-                "status": "ENGINE_EXECUTION_ERROR",
-                "detail": str(exc),
-            }
+            outcome = EngineOutcome(
+                success=False,
+                status=EngineStatus.ENGINE_EXECUTION_ERROR.value,
+                detail=str(exc),
+            )
         finally:
             if screenshot_dir is not None:
                 try:
@@ -531,10 +708,17 @@ class ApplicationPipeline:
         prepared = executed.prepared
         context = prepared.resolved.context
         target = context.target
-        outcome = dict(executed.outcome)
+        outcome = executed.outcome
         stop_after_ledger_failure = False
-        if self._operations.is_confirmed_submission(outcome):
-            engine_outcome = dict(outcome)
+        engine_result: EngineOutcome | None = None
+        ledger_persisted: bool | None = None
+        manual_review_required: bool | None = None
+        retry_safe: bool | None = None
+        quarantine_persisted: bool | None = None
+        quarantine_path = ""
+        ledger_error = ""
+        quarantine_error = ""
+        if outcome.is_confirmed_submission:
             persistence = self._operations.record_submission(
                 self._submission_log,
                 self._config.submission_log_path,
@@ -542,45 +726,51 @@ class ApplicationPipeline:
                 context.email,
                 prepared.resume_path,
                 prepared.cover_letter_path,
-                str(outcome["status"]),
+                outcome.status,
             )
             if not persistence.persisted:
-                outcome = {
-                    **engine_outcome,
-                    "success": False,
-                    "status": LEDGER_PERSIST_FAILED_STATUS,
-                    "ledger_persisted": False,
-                    "manual_review_required": True,
-                    "retry_safe": False,
-                    "ledger_error": persistence.error,
-                    "engine_result": engine_outcome,
-                    "quarantine_persisted": not bool(persistence.quarantine_error),
-                    **(
-                        {"quarantine_path": str(persistence.quarantine_path)}
-                        if persistence.quarantine_path is not None
-                        else {}
-                    ),
-                    **(
-                        {"quarantine_error": persistence.quarantine_error}
-                        if persistence.quarantine_error
-                        else {}
-                    ),
-                    "detail": (
+                engine_result = outcome
+                outcome = EngineOutcome(
+                    success=False,
+                    status=LEDGER_PERSIST_FAILED_STATUS,
+                    submitted=outcome.submitted,
+                    confirmed=outcome.confirmed,
+                    test_mode=outcome.test_mode,
+                    detail=(
                         "The engine confirmed submission, but the confirmed ledger could not "
                         "be persisted. This job requires manual review and must not be retried."
                     ),
-                }
+                )
+                ledger_persisted = False
+                manual_review_required = True
+                retry_safe = False
+                ledger_error = persistence.error
+                quarantine_persisted = not bool(persistence.quarantine_error)
+                quarantine_path = (
+                    str(persistence.quarantine_path)
+                    if persistence.quarantine_path is not None
+                    else ""
+                )
+                quarantine_error = persistence.quarantine_error
                 stop_after_ledger_failure = True
 
         return self._completion(
             target,
-            {
-                "engine": prepared.resolved.engine_label,
-                "resume": prepared.resume_path.name,
-                "cover_letter": prepared.cover_letter_path.name,
-                "email": self._operations.mask_email(context.email),
-                **outcome,
-            },
+            ApplicationDetails(
+                engine=prepared.resolved.engine_label,
+                resume=prepared.resume_path.name,
+                cover_letter=prepared.cover_letter_path.name,
+                email=self._operations.mask_email(context.email),
+                outcome=outcome,
+                ledger_persisted=ledger_persisted,
+                manual_review_required=manual_review_required,
+                retry_safe=retry_safe,
+                quarantine_persisted=quarantine_persisted,
+                quarantine_path=quarantine_path,
+                ledger_error=ledger_error,
+                quarantine_error=quarantine_error,
+                engine_result=engine_result,
+            ),
             halt_pipeline=stop_after_ledger_failure,
         )
 
