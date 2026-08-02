@@ -191,6 +191,7 @@ def _prepare_documents(
     profile: Path,
     output_dir: Path,
     timeout_seconds: int,
+    generate_cover_letter: bool = True,
 ) -> CommandOutcome:
     """Compatibility facade that retains the patchable command-runner seam."""
     return prepare_documents(
@@ -201,6 +202,7 @@ def _prepare_documents(
         profile=profile,
         output_dir=output_dir,
         timeout_seconds=timeout_seconds,
+        generate_cover_letter=generate_cover_letter,
         runner=_run_command,
     )
 
@@ -212,7 +214,7 @@ def _apply(
     launcher: Path,
     profile: Path,
     resume_path: Path,
-    cover_letter_path: Path,
+    cover_letter_path: Path | None,
     result_path: Path,
     submission_log: Path,
     screenshot_dir: Path,
@@ -251,6 +253,7 @@ def _application_service(
     application_timeout_seconds: int,
     backlog_path: Path | None,
     telemetry: OperationalTelemetry | None,
+    generate_cover_letter: bool = True,
 ) -> SelectedJobApplicationService:
     defaults = default_application_dependencies()
     dependencies = SelectedJobApplicationDependencies(
@@ -276,6 +279,7 @@ def _application_service(
             document_timeout_seconds=document_timeout_seconds,
             engine_timeout_seconds=engine_timeout_seconds,
             application_timeout_seconds=application_timeout_seconds,
+            generate_cover_letter=generate_cover_letter,
             backlog_path=backlog_path,
         ),
         telemetry=telemetry or NOOP_TELEMETRY,

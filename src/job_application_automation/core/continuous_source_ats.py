@@ -424,6 +424,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--once", action="store_true")
     parser.add_argument(
+        "--skip-cover-letter",
+        action="store_true",
+        help="Generate and submit a tailored resume without generating a cover letter.",
+    )
+    parser.add_argument(
         "--validate-only",
         action="store_true",
         help="Validate source files and print eligible counts without generating or submitting.",
@@ -481,6 +486,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             document_timeout_seconds=args.document_timeout_seconds,
             engine_timeout_seconds=args.engine_timeout_seconds,
             application_timeout_seconds=args.application_timeout_seconds,
+            generate_cover_letter=not args.skip_cover_letter,
             backlog_path=args.backlog,
             ledger_identity_for_url=lambda job_url: _job_identity(job_url, ats_platform),
         ),

@@ -64,7 +64,7 @@ foreach ($Worker in $Workers) {
         $PeerArguments += "--peer-state $RemoteRepoPath/output/continuous_greenhouse_excel_$($Peer.Id)_state.json"
     }
     $SourceArgs = (
-        "--ats-platform greenhouse --source tracker --worker-id excel-$($Worker.Id) " +
+        "--ats-platform greenhouse --source tracker --worker-id excel-$($Worker.Id) --skip-cover-letter " +
         "--sleep-min-seconds 5 --sleep-max-seconds 15 --tracker $RemoteWorkbookPath " +
         "--state $RemoteRepoPath/output/continuous_greenhouse_excel_$($Worker.Id)_state.json " +
         ($PeerArguments -join " ") + " " +

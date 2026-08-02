@@ -78,6 +78,7 @@ class DocumentPreparer(Protocol):
         profile: Path,
         output_dir: Path,
         timeout_seconds: int,
+        generate_cover_letter: bool = True,
     ) -> CommandOutcome: ...
 
 
@@ -90,7 +91,7 @@ class ApplicationRunner(Protocol):
         launcher: Path,
         profile: Path,
         resume_path: Path,
-        cover_letter_path: Path,
+        cover_letter_path: Path | None,
         result_path: Path,
         submission_log: Path,
         screenshot_dir: Path,
@@ -232,6 +233,7 @@ def prepare_documents(
     profile: Path,
     output_dir: Path,
     timeout_seconds: int,
+    generate_cover_letter: bool = True,
     runner: CommandRunner = run_command,
 ) -> CommandOutcome:
     output_dir.parent.mkdir(parents=True, exist_ok=True)
@@ -245,11 +247,12 @@ def prepare_documents(
     try:
         with open(descriptor, "w", encoding="utf-8", closefd=True) as handle:
             handle.write(str(job["description"]).strip())
-        command = [
-            sys.executable,
-            str(launcher),
-            "documents",
-            "generate",
+        command = [sys.executable, str(launcher)]
+        if generate_cover_letter:
+            command += ["documents", "generate"]
+        else:
+            command += ["resume"]
+        command += [
             "--url",
             application_url(job),
             "--company",
@@ -260,14 +263,25 @@ def prepare_documents(
             email,
             "--location",
             str(job.get("location", "")).strip(),
-            "--jd-file",
-            str(job_description_path),
-            "--profile",
-            str(profile),
-            "--output-dir",
-            str(output_dir),
-            "--overwrite",
         ]
+        if generate_cover_letter:
+            command += [
+                "--jd-file",
+                str(job_description_path),
+                "--profile",
+                str(profile),
+                "--output-dir",
+                str(output_dir),
+                "--overwrite",
+            ]
+        else:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            command += [
+                "--jd-overview",
+                str(job["description"]).strip(),
+                "--output",
+                str(output_dir / "resume.pdf"),
+            ]
         return runner(command, timeout_seconds)
     finally:
         job_description_path.unlink(missing_ok=True)
@@ -280,7 +294,7 @@ def apply_job(
     launcher: Path,
     profile: Path,
     resume_path: Path,
-    cover_letter_path: Path,
+    cover_letter_path: Path | None,
     result_path: Path,
     submission_log: Path,
     screenshot_dir: Path,
@@ -302,8 +316,6 @@ def apply_job(
         str(profile),
         "--prepared-resume",
         str(resume_path),
-        "--cover-letter",
-        str(cover_letter_path),
         "--email",
         email,
         "--headed",
@@ -316,6 +328,11 @@ def apply_job(
         "--timeout",
         str(engine_timeout_seconds),
     ]
+    if cover_letter_path is not None:
+        command[command.index("--email"):command.index("--email")] = [
+            "--cover-letter",
+            str(cover_letter_path),
+        ]
     return runner(
         command,
         process_timeout_seconds,
@@ -338,6 +355,7 @@ class SelectedJobApplicationConfig:
     document_timeout_seconds: int
     engine_timeout_seconds: int
     application_timeout_seconds: int
+    generate_cover_letter: bool = True
     backlog_path: Path | None = None
     ledger_identity_for_url: JobIdentity = canonical_job_url
 
@@ -434,19 +452,24 @@ class SelectedJobApplicationService:
         result_path = Path(str(record["result_path"]))
 
         if record["status"] == "preparing":
+            document_arguments = {
+                "job": job,
+                "ats_platform": config.ats_platform,
+                "email": email,
+                "launcher": config.launcher,
+                "profile": config.profile,
+                "output_dir": output_dir,
+                "timeout_seconds": config.document_timeout_seconds,
+            }
+            if not config.generate_cover_letter:
+                document_arguments["generate_cover_letter"] = False
             document_outcome = dependencies.prepare_documents(
-                job=job,
-                ats_platform=config.ats_platform,
-                email=email,
-                launcher=config.launcher,
-                profile=config.profile,
-                output_dir=output_dir,
-                timeout_seconds=config.document_timeout_seconds,
+                **document_arguments,
             )
             if (
                 document_outcome.return_code != 0
                 or not valid_pdf(resume_path)
-                or not valid_pdf(cover_letter_path)
+                or (config.generate_cover_letter and not valid_pdf(cover_letter_path))
             ):
                 record.update(
                     {
@@ -458,7 +481,9 @@ class SelectedJobApplicationService:
                             else "DOCUMENT_GENERATION_FAILED"
                         ),
                         "resume_valid": valid_pdf(resume_path),
-                        "cover_letter_valid": valid_pdf(cover_letter_path),
+                        "cover_letter_valid": (
+                            valid_pdf(cover_letter_path) if config.generate_cover_letter else None
+                        ),
                         "updated_at": dependencies.now(),
                         **outcome_diagnostics(document_outcome),
                     }
@@ -484,7 +509,9 @@ class SelectedJobApplicationService:
                     "status": "documents_ready",
                     "stage": "application",
                     "resume_filename": resume_path.name,
-                    "cover_letter_filename": cover_letter_path.name,
+                    "cover_letter_filename": (
+                        cover_letter_path.name if config.generate_cover_letter else ""
+                    ),
                     "updated_at": dependencies.now(),
                     **outcome_diagnostics(document_outcome),
                 }
@@ -515,7 +542,7 @@ class SelectedJobApplicationService:
                 launcher=config.launcher,
                 profile=config.profile,
                 resume_path=resume_path,
-                cover_letter_path=cover_letter_path,
+                cover_letter_path=(cover_letter_path if config.generate_cover_letter else None),
                 result_path=result_path,
                 submission_log=config.submission_log,
                 screenshot_dir=screenshot_dir,

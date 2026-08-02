@@ -64,7 +64,7 @@ $PasswordFile = Join-Path ([IO.Path]::GetTempPath()) "greenhouse-parallel-$Token
 $Template = Get-Content -LiteralPath $ServiceTemplatePath -Raw
 
 $SearchArgs = (
-    "--ats-platform greenhouse --source search --worker-id search " +
+    "--ats-platform greenhouse --source search --worker-id search --skip-cover-letter " +
     "--sleep-min-seconds 5 --sleep-max-seconds 15 " +
     "--state $RemoteRepoPath/output/continuous_greenhouse_state.json " +
     "--peer-state $RemoteRepoPath/output/continuous_greenhouse_excel_state.json " +
@@ -74,7 +74,7 @@ $SearchArgs = (
     "--documents-dir $RemoteRepoPath/output/continuous_greenhouse_documents"
 )
 $ExcelArgs = (
-    "--ats-platform greenhouse --source tracker --worker-id excel " +
+    "--ats-platform greenhouse --source tracker --worker-id excel --skip-cover-letter " +
     "--sleep-min-seconds 5 --sleep-max-seconds 15 " +
     "--tracker $RemoteRepoPath/data/greenhouse_roles.xlsx " +
     "--state $RemoteRepoPath/output/continuous_greenhouse_excel_state.json " +
