@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import logging
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from collections.abc import Mapping, Sequence
@@ -72,6 +73,12 @@ from ..mail.gmail_client import (
 from .browser_controls import (
     fill_all_visible as _shared_fill_all_visible,
     upload_matching_file,
+)
+from .form_sections import (
+    CallableSectionHandler,
+    FormSectionOutcome,
+    FormSectionReport,
+    run_section_handlers,
 )
 
 ATS_NAME = "greenhouse"
@@ -1114,6 +1121,134 @@ def _submit_control_enabled(submit: Locator) -> bool:
         return False
 
 
+@dataclass(frozen=True, slots=True)
+class _GreenhouseFormSections:
+    """Typed section report plus the provider's compatibility result values."""
+
+    report: FormSectionReport
+    fields: Mapping[str, bool | None]
+    custom_questions: Mapping[str, bool]
+    eeo_fields: Mapping[str, bool]
+    consent_fields: tuple[str, ...]
+    challenge_visible: bool
+    challenge_filled: bool
+
+
+def _run_form_sections(
+    page: Page,
+    profile: Mapping[str, Any],
+    email: str,
+    resume: Path,
+    cover_letter: Path | None,
+    config: Mapping[str, Any],
+    company: str,
+    role: str,
+    candidate_evidence: str,
+    *,
+    live_submit: bool,
+) -> _GreenhouseFormSections:
+    """Execute Greenhouse's provider-specific form phases in stable order."""
+    standard_result: dict[str, bool | None] = {}
+    custom_result: dict[str, bool] = {}
+    eeo_result: dict[str, bool] = {}
+    consent_result: list[str] = []
+    challenge_visible_result = False
+    challenge_filled_result = False
+
+    def standard_fields() -> FormSectionOutcome:
+        nonlocal standard_result
+        standard_result = _fill_standard_fields(page, profile, email, resume, cover_letter)
+        return FormSectionOutcome(
+            "standard_fields",
+            {name: value for name, value in standard_result.items() if value is not None},
+        )
+
+    def custom_questions() -> FormSectionOutcome:
+        nonlocal custom_result
+        custom_result = _fill_custom_questions(
+            page,
+            profile,
+            config.get("rules", {}),
+            config.get("eeo_defaults", {}),
+            config.get("field_matchers", {}),
+            config.get("answer_variants", {}),
+            company,
+            role,
+            candidate_evidence,
+        )
+        return FormSectionOutcome(
+            "custom_questions",
+            custom_result,
+        )
+
+    def export_control() -> FormSectionOutcome:
+        values = _fill_export_control_questions(page)
+        custom_result.update(values)
+        return FormSectionOutcome("export_control", values)
+
+    def source_attribution() -> FormSectionOutcome:
+        values = _fill_source_checkbox(page)
+        custom_result.update(values)
+        return FormSectionOutcome("source_attribution", values)
+
+    def eeo_fields() -> FormSectionOutcome:
+        nonlocal eeo_result
+        eeo_result = _fill_eeo_fields(
+            page,
+            profile,
+            config.get("eeo_defaults", {}),
+            config.get("field_matchers", {}),
+            config.get("answer_variants", {}),
+        )
+        return FormSectionOutcome(
+            "eeo_fields",
+            eeo_result,
+        )
+
+    def required_consent() -> FormSectionOutcome:
+        nonlocal consent_result
+        consent_result = _fill_consent(page)
+        consent_result.extend(_fill_explicit_required_consents(page))
+        return FormSectionOutcome("required_consent", completed=tuple(consent_result))
+
+    def security_challenge() -> FormSectionOutcome:
+        nonlocal challenge_filled_result, challenge_visible_result
+        challenge_visible_result = _security_challenge_visible(page)
+        challenge_filled_result = _fill_pre_submit_security_challenge(
+            page,
+            company,
+            live_submit=live_submit,
+        )
+        return FormSectionOutcome(
+            "security_challenge",
+            {
+                "visible": challenge_visible_result,
+                "filled": challenge_filled_result,
+            },
+        )
+
+    report = run_section_handlers(
+        (
+            CallableSectionHandler("standard_fields", standard_fields),
+            CallableSectionHandler("custom_questions", custom_questions),
+            CallableSectionHandler("export_control", export_control),
+            CallableSectionHandler("source_attribution", source_attribution),
+            CallableSectionHandler("eeo_fields", eeo_fields),
+            CallableSectionHandler("required_consent", required_consent),
+            CallableSectionHandler("security_challenge", security_challenge),
+        )
+    )
+    return _GreenhouseFormSections(
+        report=report,
+        fields=standard_result,
+        custom_questions=custom_result,
+        eeo_fields=eeo_result,
+        consent_fields=tuple(consent_result),
+        challenge_visible=challenge_visible_result,
+        challenge_filled=challenge_filled_result,
+    )
+
+
 def run(
     *,
     url: str,
@@ -1280,35 +1415,24 @@ def run(
                         page, screenshot_dir, company or "Greenhouse", "skipped_policy"
                     ),
                 }
-            fields = _fill_standard_fields(page, profile, email, resume, cover_letter)
-            custom_questions = _fill_custom_questions(
+            form_sections = _run_form_sections(
                 page,
                 profile,
-                config.get("rules", {}),
-                config.get("eeo_defaults", {}),
-                config.get("field_matchers", {}),
-                config.get("answer_variants", {}),
+                email,
+                resume,
+                cover_letter,
+                config,
                 company,
                 role,
                 candidate_evidence,
-            )
-            custom_questions.update(_fill_export_control_questions(page))
-            custom_questions.update(_fill_source_checkbox(page))
-            eeo_fields = _fill_eeo_fields(
-                page,
-                profile,
-                config.get("eeo_defaults", {}),
-                config.get("field_matchers", {}),
-                config.get("answer_variants", {}),
-            )
-            consent = _fill_consent(page)
-            consent.extend(_fill_explicit_required_consents(page))
-            challenge_visible = _security_challenge_visible(page)
-            challenge_filled = _fill_pre_submit_security_challenge(
-                page,
-                company,
                 live_submit=live_submit,
             )
+            fields = dict(form_sections.fields)
+            custom_questions = dict(form_sections.custom_questions)
+            eeo_fields = dict(form_sections.eeo_fields)
+            consent = list(form_sections.consent_fields)
+            challenge_visible = form_sections.challenge_visible
+            challenge_filled = form_sections.challenge_filled
             page.wait_for_timeout(300)
             missing = validate_required_fields(page, _required_empty_fields)
             if live_submit and challenge_visible and not challenge_filled:

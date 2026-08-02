@@ -35,12 +35,16 @@ from playwright.sync_api import (
 )
 
 from .ashby_sections import (
-    FormSectionOutcome,
-    aggregate_section_outcomes,
     choice_is_selected,
     configured_screening_answer,
     plan_option_selection,
     required_field_flag,
+)
+from .form_sections import (
+    CallableSectionHandler,
+    FormSectionOutcome,
+    FormSectionReport,
+    run_section_handlers,
 )
 from ..core.engine_shared import (
     answer_variants,
@@ -2272,6 +2276,59 @@ def _wait_for_submission_outcome(
     return "SUBMIT_ATTEMPT_UNCONFIRMED", last_body_text
 
 
+def _run_form_sections(
+    page: Page,
+    profile: Mapping[str, Any],
+    defaults: Mapping[str, Any],
+    essay: str,
+    company: str,
+    role: str,
+    email: str,
+    resume: Path,
+    cover_letter: Path | None = None,
+    *,
+    refresh_selected_choices: bool = False,
+) -> FormSectionReport:
+    """Execute Ashby's provider-specific form phases in stable order."""
+
+    def personal_and_files() -> FormSectionOutcome:
+        return FormSectionOutcome(
+            "personal_and_files",
+            fill_personal_and_files(page, profile, email, resume, cover_letter),
+        )
+
+    def secondary() -> FormSectionOutcome:
+        fill_secondary(page, profile, defaults, essay, company, role)
+        return FormSectionOutcome("secondary")
+
+    def education_history() -> FormSectionOutcome:
+        fill_education_history(page, profile)
+        return FormSectionOutcome("education_history")
+
+    def consent() -> FormSectionOutcome:
+        fill_consent_checkboxes(page, profile)
+        return FormSectionOutcome("consent")
+
+    def eeo() -> FormSectionOutcome:
+        fill_eeo(page, profile)
+        return FormSectionOutcome("eeo")
+
+    def selected_choice_refresh() -> FormSectionOutcome:
+        _refresh_selected_choice_groups(page)
+        return FormSectionOutcome("selected_choice_refresh")
+
+    handlers: tuple[CallableSectionHandler, ...] = (
+        CallableSectionHandler("personal_and_files", personal_and_files),
+        CallableSectionHandler("secondary", secondary),
+        CallableSectionHandler("education_history", education_history),
+        CallableSectionHandler("consent", consent),
+        CallableSectionHandler("eeo", eeo),
+    )
+    if refresh_selected_choices:
+        handlers += (CallableSectionHandler("selected_choice_refresh", selected_choice_refresh),)
+    return run_section_handlers(handlers)
+
+
 def _fill_current_form(
     page: Page,
     profile: Mapping[str, Any],
@@ -2284,21 +2341,43 @@ def _fill_current_form(
     cover_letter: Path | None = None,
 ) -> dict[str, bool]:
     """Run every fill helper once against the currently visible Ashby form step."""
-    outcomes = [
-        FormSectionOutcome(
-            "personal_and_files",
-            fill_personal_and_files(page, profile, email, resume, cover_letter),
-        )
-    ]
-    fill_secondary(page, profile, defaults, essay, company, role)
-    outcomes.append(FormSectionOutcome("secondary"))
-    fill_education_history(page, profile)
-    outcomes.append(FormSectionOutcome("education_history"))
-    fill_consent_checkboxes(page, profile)
-    outcomes.append(FormSectionOutcome("consent"))
-    fill_eeo(page, profile)
-    outcomes.append(FormSectionOutcome("eeo"))
-    return aggregate_section_outcomes(outcomes)
+    return _run_form_sections(
+        page,
+        profile,
+        defaults,
+        essay,
+        company,
+        role,
+        email,
+        resume,
+        cover_letter,
+    ).fields
+
+
+def _repair_dynamic_form(
+    page: Page,
+    profile: Mapping[str, Any],
+    defaults: Mapping[str, Any],
+    essay: str,
+    company: str,
+    role: str,
+    email: str,
+    resume: Path,
+    cover_letter: Path | None = None,
+) -> None:
+    """Replay Ashby sections after required-field validation rerenders the form."""
+    _run_form_sections(
+        page,
+        profile,
+        defaults,
+        essay,
+        company,
+        role,
+        email,
+        resume,
+        cover_letter,
+        refresh_selected_choices=True,
+    )
 
 
 def _required_field_issues(page: Page) -> list[str]:
@@ -2749,19 +2828,28 @@ def run_job(
             # A subset of Ashby country/location comboboxes remount the form
             # after selection and silently detach an already uploaded resume.
             # Reattach personal files after all dynamic controls have settled.
-            refreshed_personal = fill_personal_and_files(
-                page,
-                profile,
-                email,
-                resume,
-                cover_letter,
-            )
-            critical = aggregate_section_outcomes(
+            refresh_report = run_section_handlers(
                 (
-                    FormSectionOutcome("visible_form_steps", critical),
-                    FormSectionOutcome("personal_and_files_refresh", refreshed_personal),
+                    CallableSectionHandler(
+                        "visible_form_steps",
+                        lambda: FormSectionOutcome("visible_form_steps", critical),
+                    ),
+                    CallableSectionHandler(
+                        "personal_and_files_refresh",
+                        lambda: FormSectionOutcome(
+                            "personal_and_files_refresh",
+                            fill_personal_and_files(
+                                page,
+                                profile,
+                                email,
+                                resume,
+                                cover_letter,
+                            ),
+                        ),
+                    ),
                 )
             )
+            critical = refresh_report.fields
 
             # Every visible step is filled inside the loop above. Re-running
             # the terminal step here used to rebuild Ashby's React form after
@@ -2794,26 +2882,16 @@ def run_job(
                     page,
                     ashby_dir,
                     comp_name,
-                    repair_dynamic_fields=lambda: (
-                        fill_personal_and_files(
-                            page,
-                            profile,
-                            email,
-                            resume,
-                            cover_letter,
-                        ),
-                        fill_secondary(
-                            page,
-                            profile,
-                            defaults,
-                            essay,
-                            comp_name,
-                            role,
-                        ),
-                        fill_education_history(page, profile),
-                        fill_consent_checkboxes(page, profile),
-                        fill_eeo(page, profile),
-                        _refresh_selected_choice_groups(page),
+                    repair_dynamic_fields=lambda: _repair_dynamic_form(
+                        page,
+                        profile,
+                        defaults,
+                        essay,
+                        comp_name,
+                        role,
+                        email,
+                        resume,
+                        cover_letter,
                     ),
                 )
 

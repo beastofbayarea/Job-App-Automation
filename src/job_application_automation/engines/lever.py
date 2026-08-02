@@ -22,6 +22,7 @@ import argparse
 import logging
 import re
 from datetime import date
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from collections.abc import Mapping, Sequence
@@ -59,6 +60,12 @@ from ..core.engine_shared import (
 )
 from ..core.paths import OUTPUT_DIR, resolve_project_dir
 from .browser_controls import upload_matching_file
+from .form_sections import (
+    CallableSectionHandler,
+    FormSectionOutcome,
+    FormSectionReport,
+    run_section_handlers,
+)
 
 
 ATS_NAME = "lever"
@@ -560,6 +567,81 @@ def _captcha_present(page: Page) -> bool:
     return bool(challenge.count())
 
 
+@dataclass(frozen=True, slots=True)
+class _LeverFormSections:
+    """Typed section report plus the provider's compatibility result values."""
+
+    report: FormSectionReport
+    fields: Mapping[str, bool | None]
+    custom_questions: Mapping[str, bool]
+    consent_fields: tuple[str, ...]
+
+
+def _run_form_sections(
+    page: Page,
+    profile: Mapping[str, Any],
+    email: str,
+    resume: Path,
+    cover_letter: Path | None,
+    config: Mapping[str, Any],
+    company: str,
+    role: str,
+    candidate_evidence: str,
+) -> _LeverFormSections:
+    """Execute Lever's provider-specific form phases in stable order."""
+    standard_result: dict[str, bool | None] = {}
+    custom_result: dict[str, bool] = {}
+    consent_result: list[str] = []
+
+    def standard_fields() -> FormSectionOutcome:
+        nonlocal standard_result
+        standard_result = _fill_standard_fields(page, profile, email, resume, cover_letter)
+        return FormSectionOutcome(
+            "standard_fields",
+            {name: value for name, value in standard_result.items() if value is not None},
+        )
+
+    def custom_questions() -> FormSectionOutcome:
+        nonlocal custom_result
+        custom_result = _fill_custom_questions(
+            page,
+            profile,
+            config.get("rules", {}),
+            config.get("eeo_defaults", {}),
+            config.get("field_matchers", {}),
+            config.get("answer_variants", {}),
+            company,
+            role,
+            candidate_evidence,
+        )
+        return FormSectionOutcome(
+            "custom_questions",
+            custom_result,
+        )
+
+    def required_consent() -> FormSectionOutcome:
+        nonlocal consent_result
+        consent_result = fill_required_consent(page)
+        return FormSectionOutcome(
+            "required_consent",
+            completed=tuple(consent_result),
+        )
+
+    report = run_section_handlers(
+        (
+            CallableSectionHandler("standard_fields", standard_fields),
+            CallableSectionHandler("custom_questions", custom_questions),
+            CallableSectionHandler("required_consent", required_consent),
+        )
+    )
+    return _LeverFormSections(
+        report=report,
+        fields=standard_result,
+        custom_questions=custom_result,
+        consent_fields=tuple(consent_result),
+    )
+
+
 def run(
     *,
     url: str,
@@ -612,25 +694,20 @@ def run(
             except PlaywrightTimeoutError:
                 page.wait_for_timeout(2_000)
 
-            fields = _fill_standard_fields(
+            form_sections = _run_form_sections(
                 page,
                 profile,
                 email,
                 resume,
                 cover_letter,
-            )
-            custom = _fill_custom_questions(
-                page,
-                profile,
-                config.get("rules", {}),
-                config.get("eeo_defaults", {}),
-                config.get("field_matchers", {}),
-                config.get("answer_variants", {}),
+                config,
                 company,
                 role,
                 candidate_evidence,
             )
-            consent = fill_required_consent(page)
+            fields = dict(form_sections.fields)
+            custom = dict(form_sections.custom_questions)
+            consent = list(form_sections.consent_fields)
             missing = validate_required_fields(page, _required_issues)
             screenshot = capture_screenshot(page, screenshot_dir, company or "Lever", "prefilled")
             critical_missing = [key for key in ("name", "email", "resume") if not fields.get(key)]
