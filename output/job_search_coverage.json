@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-08-02T16:14:47Z",
+  "generated_at": "2026-08-02T16:39:30Z",
   "criteria": {
     "role_terms": [
       "Product Manager"
@@ -61,22 +61,22 @@
     "boards_loaded": 890,
     "candidate_urls_loaded": 1022,
     "boards_saved": 890,
-    "candidate_urls_saved": 1022
+    "candidate_urls_saved": 1023
   },
   "discovery": {
     "queries_planned": 1056,
     "queries_attempted": 120,
-    "query_failures": 58,
-    "results_seen": 311,
-    "boards_discovered": 200,
-    "candidates_discovered": 142,
+    "query_failures": 61,
+    "results_seen": 287,
+    "boards_discovered": 193,
+    "candidates_discovered": 138,
     "query_log": [
       {
         "query": "site:boards.greenhouse.io \"AI\" \"Product Manager\" jobs \"US Remote\"",
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "ok:1"
+        "status": "error: No results found."
       },
       {
         "query": "site:boards.greenhouse.io \"AI\" \"Product Manager\" jobs \"UK\"",
@@ -90,7 +90,7 @@
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "ok:7"
+        "status": "error: No results found."
       },
       {
         "query": "site:job-boards.greenhouse.io \"AI\" \"Product Manager\" jobs \"India Remote\"",
@@ -160,7 +160,7 @@
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "ok:3"
+        "status": "ok:2"
       },
       {
         "query": "site:jobs.smartrecruiters.com \"AI\" \"Product Manager\" jobs \"Hong Kong\"",
@@ -188,7 +188,7 @@
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "error: No results found."
+        "status": "ok:1"
       },
       {
         "query": "site:boards.greenhouse.io \"artificial intelligence\" \"Product Manager\" jobs \"India Remote\"",
@@ -202,7 +202,7 @@
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "error: No results found."
+        "status": "ok:7"
       },
       {
         "query": "site:job-boards.greenhouse.io \"artificial intelligence\" \"Product Manager\" jobs \"Noida\"",
@@ -244,7 +244,7 @@
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "error: No results found."
+        "status": "ok:7"
       },
       {
         "query": "site:jobs.eu.lever.co \"artificial intelligence\" \"Product Manager\" jobs \"Australia\"",
@@ -300,7 +300,7 @@
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "ok:1"
+        "status": "error: No results found."
       },
       {
         "query": "site:boards.greenhouse.io \"generative AI\" \"Product Manager\" jobs \"Noida\"",
@@ -328,7 +328,7 @@
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "ok:1"
+        "status": "error: No results found."
       },
       {
         "query": "site:job-boards.eu.greenhouse.io \"generative AI\" \"Product Manager\" jobs \"Saudi Arabia\"",
@@ -342,7 +342,7 @@
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "ok:6"
+        "status": "error: No results found."
       },
       {
         "query": "site:jobs.lever.co \"generative AI\" \"Product Manager\" jobs \"Australia\"",
@@ -384,7 +384,7 @@
         "family": "role_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "ok:7"
+        "status": "error: No results found."
       },
       {
         "query": "site:jobs.smartrecruiters.com \"Product Manager\" jobs \"India Remote\"",
@@ -398,7 +398,7 @@
         "family": "role_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "error: No results found."
+        "status": "ok:7"
       },
       {
         "query": "site:apply.workable.com \"Product Manager\" jobs \"Noida\"",
@@ -426,7 +426,7 @@
         "family": "role_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "ok:7"
+        "status": "error: No results found."
       },
       {
         "query": "site:job-boards.greenhouse.io \"Product Manager\" jobs \"Saudi Arabia\"",
@@ -482,7 +482,7 @@
         "family": "role_ai",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "ok:4"
+        "status": "error: No results found."
       },
       {
         "query": "site:jobs.ashbyhq.com \"artificial intelligence\" \"Product Manager\" jobs",
@@ -496,7 +496,7 @@
         "family": "role_ai",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "ok:7"
+        "status": "error: No results found."
       },
       {
         "query": "site:jobs.smartrecruiters.com \"GenAI\" \"Product Manager\" jobs",
@@ -601,7 +601,7 @@
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "ok:5"
+        "status": "error: No results found."
       },
       {
         "query": "site:jobs.ashbyhq.com \"AI\" \"Product Manager\" jobs \"Singapore\"",
@@ -629,7 +629,7 @@
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "ok:4"
+        "status": "error: No results found."
       },
       {
         "query": "site:apply.workable.com \"artificial intelligence\" \"Product Manager\" jobs \"US Remote\"",
@@ -643,7 +643,7 @@
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "error: No results found."
+        "status": "ok:1"
       },
       {
         "query": "site:boards.greenhouse.io \"artificial intelligence\" \"Product Manager\" jobs \"Ireland\"",
@@ -797,7 +797,7 @@
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "error: No results found."
+        "status": "ok:1"
       },
       {
         "query": "site:jobs.lever.co \"generative AI\" \"Product Manager\" jobs \"Singapore\"",
@@ -811,7 +811,7 @@
         "family": "role_ai_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "error: No results found."
+        "status": "ok:2"
       },
       {
         "query": "site:jobs.eu.lever.co \"generative AI\" \"Product Manager\" jobs \"New Zealand\"",
@@ -846,7 +846,7 @@
         "family": "role_location",
         "backend": "yandex",
         "region": "wt-wt",
-        "status": "ok:4"
+        "status": "ok:3"
       },
       {
         "query": "site:apply.workable.com \"Product Manager\" jobs \"India Remote\"",
@@ -895,7 +895,7 @@
         "family": "role_location",
         "backend": "yahoo",
         "region": "wt-wt",
-        "status": "error: No results found."
+        "status": "ok:2"
       },
       {
         "query": "site:job-boards.eu.greenhouse.io \"Product Manager\" jobs \"Singapore\"",
