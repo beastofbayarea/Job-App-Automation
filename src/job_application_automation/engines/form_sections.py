@@ -61,7 +61,9 @@ class FormSectionOutcome:
 class FormSectionHandler(Protocol):
     """Executes one named form section."""
 
-    section: str
+    @property
+    def section(self) -> str:
+        """Return the stable section name without requiring mutability."""
 
     def handle(self) -> FormSectionOutcome:
         """Fill or inspect the section and return its typed outcome."""

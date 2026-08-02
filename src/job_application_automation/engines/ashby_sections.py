@@ -79,6 +79,7 @@ class OptionSelectionPlan:
 def plan_option_selection(value: str) -> OptionSelectionPlan:
     """Build the compatible candidate order used for Ashby radio choices."""
     normalized = value.lower()
+    candidates: tuple[str, ...]
     if normalized in ("male", "man"):
         candidates = ("Male", "Man")
     elif normalized == "asian":

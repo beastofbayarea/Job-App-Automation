@@ -651,13 +651,13 @@ def _fill_custom_questions(
             elif tag == "select":
                 if maximum_policy:
                     options = control.locator("option")
-                    available = [
-                        options.nth(item).get_attribute("value")
-                        for item in range(options.count())
-                        if options.nth(item).get_attribute("value")
-                    ]
-                    if available:
-                        control.select_option(value=available[-1])
+                    select_values: list[str] = []
+                    for item in range(options.count()):
+                        option_value = options.nth(item).get_attribute("value")
+                        if option_value:
+                            select_values.append(option_value)
+                    if select_values:
+                        control.select_option(value=select_values[-1])
                         success = True
                 elif desired:
                     success = _select_native(
@@ -767,16 +767,18 @@ def _fill_eeo_fields(
         r"sexual orientation",
     ):
         try:
-            control = _first_visible(page.get_by_label(re.compile(pattern, re.IGNORECASE)))
-            if control is None:
+            retry_control = _first_visible(page.get_by_label(re.compile(pattern, re.IGNORECASE)))
+            if retry_control is None:
                 continue
-            label = _label_for(page, control)
+            label = _label_for(page, retry_control)
             if results.get(label):
                 continue
             desired = _configured_answer(label, profile, {}, eeo, field_matchers)
-            if desired and (control.get_attribute("role") or "") == "combobox":
+            if desired and (retry_control.get_attribute("role") or "") == "combobox":
                 results[label] = _select_greenhouse_combobox(
-                    page, control, _answer_variants(label, desired, option_variants)
+                    page,
+                    retry_control,
+                    _answer_variants(label, desired, option_variants),
                 )
         except Exception as exc:
             logger.debug("EEO retry failed for %s: %s", pattern, exc)
@@ -790,7 +792,7 @@ def _fill_standard_fields(
     resume: Path,
     cover_letter: Path | None = None,
 ) -> dict[str, bool | None]:
-    fields = {
+    fields: dict[str, bool | None] = {
         "first_name": _fill_all_visible(
             page,
             ('input[name="first_name"]', 'input[id*="first_name" i]'),

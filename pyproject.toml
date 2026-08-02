@@ -97,7 +97,12 @@ files = [
     "src/job_application_automation/dashboard",
     "src/job_application_automation/engines/browser_controls.py",
     "src/job_application_automation/engines/browser_runtime.py",
+    "src/job_application_automation/engines/_browser_form.py",
+    "src/job_application_automation/engines/ashby.py",
+    "src/job_application_automation/engines/ashby_sections.py",
     "src/job_application_automation/engines/form_sections.py",
+    "src/job_application_automation/engines/greenhouse.py",
+    "src/job_application_automation/engines/lever.py",
 ]
 
 [tool.ruff]

@@ -45,6 +45,7 @@ from .browser_controls import (
     fill_scrolled_control as _fill_scrolled_control,
     retry_action as _retry_action,
 )
+from .browser_runtime import PlaywrightBrowserSession
 from .form_sections import (
     CallableSectionHandler,
     FormSectionOutcome,
@@ -722,7 +723,7 @@ def _fill_radio_groups(page: Page, profile: Mapping[str, Any]) -> None:
     if not radio_inputs:
         return
 
-    radio_groups: OrderedDict[str, list[Any]] = OrderedDict()
+    radio_groups: OrderedDict[str, list[Locator]] = OrderedDict()
     for radio in radio_inputs:
         name = radio.get_attribute("name") or ""
         if name not in radio_groups:
@@ -920,13 +921,13 @@ def _refresh_selected_choice_groups(page: Page) -> None:
     for radios in radio_groups.values():
         try:
             selected = next((radio for radio in radios if radio.is_checked()), None)
-            alternate = next(
+            radio_alternate = next(
                 (radio for radio in radios if selected is not None and radio != selected),
                 None,
             )
-            if selected is None or alternate is None:
+            if selected is None or radio_alternate is None:
                 continue
-            alternate.check(force=True)
+            radio_alternate.check(force=True)
             human_delay(0.1, 0.2)
             selected.check(force=True)
             human_delay(0.1, 0.2)
@@ -1182,12 +1183,12 @@ def fill_eeo(page: Page, profile: Mapping[str, Any]) -> None:
         logger.info("EEO option not found for %s; leaving the field for review.", kw)
 
     try:
-        _sel("veteran", profile.get("veteran"))
-        _sel(r"race|ethnicity", profile.get("race"))
-        _sel("gender", profile.get("gender"))
-        _sel("transgender", profile.get("transgender"))
-        _sel(r"orientation|sexual", profile.get("orientation"))
-        _sel(r"disability|disabled", profile.get("disability"))
+        _sel("veteran", str(profile.get("veteran") or ""))
+        _sel(r"race|ethnicity", str(profile.get("race") or ""))
+        _sel("gender", str(profile.get("gender") or ""))
+        _sel("transgender", str(profile.get("transgender") or ""))
+        _sel(r"orientation|sexual", str(profile.get("orientation") or ""))
+        _sel(r"disability|disabled", str(profile.get("disability") or ""))
 
         comm_groups = page.locator("fieldset, [role='group'], div[class*='field']").filter(
             has_text=re.compile(r"community|communities|identity|neurodiverse", re.I)
@@ -2004,7 +2005,7 @@ def fill_secondary(
             logger.debug("Button-style yes/no processing failed: %s", exc)
 
 
-def _locate_submit_btn(page: Page):
+def _locate_submit_btn(page: Page) -> Locator:
     btn = page.locator('button[class*="_submitButton"], button[class*="submit-button"]').first
     if btn.count() and btn.is_visible():
         return btn
@@ -2047,7 +2048,10 @@ def can_advance(page: Page) -> bool:
     return False
 
 
-def _open_browser_session(playwright: Any, target_url: str = ""):
+def _open_browser_session(
+    playwright: Any,
+    target_url: str = "",
+) -> PlaywrightBrowserSession:
     """Open the shared visible Chrome/CDP-first ATS browser session."""
     return open_chrome_session(
         playwright,
@@ -2170,8 +2174,9 @@ def fill_education_history(
 
 def _page_body_lower(page: Page, *, timeout_ms: float | None = None) -> str:
     try:
-        kwargs = {"timeout": max(1, int(timeout_ms))} if timeout_ms is not None else {}
-        return page.inner_text("body", **kwargs).lower()
+        if timeout_ms is None:
+            return page.inner_text("body").lower()
+        return page.inner_text("body", timeout=max(1, int(timeout_ms))).lower()
     except Exception as exc:
         logger.debug("Could not read page body: %s", exc)
         return ""

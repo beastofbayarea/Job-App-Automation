@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import inspect
 import sys
 import unittest
 from collections.abc import Callable
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -635,19 +635,96 @@ class ProviderSectionRunnerParityTests(unittest.TestCase):
             ],
         )
 
-    def test_production_runners_reach_the_shared_section_boundary(self) -> None:
-        production_calls: dict[str, tuple[Any, str]] = {
-            "greenhouse": (greenhouse.run, "_run_form_sections("),
-            "lever": (lever.run, "_run_form_sections("),
-            "ashby_steps": (ashby._fill_current_form, "_run_form_sections("),
-            "ashby_plan": (ashby._run_form_sections, "run_section_handlers("),
-            "ashby_refresh": (ashby.run_job, "run_section_handlers("),
-            "ashby_repair": (ashby.run_job, "_repair_dynamic_form("),
-        }
+    def test_ashby_run_job_executes_shared_sections_and_closes_owned_browser(self) -> None:
+        section_calls: list[tuple[str, ...]] = []
+        page = MagicMock()
+        page.title.return_value = "Example - Engineer"
+        apply_control = MagicMock()
+        apply_control.count.return_value = 0
+        page.locator.return_value.first = apply_control
+        browser = MagicMock()
+        session = MagicMock(
+            browser=browser,
+            page=page,
+            close_browser_on_exit=True,
+        )
+        playwright_context = MagicMock()
+        playwright_context.__enter__.return_value = MagicMock()
 
-        for provider, (production_runner, expected_call) in production_calls.items():
-            with self.subTest(provider=provider):
-                self.assertIn(expected_call, inspect.getsource(production_runner))
+        def execute_and_record(handlers: Any) -> Any:
+            section_calls.append(tuple(handler.section for handler in handlers))
+            return run_section_handlers(handlers)
+
+        with TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            resume = temp_path / "resume.pdf"
+            resume.write_bytes(b"resume")
+            screenshot_dir = temp_path / "screenshots"
+            config = {
+                "candidate": {
+                    "first_name": "Ada",
+                    "last_name": "Lovelace",
+                    "fallback_email": "ada@example.com",
+                },
+                "paths": {"ashby_dir": str(screenshot_dir)},
+            }
+
+            with (
+                patch.object(ashby, "sync_playwright", return_value=playwright_context),
+                patch.object(ashby, "_open_browser_session", return_value=session),
+                patch.object(ashby, "navigate_reusing_tab"),
+                patch.object(ashby, "ss", return_value="screenshot.png"),
+                patch.object(ashby, "disallowed_screening_questions", return_value=[]),
+                patch.object(
+                    ashby,
+                    "fill_personal_and_files",
+                    return_value={
+                        "name": True,
+                        "email": True,
+                        "resume": True,
+                        "cover_letter": True,
+                    },
+                ),
+                patch.object(ashby, "fill_secondary"),
+                patch.object(ashby, "fill_education_history"),
+                patch.object(ashby, "fill_consent_checkboxes"),
+                patch.object(ashby, "fill_eeo"),
+                patch.object(ashby, "can_advance", return_value=False),
+                patch.object(ashby, "validate_required_fields", return_value=[]),
+                patch.object(ashby.time, "sleep"),
+                patch.object(
+                    ashby,
+                    "run_section_handlers",
+                    side_effect=execute_and_record,
+                ) as runner,
+            ):
+                status = ashby.run_job(
+                    "https://jobs.ashbyhq.com/example/job-id",
+                    str(resume),
+                    company="Example",
+                    role="Engineer",
+                    cfg=config,
+                )
+
+            self.assertTrue(screenshot_dir.is_dir())
+
+        self.assertEqual(status, "PREFILLED_ONLY")
+        self.assertEqual(runner.call_count, 2)
+        self.assertEqual(
+            section_calls,
+            [
+                (
+                    "personal_and_files",
+                    "secondary",
+                    "education_history",
+                    "consent",
+                    "eeo",
+                ),
+                ("visible_form_steps", "personal_and_files_refresh"),
+            ],
+        )
+        browser.close.assert_called_once_with()
+        self.assertFalse(Path(temp_dir).exists())
 
 
 if __name__ == "__main__":

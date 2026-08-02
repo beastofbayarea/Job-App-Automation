@@ -15,6 +15,7 @@ from urllib.parse import urljoin
 from playwright.sync_api import Page, sync_playwright
 from pypdf import PdfReader
 
+from ..core.ats_urls import validate_ats_job_url
 from ..core.engine_shared import (
     answer_variants,
     build_engine_parser,
@@ -40,7 +41,6 @@ from ..core.engine_shared import (
     requested_live_mode,
     require_orchestrated_invocation,
     resolve_candidate_email,
-    validate_ats_job_url,
     validate_nonempty_file,
     validate_required_fields,
 )
@@ -1092,7 +1092,7 @@ def _fill_custom_questions(
                 profile,
                 rules,
                 eeo,
-                matchers,  # type: ignore[arg-type]
+                matchers,
             )
             desired = _repeatable_language_answer(label, profile, rules) or desired
             relocation_answers = _relocation_target_answers(label, desired, profile)
@@ -1138,7 +1138,7 @@ def _fill_custom_questions(
                 else answer_variants(
                     label,
                     str(desired or ""),
-                    variants,  # type: ignore[arg-type]
+                    variants,
                 )
             )
             maximum_policy = bool(
