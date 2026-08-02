@@ -9,6 +9,7 @@ import pytest
 from job_application_automation.core import continuous_source_ats
 from job_application_automation.core.artifacts import read_json
 from job_application_automation.core.observability import NOOP_TELEMETRY
+from job_application_automation.core.runtime_config import RUNTIME_CONFIG
 
 
 def _write_tracker(path: Path) -> None:
@@ -258,6 +259,7 @@ def test_source_main_runs_runtime_claim_application_and_claim_sync(
     claims_path = tmp_path / "claims.json"
     selected_input = tmp_path / "selected.json"
     applied: list[dict[str, object]] = []
+    application_configs = []
     source_reads: list[Path] = []
     source_read_json = continuous_source_ats.read_json
 
@@ -266,6 +268,7 @@ def test_source_main_runs_runtime_claim_application_and_claim_sync(
         return source_read_json(path)
 
     def process_selected(service, job):
+        application_configs.append(service.config)
         applied.append(dict(job))
         state = continuous_source_ats.load_worker_state(
             service.config.state_path,
@@ -336,6 +339,16 @@ def test_source_main_runs_runtime_claim_application_and_claim_sync(
 
     assert exit_code == 0
     assert len(applied) == 1
+    assert len(application_configs) == 1
+    source_defaults = RUNTIME_CONFIG.continuous_worker.source
+    assert (
+        application_configs[0].document_timeout_seconds == source_defaults.document_timeout_seconds
+    )
+    assert application_configs[0].engine_timeout_seconds == source_defaults.engine_timeout_seconds
+    assert (
+        application_configs[0].application_timeout_seconds
+        == source_defaults.application_timeout_seconds
+    )
     assert selected_input not in source_reads
     assert read_json(selected_input)[0] == applied[0]
     assert read_json(state_path)["jobs"][_job()["job_url"]]["status"] == "confirmed"
@@ -343,3 +356,10 @@ def test_source_main_runs_runtime_claim_application_and_claim_sync(
     assert claim["owner"] == "search"
     assert claim["status"] == "confirmed"
     assert claim["result_status"] == "SUBMITTED & CONFIRMED"
+
+
+def test_source_worker_does_not_import_the_direct_worker_implementation() -> None:
+    source = Path(continuous_source_ats.__file__).read_text(encoding="utf-8")
+
+    assert "from .continuous_ats" not in source
+    assert "import continuous_ats" not in source

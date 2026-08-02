@@ -37,6 +37,20 @@ def _canonical_json(document: object) -> str:
     return json.dumps(document, allow_nan=False, separators=(",", ":"), sort_keys=True)
 
 
+LEGACY_ASHBY_WORKER_SETTINGS = {
+    "continuous_sleep_min_seconds": 900,
+    "continuous_sleep_max_seconds": 1_800,
+    "continuous_application_limit": 12,
+    "continuous_application_window_seconds": 86_400,
+    "spam_rejection_cooldown_seconds": 86_400,
+    "spam_rejection_threshold": 1,
+}
+
+
+def _inject_legacy_ashby_worker_settings(document: dict[str, object]) -> None:
+    document["ashby"].update(LEGACY_ASHBY_WORKER_SETTINGS)
+
+
 class RuntimeConfigTests(unittest.TestCase):
     def test_packaged_defaults_match_the_tracked_runtime_config(self) -> None:
         self.assertEqual(
@@ -176,10 +190,76 @@ class RuntimeConfigTests(unittest.TestCase):
             },
         )
 
+    def test_sparse_provider_pacing_is_validated_against_inherited_defaults(self) -> None:
+        invalid_overrides = (
+            ({"sleep_min_seconds": 301}, "sleep_min_seconds"),
+            ({"sleep_max_seconds": 100}, "sleep_min_seconds"),
+        )
+        for override, expected_field in invalid_overrides:
+            with self.subTest(override=override):
+                document = _split_document(RUNTIME_CONFIG_DIR)
+                document["continuous_worker"]["providers"]["greenhouse"] = override
+
+                with self.assertRaisesRegex(
+                    ConfigurationError,
+                    rf"continuous_worker\.providers\.greenhouse\.{expected_field}",
+                ):
+                    RuntimeConfig.from_mapping(document)
+
+    def test_search_defaults_accept_only_cli_supported_choices(self) -> None:
+        allowed_values = {
+            "discovery_mode": ("focused", "expanded", "exhaustive"),
+            "discovery_timelimit": ("auto", "none"),
+            "match_mode": ("strict", "expanded"),
+            "scrape_discovered_pages": ("none", "failed-feed", "all"),
+            "live_check_target": ("listing", "application", "both"),
+        }
+        for field, choices in allowed_values.items():
+            for choice in choices:
+                with self.subTest(field=field, choice=choice):
+                    document = _split_document(RUNTIME_CONFIG_DIR)
+                    document["search"]["defaults"][field] = choice
+                    self.assertEqual(
+                        getattr(RuntimeConfig.from_mapping(document).search.defaults, field),
+                        choice,
+                    )
+
+            document = _split_document(RUNTIME_CONFIG_DIR)
+            document["search"]["defaults"][field] = "unsupported"
+            with self.subTest(field=field, choice="unsupported"):
+                with self.assertRaisesRegex(
+                    ConfigurationError,
+                    rf"search\.defaults\.{field}",
+                ):
+                    RuntimeConfig.from_mapping(document)
+
+    def test_search_backend_must_be_configured_or_intentional_all(self) -> None:
+        for backend in (*_split_document(RUNTIME_CONFIG_DIR)["search"]["ddgs_backends"], "all"):
+            with self.subTest(backend=backend):
+                document = _split_document(RUNTIME_CONFIG_DIR)
+                document["search"]["defaults"]["search_backend"] = backend
+                self.assertEqual(
+                    RuntimeConfig.from_mapping(document).search.defaults.search_backend,
+                    backend,
+                )
+
+        document = _split_document(RUNTIME_CONFIG_DIR)
+        document["search"]["defaults"]["search_backend"] = "unsupported"
+        with self.assertRaisesRegex(ConfigurationError, "search.defaults.search_backend"):
+            RuntimeConfig.from_mapping(document)
+
+    def test_role_family_aliases_must_reference_a_defined_family(self) -> None:
+        document = _split_document(RUNTIME_CONFIG_DIR)
+        document["search"]["role_family_input_aliases"]["missing-family"] = ["missing"]
+
+        with self.assertRaisesRegex(ConfigurationError, "undefined role_families.*missing-family"):
+            RuntimeConfig.from_mapping(document)
+
     def test_legacy_schema_one_document_gains_behavior_preserving_typed_sections(self) -> None:
         document = _split_document(RUNTIME_CONFIG_DIR)
         document.pop("observability")
         document.pop("continuous_worker")
+        _inject_legacy_ashby_worker_settings(document)
 
         config = RuntimeConfig.from_mapping(document)
 
@@ -194,8 +274,41 @@ class RuntimeConfigTests(unittest.TestCase):
             900,
         )
 
+    def test_legacy_and_explicit_ashby_worker_values_must_not_conflict(self) -> None:
+        document = _split_document(RUNTIME_CONFIG_DIR)
+        _inject_legacy_ashby_worker_settings(document)
+        document["ashby"]["continuous_sleep_min_seconds"] = 901
+
+        with self.assertRaisesRegex(
+            ConfigurationError,
+            "ashby.continuous_sleep_min_seconds.*"
+            "continuous_worker.providers.ashby.sleep_min_seconds",
+        ):
+            RuntimeConfig.from_mapping(document)
+
+    def test_identical_legacy_and_explicit_ashby_worker_values_remain_compatible(self) -> None:
+        document = _split_document(RUNTIME_CONFIG_DIR)
+        _inject_legacy_ashby_worker_settings(document)
+
+        config = RuntimeConfig.from_mapping(document)
+
+        self.assertEqual(config.continuous_worker.for_provider("ashby").sleep_min_seconds, 900)
+
+    def test_missing_worker_sections_and_legacy_keys_use_generic_defaults(self) -> None:
+        document = _split_document(RUNTIME_CONFIG_DIR)
+        document.pop("continuous_worker")
+
+        config = RuntimeConfig.from_mapping(document)
+
+        self.assertEqual(config.continuous_worker.for_provider("ashby").sleep_min_seconds, 120)
+
     def test_representative_consumers_receive_typed_attribute_defaults(self) -> None:
-        from job_application_automation.core import continuous_ats, orchestrator
+        from job_application_automation.core import (
+            continuous_ats,
+            continuous_source_ats,
+            continuous_worker_application,
+            orchestrator,
+        )
         from job_application_automation.engines import browser_runtime
         from job_application_automation.search import config as search_config
 
@@ -208,6 +321,62 @@ class RuntimeConfigTests(unittest.TestCase):
         self.assertEqual(
             continuous_ats.build_parser("ashby").parse_args(["--once"]).sleep_min_seconds,
             config.continuous_worker.for_provider("ashby").sleep_min_seconds,
+        )
+        direct_args = continuous_ats.build_parser("greenhouse").parse_args(["--once"])
+        direct_defaults = config.continuous_worker.for_provider("greenhouse")
+        self.assertEqual(direct_args.sleep_min_seconds, direct_defaults.sleep_min_seconds)
+        self.assertEqual(direct_args.sleep_max_seconds, direct_defaults.sleep_max_seconds)
+        self.assertEqual(
+            direct_args.document_timeout_seconds,
+            direct_defaults.document_timeout_seconds,
+        )
+        self.assertEqual(direct_args.engine_timeout_seconds, direct_defaults.engine_timeout_seconds)
+        self.assertEqual(
+            direct_args.application_timeout_seconds,
+            direct_defaults.application_timeout_seconds,
+        )
+        source_args = continuous_source_ats.build_parser().parse_args(
+            [
+                "--ats-platform",
+                "greenhouse",
+                "--source",
+                "search",
+                "--worker-id",
+                "config-test",
+                "--state",
+                "state.json",
+                "--selected-input",
+                "selected.json",
+                "--results-dir",
+                "results",
+                "--documents-dir",
+                "documents",
+                "--once",
+            ]
+        )
+        self.assertEqual(
+            source_args.sleep_min_seconds,
+            config.continuous_worker.source.sleep_min_seconds,
+        )
+        self.assertEqual(
+            source_args.engine_timeout_seconds,
+            config.continuous_worker.source.engine_timeout_seconds,
+        )
+        self.assertEqual(
+            source_args.application_timeout_seconds,
+            config.continuous_worker.source.application_timeout_seconds,
+        )
+        self.assertEqual(
+            continuous_worker_application.DEFAULT_SUBMISSION_LOG,
+            resolve_runtime_path(config.application.submission_log_file),
+        )
+        self.assertEqual(
+            continuous_worker_application.DEFAULT_BACKLOG,
+            resolve_runtime_path(config.application.vps_job_backlog_file),
+        )
+        self.assertEqual(
+            continuous_worker_application.DEFAULT_EMAIL_POOL,
+            resolve_runtime_path(config.application.candidate_email_pool_file),
         )
         self.assertEqual(
             browser_runtime.RUNTIME_CONFIG.browser.cdp_endpoint,
@@ -251,7 +420,7 @@ class RuntimeConfigTests(unittest.TestCase):
             "submission_result_poll_seconds",
             "submission_spam_phrases",
         ):
-            document["ashby"].pop(key)
+            document["ashby"].pop(key, None)
         document["browser"]["cdp_endpoint"] = "http://127.0.0.1:9333"
 
         with tempfile.TemporaryDirectory() as directory:
@@ -262,8 +431,9 @@ class RuntimeConfigTests(unittest.TestCase):
         self.assertEqual(config.browser["cdp_endpoint"], "http://127.0.0.1:9333")
         self.assertNotIn("continuous_application_limit", config.ashby)
 
-    def test_zero_continuous_application_limit_disables_the_optional_cap(self) -> None:
+    def test_legacy_zero_continuous_application_limit_disables_the_optional_cap(self) -> None:
         document = _split_document(RUNTIME_CONFIG_DIR)
+        document.pop("continuous_worker")
         document["ashby"]["continuous_application_limit"] = 0
 
         with tempfile.TemporaryDirectory() as directory:
@@ -272,6 +442,7 @@ class RuntimeConfigTests(unittest.TestCase):
             config = load_runtime_config(path)
 
         self.assertEqual(config.ashby["continuous_application_limit"], 0)
+        self.assertEqual(config.continuous_worker.for_provider("ashby").application_limit, 0)
 
     def test_cover_letter_section_loads_with_valid_word_budget(self) -> None:
         config = load_runtime_config()
@@ -311,6 +482,10 @@ class RuntimeConfigTests(unittest.TestCase):
                     (split_dir / source.name).write_text(
                         source.read_text(encoding="utf-8"), encoding="utf-8"
                     )
+            ashby_path = split_dir / "ashby.json"
+            ashby_document = json.loads(ashby_path.read_text(encoding="utf-8"))
+            _inject_legacy_ashby_worker_settings(ashby_document)
+            ashby_path.write_text(json.dumps(ashby_document), encoding="utf-8")
 
             config = load_runtime_config(split_dir)
 

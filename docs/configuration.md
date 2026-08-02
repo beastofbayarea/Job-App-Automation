@@ -41,9 +41,18 @@ in its own JSON file, while `schema_version.json` versions the complete set:
 - `resume` and `cover_letter`: caches, retry limits, quality threshold, and word limits.
 - `search`: default AI/location vocabulary, role and location aliases, ATS discovery
   hosts, liveness markers, provider backends, output paths, and CLI/network defaults.
-  Command-line arguments still override these defaults for an individual run.
-- `ashby`: navigation and form limits plus confirmation and failure phrases.
+  Configured modes and backend names must match the supported search CLI values;
+  command-line arguments still override these defaults for an individual run.
+- `ashby`: navigation and form limits plus confirmation and failure phrases. Older
+  external schema-one files may still contain the former Ashby worker pacing keys,
+  but new configuration belongs in `continuous_worker` and conflicting duplicate
+  values are rejected.
 - `gmail`: OAuth credential/token locations and verification polling settings.
+- `observability`: non-secret telemetry environment and flush-timeout defaults.
+  Sentry credentials and release metadata remain external environment settings.
+- `continuous_worker`: direct-worker defaults, source-worker defaults, and sparse
+  provider pacing overrides. Provider overrides are validated after inheritance so
+  an incomplete minimum/maximum pair cannot defer an invalid state until runtime.
 
 Every section file must contain exactly one top-level object matching its file
 name. The loader rejects missing or unexpected JSON files so partial deployments
@@ -56,8 +65,9 @@ configuration committed to Git.
 Install the `observability` package extra and set `SENTRY_DSN` only in the
 worker's external environment when centralized worker diagnostics are wanted.
 `SENTRY_ENVIRONMENT` and `SENTRY_RELEASE` are optional bounded labels. These
-values do not belong in `config/runtime/`; on the VPS they belong in
-the root-readable `/etc/job-application-automation/observability.env` file.
+secret or deployment-specific values do not belong in `config/runtime/`; on the
+VPS they belong in the root-readable
+`/etc/job-application-automation/observability.env` file.
 Without `SENTRY_DSN`, the application does not import or initialize the Sentry
 SDK.
 

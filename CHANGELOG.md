@@ -34,6 +34,10 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Changed
 
+- Runtime configuration now loads into frozen, mapping-compatible typed sections,
+  including dedicated non-secret observability settings and direct/source worker
+  controls with sparse provider overrides. Production consumers use typed fields
+  while legacy schema-one monolithic documents remain supported.
 - Split the unauthenticated, read-only dashboard into typed artifact,
   operations, metrics, download, and declarative route services while
   preserving every public URL alias, response schema, header, static asset,
@@ -95,6 +99,11 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Fixed
 
+- Runtime startup now rejects unsupported search modes/backends, undefined role
+  family aliases, invalid inherited worker pacing, conflicting legacy/new Ashby
+  worker values, non-integer schema versions, non-finite numbers, and invalid
+  UTF-8. Numeric JSON values retain their exact integer or decimal representation
+  through typed round-trips.
 - Empty application selections now replace stale orchestration results with an
   atomic empty snapshot, and live ledger/quarantine terminal jobs no longer
   consume candidate-email pool capacity or require a pool file.

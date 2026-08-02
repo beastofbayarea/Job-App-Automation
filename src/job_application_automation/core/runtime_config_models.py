@@ -52,6 +52,20 @@ def _string(values: Mapping[str, object], path: str, key: str) -> str:
     return value
 
 
+def _choice(
+    values: Mapping[str, object],
+    path: str,
+    key: str,
+    *,
+    allowed: frozenset[str],
+) -> str:
+    value = _string(values, path, key)
+    if value not in allowed:
+        choices = ", ".join(sorted(allowed))
+        raise ConfigurationError(f"runtime config {path}.{key} must be one of: {choices}")
+    return value
+
+
 def _positive_integer(values: Mapping[str, object], path: str, key: str) -> int:
     value = values.get(key)
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
@@ -623,15 +637,40 @@ class SearchDefaultsSettings(RuntimeSection):
         values = _strict_mapping(value, "search.defaults", required=cls._mapping_fields)
         return cls(
             days=_nonnegative_integer(values, "search.defaults", "days"),
-            discovery_mode=_string(values, "search.defaults", "discovery_mode"),
+            discovery_mode=_choice(
+                values,
+                "search.defaults",
+                "discovery_mode",
+                allowed=frozenset({"focused", "expanded", "exhaustive"}),
+            ),
             max_discovery_queries=_nonnegative_integer(
                 values, "search.defaults", "max_discovery_queries"
             ),
-            discovery_timelimit=_string(values, "search.defaults", "discovery_timelimit"),
-            match_mode=_string(values, "search.defaults", "match_mode"),
+            discovery_timelimit=_choice(
+                values,
+                "search.defaults",
+                "discovery_timelimit",
+                allowed=frozenset({"auto", "none"}),
+            ),
+            match_mode=_choice(
+                values,
+                "search.defaults",
+                "match_mode",
+                allowed=frozenset({"strict", "expanded"}),
+            ),
             max_career_pages=_nonnegative_integer(values, "search.defaults", "max_career_pages"),
-            scrape_discovered_pages=_string(values, "search.defaults", "scrape_discovered_pages"),
-            live_check_target=_string(values, "search.defaults", "live_check_target"),
+            scrape_discovered_pages=_choice(
+                values,
+                "search.defaults",
+                "scrape_discovered_pages",
+                allowed=frozenset({"none", "failed-feed", "all"}),
+            ),
+            live_check_target=_choice(
+                values,
+                "search.defaults",
+                "live_check_target",
+                allowed=frozenset({"listing", "application", "both"}),
+            ),
             output_file=_string(values, "search.defaults", "output_file"),
             coverage_report_file=_string(values, "search.defaults", "coverage_report_file"),
             cache_file=_string(values, "search.defaults", "cache_file"),
@@ -707,22 +746,39 @@ class SearchSettings(RuntimeSection):
     @classmethod
     def from_mapping(cls, value: Mapping[str, object]) -> SearchSettings:
         values = _strict_mapping(value, "search", required=cls._mapping_fields)
+        role_families = _string_tuple_mapping(values["role_families"], "search.role_families")
+        role_family_input_aliases = _string_tuple_mapping(
+            values["role_family_input_aliases"],
+            "search.role_family_input_aliases",
+        )
+        undefined_families = set(role_family_input_aliases).difference(role_families)
+        if undefined_families:
+            raise ConfigurationError(
+                "runtime config search.role_family_input_aliases references undefined "
+                f"role_families: {', '.join(sorted(undefined_families))}"
+            )
+        ddgs_backends = _strings(values, "search", "ddgs_backends")
+        defaults = SearchDefaultsSettings.from_mapping(
+            _object_mapping(values["defaults"], "search.defaults")
+        )
+        if defaults.search_backend != "all" and defaults.search_backend not in ddgs_backends:
+            raise ConfigurationError(
+                "runtime config search.defaults.search_backend must be 'all' or a member "
+                "of search.ddgs_backends"
+            )
         return cls(
             search_phrase_templates=_strings(values, "search", "search_phrase_templates"),
             ai_terms=_strings(values, "search", "ai_terms"),
             ai_discovery_terms=_strings(values, "search", "ai_discovery_terms"),
             default_locations=_strings(values, "search", "default_locations"),
-            role_families=_string_tuple_mapping(values["role_families"], "search.role_families"),
-            role_family_input_aliases=_string_tuple_mapping(
-                values["role_family_input_aliases"],
-                "search.role_family_input_aliases",
-            ),
+            role_families=role_families,
+            role_family_input_aliases=role_family_input_aliases,
             location_aliases=_string_tuple_mapping(
                 values["location_aliases"], "search.location_aliases"
             ),
             generic_ats_host_suffixes=_strings(values, "search", "generic_ats_host_suffixes"),
             ats_hosts=_string_tuple_mapping(values["ats_hosts"], "search.ats_hosts"),
-            ddgs_backends=_strings(values, "search", "ddgs_backends"),
+            ddgs_backends=ddgs_backends,
             dead_role_markers=_strings(values, "search", "dead_role_markers"),
             restricted_url_patterns=_strings(values, "search", "restricted_url_patterns"),
             restricted_board_tokens=_string_tuple_mapping(
@@ -735,9 +791,7 @@ class SearchSettings(RuntimeSection):
                 "search.provider_api_urls",
                 required=_PROVIDER_API_KEYS,
             ),
-            defaults=SearchDefaultsSettings.from_mapping(
-                _object_mapping(values["defaults"], "search.defaults")
-            ),
+            defaults=defaults,
         )
 
 
@@ -797,60 +851,50 @@ class WorkerControlSettings(RuntimeSection):
     _mapping_fields = _WORKER_CONTROL_FIELDS
 
     @classmethod
-    def from_mapping(cls, value: Mapping[str, object]) -> WorkerControlSettings:
-        values = _strict_mapping(value, "continuous_worker.defaults", required=cls._mapping_fields)
+    def from_mapping(
+        cls,
+        value: Mapping[str, object],
+        *,
+        path: str = "continuous_worker.defaults",
+    ) -> WorkerControlSettings:
+        values = _strict_mapping(value, path, required=cls._mapping_fields)
         settings = cls(
-            sleep_min_seconds=_positive_integer(
-                values, "continuous_worker.defaults", "sleep_min_seconds"
-            ),
-            sleep_max_seconds=_positive_integer(
-                values, "continuous_worker.defaults", "sleep_max_seconds"
-            ),
-            application_limit=_nonnegative_integer(
-                values, "continuous_worker.defaults", "application_limit"
-            ),
+            sleep_min_seconds=_positive_integer(values, path, "sleep_min_seconds"),
+            sleep_max_seconds=_positive_integer(values, path, "sleep_max_seconds"),
+            application_limit=_nonnegative_integer(values, path, "application_limit"),
             application_window_seconds=_positive_integer(
                 values,
-                "continuous_worker.defaults",
+                path,
                 "application_window_seconds",
             ),
-            document_timeout_seconds=_positive_integer(
-                values, "continuous_worker.defaults", "document_timeout_seconds"
-            ),
-            engine_timeout_seconds=_positive_integer(
-                values, "continuous_worker.defaults", "engine_timeout_seconds"
-            ),
+            document_timeout_seconds=_positive_integer(values, path, "document_timeout_seconds"),
+            engine_timeout_seconds=_positive_integer(values, path, "engine_timeout_seconds"),
             application_timeout_seconds=_positive_integer(
                 values,
-                "continuous_worker.defaults",
+                path,
                 "application_timeout_seconds",
             ),
-            refresh_timeout_seconds=_positive_integer(
-                values, "continuous_worker.defaults", "refresh_timeout_seconds"
-            ),
+            refresh_timeout_seconds=_positive_integer(values, path, "refresh_timeout_seconds"),
             captcha_cooldown_seconds=_positive_integer(
                 values,
-                "continuous_worker.defaults",
+                path,
                 "captcha_cooldown_seconds",
             ),
-            captcha_threshold=_positive_integer(
-                values, "continuous_worker.defaults", "captcha_threshold"
-            ),
+            captcha_threshold=_positive_integer(values, path, "captcha_threshold"),
             spam_rejection_cooldown_seconds=_positive_integer(
                 values,
-                "continuous_worker.defaults",
+                path,
                 "spam_rejection_cooldown_seconds",
             ),
             spam_rejection_threshold=_positive_integer(
                 values,
-                "continuous_worker.defaults",
+                path,
                 "spam_rejection_threshold",
             ),
         )
         if settings.sleep_min_seconds > settings.sleep_max_seconds:
             raise ConfigurationError(
-                "runtime config continuous_worker.defaults.sleep_min_seconds cannot exceed "
-                "sleep_max_seconds"
+                f"runtime config {path}.sleep_min_seconds cannot exceed sleep_max_seconds"
             )
         return settings
 
@@ -922,14 +966,19 @@ class WorkerControlOverrides(RuntimeSection):
             )
         return settings
 
-    def apply(self, defaults: WorkerControlSettings) -> WorkerControlSettings:
+    def apply(
+        self,
+        defaults: WorkerControlSettings,
+        *,
+        path: str = "continuous_worker.providers",
+    ) -> WorkerControlSettings:
         resolved = {
             field: getattr(self, field)
             if getattr(self, field) is not None
             else getattr(defaults, field)
             for field in self._mapping_fields
         }
-        return WorkerControlSettings.from_mapping(resolved)
+        return WorkerControlSettings.from_mapping(resolved, path=path)
 
     def to_mapping(self) -> dict[str, object]:
         return {
@@ -1000,6 +1049,9 @@ class ContinuousWorkerSettings(RuntimeSection):
     @classmethod
     def from_mapping(cls, value: Mapping[str, object]) -> ContinuousWorkerSettings:
         values = _strict_mapping(value, "continuous_worker", required=cls._mapping_fields)
+        defaults = WorkerControlSettings.from_mapping(
+            _object_mapping(values["defaults"], "continuous_worker.defaults")
+        )
         raw_providers = _object_mapping(values["providers"], "continuous_worker.providers")
         providers: dict[str, WorkerControlOverrides] = {}
         for provider, provider_value in raw_providers.items():
@@ -1008,17 +1060,18 @@ class ContinuousWorkerSettings(RuntimeSection):
                 raise ConfigurationError(
                     "runtime config continuous_worker.providers keys must be normalized lowercase"
                 )
-            providers[provider] = WorkerControlOverrides.from_mapping(
+            path = f"continuous_worker.providers.{provider}"
+            override = WorkerControlOverrides.from_mapping(
                 _object_mapping(
                     provider_value,
-                    f"continuous_worker.providers.{provider}",
+                    path,
                 ),
-                path=f"continuous_worker.providers.{provider}",
+                path=path,
             )
+            override.apply(defaults, path=path)
+            providers[provider] = override
         return cls(
-            defaults=WorkerControlSettings.from_mapping(
-                _object_mapping(values["defaults"], "continuous_worker.defaults")
-            ),
+            defaults=defaults,
             source=WorkerSourceSettings.from_mapping(
                 _object_mapping(values["source"], "continuous_worker.source")
             ),
@@ -1028,7 +1081,14 @@ class ContinuousWorkerSettings(RuntimeSection):
     def for_provider(self, provider: str) -> WorkerControlSettings:
         normalized = provider.strip().lower()
         override = self.providers.get(normalized)
-        return override.apply(self.defaults) if override is not None else self.defaults
+        return (
+            override.apply(
+                self.defaults,
+                path=f"continuous_worker.providers.{normalized}",
+            )
+            if override is not None
+            else self.defaults
+        )
 
 
 def default_observability_mapping() -> dict[str, object]:
@@ -1067,20 +1127,39 @@ def default_continuous_worker_mapping(engine_timeout_seconds: int) -> dict[str, 
     }
 
 
+_LEGACY_ASHBY_WORKER_TRANSLATIONS = {
+    "continuous_sleep_min_seconds": "sleep_min_seconds",
+    "continuous_sleep_max_seconds": "sleep_max_seconds",
+    "continuous_application_limit": "application_limit",
+    "continuous_application_window_seconds": "application_window_seconds",
+    "spam_rejection_cooldown_seconds": "spam_rejection_cooldown_seconds",
+    "spam_rejection_threshold": "spam_rejection_threshold",
+}
+
+
 def _legacy_ashby_worker_overrides(settings: AshbyEngineSettings) -> dict[str, object]:
-    translations = {
-        "continuous_sleep_min_seconds": "sleep_min_seconds",
-        "continuous_sleep_max_seconds": "sleep_max_seconds",
-        "continuous_application_limit": "application_limit",
-        "continuous_application_window_seconds": "application_window_seconds",
-        "spam_rejection_cooldown_seconds": "spam_rejection_cooldown_seconds",
-        "spam_rejection_threshold": "spam_rejection_threshold",
-    }
     return {
         output_name: value
-        for legacy_name, output_name in translations.items()
+        for legacy_name, output_name in _LEGACY_ASHBY_WORKER_TRANSLATIONS.items()
         if (value := getattr(settings, legacy_name)) is not None
     }
+
+
+def _reject_conflicting_ashby_worker_settings(
+    legacy_overrides: Mapping[str, object],
+    explicit_overrides: Mapping[str, object],
+) -> None:
+    legacy_names = {
+        output_name: legacy_name
+        for legacy_name, output_name in _LEGACY_ASHBY_WORKER_TRANSLATIONS.items()
+    }
+    for field in sorted(set(legacy_overrides).intersection(explicit_overrides)):
+        if legacy_overrides[field] == explicit_overrides[field]:
+            continue
+        raise ConfigurationError(
+            "runtime config worker setting conflict between "
+            f"ashby.{legacy_names[field]} and continuous_worker.providers.ashby.{field}"
+        )
 
 
 _RUNTIME_REQUIRED_SECTIONS = (
@@ -1150,6 +1229,7 @@ class RuntimeConfig(RuntimeSection):
             if "ashby" in providers
             else {}
         )
+        _reject_conflicting_ashby_worker_settings(legacy_overrides, explicit_ashby)
         if legacy_overrides or explicit_ashby:
             providers["ashby"] = {**legacy_overrides, **explicit_ashby}
         raw_continuous["providers"] = providers

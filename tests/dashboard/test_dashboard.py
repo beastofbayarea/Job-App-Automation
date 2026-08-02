@@ -63,6 +63,8 @@ def test_split_runtime_config_files_are_visible_to_repository_inventory():
     runtime_dir = server.PROJECT_ROOT / "config" / "runtime"
 
     assert server._is_repository_admin_file(runtime_dir / "application.json")
+    assert server._is_repository_admin_file(runtime_dir / "continuous_worker.json")
+    assert server._is_repository_admin_file(runtime_dir / "observability.json")
     assert server._is_repository_admin_file(runtime_dir / "schema_version.json")
     assert not server._is_repository_admin_file(runtime_dir / "unexpected.json")
 

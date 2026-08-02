@@ -92,6 +92,8 @@ files = [
     "src/job_application_automation/search/models.py",
     "src/job_application_automation/search/providers",
     "src/job_application_automation/core/runtime_config.py",
+    "src/job_application_automation/core/runtime_config_models.py",
+    "src/job_application_automation/search/config.py",
     "src/job_application_automation/dashboard",
     "src/job_application_automation/engines/browser_controls.py",
     "src/job_application_automation/engines/browser_runtime.py",
