@@ -34,6 +34,9 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Changed
 
+- Unified direct and search/tracker continuous workers around typed state,
+  source, recovery, supervision, telemetry, pacing, and once-exit contracts
+  while preserving deployed CLI, service, and JSON state behavior.
 - Extracted provider-neutral browser controls, Playwright session/runtime
   lifecycle, and typed ordered form-section handlers while retaining
   provider-specific navigation, widgets, and compatibility entry points.
