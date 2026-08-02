@@ -378,7 +378,7 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self) -> None:
         # This public dashboard never exposes write or command-executing routes.
-        self.send_error(404, "Endpoint not found")
+        self._send_json({"error": "Endpoint not found"}, status=404)
 
     def _send_response(self, response: HttpResponse) -> None:
         self.send_response(response.status)

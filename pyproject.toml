@@ -35,6 +35,7 @@ dev = [
     "pytest-cov>=7.0,<8.0",
     "pytest-socket>=0.7,<1.0",
     "ruff>=0.6,<1.0",
+    "setuptools>=83.0.0",
 ]
 
 [project.scripts]

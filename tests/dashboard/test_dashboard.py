@@ -107,7 +107,7 @@ def test_dashboard_rejects_all_post_requests():
     handler = DashboardRequestHandler.__new__(DashboardRequestHandler)
     handler.headers = Message()
     errors = []
-    handler.send_error = lambda code, message=None: errors.append((code, message))
+    handler._send_json = lambda payload, status=200: errors.append((status, payload))
 
     for path in ("/api/vps/sync", "/api/vps/status", "/api/metrics", "/"):
         handler.path = path

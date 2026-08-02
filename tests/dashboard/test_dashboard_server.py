@@ -97,9 +97,10 @@ def test_dashboard_handler_api_routes() -> None:
     data = json.loads(wfile.getvalue().decode("utf-8"))
     assert "log" in data
 
-    handler, _ = make_mock_handler("/api/vps/sync")
+    handler, wfile = make_mock_handler("/api/vps/sync")
     handler.do_POST()
-    handler.send_error.assert_called_once_with(404, "Endpoint not found")
+    handler.send_response.assert_called_once_with(404)
+    assert json.loads(wfile.getvalue().decode("utf-8")) == {"error": "Endpoint not found"}
 
 
 def test_dashboard_handler_get_route_mappings() -> None:
