@@ -81,12 +81,40 @@ def build_records(workbook_path: Path) -> list[dict[str, str]]:
     return records
 
 
+def merge_records(
+    workbook_records: list[dict[str, str]],
+    additional_records: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    """Merge actual attempt records over workbook placeholders by canonical URL."""
+    merged: dict[str, dict[str, object]] = {
+        record["job_url"]: dict(record) for record in workbook_records
+    }
+    for incoming in additional_records:
+        url = canonical_ashby_url(incoming.get("job_url"))
+        if url is None:
+            continue
+        current = merged.get(url, {})
+        updated = dict(current)
+        for key, value in incoming.items():
+            if value not in (None, "", []):
+                updated[str(key)] = value
+        updated["job_url"] = url
+        merged[url] = updated
+    return list(merged.values())
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("workbook", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument("--merge-json", action="append", default=[], type=Path)
     args = parser.parse_args()
-    records = build_records(args.workbook)
+    records: list[dict[str, object]] = list(build_records(args.workbook))
+    for merge_path in args.merge_json:
+        payload = json.loads(merge_path.read_text(encoding="utf-8"))
+        if not isinstance(payload, list):
+            raise ValueError(f"merge JSON must contain a list: {merge_path}")
+        records = merge_records(records, [item for item in payload if isinstance(item, dict)])
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(records, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"records={len(records)} output={args.output}")
