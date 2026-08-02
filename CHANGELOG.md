@@ -34,6 +34,10 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Changed
 
+- Split the unauthenticated, read-only dashboard into typed artifact,
+  operations, metrics, download, and declarative route services while
+  preserving every public URL alias, response schema, header, static asset,
+  and compatibility seam.
 - Unified direct and search/tracker continuous workers around typed state,
   source, recovery, supervision, telemetry, pacing, and once-exit contracts
   while preserving deployed CLI, service, and JSON state behavior.
