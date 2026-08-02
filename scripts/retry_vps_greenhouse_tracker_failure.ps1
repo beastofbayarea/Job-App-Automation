@@ -3,6 +3,8 @@ param(
     [string]$Worker = "all",
     [string]$RemoteRepoPath = "/root/Job-App-Automation",
     [string]$ConfigPath = "config/vps_config.json",
+    [ValidateRange(2, 5)]
+    [int]$MaxRequiredFieldRetries = 2,
     [ValidateRange(60, 1800)]
     [int]$TimeoutSeconds = 900
 )
@@ -13,6 +15,7 @@ $Connection = Read-VpsConnectionConfig -Path $ConfigPath
 $PlinkPath = Get-RequiredCommandPath -Name "plink"
 $Repo = ConvertTo-PosixShellLiteral $RemoteRepoPath.TrimEnd("/")
 $WorkerLiteral = ConvertTo-PosixShellLiteral $Worker
+$MaxRequiredFieldRetriesLiteral = ConvertTo-PosixShellLiteral $MaxRequiredFieldRetries
 $StatePath = ConvertTo-PosixShellLiteral (
     "$($RemoteRepoPath.TrimEnd('/'))/output/continuous_greenhouse_excel_${Worker}_state.json"
 )
@@ -32,6 +35,7 @@ repo=$Repo
 worker=$WorkerLiteral
 state=$StatePath
 tracker=$TrackerPath
+max_required_field_retries=$MaxRequiredFieldRetriesLiteral
 retry_root=`$(mktemp -d "`$repo/output/greenhouse-tracker-retry.XXXXXXXX")
 services='job-app-greenhouse.service job-app-greenhouse-excel-all.service job-app-greenhouse-excel-marketing.service job-app-greenhouse-excel-product-management.service'
 
@@ -47,7 +51,8 @@ restore_workers() {
 trap restore_workers EXIT INT TERM
 
 PYTHONPATH="`$repo/src" "`$repo/.venv/bin/python" - \
-  "`$state" "`$tracker" "`$repo/output/submission_log.json" "`$retry_root/tracker.xlsx" <<'PY'
+  "`$state" "`$tracker" "`$repo/output/submission_log.json" "`$retry_root/tracker.xlsx" \
+  "`$max_required_field_retries" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -56,7 +61,8 @@ import openpyxl
 
 from job_application_automation.core.orchestrator import load_jobs_from_tracker
 
-state_path, tracker_path, ledger_path, retry_path = map(Path, sys.argv[1:])
+state_path, tracker_path, ledger_path, retry_path = map(Path, sys.argv[1:5])
+max_required_field_retries = int(sys.argv[5])
 state = json.loads(state_path.read_text(encoding="utf-8"))
 
 # Reconcile verified terminal outcomes from earlier isolated retries before
@@ -110,7 +116,7 @@ for source_record in state.get("jobs", {}).values():
     if not isinstance(source_record, dict):
         continue
     source_url = str(source_record.get("job_url", ""))
-    if required_retry_counts.get(source_url, 0) < 2:
+    if required_retry_counts.get(source_url, 0) < max_required_field_retries:
         continue
     source_record.update({
         "status": "failed",
