@@ -657,10 +657,9 @@ def _fill_custom_questions(
                         if is_location_question(label)
                         else _answer_variants(label, desired, option_variants)
                     )
-                    if (
-                        re.search(r"\b(?:if yes,? )?what type of visa\b", label, re.I)
-                        and str(desired).strip().casefold() in {"n/a", "not applicable"}
-                    ):
+                    if re.search(r"\b(?:if yes,? )?what type of visa\b", label, re.I) and str(
+                        desired
+                    ).strip().casefold() in {"n/a", "not applicable"}:
                         # Some employers omit a literal N/A option for a
                         # conditional visa question. "Other" is the only
                         # truthful non-visa choice in that fixed dropdown.

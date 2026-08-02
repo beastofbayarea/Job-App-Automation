@@ -283,10 +283,10 @@ def test_greenhouse_policy_answers_cover_user_supplied_screening_defaults() -> N
     assert _greenhouse_semantic_answer("Will you relocate to London?", {}, rules) == "Yes"
     assert _greenhouse_semantic_answer("Are you authorized to work in France?", {}, rules) == "Yes"
     assert _greenhouse_semantic_answer("Do you require visa sponsorship?", {}, rules) == "No"
+    assert _greenhouse_semantic_answer("If yes, what type of visa are you on?", {}, rules) == "N/A"
     assert (
-        _greenhouse_semantic_answer("If yes, what type of visa are you on?", {}, rules) == "N/A"
+        _greenhouse_semantic_answer("Do you reside within the United States?", {}, rules) == "Yes"
     )
-    assert _greenhouse_semantic_answer("Do you reside within the United States?", {}, rules) == "Yes"
 
 
 def test_resume_employer_answer_uses_generated_resume_companies() -> None:

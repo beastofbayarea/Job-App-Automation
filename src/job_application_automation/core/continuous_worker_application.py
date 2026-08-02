@@ -329,7 +329,7 @@ def apply_job(
         str(engine_timeout_seconds),
     ]
     if cover_letter_path is not None:
-        command[command.index("--email"):command.index("--email")] = [
+        command[command.index("--email") : command.index("--email")] = [
             "--cover-letter",
             str(cover_letter_path),
         ]
