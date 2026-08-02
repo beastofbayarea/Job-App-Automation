@@ -21,7 +21,19 @@ $Unit = "job-app-greenhouse-failed-$Worker.service"
 $StateSuffix = $Worker.Replace("-", "_")
 $RequeueCommand = if ($RequeueClarification) {
 @"
-test "`$(systemctl is-active '$Unit' || true)" = inactive
+python3 - '/root/Job-App-Automation/output/continuous_greenhouse_failed_${StateSuffix}_state.json' <<'PY'
+import json
+import sys
+from pathlib import Path
+
+state = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+if any(
+    isinstance(record, dict) and record.get("status") in {"preparing", "application_started"}
+    for record in state.get("jobs", {}).values()
+):
+    raise SystemExit("worker has an in-flight application; refusing to interrupt it")
+PY
+systemctl stop '$Unit'
 PYTHONPATH='/root/Job-App-Automation/src' python3 - '/root/Job-App-Automation/output/continuous_greenhouse_failed_${StateSuffix}_state.json' '/root/Job-App-Automation/output/continuous_greenhouse_failed_claims.json' <<'PY'
 import json
 import sys
