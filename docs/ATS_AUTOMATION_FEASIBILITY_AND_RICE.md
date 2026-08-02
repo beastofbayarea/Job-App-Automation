@@ -66,8 +66,8 @@ graph TD
     B --> C[core/identity.py: Canonical Identity]
     C --> D[search/job_boards.py: Stable Search Facade]
     D --> E[search/providers/registry.py: Provider Dispatch]
-    E --> F[search/providers/provider.py: Feed and Liveness Adapter]
-    C --> G[engines/provider.py: Dedicated Application Engine]
+    E --> F[search/providers: Feed and Liveness Adapter]
+    C --> G[engines: Dedicated Provider Engine]
     G --> H[core/application_pipeline.py: Typed Application Stages]
     H --> I[EngineResult and Submission Ledger]
 ```
