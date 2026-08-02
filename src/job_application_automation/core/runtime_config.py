@@ -53,7 +53,7 @@ def _read_json_file(path: Path) -> Mapping[str, object]:
     try:
         with path.open("r", encoding="utf-8") as stream:
             document: object = json.load(stream)
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise ConfigurationError(
             f"runtime config contains invalid JSON or cannot be read: {path}"
         ) from exc

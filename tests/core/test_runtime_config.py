@@ -33,6 +33,10 @@ def _split_document(directory: Path) -> dict[str, object]:
     return document
 
 
+def _canonical_json(document: object) -> str:
+    return json.dumps(document, allow_nan=False, separators=(",", ":"), sort_keys=True)
+
+
 class RuntimeConfigTests(unittest.TestCase):
     def test_packaged_defaults_match_the_tracked_runtime_config(self) -> None:
         self.assertEqual(
@@ -97,9 +101,46 @@ class RuntimeConfigTests(unittest.TestCase):
         config = RuntimeConfig.from_mapping(document)
 
         self.assertEqual(config.to_mapping(), document)
+        self.assertEqual(_canonical_json(config.to_mapping()), _canonical_json(document))
+        self.assertIs(type(config.vertex.retry_delay_seconds), int)
+        self.assertIs(type(config.resume.original_page_height), int)
+        self.assertIs(type(config.search.defaults.timeout_seconds), int)
+        self.assertIs(type(config.search.defaults.delay_seconds), float)
+        self.assertIs(type(config.observability.flush_timeout_seconds), float)
         self.assertEqual(RuntimeConfig.from_mapping(config.to_mapping()), config)
         with self.assertRaises(FrozenInstanceError):
             config.application.queue_timeout_seconds = 1  # type: ignore[misc]
+
+    def test_number_fields_preserve_explicit_integer_and_float_json_types(self) -> None:
+        document = _split_document(RUNTIME_CONFIG_DIR)
+        document["vertex"]["retry_delay_seconds"] = 2.0
+        document["search"]["defaults"]["timeout_seconds"] = 20
+        document["search"]["defaults"]["async_timeout_seconds"] = 10.0
+
+        serialized = RuntimeConfig.from_mapping(document).to_mapping()
+
+        self.assertEqual(_canonical_json(serialized), _canonical_json(document))
+        self.assertIs(type(serialized["vertex"]["retry_delay_seconds"]), float)
+        self.assertIs(type(serialized["search"]["defaults"]["timeout_seconds"]), int)
+        self.assertIs(type(serialized["search"]["defaults"]["async_timeout_seconds"]), float)
+
+    def test_schema_version_rejects_boolean_and_float_lookalikes(self) -> None:
+        for invalid_version in (True, 1.0):
+            with self.subTest(invalid_version=invalid_version):
+                document = _split_document(RUNTIME_CONFIG_DIR)
+                document["schema_version"] = invalid_version
+
+                with self.assertRaisesRegex(ConfigurationError, "integer 1"):
+                    RuntimeConfig.from_mapping(document)
+
+    def test_non_finite_number_is_rejected(self) -> None:
+        for invalid_number in (float("nan"), float("inf"), float("-inf")):
+            with self.subTest(invalid_number=invalid_number):
+                document = _split_document(RUNTIME_CONFIG_DIR)
+                document["vertex"]["retry_delay_seconds"] = invalid_number
+
+                with self.assertRaisesRegex(ConfigurationError, "non-negative number"):
+                    RuntimeConfig.from_mapping(document)
 
     def test_unknown_and_missing_keys_are_rejected_by_exact_section(self) -> None:
         unknown = _split_document(RUNTIME_CONFIG_DIR)
@@ -300,6 +341,17 @@ class RuntimeConfigTests(unittest.TestCase):
             config = load_runtime_config(path)
 
         self.assertEqual(config.browser["cdp_endpoint"], "http://localhost:9222")
+
+    def test_invalid_utf8_is_reported_as_a_configuration_error(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "runtime_config.json"
+            path.write_bytes(b'\xff{"schema_version": 1}')
+
+            with self.assertRaisesRegex(
+                ConfigurationError,
+                "runtime config contains invalid JSON or cannot be read",
+            ):
+                load_runtime_config(path)
 
 
 if __name__ == "__main__":

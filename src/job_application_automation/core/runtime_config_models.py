@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
+import math
 from types import MappingProxyType
 from typing import ClassVar
 
@@ -67,16 +68,26 @@ def _nonnegative_integer(values: Mapping[str, object], path: str, key: str) -> i
 
 def _positive_number(values: Mapping[str, object], path: str, key: str) -> float:
     value = values.get(key)
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or value <= 0
+        or (isinstance(value, float) and not math.isfinite(value))
+    ):
         raise ConfigurationError(f"runtime config {path}.{key} must be a positive number")
-    return float(value)
+    return value
 
 
 def _nonnegative_number(values: Mapping[str, object], path: str, key: str) -> float:
     value = values.get(key)
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or value < 0
+        or (isinstance(value, float) and not math.isfinite(value))
+    ):
         raise ConfigurationError(f"runtime config {path}.{key} must be a non-negative number")
-    return float(value)
+    return value
 
 
 def _boolean(values: Mapping[str, object], path: str, key: str) -> bool:
@@ -1115,8 +1126,13 @@ class RuntimeConfig(RuntimeSection):
             required=("schema_version", *_RUNTIME_REQUIRED_SECTIONS),
             optional=_RUNTIME_OPTIONAL_SECTIONS,
         )
-        if values["schema_version"] != 1:
-            raise ConfigurationError("runtime config schema_version must be 1")
+        schema_version = values["schema_version"]
+        if (
+            isinstance(schema_version, bool)
+            or not isinstance(schema_version, int)
+            or schema_version != 1
+        ):
+            raise ConfigurationError("runtime config schema_version must be the integer 1")
 
         application = ApplicationSettings.from_mapping(
             _object_mapping(values["application"], "application")
