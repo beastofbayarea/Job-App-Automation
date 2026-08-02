@@ -15,6 +15,7 @@ from job_application_automation.engines.greenhouse import (
     _fill_pre_submit_security_challenge,
     _fill_source_checkbox,
     _greenhouse_semantic_answer,
+    _job_unavailable_after_navigation,
     _option_text_matches,
     _resume_employer_answer,
     _required_empty_fields,
@@ -329,6 +330,16 @@ def test_valid_greenhouse_url() -> None:
     assert _valid_greenhouse_url("https://job-boards.greenhouse.io/company/jobs/12345") is True
     assert _valid_greenhouse_url("https://example.com/job/123") is False
     assert _valid_greenhouse_url("") is False
+
+
+def test_job_unavailable_detects_greenhouse_board_error_redirect() -> None:
+    page = MagicMock()
+    page.url = "https://job-boards.greenhouse.io/trgscreen?error=true"
+
+    assert _job_unavailable_after_navigation(page) is True
+
+    page.url = "https://job-boards.greenhouse.io/trgscreen/jobs/4819740101"
+    assert _job_unavailable_after_navigation(page) is False
 
 
 def test_load_candidate_evidence() -> None:

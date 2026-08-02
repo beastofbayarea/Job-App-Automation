@@ -111,6 +111,13 @@ def _valid_greenhouse_url(url: str) -> bool:
     return validate_ats_url(url, ATS_NAME)
 
 
+def _job_unavailable_after_navigation(page: Page) -> bool:
+    """Detect Greenhouse's archived-job redirect before treating it as a form."""
+    parsed = urlparse(page.url)
+    query = parse_qs(parsed.query)
+    return query.get("error", [""])[0].casefold() == "true" and "/jobs/" not in parsed.path
+
+
 def _fill_all_visible(page: Page, selectors: Sequence[str], value: str) -> bool:
     """Fill every visible duplicate of a standard Greenhouse input."""
     return _shared_fill_all_visible(page, selectors, value)
@@ -1361,6 +1368,24 @@ def run(
             except PlaywrightTimeoutError:
                 logger.info("Initial network-idle wait timed out; continuing with loaded DOM")
             _open_application_form(page, timeout, url, company)
+            if _job_unavailable_after_navigation(page):
+                return {
+                    "success": False,
+                    "status": "JOB_CONTEXT_UNAVAILABLE",
+                    "ats": ATS_NAME,
+                    "submitted": False,
+                    "confirmed": False,
+                    "test_mode": not live_submit,
+                    "filled_fields": {},
+                    "custom_questions": {},
+                    "eeo_fields": {},
+                    "consent_fields": [],
+                    "missing_required": [],
+                    "detail": "Greenhouse redirected the archived job to its board error page",
+                    "screenshot": _screenshot(
+                        page, screenshot_dir, company or "Greenhouse", "job_unavailable"
+                    ),
+                }
             if _confirmation_visible(page):
                 confirmed_screenshot = _screenshot(
                     page, screenshot_dir, company or "Greenhouse", "submitted_verified"
