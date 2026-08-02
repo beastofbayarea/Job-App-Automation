@@ -12,7 +12,25 @@ from ..config import PROVIDER_API_URLS
 from ..models import Board, Job, SearchCandidate
 from ..terms import clean_whitespace
 from .common import days_old, iso_or_blank, mapping_items, parse_datetime, prettify_slug, strip_html
-from .contracts import FetchContext, FetchServices, LivenessServices
+from .contracts import FetchContext, FetchServices, LivenessServices, ProviderUrl
+
+
+LEVER_HOSTS = frozenset({"jobs.lever.co", "jobs.eu.lever.co"})
+
+
+def matches_url(url: ProviderUrl) -> bool:
+    return url.host in LEVER_HOSTS
+
+
+def board_from_url(url: ProviderUrl) -> Board | None:
+    if not matches_url(url) or not url.parts:
+        return None
+    region = "eu" if url.host == "jobs.eu.lever.co" else "global"
+    return Board("lever", url.parts[0], region)
+
+
+def looks_like_job_url(url: ProviderUrl) -> bool:
+    return matches_url(url) and len(url.parts) >= 2 and url.parts[-1].lower() != "apply"
 
 
 def api_base(board: Board) -> str:

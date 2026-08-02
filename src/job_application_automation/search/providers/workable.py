@@ -20,7 +20,36 @@ from .common import (
     prettify_slug,
     strip_html,
 )
-from .contracts import FetchContext, FetchServices, LivenessServices
+from .contracts import FetchContext, FetchServices, LivenessServices, ProviderUrl
+
+
+def matches_url(url: ProviderUrl) -> bool:
+    return url.host == "apply.workable.com"
+
+
+def board_from_url(url: ProviderUrl) -> Board | None:
+    if not matches_url(url):
+        return None
+    lowered_parts = tuple(part.lower() for part in url.parts)
+    if len(url.parts) >= 3 and lowered_parts[1] in {"j", "jobs"}:
+        return Board("workable", url.parts[0], "global")
+    if url.parts and lowered_parts[0] not in {"j", "jobs"}:
+        return Board("workable", url.parts[0], "global")
+    if len(url.parts) >= 2 and lowered_parts[0] in {"j", "jobs"}:
+        return Board("workable", WORKABLE_SHORT_LINK_BOARD, "global")
+    return None
+
+
+def looks_like_job_url(url: ProviderUrl) -> bool:
+    if not matches_url(url):
+        return False
+    lowered_parts = tuple(part.lower() for part in url.parts)
+    return (
+        len(url.parts) >= 3
+        and lowered_parts[1] in {"j", "jobs"}
+        or len(url.parts) >= 2
+        and lowered_parts[0] in {"j", "jobs"}
+    )
 
 
 def api_url(board: Board) -> str:

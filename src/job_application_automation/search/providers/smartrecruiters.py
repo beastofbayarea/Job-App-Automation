@@ -20,7 +20,49 @@ from .common import (
     prettify_slug,
     strip_html,
 )
-from .contracts import FetchContext, FetchServices, LivenessServices
+from .contracts import FetchContext, FetchServices, LivenessServices, ProviderUrl
+
+
+SMARTRECRUITERS_HOSTS = frozenset(
+    {
+        "jobs.smartrecruiters.com",
+        "www.smartrecruiters.com",
+        "careers.smartrecruiters.com",
+    }
+)
+
+
+def matches_url(url: ProviderUrl) -> bool:
+    return url.host in SMARTRECRUITERS_HOSTS
+
+
+def board_from_url(url: ProviderUrl) -> Board | None:
+    if not matches_url(url):
+        return None
+    lowered_parts = tuple(part.lower() for part in url.parts)
+    if (
+        len(url.parts) >= 5
+        and lowered_parts[:2] == ("oneclick-ui", "company")
+        and lowered_parts[3] == "publication"
+    ):
+        return Board("smartrecruiters", url.parts[2], "global")
+    if url.parts:
+        return Board("smartrecruiters", url.parts[0], "global")
+    return None
+
+
+def looks_like_job_url(url: ProviderUrl) -> bool:
+    if url.host not in {"jobs.smartrecruiters.com", "www.smartrecruiters.com"}:
+        return False
+    lowered_parts = tuple(part.lower() for part in url.parts)
+    return len(url.parts) >= 2 and (
+        lowered_parts[0] != "oneclick-ui"
+        or (
+            len(url.parts) >= 5
+            and lowered_parts[:2] == ("oneclick-ui", "company")
+            and lowered_parts[3] == "publication"
+        )
+    )
 
 
 def api_base(board: Board) -> str:

@@ -20,7 +20,41 @@ from .common import (
     prettify_slug,
     strip_html,
 )
-from .contracts import FetchContext, FetchServices, LivenessServices
+from .contracts import FetchContext, FetchServices, LivenessServices, ProviderUrl
+
+
+GREENHOUSE_HOSTS = frozenset(
+    {
+        "boards.greenhouse.io",
+        "job-boards.greenhouse.io",
+        "job-boards.eu.greenhouse.io",
+    }
+)
+
+
+def matches_url(url: ProviderUrl) -> bool:
+    return url.host in GREENHOUSE_HOSTS
+
+
+def board_from_url(url: ProviderUrl) -> Board | None:
+    if not matches_url(url):
+        return None
+    region = "eu" if ".eu." in url.host else "global"
+    if url.parts and url.parts[0].lower() != "embed":
+        return Board("greenhouse", url.parts[0], region)
+    for key in ("for", "board", "board_token"):
+        values = url.query.get(key)
+        if values and values[0]:
+            return Board("greenhouse", values[0], region)
+    return None
+
+
+def looks_like_job_url(url: ProviderUrl) -> bool:
+    return matches_url(url) and (
+        "jobs" in tuple(part.lower() for part in url.parts)
+        or "gh_jid" in url.query
+        or "token" in url.query
+    )
 
 
 def base_url(board: Board) -> str:

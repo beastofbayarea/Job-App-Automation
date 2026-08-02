@@ -86,7 +86,6 @@ from .config import (
     ROLE_ALIAS_MAP,
     SEARCH_PHRASE_TEMPLATES,
     SUPPORTED_ATS_PLATFORMS,
-    WORKABLE_SHORT_LINK_BOARD,
 )
 
 try:
@@ -522,112 +521,18 @@ def board_from_url(raw_url: str) -> Board | None:
     if is_restricted_url(raw_url):
         return None
     url = unwrap_search_url(raw_url)
-    parsed = urlparse(url)
-    host = parsed.netloc.lower().split(":", 1)[0]
-    parts = [unquote(part) for part in parsed.path.split("/") if part]
-    query = parse_qs(parsed.query)
-
-    if host == "jobs.ashbyhq.com" or host.endswith(".jobs.ashbyhq.com"):
-        if parts:
-            return Board("ashby", parts[0], "global")
-        return None
-
-    if host in {"jobs.lever.co", "jobs.eu.lever.co"}:
-        if parts:
-            region = "eu" if host == "jobs.eu.lever.co" else "global"
-            return Board("lever", parts[0], region)
-        return None
-
-    greenhouse_hosts = {
-        "boards.greenhouse.io",
-        "job-boards.greenhouse.io",
-        "job-boards.eu.greenhouse.io",
-    }
-    if host in greenhouse_hosts:
-        if parts and parts[0].lower() != "embed":
-            region = "eu" if ".eu." in host else "global"
-            return Board("greenhouse", parts[0], region)
-        # Embed widget URLs carry the board token as a query param instead of a path segment.
-        for key in ("for", "board", "board_token"):
-            values = query.get(key)
-            if values and values[0]:
-                region = "eu" if ".eu." in host else "global"
-                return Board("greenhouse", unquote(values[0]), region)
-
-    if host in {
-        "jobs.smartrecruiters.com",
-        "www.smartrecruiters.com",
-        "careers.smartrecruiters.com",
-    }:
-        lowered_parts = [part.lower() for part in parts]
-        if (
-            len(parts) >= 5
-            and lowered_parts[:2] == ["oneclick-ui", "company"]
-            and lowered_parts[3] == "publication"
-        ):
-            return Board("smartrecruiters", parts[2], "global")
-        if parts:
-            return Board("smartrecruiters", parts[0], "global")
-        return None
-
-    if host == "apply.workable.com":
-        lowered_parts = [part.lower() for part in parts]
-        if len(parts) >= 3 and lowered_parts[1] in {"j", "jobs"}:
-            return Board("workable", parts[0], "global")
-        if parts and lowered_parts[0] not in {"j", "jobs"}:
-            return Board("workable", parts[0], "global")
-        if len(parts) >= 2 and lowered_parts[0] in {"j", "jobs"}:
-            # Workable short links omit the account slug. Retain them for
-            # page-level JSON-LD parsing under a stable synthetic board.
-            return Board("workable", WORKABLE_SHORT_LINK_BOARD, "global")
-        return None
-
-    if any(host == suffix or host.endswith(f".{suffix}") for suffix in GENERIC_ATS_HOST_SUFFIXES):
-        # Generic public ATS pages are scraped through JSON-LD rather than a
-        # provider-specific board feed. Keep the host as a stable grouping key.
-        return Board("web", host, "global")
-    return None
+    return _provider_registry.board_from_url(
+        url,
+        generic_host_suffixes=GENERIC_ATS_HOST_SUFFIXES,
+    )
 
 
 def looks_like_job_url(url: str) -> bool:
     """Heuristically detect whether a URL points at a specific job posting rather than a board root."""
-    parsed = urlparse(url)
-    host = parsed.netloc.lower().split(":", 1)[0]
-    parts = [part for part in parsed.path.split("/") if part]
-    query = parse_qs(parsed.query)
-
-    if host == "jobs.ashbyhq.com":
-        return len(parts) >= 2
-    if host in {"jobs.lever.co", "jobs.eu.lever.co"}:
-        # /apply is the application form for a job, not the job posting itself.
-        return len(parts) >= 2 and parts[-1].lower() != "apply"
-    if host in {
-        "boards.greenhouse.io",
-        "job-boards.greenhouse.io",
-        "job-boards.eu.greenhouse.io",
-    }:
-        return "jobs" in [part.lower() for part in parts] or "gh_jid" in query or "token" in query
-    if host in {"jobs.smartrecruiters.com", "www.smartrecruiters.com"}:
-        lowered_parts = [part.lower() for part in parts]
-        return len(parts) >= 2 and (
-            lowered_parts[0] != "oneclick-ui"
-            or (
-                len(parts) >= 5
-                and lowered_parts[:2] == ["oneclick-ui", "company"]
-                and lowered_parts[3] == "publication"
-            )
-        )
-    if host == "apply.workable.com":
-        lowered_parts = [part.lower() for part in parts]
-        return (
-            len(parts) >= 3
-            and lowered_parts[1] in {"j", "jobs"}
-            or len(parts) >= 2
-            and lowered_parts[0] in {"j", "jobs"}
-        )
-    if any(host == suffix or host.endswith(f".{suffix}") for suffix in GENERIC_ATS_HOST_SUFFIXES):
-        return len(parts) >= 2
-    return False
+    return _provider_registry.looks_like_job_url(
+        url,
+        generic_host_suffixes=GENERIC_ATS_HOST_SUFFIXES,
+    )
 
 
 def board_from_cache_value(value: Any) -> Board | None:
@@ -1111,7 +1016,7 @@ def fetch_board_jobs(
         session,
         board,
         context,
-        fetchers=BOARD_FETCHERS,
+        services=_provider_fetch_services(),
         is_restricted_board=is_restricted_board,
     )
 
@@ -1341,26 +1246,16 @@ def verify_live_jobs(
 ) -> None:
     """Perform a final tri-state liveness check after result deduplication."""
     provider_jobs = [job for job in jobs if job.provider_id_trusted]
-    ashby_jobs = [job for job in provider_jobs if job.platform == "ashby"]
-    workable_jobs = [job for job in provider_jobs if job.platform == "workable"]
     if target in {"listing", "both"}:
-        for job in provider_jobs:
-            if job.platform == "greenhouse":
-                verify_greenhouse_job_live(session, job, timeout=timeout, now=now)
-            elif job.platform == "lever":
-                verify_lever_job_live(session, job, timeout=timeout, now=now)
-            elif job.platform == "smartrecruiters":
-                verify_smartrecruiters_job_live(session, job, timeout=timeout, now=now)
-            if job.platform in {"greenhouse", "lever", "smartrecruiters"} and delay > 0:
-                time.sleep(delay)
-        if ashby_jobs:
-            verify_ashby_jobs_live(session, ashby_jobs, timeout=timeout, now=now)
-            if delay > 0:
-                time.sleep(delay)
-        if workable_jobs:
-            verify_workable_jobs_live(session, workable_jobs, timeout=timeout, now=now)
-            if delay > 0:
-                time.sleep(delay)
+        _provider_registry.verify_jobs_live(
+            session,
+            provider_jobs,
+            timeout=timeout,
+            delay=delay,
+            now=now,
+            services=_provider_liveness_services(),
+            sleep=time.sleep,
+        )
 
     # A JSON-LD record has no provider-trusted listing identifier. Its page is
     # therefore the only evidence available, including for --target listing.

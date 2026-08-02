@@ -3,14 +3,35 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any, Protocol
+from urllib.parse import parse_qs, unquote, urlparse
 
 import requests
 
 from ..models import Board, Job, SearchCandidate
+
+
+@dataclass(frozen=True)
+class ProviderUrl:
+    """Normalized URL components consumed by provider recognition rules."""
+
+    raw_url: str
+    host: str
+    parts: tuple[str, ...]
+    query: Mapping[str, tuple[str, ...]]
+
+    @classmethod
+    def parse(cls, raw_url: str) -> ProviderUrl:
+        parsed = urlparse(raw_url)
+        return cls(
+            raw_url=raw_url,
+            host=parsed.netloc.lower().split(":", 1)[0],
+            parts=tuple(unquote(part) for part in parsed.path.split("/") if part),
+            query={key: tuple(values) for key, values in parse_qs(parsed.query).items()},
+        )
 
 
 class JobCriteria(Protocol):

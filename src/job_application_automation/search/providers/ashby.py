@@ -13,7 +13,21 @@ from ..config import PROVIDER_API_URLS
 from ..models import Board, Job
 from ..terms import clean_whitespace
 from .common import days_old, iso_or_blank, mapping_items, parse_datetime, prettify_slug, strip_html
-from .contracts import FetchContext, FetchServices, LivenessServices
+from .contracts import FetchContext, FetchServices, LivenessServices, ProviderUrl
+
+
+def matches_url(url: ProviderUrl) -> bool:
+    return url.host == "jobs.ashbyhq.com" or url.host.endswith(".jobs.ashbyhq.com")
+
+
+def board_from_url(url: ProviderUrl) -> Board | None:
+    if not matches_url(url) or not url.parts:
+        return None
+    return Board("ashby", url.parts[0], "global")
+
+
+def looks_like_job_url(url: ProviderUrl) -> bool:
+    return url.host == "jobs.ashbyhq.com" and len(url.parts) >= 2
 
 
 def format_salary(value: Any) -> str:

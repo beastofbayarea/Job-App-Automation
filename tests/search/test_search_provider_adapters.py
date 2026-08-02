@@ -74,33 +74,46 @@ def test_registry_exposes_one_typed_adapter_per_supported_feed() -> None:
         adapter = registry.PROVIDER_ADAPTERS[platform]
         assert adapter.platform == platform
         assert adapter.fetch is module.fetch_jobs
+        assert adapter.matches_url is module.matches_url
+        assert adapter.board_from_url is module.board_from_url
+        assert adapter.looks_like_job_url is module.looks_like_job_url
         assert (adapter.verify_one is None) != (adapter.verify_many is None)
 
 
 def test_registry_dispatch_preserves_restricted_web_and_unsupported_semantics() -> None:
-    calls: list[search.Board] = []
-
-    def fetch(_session: object, board: search.Board, _context: FetchContext) -> list[search.Job]:
-        calls.append(board)
-        return [make_job()]
-
     board = search.Board("greenhouse", "example")
-    jobs = registry.fetch_board_jobs(
-        object(),  # type: ignore[arg-type]
-        board,
-        make_context(),
-        fetchers={"greenhouse": fetch},  # type: ignore[dict-item]
-        is_restricted_board=lambda _board: False,
-    )
+    with patch.object(greenhouse, "fetch_jobs", return_value=[make_job()]) as fetch:
+        adapter = registry.PROVIDER_ADAPTERS["greenhouse"]
+        with patch.dict(
+            registry.PROVIDER_ADAPTERS,
+            {
+                "greenhouse": registry.ProviderAdapter(
+                    platform=adapter.platform,
+                    matches_url=adapter.matches_url,
+                    board_from_url=adapter.board_from_url,
+                    looks_like_job_url=adapter.looks_like_job_url,
+                    fetch=greenhouse.fetch_jobs,
+                    verify_one=adapter.verify_one,
+                )
+            },
+            clear=False,
+        ):
+            jobs = registry.fetch_board_jobs(
+                object(),  # type: ignore[arg-type]
+                board,
+                make_context(),
+                services=search._provider_fetch_services(),
+                is_restricted_board=lambda _board: False,
+            )
     assert len(jobs) == 1
-    assert calls == [board]
+    fetch.assert_called_once()
 
     assert (
         registry.fetch_board_jobs(
             object(),  # type: ignore[arg-type]
             board,
             make_context(),
-            fetchers={"greenhouse": fetch},  # type: ignore[dict-item]
+            services=search._provider_fetch_services(),
             is_restricted_board=lambda _board: True,
         )
         == []
@@ -110,7 +123,7 @@ def test_registry_dispatch_preserves_restricted_web_and_unsupported_semantics() 
             object(),  # type: ignore[arg-type]
             search.Board("web", "careers.example.com"),
             make_context(),
-            fetchers={},
+            services=search._provider_fetch_services(),
             is_restricted_board=lambda _board: False,
         )
         == []
@@ -120,9 +133,80 @@ def test_registry_dispatch_preserves_restricted_web_and_unsupported_semantics() 
             object(),  # type: ignore[arg-type]
             search.Board("unknown", "example"),
             make_context(),
-            fetchers={},
+            services=search._provider_fetch_services(),
             is_restricted_board=lambda _board: False,
         )
+
+
+@pytest.mark.parametrize(
+    ("url", "platform", "is_job"),
+    [
+        ("https://jobs.ashbyhq.com/example/role", "ashby", True),
+        ("https://jobs.eu.lever.co/example/role", "lever", True),
+        ("https://job-boards.eu.greenhouse.io/example/jobs/123", "greenhouse", True),
+        ("https://jobs.smartrecruiters.com/example/123-role", "smartrecruiters", True),
+        ("https://apply.workable.com/example/j/ABC123", "workable", True),
+    ],
+)
+def test_registry_owns_provider_url_recognition(
+    url: str,
+    platform: str,
+    is_job: bool,
+) -> None:
+    board = registry.board_from_url(url, generic_host_suffixes=())
+    assert board is not None
+    assert board.platform == platform
+    assert registry.looks_like_job_url(url, generic_host_suffixes=()) is is_job
+
+
+def test_registry_owns_single_and_batch_liveness_dispatch() -> None:
+    single = make_job(platform="greenhouse")
+    batch = make_job(platform="ashby")
+    services = search._provider_liveness_services()
+    sleeps: list[float] = []
+    single_calls: list[search.Job] = []
+    batch_calls: list[list[search.Job]] = []
+
+    def verify_one(_session: object, job: search.Job, **_kwargs: object) -> None:
+        single_calls.append(job)
+
+    def verify_many(_session: object, jobs: list[search.Job], **_kwargs: object) -> None:
+        batch_calls.append(jobs)
+
+    greenhouse_adapter = registry.PROVIDER_ADAPTERS["greenhouse"]
+    ashby_adapter = registry.PROVIDER_ADAPTERS["ashby"]
+    replacements = {
+        "greenhouse": registry.ProviderAdapter(
+            platform=greenhouse_adapter.platform,
+            matches_url=greenhouse_adapter.matches_url,
+            board_from_url=greenhouse_adapter.board_from_url,
+            looks_like_job_url=greenhouse_adapter.looks_like_job_url,
+            fetch=greenhouse_adapter.fetch,
+            verify_one=verify_one,  # type: ignore[arg-type]
+        ),
+        "ashby": registry.ProviderAdapter(
+            platform=ashby_adapter.platform,
+            matches_url=ashby_adapter.matches_url,
+            board_from_url=ashby_adapter.board_from_url,
+            looks_like_job_url=ashby_adapter.looks_like_job_url,
+            fetch=ashby_adapter.fetch,
+            verify_many=verify_many,  # type: ignore[arg-type]
+        ),
+    }
+    with patch.dict(registry.PROVIDER_ADAPTERS, replacements, clear=False):
+        registry.verify_jobs_live(
+            object(),  # type: ignore[arg-type]
+            [single, batch],
+            timeout=1,
+            delay=0.25,
+            now=NOW,
+            services=services,
+            sleep=sleeps.append,
+        )
+
+    assert single_calls == [single]
+    assert batch_calls == [[batch]]
+    assert sleeps == [0.25, 0.25]
 
 
 def test_historic_provider_symbols_remain_available_from_facade() -> None:
