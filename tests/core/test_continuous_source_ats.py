@@ -8,6 +8,7 @@ import pytest
 
 from job_application_automation.core import continuous_source_ats
 from job_application_automation.core.artifacts import read_json
+from job_application_automation.core.observability import NOOP_TELEMETRY
 
 
 def _write_tracker(path: Path) -> None:
@@ -237,3 +238,108 @@ def test_sleep_until_next_cycle_handles_keyboard_interrupt(
         capsys.readouterr().out == "GREENHOUSE_SOURCE_WORKER_STOPPED "
         "worker=search signal=keyboard_interrupt\n"
     )
+
+
+def test_source_main_runs_runtime_claim_application_and_claim_sync(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    input_path = tmp_path / "search_jobs.json"
+    input_path.write_text(json.dumps([_job()]), encoding="utf-8")
+    profile = tmp_path / "profile.json"
+    profile.write_text("{}\n", encoding="utf-8")
+    email_pool = tmp_path / "emails.json"
+    email_pool.write_text('["candidate@example.test"]\n', encoding="utf-8")
+    launcher = tmp_path / "job_automation.py"
+    launcher.write_text("", encoding="utf-8")
+    submission_log = tmp_path / "submission_log.json"
+    submission_log.write_text("{}\n", encoding="utf-8")
+    state_path = tmp_path / "state.json"
+    claims_path = tmp_path / "claims.json"
+    selected_input = tmp_path / "selected.json"
+    applied: list[dict[str, object]] = []
+    source_reads: list[Path] = []
+    source_read_json = continuous_source_ats.read_json
+
+    def record_source_read(path: Path) -> object:
+        source_reads.append(path)
+        return source_read_json(path)
+
+    def process_selected(service, job):
+        applied.append(dict(job))
+        state = continuous_source_ats.load_worker_state(
+            service.config.state_path,
+            service.config.ats_platform,
+        )
+        canonical_url = continuous_source_ats.canonical_job_url(job["job_url"])
+        state["jobs"][canonical_url] = {
+            "status": "confirmed",
+            "stage": "application",
+            "job_url": str(job["job_url"]),
+            "company": str(job["company"]),
+            "title": str(job["title"]),
+            "result_status": "SUBMITTED & CONFIRMED",
+            "updated_at": "2026-08-02T00:00:00+00:00",
+        }
+        continuous_source_ats.save_worker_state(service.config.state_path, state)
+        return "confirmed"
+
+    monkeypatch.setattr(
+        continuous_source_ats.SelectedJobApplicationService,
+        "process",
+        process_selected,
+    )
+    monkeypatch.setattr(
+        continuous_source_ats,
+        "initialize_observability",
+        lambda **_kwargs: NOOP_TELEMETRY,
+    )
+    monkeypatch.setattr(
+        continuous_source_ats,
+        "read_json",
+        record_source_read,
+    )
+
+    exit_code = continuous_source_ats.main(
+        [
+            "--ats-platform",
+            "greenhouse",
+            "--source",
+            "search",
+            "--worker-id",
+            "search",
+            "--input",
+            str(input_path),
+            "--state",
+            str(state_path),
+            "--claims",
+            str(claims_path),
+            "--selected-input",
+            str(selected_input),
+            "--results-dir",
+            str(tmp_path / "results"),
+            "--documents-dir",
+            str(tmp_path / "documents"),
+            "--profile",
+            str(profile),
+            "--email-pool",
+            str(email_pool),
+            "--launcher",
+            str(launcher),
+            "--submission-log",
+            str(submission_log),
+            "--backlog",
+            str(tmp_path / "backlog.json"),
+            "--once",
+        ]
+    )
+
+    assert exit_code == 0
+    assert len(applied) == 1
+    assert selected_input not in source_reads
+    assert read_json(selected_input)[0] == applied[0]
+    assert read_json(state_path)["jobs"][_job()["job_url"]]["status"] == "confirmed"
+    claim = read_json(claims_path)["jobs"]["greenhouse:12345"]
+    assert claim["owner"] == "search"
+    assert claim["status"] == "confirmed"
+    assert claim["result_status"] == "SUBMITTED & CONFIRMED"

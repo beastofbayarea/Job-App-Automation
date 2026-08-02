@@ -16,15 +16,20 @@ from collections.abc import Mapping, Sequence
 
 from .artifacts import atomic_write_text, interprocess_file_lock, read_json
 from .ats_urls import detect_ats_job_url
-from .continuous_ats import (
+from .continuous_worker_application import (
     DEFAULT_BACKLOG,
     DEFAULT_EMAIL_POOL,
     DEFAULT_LAUNCHER,
     DEFAULT_PROFILE,
     DEFAULT_SUBMISSION_LOG,
-    RESUMABLE_STATUSES,
     SHARED_INPUT,
-    process_one,
+    SelectedJobApplicationConfig,
+    SelectedJobApplicationService,
+)
+from .continuous_worker_candidates import (
+    ExactConfirmedLedgerIndex,
+    load_exact_confirmed_ledger_index,
+    partition_candidate_state,
 )
 from .continuous_worker_models import SOURCE_ONCE_EXIT_POLICY, CycleStatus
 from .continuous_worker_runtime import WorkerRuntime, run_worker
@@ -40,7 +45,7 @@ from .continuous_worker_state import (
     save_worker_state,
 )
 from .identity import canonical_job_url
-from .observability import OperationalTelemetry, initialize_observability
+from .observability import initialize_observability
 from .orchestrator import load_jobs_from_tracker
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from ..resume.ai_client import scrape_job
@@ -120,35 +125,18 @@ def _seed_claims_from_state(
 def _seed_claims_from_ledger(
     claims: dict[str, Any],
     *,
-    submission_log: Path,
-    ats_platform: str,
+    ledger_index: ExactConfirmedLedgerIndex,
 ) -> None:
-    if not submission_log.is_file():
-        return
-    payload = read_json(submission_log)
-    if not isinstance(payload, dict):
-        raise ValueError("submission log root must be an object")
     claim_records: dict[str, Any] = claims["jobs"]
-    for record in payload.values():
-        if (
-            not isinstance(record, Mapping)
-            or str(record.get("ats", "")).strip().lower() != ats_platform
-            or str(record.get("status", "")).strip() != "SUBMITTED & CONFIRMED"
-        ):
-            continue
-        job_url = str(record.get("job_url") or "")
-        try:
-            identity = _job_identity(job_url, ats_platform)
-        except ValueError:
-            continue
-        claim_records[identity] = {
+    for submission in ledger_index.records.values():
+        claim_records[submission.identity] = {
             "owner": "ledger",
             "status": "confirmed",
             "result_status": "SUBMITTED & CONFIRMED",
-            "job_url": job_url,
-            "company": str(record.get("company") or ""),
-            "title": str(record.get("role") or ""),
-            "updated_at": str(record.get("applied_at") or _now()),
+            "job_url": submission.job_url,
+            "company": submission.company,
+            "title": submission.title,
+            "updated_at": submission.applied_at or _now(),
         }
 
 
@@ -197,24 +185,9 @@ def _claim_next_job(
             except ValueError:
                 continue
 
-    resumable: list[dict[str, Any]] = []
-    fresh: list[dict[str, Any]] = []
-    for job in jobs:
-        try:
-            canonical_url = _candidate_url(job)
-            identity = _job_identity(str(job.get("job_url") or canonical_url), ats_platform)
-        except ValueError:
-            continue
-        if identity in peer_identities:
-            continue
-        record = own_records.get(canonical_url)
-        if isinstance(record, Mapping) and record.get("status") in RESUMABLE_STATUSES:
-            resumable.append(job)
-        elif canonical_url not in own_records:
-            fresh.append(job)
+    def candidate_identity(job: Mapping[str, Any]) -> str:
+        return _job_identity(str(job.get("job_url") or _candidate_url(job)), ats_platform)
 
-    random.shuffle(resumable)
-    random.shuffle(fresh)
     with interprocess_file_lock(claims_path):
         claims = _load_claims(claims_path)
         _seed_claims_from_state(
@@ -230,22 +203,36 @@ def _claim_next_job(
                 owner=f"peer:{peer_state.stem}",
                 ats_platform=ats_platform,
             )
-        _seed_claims_from_ledger(
-            claims,
-            submission_log=submission_log,
-            ats_platform=ats_platform,
+        ledger_index = load_exact_confirmed_ledger_index(
+            submission_log,
+            ats_platform,
+            identity_for_url=lambda job_url: _job_identity(job_url, ats_platform),
         )
+        _seed_claims_from_ledger(claims, ledger_index=ledger_index)
+        pools = partition_candidate_state(
+            jobs,
+            own_records,
+            state_key=_candidate_url,
+            identity=candidate_identity,
+            confirmed_identities=ledger_index.identities,
+            blocked_identities=peer_identities,
+        )
+        resumable = list(pools.resumable)
+        fresh = list(pools.fresh)
+        random.shuffle(resumable)
+        random.shuffle(fresh)
+
         claim_records: dict[str, Any] = claims["jobs"]
         selected: dict[str, Any] | None = None
         for job in resumable:
-            identity = _job_identity(str(job["job_url"]), ats_platform)
+            identity = candidate_identity(job)
             claim = claim_records.get(identity)
             if not isinstance(claim, Mapping) or claim.get("owner") == worker_id:
                 selected = job
                 break
         if selected is None:
             for job in fresh:
-                identity = _job_identity(str(job["job_url"]), ats_platform)
+                identity = candidate_identity(job)
                 claim = claim_records.get(identity)
                 if not isinstance(claim, Mapping):
                     selected = job
@@ -265,7 +252,8 @@ def _claim_next_job(
                 encoding="utf-8",
             )
             return None
-        identity = _job_identity(str(selected["job_url"]), ats_platform)
+
+        identity = candidate_identity(selected)
         claim_records[identity] = {
             "owner": worker_id,
             "status": "claimed",
@@ -358,42 +346,16 @@ def _process_selected_job(
     *,
     job: Mapping[str, Any],
     selected_input: Path,
-    ats_platform: str,
-    profile: Path,
-    email_pool: Path,
-    launcher: Path,
-    state_path: Path,
-    results_dir: Path,
-    documents_dir: Path,
-    submission_log: Path,
-    document_timeout_seconds: int,
-    engine_timeout_seconds: int,
-    application_timeout_seconds: int,
-    backlog_path: Path,
-    telemetry: OperationalTelemetry,
+    application_service: SelectedJobApplicationService,
 ) -> CycleStatus:
+    """Persist the selected candidate for operations, then apply that exact in-memory job."""
     selected_input.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_text(
         selected_input,
         json.dumps([job], indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
-    return process_one(
-        ats_platform=ats_platform,
-        input_path=selected_input,
-        profile=profile,
-        email_pool=email_pool,
-        launcher=launcher,
-        state_path=state_path,
-        results_dir=results_dir,
-        documents_dir=documents_dir,
-        submission_log=submission_log,
-        document_timeout_seconds=document_timeout_seconds,
-        engine_timeout_seconds=engine_timeout_seconds,
-        application_timeout_seconds=application_timeout_seconds,
-        backlog_path=backlog_path,
-        telemetry=telemetry,
-    )
+    return application_service.process(job)
 
 
 def _sleep_until_next_cycle(
@@ -493,6 +455,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         provider=ats_platform,
         worker_id=worker_id,
     )
+    application_service = SelectedJobApplicationService(
+        config=SelectedJobApplicationConfig(
+            ats_platform=ats_platform,
+            profile=args.profile,
+            email_pool=args.email_pool,
+            launcher=args.launcher,
+            state_path=args.state,
+            results_dir=args.results_dir,
+            documents_dir=args.documents_dir,
+            submission_log=args.submission_log,
+            document_timeout_seconds=args.document_timeout_seconds,
+            engine_timeout_seconds=args.engine_timeout_seconds,
+            application_timeout_seconds=args.application_timeout_seconds,
+            backlog_path=args.backlog,
+            ledger_identity_for_url=lambda job_url: _job_identity(job_url, ats_platform),
+        ),
+        telemetry=telemetry,
+    )
 
     state = load_worker_state(args.state, ats_platform)
     reconciled = reconcile_interrupted_submissions(state)
@@ -560,37 +540,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 cycle_status = _process_selected_job(
                     job=job,
                     selected_input=args.selected_input,
-                    ats_platform=ats_platform,
-                    profile=args.profile,
-                    email_pool=args.email_pool,
-                    launcher=args.launcher,
-                    state_path=args.state,
-                    results_dir=args.results_dir,
-                    documents_dir=args.documents_dir,
-                    submission_log=args.submission_log,
-                    document_timeout_seconds=args.document_timeout_seconds,
-                    engine_timeout_seconds=args.engine_timeout_seconds,
-                    application_timeout_seconds=args.application_timeout_seconds,
-                    backlog_path=args.backlog,
-                    telemetry=telemetry,
+                    application_service=application_service,
                 )
         else:
             cycle_status = _process_selected_job(
                 job=job,
                 selected_input=args.selected_input,
-                ats_platform=ats_platform,
-                profile=args.profile,
-                email_pool=args.email_pool,
-                launcher=args.launcher,
-                state_path=args.state,
-                results_dir=args.results_dir,
-                documents_dir=args.documents_dir,
-                submission_log=args.submission_log,
-                document_timeout_seconds=args.document_timeout_seconds,
-                engine_timeout_seconds=args.engine_timeout_seconds,
-                application_timeout_seconds=args.application_timeout_seconds,
-                backlog_path=args.backlog,
-                telemetry=telemetry,
+                application_service=application_service,
             )
         _sync_claim_from_state(
             job=selected,
