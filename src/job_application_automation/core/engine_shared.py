@@ -849,6 +849,33 @@ def generate_essay_answer(
         return ""
 
 
+def generate_salary_answer(
+    question: str,
+    job_text: str,
+    company: str,
+    role: str,
+    candidate_evidence: str,
+) -> str:
+    """Generate a concise salary response via the essay LLM with safe validation."""
+    prompt = (
+        f"{question}\n\n"
+        "Return only one concise desired annual base salary range appropriate for this role and "
+        "location, including currency. Do not add explanation, benefits, equity, or unsupported "
+        "claims. If the posting lacks enough compensation context, return Negotiable."
+    )
+    answer = generate_essay_answer(prompt, job_text, company, role, candidate_evidence)
+    normalized = " ".join(answer.split()).strip(" -*`")
+    if not normalized or len(normalized) > 120 or "\n" in answer.strip():
+        return "Negotiable"
+    if normalized.casefold() == "negotiable":
+        return "Negotiable"
+    if not re.search(r"(?:[$€£₹]|\b(?:usd|eur|gbp|inr)\b)", normalized, re.I):
+        return "Negotiable"
+    if not re.search(r"\d", normalized):
+        return "Negotiable"
+    return normalized
+
+
 def _consent_control_is_checked(control: Locator) -> bool:
     return _browser_controls._consent_control_is_checked(control)
 

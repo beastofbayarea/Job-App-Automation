@@ -14,6 +14,34 @@ from job_application_automation.core import engine_shared  # noqa: E402
 
 
 class EngineSharedConfigTests(unittest.TestCase):
+    def test_salary_generation_accepts_a_concise_currency_range(self) -> None:
+        with unittest.mock.patch.object(
+            engine_shared,
+            "generate_essay_answer",
+            return_value="$120,000-$140,000 USD",
+        ):
+            answer = engine_shared.generate_salary_answer(
+                "What is your desired salary?",
+                "US remote lifecycle role",
+                "PerfectServe",
+                "Lifecycle Manager",
+                "Candidate evidence",
+            )
+
+        self.assertEqual(answer, "$120,000-$140,000 USD")
+
+    def test_salary_generation_rejects_unstructured_llm_output(self) -> None:
+        with unittest.mock.patch.object(
+            engine_shared,
+            "generate_essay_answer",
+            return_value="I would like a competitive package based on the complete benefits.",
+        ):
+            answer = engine_shared.generate_salary_answer(
+                "What is your desired salary?", "Role", "Company", "Role", "Evidence"
+            )
+
+        self.assertEqual(answer, "Negotiable")
+
     def test_personalized_resume_evidence_is_preferred_over_base_resume(self) -> None:
         document = unittest.mock.MagicMock()
         page = unittest.mock.MagicMock()

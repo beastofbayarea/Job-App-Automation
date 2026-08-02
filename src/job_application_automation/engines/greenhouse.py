@@ -45,6 +45,7 @@ from ..core.engine_shared import (
     fill_required_consent as _fill_consent,
     first_visible as _first_visible,
     generate_essay_answer as _generate_essay,
+    generate_salary_answer as _generate_salary,
     is_essay_question as _is_essay_question,
     is_location_question,
     label_for as _label_for,
@@ -495,6 +496,8 @@ def _greenhouse_semantic_answer(
         return str(rules.get("permit_status") or "").strip() or None
     if re.search(r"\b(?:authorized|authorised|eligible|entitled) to work\b", normalized):
         return str(rules.get("target_country_work_authorization") or "").strip() or None
+    if re.search(r"\b(?:reside|located|based) within the united states\b", normalized):
+        return str(rules.get("target_country_residence") or "Yes").strip()
     if "notice period" in normalized:
         return str(rules.get("notice_period") or "").strip() or None
     if re.search(
@@ -582,6 +585,17 @@ def _fill_custom_questions(
             semantic_answer = _greenhouse_semantic_answer(label, profile, rules)
             if semantic_answer:
                 desired = semantic_answer
+            salary_question = bool(
+                re.search(r"\b(?:desired|expected|salary|compensation)\b", label, re.I)
+            )
+            if salary_question:
+                desired = _generate_salary(
+                    label,
+                    job_text,
+                    company,
+                    role,
+                    candidate_evidence,
+                )
             if not desired:
                 desired = _resume_employer_answer(label, candidate_evidence)
             # Language proficiency is a configured selection policy. Other
