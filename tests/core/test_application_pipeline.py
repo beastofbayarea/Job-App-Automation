@@ -27,6 +27,11 @@ from job_application_automation.core.engine_shared import (
     ORCHESTRATOR_CURRENT_TITLE_ENV,
     ORCHESTRATOR_INVOCATION_ENV,
 )
+from job_application_automation.core.exceptions import (
+    ApplicationBlockedError,
+    InputContractError,
+    SubmissionOutcomeUnknown,
+)
 from job_application_automation.core.screenshots import APPLICATION_SCREENSHOT_DIR_ENV
 from job_application_automation.core.submission_log import SubmissionLog, SubmissionRecord
 
@@ -454,6 +459,28 @@ def test_execution_propagates_environment_preserves_extras_and_cleans(
                 "detail": "browser crashed",
             },
         ),
+        (
+            ApplicationBlockedError("manual challenge"),
+            {
+                "success": False,
+                "status": EngineStatus.FAILED.value,
+                "detail": "manual challenge",
+                "manual_review_required": True,
+                "retry_safe": False,
+            },
+        ),
+        (
+            SubmissionOutcomeUnknown("confirmation timed out"),
+            {
+                "success": False,
+                "status": EngineStatus.SUBMISSION_UNCONFIRMED.value,
+                "submitted": True,
+                "confirmed": False,
+                "detail": "confirmation timed out",
+                "manual_review_required": True,
+                "retry_safe": False,
+            },
+        ),
     ],
 )
 def test_execution_cleans_screenshots_for_timeout_and_error(
@@ -568,7 +595,7 @@ def test_pipeline_rejects_an_email_assignment_length_mismatch(tmp_path: Path) ->
     engine.write_text("# engine", encoding="utf-8")
     operations = FakeOperations(tmp_path)
 
-    with pytest.raises(ValueError, match="one assigned email"):
+    with pytest.raises(InputContractError, match="one assigned email"):
         ApplicationPipeline(
             targets=[_target()],
             emails=[],
@@ -578,7 +605,7 @@ def test_pipeline_rejects_an_email_assignment_length_mismatch(tmp_path: Path) ->
             operations=operations.bundle(),
         )
 
-    with pytest.raises(ValueError, match="email-requirement decision"):
+    with pytest.raises(InputContractError, match="email-requirement decision"):
         ApplicationPipeline(
             targets=[_target()],
             emails=["candidate@example.test"],

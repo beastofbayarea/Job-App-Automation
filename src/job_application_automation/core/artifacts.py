@@ -12,6 +12,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 
+from .exceptions import ArtifactError, InputContractError
+
 
 DEFAULT_LOCK_TIMEOUT_SECONDS = 30.0
 DEFAULT_STALE_LOCK_SECONDS = 300.0
@@ -20,7 +22,7 @@ DEFAULT_STALE_LOCK_SECONDS = 300.0
 def _target_path(path: str | Path) -> Path:
     target = Path(path).expanduser()
     if not target.name:
-        raise ValueError("artifact path must name a file")
+        raise InputContractError("artifact path must name a file")
     return target
 
 
@@ -33,9 +35,9 @@ def interprocess_file_lock(
 ) -> Iterator[None]:
     """Serialize read-modify-write updates made by independent processes."""
     if timeout_seconds <= 0:
-        raise ValueError("timeout_seconds must be greater than zero")
+        raise InputContractError("timeout_seconds must be greater than zero")
     if stale_seconds <= 0:
-        raise ValueError("stale_seconds must be greater than zero")
+        raise InputContractError("stale_seconds must be greater than zero")
 
     target = _target_path(path)
     lock_path = target.with_name(f"{target.name}.lock")
@@ -89,11 +91,11 @@ def interprocess_file_lock(
 def atomic_write_text(path: str | Path, text: str, *, encoding: str = "utf-8") -> Path:
     """Write text by replacing the target only after the temporary file is ready."""
     if not isinstance(text, str):
-        raise ValueError("text must be a string")
+        raise InputContractError("text must be a string")
     target = _target_path(path)
-    target.parent.mkdir(parents=True, exist_ok=True)
     temporary_name: str | None = None
     try:
+        target.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(
             mode="w",
             encoding=encoding,
@@ -109,6 +111,8 @@ def atomic_write_text(path: str | Path, text: str, *, encoding: str = "utf-8") -
             os.fsync(stream.fileno())
         os.replace(temporary_name, target)
         temporary_name = None
+    except OSError as exc:
+        raise ArtifactError(f"could not write artifact {target}: {exc}") from exc
     finally:
         if temporary_name:
             try:
@@ -121,8 +125,11 @@ def atomic_write_text(path: str | Path, text: str, *, encoding: str = "utf-8") -
 def read_json(path: str | Path) -> object:
     """Read one UTF-8 JSON artifact without adding application-specific defaults."""
     target = _target_path(path)
-    with target.open("r", encoding="utf-8") as stream:
-        return json.load(stream)
+    try:
+        with target.open("r", encoding="utf-8") as stream:
+            return json.load(stream)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ArtifactError(f"could not read JSON artifact {target}: {exc}") from exc
 
 
 def write_json(
@@ -134,12 +141,15 @@ def write_json(
     sort_keys: bool = False,
 ) -> Path:
     """Atomically persist JSON while preserving the caller's selected format."""
-    serialized = json.dumps(
-        payload,
-        indent=indent,
-        ensure_ascii=ensure_ascii,
-        sort_keys=sort_keys,
-    )
+    try:
+        serialized = json.dumps(
+            payload,
+            indent=indent,
+            ensure_ascii=ensure_ascii,
+            sort_keys=sort_keys,
+        )
+    except (TypeError, ValueError) as exc:
+        raise InputContractError("artifact payload must be JSON serializable") from exc
     return atomic_write_text(path, serialized)
 
 
@@ -149,16 +159,16 @@ def _normalized_fieldnames(
     if fieldnames is not None:
         normalized = list(fieldnames)
         if any(not isinstance(name, str) or not name for name in normalized):
-            raise ValueError("fieldnames must contain non-empty strings")
+            raise InputContractError("fieldnames must contain non-empty strings")
         if len(set(normalized)) != len(normalized):
-            raise ValueError("fieldnames cannot contain duplicates")
+            raise InputContractError("fieldnames cannot contain duplicates")
         return normalized
     names: list[str] = []
     seen: set[str] = set()
     for row in rows:
         for key in row:
             if not isinstance(key, str) or not key:
-                raise ValueError("CSV row keys must be non-empty strings")
+                raise InputContractError("CSV row keys must be non-empty strings")
             if key not in seen:
                 names.append(key)
                 seen.add(key)
@@ -179,13 +189,13 @@ def write_csv(
     """
     materialized = list(rows)
     if not all(isinstance(row, Mapping) for row in materialized):
-        raise ValueError("rows must contain mappings")
+        raise InputContractError("rows must contain mappings")
     columns = _normalized_fieldnames(materialized, fieldnames)
     for row in materialized:
         unexpected = set(row).difference(columns)
         if unexpected:
             names = ", ".join(sorted(str(name) for name in unexpected))
-            raise ValueError(f"CSV row has fields outside fieldnames: {names}")
+            raise InputContractError(f"CSV row has fields outside fieldnames: {names}")
     buffer = io.StringIO(newline="")
     if columns:
         writer = csv.DictWriter(buffer, fieldnames=columns, extrasaction="raise")

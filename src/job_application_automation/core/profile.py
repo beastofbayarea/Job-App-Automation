@@ -13,10 +13,12 @@ from types import MappingProxyType
 from typing import Any
 from collections.abc import Mapping
 
+from .exceptions import ConfigurationError
+
 
 def _frozen_mapping(value: object, field_name: str) -> Mapping[str, Any]:
     if not isinstance(value, Mapping):
-        raise ValueError(f"profile {field_name} must be an object")
+        raise ConfigurationError(f"profile {field_name} must be an object")
     return MappingProxyType(dict(value))
 
 
@@ -44,7 +46,7 @@ class AutomationProfile:
     def from_runtime_mapping(cls, config: Mapping[str, Any]) -> AutomationProfile:
         """Freeze a normalized config while retaining unknown top-level fields."""
         if not isinstance(config, Mapping):
-            raise ValueError("profile config must be an object")
+            raise ConfigurationError("profile config must be an object")
         document = dict(config)
         return cls(
             candidate=_frozen_mapping(document.get("candidate"), "candidate"),

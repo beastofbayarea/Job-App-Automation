@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Protocol, runtime_checkable
 from urllib.parse import urlparse
 
+from .exceptions import InputContractError
 from .identity import _require_string
 
 
@@ -40,12 +41,12 @@ class EngineMode(str, Enum):
         if isinstance(value, cls):
             return value
         if not isinstance(value, str):
-            raise ValueError("engine mode must be a string")
+            raise InputContractError("engine mode must be a string")
         try:
             return cls(value.strip().lower())
         except ValueError as exc:
             choices = ", ".join(member.value for member in cls)
-            raise ValueError(
+            raise InputContractError(
                 f"unsupported engine mode {value!r}; expected one of {choices}"
             ) from exc
 
@@ -79,7 +80,7 @@ class EngineStatus(str, Enum):
 def _require_bool(value: object, field_name: str) -> bool:
     # bool is a subclass of int, so identity is intentional here.
     if not isinstance(value, bool):
-        raise ValueError(f"{field_name} must be a boolean")
+        raise InputContractError(f"{field_name} must be a boolean")
     return value
 
 
@@ -88,7 +89,7 @@ def _ensure_json_value(value: object, field_name: str) -> None:
     try:
         json.dumps(value)
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"{field_name} must be JSON serializable") from exc
+        raise InputContractError(f"{field_name} must be JSON serializable") from exc
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,9 +112,9 @@ class EngineRequest:
         url = _require_string(self.url, "url")
         parsed = urlparse(url)
         if parsed.scheme.lower() != "https" or not parsed.netloc:
-            raise ValueError("url must be an absolute HTTPS URL")
+            raise InputContractError("url must be an absolute HTTPS URL")
         if not self.resume_path or not str(self.resume_path).strip():
-            raise ValueError("resume_path cannot be empty")
+            raise InputContractError("resume_path cannot be empty")
         resume_path = Path(self.resume_path).expanduser()
         cover_letter_path = (
             Path(self.cover_letter_path).expanduser()
@@ -121,7 +122,7 @@ class EngineRequest:
             else None
         )
         if not isinstance(self.mode, EngineMode):
-            raise ValueError("mode must be an EngineMode")
+            raise InputContractError("mode must be an EngineMode")
         _require_bool(self.headed, "headed")
         for field_name, value in (
             ("company", self.company),
@@ -130,9 +131,9 @@ class EngineRequest:
         ):
             _require_string(value, field_name, allow_empty=True)
         if self.email and ("@" not in self.email or self.email.startswith("@")):
-            raise ValueError("email must be empty or contain a local part and @")
+            raise InputContractError("email must be empty or contain a local part and @")
         if not isinstance(self.metadata, Mapping):
-            raise ValueError("metadata must be an object")
+            raise InputContractError("metadata must be an object")
         metadata = dict(self.metadata)
         _ensure_json_value(metadata, "metadata")
         object.__setattr__(self, "ats", ats.lower())
@@ -166,14 +167,14 @@ class EngineRequest:
     def from_payload(cls, payload: Mapping[str, object]) -> EngineRequest:
         """Construct a request from a JSON-decoded mapping."""
         if not isinstance(payload, Mapping):
-            raise ValueError("engine request must be an object")
+            raise InputContractError("engine request must be an object")
         resume = payload.get("resume", payload.get("resume_path"))
         if resume is None:
-            raise ValueError("engine request is missing resume")
+            raise InputContractError("engine request is missing resume")
         cover_letter = payload.get("cover_letter", payload.get("cover_letter_path"))
         metadata = payload.get("metadata", {})
         if not isinstance(metadata, Mapping):
-            raise ValueError("metadata must be an object")
+            raise InputContractError("metadata must be an object")
         return cls(
             ats=_require_string(payload.get("ats"), "ats"),
             url=_require_string(payload.get("url"), "url"),
@@ -244,21 +245,23 @@ class EngineResult:
         _require_string(self.error, "error", allow_empty=True)
         _require_string(self.detail, "detail", allow_empty=True)
         if self.confirmed and not self.submitted:
-            raise ValueError("confirmed results must also be submitted")
+            raise InputContractError("confirmed results must also be submitted")
         known = EngineStatus.from_value(status)
         if known is EngineStatus.SUBMITTED_CONFIRMED:
             if not (self.success and self.submitted and self.confirmed):
-                raise ValueError("SUBMITTED & CONFIRMED requires success, submitted, and confirmed")
+                raise InputContractError(
+                    "SUBMITTED & CONFIRMED requires success, submitted, and confirmed"
+                )
         if known is EngineStatus.PREFILLED_ONLY and (self.submitted or self.confirmed):
-            raise ValueError("PREFILLED_ONLY cannot be submitted or confirmed")
+            raise InputContractError("PREFILLED_ONLY cannot be submitted or confirmed")
         if not isinstance(self.extra, Mapping):
-            raise ValueError("extra must be an object")
+            raise InputContractError("extra must be an object")
         extra = dict(self.extra)
         reserved = set(self._reserved_payload_keys())
         collisions = reserved.intersection(extra)
         if collisions:
             names = ", ".join(sorted(collisions))
-            raise ValueError(f"extra cannot overwrite reserved result fields: {names}")
+            raise InputContractError(f"extra cannot overwrite reserved result fields: {names}")
         _ensure_json_value(extra, "extra")
         object.__setattr__(self, "status", status)
         object.__setattr__(self, "ats", ats.lower())
@@ -346,7 +349,7 @@ class EngineResult:
     def from_payload(cls, payload: Mapping[str, object]) -> EngineResult:
         """Parse and validate the established engine-result JSON object."""
         if not isinstance(payload, Mapping):
-            raise ValueError("engine result must be an object")
+            raise InputContractError("engine result must be an object")
         known_keys = set(cls._wire_payload_keys())
         extras = {key: value for key, value in payload.items() if key not in known_keys}
         return cls(
@@ -365,13 +368,13 @@ class EngineResult:
     def from_wire_line(cls, line: str) -> EngineResult:
         """Parse one ``ENGINE_RESULT_JSON:`` line emitted by an engine."""
         if not isinstance(line, str) or not line.startswith(ENGINE_RESULT_PREFIX):
-            raise ValueError("line does not start with ENGINE_RESULT_JSON:")
+            raise InputContractError("line does not start with ENGINE_RESULT_JSON:")
         try:
             payload = json.loads(line[len(ENGINE_RESULT_PREFIX) :])
         except json.JSONDecodeError as exc:
-            raise ValueError("engine result contains invalid JSON") from exc
+            raise InputContractError("engine result contains invalid JSON") from exc
         if not isinstance(payload, dict):
-            raise ValueError("engine result JSON must be an object")
+            raise InputContractError("engine result JSON must be an object")
         return cls.from_payload(payload)
 
 
@@ -408,6 +411,6 @@ def command_with_request(executable: str, request: EngineRequest) -> tuple[str, 
 def validate_engine_command(command: Sequence[str]) -> tuple[str, ...]:
     """Validate a process command before an injected runner receives it."""
     if not command:
-        raise ValueError("command must contain at least one argument")
+        raise InputContractError("command must contain at least one argument")
     normalized = tuple(_require_string(part, "command argument") for part in command)
     return normalized

@@ -12,16 +12,18 @@ from types import MappingProxyType
 from typing import Protocol, runtime_checkable
 from collections.abc import Mapping, Sequence
 
+from .exceptions import InputContractError
+
 
 def _immutable_environment(value: Mapping[str, str]) -> Mapping[str, str]:
     if not isinstance(value, Mapping):
-        raise ValueError("environment must be a mapping")
+        raise InputContractError("environment must be a mapping")
     copied: dict[str, str] = {}
     for key, item in value.items():
         if not isinstance(key, str) or not key:
-            raise ValueError("environment keys must be non-empty strings")
+            raise InputContractError("environment keys must be non-empty strings")
         if not isinstance(item, str):
-            raise ValueError("environment values must be strings")
+            raise InputContractError("environment values must be strings")
         copied[key] = item
     return MappingProxyType(copied)
 
@@ -36,9 +38,9 @@ class ProcessSettings:
 
     def __post_init__(self) -> None:
         if isinstance(self.timeout_seconds, bool) or not isinstance(self.timeout_seconds, int):
-            raise ValueError("timeout_seconds must be an integer")
+            raise InputContractError("timeout_seconds must be an integer")
         if self.timeout_seconds <= 0:
-            raise ValueError("timeout_seconds must be greater than zero")
+            raise InputContractError("timeout_seconds must be greater than zero")
         if self.cwd is not None:
             object.__setattr__(self, "cwd", Path(self.cwd).expanduser())
         object.__setattr__(self, "environment", _immutable_environment(self.environment))
@@ -54,9 +56,9 @@ class CommandResult:
 
     def __post_init__(self) -> None:
         if isinstance(self.returncode, bool) or not isinstance(self.returncode, int):
-            raise ValueError("returncode must be an integer")
+            raise InputContractError("returncode must be an integer")
         if not isinstance(self.stdout, str) or not isinstance(self.stderr, str):
-            raise ValueError("stdout and stderr must be strings")
+            raise InputContractError("stdout and stderr must be strings")
 
 
 @runtime_checkable
@@ -78,21 +80,21 @@ class LLMSettings:
 
     def __post_init__(self) -> None:
         if not isinstance(self.model, str) or not self.model.strip():
-            raise ValueError("model cannot be empty")
+            raise InputContractError("model cannot be empty")
         if isinstance(self.temperature, bool) or not isinstance(self.temperature, (int, float)):
-            raise ValueError("temperature must be a number")
+            raise InputContractError("temperature must be a number")
         if not 0.0 <= float(self.temperature) <= 2.0:
-            raise ValueError("temperature must be between 0 and 2")
+            raise InputContractError("temperature must be between 0 and 2")
         if isinstance(self.max_attempts, bool) or not isinstance(self.max_attempts, int):
-            raise ValueError("max_attempts must be an integer")
+            raise InputContractError("max_attempts must be an integer")
         if self.max_attempts < 1:
-            raise ValueError("max_attempts must be at least 1")
+            raise InputContractError("max_attempts must be at least 1")
         if isinstance(self.retry_delay_seconds, bool) or not isinstance(
             self.retry_delay_seconds, (int, float)
         ):
-            raise ValueError("retry_delay_seconds must be a number")
+            raise InputContractError("retry_delay_seconds must be a number")
         if self.retry_delay_seconds < 0:
-            raise ValueError("retry_delay_seconds cannot be negative")
+            raise InputContractError("retry_delay_seconds cannot be negative")
         object.__setattr__(self, "model", self.model.strip())
         object.__setattr__(self, "temperature", float(self.temperature))
         object.__setattr__(self, "retry_delay_seconds", float(self.retry_delay_seconds))
@@ -123,14 +125,14 @@ class BrowserSettings:
 
     def __post_init__(self) -> None:
         if not isinstance(self.headed, bool):
-            raise ValueError("headed must be a boolean")
+            raise InputContractError("headed must be a boolean")
         if isinstance(self.timeout_ms, bool) or not isinstance(self.timeout_ms, int):
-            raise ValueError("timeout_ms must be an integer")
+            raise InputContractError("timeout_ms must be an integer")
         if self.timeout_ms <= 0:
-            raise ValueError("timeout_ms must be greater than zero")
+            raise InputContractError("timeout_ms must be greater than zero")
         if self.cdp_endpoint is not None:
             if not isinstance(self.cdp_endpoint, str) or not self.cdp_endpoint.strip():
-                raise ValueError("cdp_endpoint must be a non-empty string or None")
+                raise InputContractError("cdp_endpoint must be a non-empty string or None")
             object.__setattr__(self, "cdp_endpoint", self.cdp_endpoint.strip())
 
 

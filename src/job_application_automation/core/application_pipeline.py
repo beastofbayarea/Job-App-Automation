@@ -21,6 +21,12 @@ from .engine_shared import (
     ORCHESTRATOR_CURRENT_TITLE_ENV,
     ORCHESTRATOR_INVOCATION_ENV,
 )
+from .exceptions import (
+    ApplicationBlockedError,
+    ExternalServiceError,
+    InputContractError,
+    SubmissionOutcomeUnknown,
+)
 from .screenshots import APPLICATION_SCREENSHOT_DIR_ENV
 from .submission_log import SubmissionLog
 
@@ -38,7 +44,7 @@ class ProcessResult:
     stderr: str
 
 
-class ProcessTimeoutError(TimeoutError):
+class ProcessTimeoutError(ExternalServiceError, TimeoutError):
     """A bounded child process exceeded its configured lifetime."""
 
     def __init__(self, timeout: int, stdout: str = "", stderr: str = "") -> None:
@@ -198,6 +204,49 @@ class EngineOutcome:
 
 
 @dataclass(frozen=True, slots=True)
+class ExceptionOutcome:
+    """Typed engine failure and the application-level recovery policy it implies."""
+
+    outcome: EngineOutcome
+    manual_review_required: bool | None = None
+    retry_safe: bool | None = None
+
+
+def engine_outcome_from_exception(exc: Exception) -> ExceptionOutcome:
+    """Translate an execution exception without flattening pipeline state."""
+    detail = str(exc)
+    if isinstance(exc, SubmissionOutcomeUnknown):
+        return ExceptionOutcome(
+            outcome=EngineOutcome(
+                success=False,
+                status=EngineStatus.SUBMISSION_UNCONFIRMED.value,
+                submitted=True,
+                confirmed=False,
+                detail=detail,
+            ),
+            manual_review_required=True,
+            retry_safe=False,
+        )
+    if isinstance(exc, ApplicationBlockedError):
+        return ExceptionOutcome(
+            outcome=EngineOutcome(
+                success=False,
+                status=EngineStatus.FAILED.value,
+                detail=detail,
+            ),
+            manual_review_required=True,
+            retry_safe=False,
+        )
+    return ExceptionOutcome(
+        outcome=EngineOutcome(
+            success=False,
+            status=EngineStatus.ENGINE_EXECUTION_ERROR.value,
+            detail=detail,
+        )
+    )
+
+
+@dataclass(frozen=True, slots=True)
 class ApplicationDetails:
     """Typed non-identity fields for one terminal application result."""
 
@@ -289,6 +338,8 @@ class ExecutedApplication:
 
     prepared: PreparedApplication
     outcome: EngineOutcome
+    manual_review_required: bool | None = None
+    retry_safe: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -366,9 +417,11 @@ class ApplicationPipeline:
         operations: PipelineOperations,
     ) -> None:
         if len(targets) != len(emails):
-            raise ValueError("Every application target must have one assigned email")
+            raise InputContractError("Every application target must have one assigned email")
         if email_required is not None and len(targets) != len(email_required):
-            raise ValueError("Every application target must have one email-requirement decision")
+            raise InputContractError(
+                "Every application target must have one email-requirement decision"
+            )
         self._targets = tuple(targets)
         self._emails = tuple(emails)
         self._email_required = (
@@ -630,6 +683,8 @@ class ApplicationPipeline:
         context = prepared.resolved.context
         target = context.target
         screenshot_dir: Path | None = None
+        manual_review_required: bool | None = None
+        retry_safe: bool | None = None
         try:
             command = self._operations.build_engine_command(
                 prepared.resolved.engine_path,
@@ -679,11 +734,10 @@ class ApplicationPipeline:
             )
         except Exception as exc:
             logger.error("Engine execution failed: %s", exc)
-            outcome = EngineOutcome(
-                success=False,
-                status=EngineStatus.ENGINE_EXECUTION_ERROR.value,
-                detail=str(exc),
-            )
+            exception_outcome = engine_outcome_from_exception(exc)
+            outcome = exception_outcome.outcome
+            manual_review_required = exception_outcome.manual_review_required
+            retry_safe = exception_outcome.retry_safe
         finally:
             if screenshot_dir is not None:
                 try:
@@ -702,7 +756,12 @@ class ApplicationPipeline:
                         screenshot_dir,
                         exc,
                     )
-        return ExecutedApplication(prepared=prepared, outcome=outcome)
+        return ExecutedApplication(
+            prepared=prepared,
+            outcome=outcome,
+            manual_review_required=manual_review_required,
+            retry_safe=retry_safe,
+        )
 
     def _reconcile_confirmation(self, executed: ExecutedApplication) -> PipelineCompletion:
         prepared = executed.prepared
@@ -712,8 +771,8 @@ class ApplicationPipeline:
         stop_after_ledger_failure = False
         engine_result: EngineOutcome | None = None
         ledger_persisted: bool | None = None
-        manual_review_required: bool | None = None
-        retry_safe: bool | None = None
+        manual_review_required = executed.manual_review_required
+        retry_safe = executed.retry_safe
         quarantine_persisted: bool | None = None
         quarantine_path = ""
         ledger_error = ""

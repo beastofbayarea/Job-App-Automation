@@ -26,6 +26,7 @@ from urllib.parse import urlparse
 
 from playwright.sync_api import Browser, Page, Playwright
 
+from ..core.exceptions import BrowserAutomationError
 from ..core.runtime_config import RUNTIME_CONFIG
 from ..core.screenshots import active_screenshot_directory
 
@@ -231,7 +232,7 @@ def _raw_browser_cdp_command(
         version = json.load(response)
     web_socket_url = str(version.get("webSocketDebuggerUrl", ""))
     if not web_socket_url:
-        raise RuntimeError("Chrome CDP endpoint did not expose a browser WebSocket URL")
+        raise BrowserAutomationError("Chrome CDP endpoint did not expose a browser WebSocket URL")
     request_id = 1
     with connect(web_socket_url, open_timeout=5, close_timeout=2) as socket:
         socket.send(
@@ -248,7 +249,7 @@ def _raw_browser_cdp_command(
             if message.get("id") != request_id:
                 continue
             if message.get("error"):
-                raise RuntimeError(f"Chrome CDP command failed: {message['error']}")
+                raise BrowserAutomationError(f"Chrome CDP command failed: {message['error']}")
             result = message.get("result", {})
             return result if isinstance(result, Mapping) else {}
 
@@ -264,7 +265,7 @@ def _create_background_target(
     result = raw_command(endpoint, "Target.createTarget", {"url": marker, "background": True})
     target_id = str(result.get("targetId", ""))
     if not target_id:
-        raise RuntimeError("Chrome did not return an ID for the background target")
+        raise BrowserAutomationError("Chrome did not return an ID for the background target")
     return marker, target_id
 
 
@@ -289,7 +290,9 @@ def _resolve_background_page(browser: Browser, marker: str) -> Page:
                 if page.url == marker:
                     return page
         time.sleep(0.1)
-    raise RuntimeError("Chrome created a background target but Playwright could not resolve it")
+    raise BrowserAutomationError(
+        "Chrome created a background target but Playwright could not resolve it"
+    )
 
 
 def _reusable_page(
