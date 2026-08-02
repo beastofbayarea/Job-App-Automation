@@ -725,5 +725,5 @@ This project is a private toolkit for authorized job application automation. Use
 
 ---
 
-**Last Updated:** August 2025  
+**Last Updated:** August 2025
 **Version:** 0.1.0 (pre-release)

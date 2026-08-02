@@ -47,7 +47,7 @@ python -c "import sys; print(sys.path)"
 **Symptoms:** `FileNotFoundError`, JSON parse errors, schema validation failures.
 
 **Resolution:**
-1. Copy example templates: 
+1. Copy example templates:
    ```powershell
    Copy-Item config\candidate_profile_config.example.json config\candidate_profile_config.json
    Copy-Item config\candidate_email_pool.example.json config\candidate_email_pool.json
