@@ -1,89 +1,206 @@
 # Job Application Automation
 
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![uv](https://img.shields.io/badge/uv-supported-green.svg)](https://github.com/astral-sh/uv)
+[![License](https://img.shields.io/badge/license-private-red.svg)]()
+
 A local, safety-first toolkit for discovering public ATS vacancies, generating tailored PDF resumes and cover letters, privately archiving those documents on a VPS, and filling applications on five supported ATS providers. It also includes a Gmail OAuth utility and a candidate-email pool selector.
 
-The public entry point is `src/job_automation.py`. The implementation under `src/job_application_automation/` is a reusable Python package; ATS engine commands are primarily diagnostics used by the orchestrator.
+**Quick Links:** [Documentation](docs/README.md) | [Configuration Guide](docs/configuration.md) | [CLI Reference](docs/cli-reference.md) | [Operations Runbook](docs/operations-runbook.md) | [Contributing](CONTRIBUTING.md) | [Changelog](CHANGELOG.md)
+
+---
+
+## Table of Contents
+
+- [Capabilities](#capabilities)
+- [Quick Start](#quick-start)
+- [Project Structure](#project-structure)
+- [Requirements](#requirements)
+- [Setup](#setup)
+- [Configuration](#configuration)
+- [Commands](#commands)
+- [VPS Operations](#vps-operations)
+- [Safety & Privacy](#safety--privacy)
+- [Architecture](#architecture)
+- [Testing](#testing)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+
+---
 
 ## Capabilities
 
-- Search Greenhouse, Lever, Ashby, SmartRecruiters, Workable, and generic JSON-LD job pages without configured API credentials. Search produces CSV results, optional JSON, a reusable board cache, and a coverage report.
-- Generate a role-specific PDF resume with Vertex AI when configured, or a rule-based fallback if AI is unavailable. Source identity, employment facts, and education are validated before rendering.
-- Generate a one-page, evidence-constrained cover letter with a JSON audit sidecar. The generator rejects invented source-claim IDs and invalid or multi-page output.
-- Generate a matching CV/cover-letter pair and store or retrieve it from private, hash-verified VPS storage using the job URL, company, title, and candidate email.
-- Apply to a single URL or an Excel tracker. The orchestrator detects the supported ATS, selects a configured candidate email, generates a tailored resume, and records results and confirmed submissions.
-- Run a deliberately live sequential queue that stops at the first unconfirmed application.
-- Read, classify, redact, export, draft, or send Gmail messages through local OAuth, and select addresses from the configured candidate-email pool.
-- Run scheduled searches and guarded automatic applications on a VPS, synchronize
-  public-safe results, verify freshness, rotate logs, and prune old generated PDFs.
+- **Job Discovery**: Search Greenhouse, Lever, Ashby, SmartRecruiters, Workable, and generic JSON-LD job pages without configured API credentials. Search produces CSV results, optional JSON, a reusable board cache, and a coverage report.
+- **Tailored Resumes**: Generate role-specific PDF resumes with Vertex AI when configured, or a rule-based fallback if AI is unavailable. Source identity, employment facts, and education are validated before rendering.
+- **Cover Letters**: Generate one-page, evidence-constrained cover letters with a JSON audit sidecar. The generator rejects invented source-claim IDs and invalid or multi-page output.
+- **Document Archiving**: Generate matching CV/cover-letter pairs and store or retrieve them from private, hash-verified VPS storage using job URL, company, title, and candidate email.
+- **Application Automation**: Apply to a single URL or an Excel tracker. The orchestrator detects the supported ATS, selects a configured candidate email, generates a tailored resume, and records results and confirmed submissions.
+- **Submission Queue**: Run a deliberately live sequential queue that stops at the first unconfirmed application.
+- **Gmail Integration**: Read, classify, redact, export, draft, or send Gmail messages through local OAuth, and select addresses from the configured candidate-email pool.
+- **VPS Operations**: Run scheduled searches and guarded automatic applications on a VPS, synchronize public-safe results, verify freshness, rotate logs, and prune old generated PDFs.
+- **Google Indexing**: Submit sitemaps and eligible job pages to Google Search Console and the Indexing API.
+
+---
+
+## Quick Start
+
+### First-Time Setup (5 minutes)
+
+```powershell
+# Clone and enter the repository
+cd Job-App-Automation
+
+# Create virtual environment and install dependencies
+uv sync --locked --no-dev
+
+# Install Playwright Chromium
+uv run playwright install chromium
+
+# Copy configuration templates
+Copy-Item config\candidate_profile_config.example.json config\candidate_profile_config.json
+Copy-Item config\candidate_email_pool.example.json config\candidate_email_pool.json
+
+# Create your resume source file
+# Edit data\base_resume.txt with your actual resume content
+
+# Verify setup
+uv run python src/job_automation.py email-pool --count 1
+```
+
+### Common Workflows
+
+#### 1. Search for Jobs
+```powershell
+uv run python src/job_automation.py search `
+  --role-type "Product Manager" `
+  --ats-platform greenhouse `
+  --ats-platform lever `
+  --location "Remote"
+```
+
+#### 2. Generate a Tailored Resume
+```powershell
+uv run python src/job_automation.py resume `
+  --company "Example Corp" `
+  --role "Senior Product Manager" `
+  --url "https://jobs.ashbyhq.com/example/job-id"
+```
+
+#### 3. Generate a Cover Letter
+```powershell
+uv run python src/job_automation.py cover-letter `
+  --company "Example Corp" `
+  --role "Senior Product Manager" `
+  --url "https://jobs.ashbyhq.com/example/job-id"
+```
+
+#### 4. Apply to a Job (Dry Run by Default)
+```powershell
+# Safe dry run - no submission
+uv run python src/job_automation.py apply `
+  --url "https://jobs.ashbyhq.com/example/job-id" `
+  --dry-run
+
+# Live submission (requires explicit flag)
+uv run python src/job_automation.py apply `
+  --url "https://jobs.ashbyhq.com/example/job-id" `
+  --live-submit
+```
+
+---
+
+## Project Structure
+
+```
+Job-App-Automation/
+├── src/
+│   ├── job_automation.py              # CLI entry point
+│   └── job_application_automation/    # Main package
+│       ├── cli.py                     # Command dispatcher
+│       ├── core/                      # Orchestration & workflows
+│       ├── engines/                   # ATS provider adapters
+│       ├── search/                    # Job discovery
+│       ├── resume/                    # Resume & cover letter generation
+│       ├── mail/                      # Gmail integration
+│       └── dashboard/                 # HTTP dashboard server
+├── config/                            # Configuration files
+│   ├── runtime/                       # Runtime settings by domain
+│   └── *.example.json                 # Configuration templates
+├── data/                              # Source material (resume, etc.)
+├── output/                            # Generated artifacts
+├── scripts/                           # VPS deployment & maintenance
+├── docs/                              # Documentation
+├── tests/                             # Test suite
+├── pyproject.toml                     # Package metadata
+└── README.md                          # This file
+```
 
 ## Requirements
 
-- Python 3.10 or newer
-- Chromium for browser-based application flows
-- Candidate configuration and resume source material for resume or application workflows
-- Google OAuth credentials for Gmail features
-- A Google Cloud Vertex AI credential is optional; without it, resume generation falls back locally
-- PuTTY `plink` and `pscp` for private VPS document storage and retrieval
+| Requirement | Purpose | Required For |
+|-------------|---------|--------------|
+| **Python 3.10+** | Runtime environment | All commands |
+| **Chromium** | Browser automation | Application workflows |
+| **Candidate config** | Profile, answers, policies | Resume & application workflows |
+| **Resume source** | Base resume content (`data/base_resume.txt`) | Resume generation |
+| **Google OAuth** | Gmail API access | Gmail commands |
+| **Vertex AI** (optional) | AI-powered resume/cover letter | Falls back to rule-based if absent |
+| **PuTTY tools** | VPS document archive | `documents store/retrieve` commands |
+
+---
 
 ## Setup
 
+### Standard Installation (pip)
+
 ```powershell
+# Create virtual environment
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
+
+# Install dependencies
 python -m pip install -r requirements.txt
+
+# Install Playwright Chromium
 python -m playwright install chromium
 ```
 
-That Pip command is retained as a compatibility path and installs this checkout
-in editable mode. For a reproducible checkout, use the committed lockfile:
+### Reproducducible Installation (uv - Recommended)
 
 ```powershell
+# Sync from lockfile (production)
 uv sync --locked --no-dev
 uv run playwright install chromium
+
+# Sync with dev tools (contributors)
+uv sync --locked --dev
 ```
 
-To install the reusable package and the `job-automation` command, use:
+### Install as Package
+
+To use the `job-automation` command globally:
 
 ```powershell
 python -m pip install .
 job-automation --help
+
 # Equivalent module entry point:
 python -m job_application_automation --help
 ```
 
-Installed commands look for local candidate files and an optional
-`config/runtime/` directory in the project where they are run. When that
-directory is absent, they use the package's equivalent split defaults; copy
-the tracked runtime directory to customize paths or timeouts. Explicit callers
-may still pass a legacy monolithic runtime JSON file to the Python loader.
-
-For contributor checks, install the development dependencies as well:
+### Optional Extras
 
 ```powershell
-python -m pip install -r requirements-dev.txt
-```
-
-The preferred reproducible contributor setup uses the committed uv lockfile:
-
-```powershell
-uv sync --locked --dev
-```
-
-Structured Pydantic-based resume decoding is an optional package capability for
-non-development installations:
-
-```powershell
+# Structured Pydantic-based resume decoding
 python -m pip install ".[structured]"
-```
 
-Privacy-safe unattended-worker telemetry is also optional:
-
-```powershell
+# Privacy-safe worker telemetry (Sentry)
 python -m pip install ".[observability]"
 ```
 
-It remains disabled unless the worker environment contains `SENTRY_DSN`; see
-the operations runbook for the allow-listed event fields and VPS setup.
+> **Note:** Installed commands look for local candidate files and an optional `config/runtime/` directory in the project where they are run. When that directory is absent, they use the package's equivalent split defaults.
+
+---
 
 ## Configure local data and credentials
 
@@ -473,9 +590,28 @@ and leaves existing local reports untouched unless `-Overwrite` is explicit.
 
 Commands generally return `0` for success, `1` for an unsuccessful workflow or remote operation, and `2` for invalid input. Gmail also returns `3` for an API error, `4` for dependency/authentication configuration errors, and `130` when interrupted. A zero exit status from a dry run or fill-only run is not evidence of submission; only an exact, non-test `SUBMITTED & CONFIRMED` result is recorded as complete.
 
+## Safety & Privacy
+
+**Critical Guidelines:**
+
+- ✅ **Only automate with explicit authorization** for the candidate account and target job
+- ✅ **Keep credentials out of version control**: OAuth tokens, service accounts, SSH keys, passwords
+- ✅ **Use private VPS archive** outside repository and web roots
+- ✅ **Verify confirmation status** before treating an application as submitted
+- ✅ **Use queue command only for intentional live submissions** (not dry-run)
+
+**What Never Gets Committed:**
+- Credentials, tokens, or API keys
+- Personal candidate data (profile, resume source)
+- Generated application artifacts
+- Unredacted screenshots
+- Private archive contents
+
+---
+
 ## Architecture
 
-```text
+```
 job_automation.py
   └─ cli.py
       ├─ apply / queue              core orchestration and shared contracts
@@ -487,28 +623,107 @@ job_automation.py
       └─ engine <ATS>               guarded provider-specific browser engine
 ```
 
-See the maintained [architecture guide](docs/architecture.md) for component boundaries and extension points.
+### Key Components
 
-## Documentation
+| Component | Responsibility |
+|-----------|----------------|
+| `core/` | Orchestration, workflows, state management |
+| `engines/` | ATS provider adapters (Ashby, Greenhouse, Lever, etc.) |
+| `search/` | Job discovery across multiple providers |
+| `resume/` | Resume and cover letter generation |
+| `mail/` | Gmail OAuth integration |
+| `dashboard/` | HTTP dashboard server (read-only, unauthenticated) |
 
-The [documentation guide](docs/README.md) links to detailed configuration, CLI, operations, data-format, ATS-support, security, architecture, and troubleshooting references. Contributors should read [CONTRIBUTING.md](CONTRIBUTING.md); user-facing changes are recorded in [CHANGELOG.md](CHANGELOG.md).
+📖 See the detailed [Architecture Guide](docs/architecture.md) for component boundaries and extension points.
 
-## Quality checks
+---
+
+## Testing
+
+### Run Test Suite
 
 ```powershell
-python -m ruff format --check .
-python -m ruff check .
+# Standard pytest run
 python -m pytest
-python -m compileall -q src
-python -m pip check
+
+# With coverage
+python -m pytest --cov=src --cov-report=term-missing
+
+# Using uv (recommended)
+uv run pytest
 ```
 
-Pytest runs with sockets disabled, so tests use mocks and never invoke live ATS, browser, Gmail, or LLM operations.
+### Test Boundaries
 
-## Safety and privacy
+- ✅ **Mocked**: Browser, ATS, Gmail, and LLM boundaries
+- ❌ **No live**: Job boards, candidate accounts, or remote AI services
+- ❌ **Never commit**: Credentials, tokens, personal data, or unredacted screenshots
 
-- Only use browser automation and email features with explicit authorization for the candidate account and target job.
-- Keep credentials, OAuth tokens, candidate profile data, resume source material, and generated output out of version control.
-- Keep the private archive outside the VPS repository and web roots; never publish its PDFs, manifest, or email metadata through Git.
-- Do not treat a filled form as submitted: rely on the recorded confirmation status before proceeding.
-- Use the queue only for intentional live submissions; it is not a dry-run batch tool.
+Tests run with sockets disabled to ensure isolation.
+
+---
+
+## Troubleshooting
+
+Common issues and solutions:
+
+| Issue | Solution |
+|-------|----------|
+| Playwright browser errors | Run `playwright install chromium` |
+| Missing config files | Copy `.example.json` templates from `config/` |
+| OAuth authentication failures | Re-authorize using Gmail flow; check `credentials.json` |
+| VPS connection refused | Verify SSH host key fingerprint in `vps_config.json` |
+| Application timeouts | Increase `--timeout` flag or check network stability |
+| Resume generation fails | Ensure `data/base_resume.txt` exists with valid content |
+
+📖 See the comprehensive [Troubleshooting Guide](docs/troubleshooting.md) for detailed diagnostics.
+
+---
+
+## Contributing
+
+### Quick Start for Contributors
+
+```powershell
+# Clone and setup
+uv sync --locked --dev
+uv run playwright install chromium
+
+# Run quality checks before committing
+uv run ruff format --check .
+uv run ruff check .
+uv run mypy
+uv run pytest
+uv run compileall -q src
+uv run pip check
+```
+
+### Change Boundaries
+
+| Directory | Purpose |
+|-----------|---------|
+| `engines/` | Provider-specific browser behavior |
+| `core/` | Workflow coordination |
+| `resume/` | Resume and cover letter concerns |
+| `core/artifacts` | Persisted files |
+
+### Pull Request Guidelines
+
+When submitting PRs, include:
+- User-visible behavior changes
+- Safety impact assessment
+- Tests run and results
+- Documentation updates (especially for CLI, config, or ATS support changes)
+
+📖 Read the full [Contributing Guide](CONTRIBUTING.md) for detailed standards.
+
+---
+
+## License & Acknowledgments
+
+This project is a private toolkit for authorized job application automation. Use responsibly and only with explicit permission from candidates whose profiles and accounts are managed through this system.
+
+---
+
+**Last Updated:** August 2025  
+**Version:** 0.1.0 (pre-release)
