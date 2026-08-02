@@ -452,20 +452,27 @@ class SelectedJobApplicationService:
         result_path = Path(str(record["result_path"]))
 
         if record["status"] == "preparing":
-            document_arguments = {
-                "job": job,
-                "ats_platform": config.ats_platform,
-                "email": email,
-                "launcher": config.launcher,
-                "profile": config.profile,
-                "output_dir": output_dir,
-                "timeout_seconds": config.document_timeout_seconds,
-            }
-            if not config.generate_cover_letter:
-                document_arguments["generate_cover_letter"] = False
-            document_outcome = dependencies.prepare_documents(
-                **document_arguments,
-            )
+            if config.generate_cover_letter:
+                document_outcome = dependencies.prepare_documents(
+                    job=job,
+                    ats_platform=config.ats_platform,
+                    email=email,
+                    launcher=config.launcher,
+                    profile=config.profile,
+                    output_dir=output_dir,
+                    timeout_seconds=config.document_timeout_seconds,
+                )
+            else:
+                document_outcome = dependencies.prepare_documents(
+                    job=job,
+                    ats_platform=config.ats_platform,
+                    email=email,
+                    launcher=config.launcher,
+                    profile=config.profile,
+                    output_dir=output_dir,
+                    timeout_seconds=config.document_timeout_seconds,
+                    generate_cover_letter=False,
+                )
             if (
                 document_outcome.return_code != 0
                 or not valid_pdf(resume_path)
