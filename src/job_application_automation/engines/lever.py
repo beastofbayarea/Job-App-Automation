@@ -59,7 +59,7 @@ from ..core.engine_shared import (
     validate_required_fields,
 )
 from ..core.paths import OUTPUT_DIR, resolve_project_dir
-from .browser_controls import upload_matching_file
+from .browser_controls import upload_matching_file, upload_preferred_file
 from .form_sections import (
     CallableSectionHandler,
     FormSectionOutcome,
@@ -106,16 +106,12 @@ def _context(control: Locator) -> str:
 
 
 def _upload_resume(page: Page, resume: Path) -> bool:
-    target = page.locator('input[type="file"][name="resume"], input#resume-upload-input').first
-    if not target.count():
-        target = page.locator('input[type="file"]').first
-    if not target.count():
-        return False
-    try:
-        target.set_input_files(str(resume))
-        return True
-    except Exception:
-        return False
+    return upload_preferred_file(
+        page,
+        resume,
+        preferred_selector='input[type="file"][name="resume"], input#resume-upload-input',
+        fallback_selector='input[type="file"]',
+    )
 
 
 def _upload_cover_letter(page: Page, cover_letter: Path) -> bool | None:

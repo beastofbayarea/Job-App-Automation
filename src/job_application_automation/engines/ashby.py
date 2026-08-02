@@ -40,6 +40,11 @@ from .ashby_sections import (
     plan_option_selection,
     required_field_flag,
 )
+from .browser_controls import (
+    click_scrolled_control as _click_scrolled_control,
+    fill_scrolled_control as _fill_scrolled_control,
+    retry_action as _retry_action,
+)
 from .form_sections import (
     CallableSectionHandler,
     FormSectionOutcome,
@@ -189,21 +194,20 @@ def retry(
     base_delay: float = 1.1,
     label: str = "action",
 ) -> T:
-    if attempts < 1:
-        raise ValueError("attempts must be at least 1")
-
-    last_error: Exception | None = None
-    for i in range(1, attempts + 1):
-        try:
-            return fn()
-        except Exception as exc:
-            last_error = exc
-            logger.warning("%s failed (%d/%d): %s", label, i, attempts, exc)
-            if i < attempts:
-                time.sleep(base_delay * i)
-    if last_error is None:
-        raise RuntimeError(f"{label} exhausted retries without recording an error")
-    raise last_error
+    return _retry_action(
+        fn,
+        attempts=attempts,
+        base_delay=base_delay,
+        label=label,
+        sleep=time.sleep,
+        on_error=lambda action, attempt, total, exc: logger.warning(
+            "%s failed (%d/%d): %s",
+            action,
+            attempt,
+            total,
+            exc,
+        ),
+    )
 
 
 def load_config(path: Path) -> dict[str, Any]:
@@ -354,35 +358,30 @@ def ss(page: Page, directory: Path, company: str, tag: str) -> str:
 
 
 def fill(page: Page, loc: Any, value: str, timeout: int = 7000) -> bool:
-    text = str(value)
-    try:
-        expect(loc).to_be_visible(timeout=timeout)
-        loc.scroll_into_view_if_needed()
-        loc.click()
-        human_delay(0.08, 0.2)
-        loc.fill(text)
-        return True
-    except Exception:
-        try:
-            loc.fill("")
-            loc.press_sequentially(text, delay=random.randint(25, 55))
-            return True
-        except Exception as e:
-            logger.debug(f"fill failed: {e}")
-            return False
+    return _fill_scrolled_control(
+        loc,
+        value,
+        timeout_ms=timeout,
+        visibility_waiter=lambda control, timeout_ms: expect(control).to_be_visible(
+            timeout=timeout_ms
+        ),
+        before_primary_fill=lambda: human_delay(0.08, 0.2),
+        fallback_delay_ms=lambda: random.randint(25, 55),
+        on_failure=lambda exc: logger.debug("fill failed: %s", exc),
+    )
 
 
 def click(loc: Any, desc: str = "", timeout: int = 5000) -> bool:
-    try:
-        expect(loc).to_be_visible(timeout=timeout)
-        loc.scroll_into_view_if_needed()
-        human_delay(0.12, 0.28)
-        loc.click()
-        logger.info(f"Clicked: {desc}")
-        return True
-    except Exception as e:
-        logger.debug(f"click [{desc}] failed: {e}")
-        return False
+    return _click_scrolled_control(
+        loc,
+        timeout_ms=timeout,
+        visibility_waiter=lambda control, timeout_ms: expect(control).to_be_visible(
+            timeout=timeout_ms
+        ),
+        before_click=lambda: human_delay(0.12, 0.28),
+        on_success=lambda: logger.info("Clicked: %s", desc),
+        on_failure=lambda exc: logger.debug("click [%s] failed: %s", desc, exc),
+    )
 
 
 def smooth_mouse_move(page: Page, loc: Any) -> None:

@@ -7,11 +7,14 @@ of navigation, custom widgets, question semantics, and submission decisions.
 
 from __future__ import annotations
 
+import random
 import re
+import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import TypeVar
 
-from playwright.sync_api import Locator, Page
+from playwright.sync_api import Locator, Page, expect
 
 
 SENSITIVE_FIELD_PATTERN = re.compile(
@@ -19,6 +22,10 @@ SENSITIVE_FIELD_PATTERN = re.compile(
     r"sexual|\bsex\b|orientation|transgender|demographic|identity|pronoun",
     re.IGNORECASE,
 )
+T = TypeVar("T")
+
+VisibilityWaiter = Callable[[Locator, int], None]
+FailureCallback = Callable[[Exception], None]
 
 
 def first_visible(locator: Locator) -> Locator | None:
@@ -133,7 +140,11 @@ def fill_labeled(
     return False
 
 
-def upload_first(page: Page, selectors: Sequence[str], path: Path) -> bool:
+def upload_first(
+    page: Page,
+    selectors: Sequence[str],
+    path: Path,
+) -> bool:
     """Upload a file to the first usable control in selector order."""
     for selector in selectors:
         controls = page.locator(selector)
@@ -147,18 +158,41 @@ def upload_first(page: Page, selectors: Sequence[str], path: Path) -> bool:
     return False
 
 
+def upload_preferred_file(
+    page: Page,
+    path: Path,
+    *,
+    preferred_selector: str,
+    fallback_selector: str,
+) -> bool:
+    """Upload through a preferred first control, falling back only when absent."""
+    target = page.locator(preferred_selector).first
+    if not target.count():
+        target = page.locator(fallback_selector).first
+    if not target.count():
+        return False
+    try:
+        target.set_input_files(str(path))
+        return True
+    except Exception:
+        return False
+
+
 def upload_matching_file(
     page: Page,
     path: Path,
     *,
     required_terms: Sequence[str],
     context_resolver: Callable[[Locator], str],
+    fallback_to_single: bool = False,
 ) -> bool | None:
     """Upload to a semantically matching file control.
 
     ``None`` means the form exposes no matching field. ``False`` means a field
     matched but every upload attempt failed, preserving the adapters' existing
-    optional-document contract.
+    optional-document contract. ``fallback_to_single`` uploads to a sole file
+    input after semantic matching, including a retry after a matched input
+    failed, for providers with that established resume behavior.
     """
     inputs = page.locator('input[type="file"]')
     matched = False
@@ -174,7 +208,105 @@ def upload_matching_file(
             return True
         except Exception:
             continue
+    if fallback_to_single and inputs.count() == 1:
+        try:
+            inputs.first.set_input_files(str(path))
+            return True
+        except Exception:
+            return False
     return False if matched else None
+
+
+def retry_action(
+    action: Callable[[], T],
+    *,
+    attempts: int = 3,
+    base_delay: float = 1.1,
+    label: str = "action",
+    sleep: Callable[[float], None] = time.sleep,
+    on_error: Callable[[str, int, int, Exception], None] | None = None,
+) -> T:
+    """Retry an action with linear backoff while preserving its final error."""
+    if attempts < 1:
+        raise ValueError("attempts must be at least 1")
+
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return action()
+        except Exception as exc:
+            last_error = exc
+            if on_error is not None:
+                on_error(label, attempt, attempts, exc)
+            if attempt < attempts:
+                sleep(base_delay * attempt)
+    if last_error is None:
+        raise RuntimeError(f"{label} exhausted retries without recording an error")
+    raise last_error
+
+
+def _expect_visible(control: Locator, timeout_ms: int) -> None:
+    expect(control).to_be_visible(timeout=timeout_ms)
+
+
+def _fallback_typing_delay() -> int:
+    return random.randint(25, 55)
+
+
+def fill_scrolled_control(
+    control: Locator,
+    value: object,
+    *,
+    timeout_ms: int = 7_000,
+    visibility_waiter: VisibilityWaiter = _expect_visible,
+    before_primary_fill: Callable[[], None] | None = None,
+    fallback_delay_ms: Callable[[], int] = _fallback_typing_delay,
+    on_failure: FailureCallback | None = None,
+) -> bool:
+    """Scroll, click, and fill a control with a sequential-typing fallback."""
+    text = str(value)
+    try:
+        visibility_waiter(control, timeout_ms)
+        control.scroll_into_view_if_needed()
+        control.click()
+        if before_primary_fill is not None:
+            before_primary_fill()
+        control.fill(text)
+        return True
+    except Exception:
+        try:
+            control.fill("")
+            control.press_sequentially(text, delay=fallback_delay_ms())
+            return True
+        except Exception as exc:
+            if on_failure is not None:
+                on_failure(exc)
+            return False
+
+
+def click_scrolled_control(
+    control: Locator,
+    *,
+    timeout_ms: int = 5_000,
+    visibility_waiter: VisibilityWaiter = _expect_visible,
+    before_click: Callable[[], None] | None = None,
+    on_success: Callable[[], None] | None = None,
+    on_failure: FailureCallback | None = None,
+) -> bool:
+    """Wait for, scroll to, and click a control with provider callbacks."""
+    try:
+        visibility_waiter(control, timeout_ms)
+        control.scroll_into_view_if_needed()
+        if before_click is not None:
+            before_click()
+        control.click()
+        if on_success is not None:
+            on_success()
+        return True
+    except Exception as exc:
+        if on_failure is not None:
+            on_failure(exc)
+        return False
 
 
 def fill_and_blur(

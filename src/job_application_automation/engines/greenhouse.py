@@ -127,56 +127,42 @@ def _screenshot(page: Page, directory: Path, company: str, tag: str) -> str:
     return result
 
 
-def _upload_resume(page: Page, resume: Path) -> bool:
-    inputs = page.locator('input[type="file"]')
-    for index in range(inputs.count()):
-        target = inputs.nth(index)
-        try:
-            context = target.evaluate(
-                """el => {
-                    const root = el.closest('div') || el.parentElement;
-                    return (root && root.innerText || '') + ' ' +
-                           (el.name || '') + ' ' + (el.id || '');
-                }"""
-            ).lower()
-            if (
-                "resume" not in context
-                and "resume" not in (target.get_attribute("name") or "").lower()
-            ):
-                continue
-            target.set_input_files(str(resume))
-            return True
-        except Exception:
-            continue
+def _file_input_context(target: Locator) -> str:
+    return str(
+        target.evaluate(
+            """el => {
+                const root = el.closest('div') || el.parentElement;
+                return (root && root.innerText || '') + ' ' +
+                       (el.name || '') + ' ' + (el.id || '');
+            }"""
+        )
+    )
 
-    if inputs.count() == 1:
-        try:
-            inputs.first.set_input_files(str(resume))
-            return True
-        except Exception:
-            pass
-    return False
+
+def _resume_file_input_context(target: Locator) -> str:
+    return f"{_file_input_context(target)} {target.get_attribute('name') or ''}"
+
+
+def _upload_resume(page: Page, resume: Path) -> bool:
+    return (
+        upload_matching_file(
+            page,
+            resume,
+            required_terms=("resume",),
+            context_resolver=_resume_file_input_context,
+            fallback_to_single=True,
+        )
+        is True
+    )
 
 
 def _upload_cover_letter(page: Page, cover_letter: Path) -> bool | None:
     """Upload a cover letter when the Greenhouse form exposes that field."""
-
-    def context(target: Locator) -> str:
-        return str(
-            target.evaluate(
-                """el => {
-                    const root = el.closest('div') || el.parentElement;
-                    return (root && root.innerText || '') + ' ' +
-                           (el.name || '') + ' ' + (el.id || '');
-                }"""
-            )
-        )
-
     return upload_matching_file(
         page,
         cover_letter,
         required_terms=("cover", "letter"),
-        context_resolver=context,
+        context_resolver=_file_input_context,
     )
 
 
