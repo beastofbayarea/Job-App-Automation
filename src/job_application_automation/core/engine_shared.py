@@ -1060,6 +1060,8 @@ def open_chrome_session(
         reusable_page=_reusable_page,
         new_page=_new_page,
     )
+
+
 def build_engine_parser(description: str) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--url", required=True)

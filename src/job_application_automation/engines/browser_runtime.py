@@ -21,7 +21,7 @@ import uuid
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlparse
 
 from playwright.sync_api import Browser, Page, Playwright
@@ -89,8 +89,7 @@ def capture_screenshot(
     directory = active_screenshot_directory(directory)
     directory.mkdir(parents=True, exist_ok=True)
     target = directory / (
-        f"{filename_sanitizer(company, 'ats')}_"
-        f"{filename_sanitizer(tag, 'capture')}.png"
+        f"{filename_sanitizer(company, 'ats')}_{filename_sanitizer(tag, 'capture')}.png"
     )
     try:
         page.screenshot(path=str(target), full_page=True, timeout=15_000)
@@ -175,7 +174,7 @@ def navigate_reusing_tab(
     url: str,
     *,
     timeout: int,
-    wait_until: str = "domcontentloaded",
+    wait_until: Literal["commit", "domcontentloaded", "load", "networkidle"] = "domcontentloaded",
     captcha_checker: Callable[[Page], bool] = page_has_captcha,
 ) -> None:
     """Preserve a matching application tab; navigate only when it differs."""
@@ -668,7 +667,9 @@ def open_chrome_session(
                 return PlaywrightBrowserSession(browser, page or new_page(browser), False)
             except Exception:
                 continue
-        logger.info("Chrome process started but CDP on %s did not become ready; falling back", endpoint)
+        logger.info(
+            "Chrome process started but CDP on %s did not become ready; falling back", endpoint
+        )
 
     logger.info("CDP connection unavailable on %s; launching fresh Chromium instance", endpoint)
     browser = playwright.chromium.launch(headless=False)
