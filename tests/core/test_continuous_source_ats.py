@@ -48,6 +48,36 @@ def test_greenhouse_identity_matches_branded_and_native_urls() -> None:
     assert continuous_source_ats._job_identity(branded, "greenhouse") == "greenhouse:8064526"
 
 
+def test_supervised_pause_only_stops_for_question_failures(tmp_path: Path) -> None:
+    state = tmp_path / "state.json"
+    state.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "jobs": {
+                    "https://example.test/jobs/1": {
+                        "updated_at": "2026-08-03T01:00:00+00:00",
+                        "result_status": "JOB_CONTEXT_UNAVAILABLE",
+                    },
+                    "https://example.test/jobs/2": {
+                        "updated_at": "2026-08-03T02:00:00+00:00",
+                        "result": {"status": "REQUIRED_FIELDS_NOT_FILLED"},
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert continuous_source_ats._requires_clarification(state, "failed") is True
+    assert continuous_source_ats._requires_clarification(state, "confirmed") is False
+    assert continuous_source_ats._requires_clarification(state, "manual_review") is True
+    payload = json.loads(state.read_text(encoding="utf-8"))
+    payload["jobs"].pop("https://example.test/jobs/2")
+    state.write_text(json.dumps(payload), encoding="utf-8")
+    assert continuous_source_ats._requires_clarification(state, "failed") is False
+
+
 def test_tracker_source_loads_only_recognized_provider_jobs(tmp_path: Path) -> None:
     tracker = tmp_path / "greenhouse.xlsx"
     _write_tracker(tracker)

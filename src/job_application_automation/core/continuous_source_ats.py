@@ -362,6 +362,20 @@ def _process_selected_job(
     return application_service.process(job)
 
 
+def _requires_clarification(state_path: Path, cycle_status: CycleStatus) -> bool:
+    if cycle_status == "manual_review":
+        return True
+    if cycle_status != "failed":
+        return False
+    records = list(_state_records(state_path).values())
+    if not records:
+        return False
+    latest = max(records, key=lambda record: str(record.get("updated_at", "")))
+    result = latest.get("result") if isinstance(latest.get("result"), Mapping) else {}
+    result_status = str(latest.get("result_status") or result.get("status") or "")
+    return result_status == "REQUIRED_FIELDS_NOT_FILLED"
+
+
 def _sleep_until_next_cycle(
     delay: int,
     *,
@@ -629,7 +643,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             report_interrupt=report_interrupt,
             report_exception=report_exception,
             stop_after_cycle=(
-                (lambda status: status in {"failed", "manual_review"})
+                (lambda status: _requires_clarification(args.state, status))
                 if args.pause_on_unconfirmed
                 else None
             ),
