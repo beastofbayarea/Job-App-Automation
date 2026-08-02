@@ -63,4 +63,3 @@ DIRECT_ONCE_EXIT_POLICY = OnceExitPolicy(
 SOURCE_ONCE_EXIT_POLICY = OnceExitPolicy(
     successful_statuses=frozenset(("confirmed", "no_work")),
 )
-

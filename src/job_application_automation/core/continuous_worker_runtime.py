@@ -99,4 +99,3 @@ def run_worker(runtime: WorkerRuntime) -> int:
         if not runtime.sleep(delay):
             runtime.telemetry.flush()
             return 130
-

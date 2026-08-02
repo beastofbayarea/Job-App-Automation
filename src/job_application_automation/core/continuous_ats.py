@@ -8,7 +8,6 @@ import importlib.util
 import json
 import os
 import random
-import re
 import signal
 import subprocess
 import sys
@@ -19,7 +18,7 @@ from pathlib import Path
 from typing import Any
 from collections.abc import Callable, Mapping, Sequence
 
-from .application_candidates import application_url, eligible_application_jobs
+from .application_candidates import application_url
 from .artifacts import atomic_write_text, read_json
 from .contracts import EngineResult
 from .continuous_worker_models import (
@@ -28,6 +27,11 @@ from .continuous_worker_models import (
     CycleStatus,
 )
 from .continuous_worker_runtime import WorkerRuntime, cycle_event_level, run_worker
+from .continuous_worker_sources import (
+    ATS_PLATFORM_PATTERN as _WORKER_ATS_PLATFORM_PATTERN,
+    eligible_provider_jobs,
+    validate_worker_platform,
+)
 from .continuous_worker_state import (
     load_worker_state,
     reconcile_interrupted_submissions,
@@ -58,7 +62,7 @@ DEFAULT_EMAIL_POOL = resolve_runtime_path(RUNTIME_CONFIG.application["candidate_
 DEFAULT_LAUNCHER = resolve_runtime_path("src/job_automation.py")
 TERMINAL_STATUSES = frozenset({"confirmed", "failed", "manual_review"})
 RESUMABLE_STATUSES = frozenset({"preparing", "documents_ready"})
-ATS_PLATFORM_PATTERN = re.compile(r"^[a-z][a-z0-9]*$")
+ATS_PLATFORM_PATTERN = _WORKER_ATS_PLATFORM_PATTERN
 DEFAULT_CAPTCHA_COOLDOWN_SECONDS = 86_400
 DEFAULT_CAPTCHA_THRESHOLD = 2
 DEFAULT_SPAM_REJECTION_COOLDOWN_SECONDS = 86_400
@@ -80,12 +84,8 @@ _save_state = save_worker_state
 
 
 def _eligible_jobs(payload: Any, ats_platform: str) -> list[dict[str, Any]]:
-    return eligible_application_jobs(
-        payload,
-        expected_platform=ats_platform,
-        require_declared_platform=True,
-        input_label=f"continuous {ats_platform} input",
-    )
+    """Compatibility facade for the shared provider-source normalizer."""
+    return eligible_provider_jobs(payload, ats_platform)
 
 
 def _confirmed_urls(path: Path, ats_platform: str) -> set[str]:
@@ -636,13 +636,10 @@ def _platform_output_path(ats_platform: str, suffix: str = "") -> Path:
 
 def _validate_platform(ats_platform: str) -> str:
     """Accept installed ATS engines without maintaining a second provider registry."""
-    normalized = str(ats_platform).strip().lower()
-    if not ATS_PLATFORM_PATTERN.fullmatch(normalized):
-        raise ValueError("continuous ATS platform must contain only lowercase letters and digits")
-    engine_module = f"job_application_automation.engines.{normalized}"
-    if importlib.util.find_spec(engine_module) is None:
-        raise ValueError(f"continuous ATS engine is not installed: {normalized}")
-    return normalized
+    return validate_worker_platform(
+        ats_platform,
+        find_module=importlib.util.find_spec,
+    )
 
 
 def _seed_platform_input(
@@ -1044,8 +1041,7 @@ def main(
                 )
                 if shared_count:
                     print(
-                        f"{ats_platform.upper()}_INPUT_REFRESHED_FROM_SHARED "
-                        f"count={shared_count}",
+                        f"{ats_platform.upper()}_INPUT_REFRESHED_FROM_SHARED count={shared_count}",
                         flush=True,
                     )
                     cycle_status = process_one(
@@ -1078,9 +1074,7 @@ def main(
                         f"exit_code={outcome.return_code} timed_out={outcome.timed_out}",
                         flush=True,
                     )
-                    cycle_status = (
-                        "refreshed" if outcome.return_code == 0 else "refresh_failed"
-                    )
+                    cycle_status = "refreshed" if outcome.return_code == 0 else "refresh_failed"
         return cycle_status
 
     def report_interrupt() -> None:
@@ -1099,8 +1093,7 @@ def main(
 
     def announce_sleep(delay: int, cycle_status: CycleStatus) -> None:
         print(
-            f"{ats_platform.upper()}_CYCLE_SLEEP seconds={delay} "
-            f"prior_status={cycle_status}",
+            f"{ats_platform.upper()}_CYCLE_SLEEP seconds={delay} prior_status={cycle_status}",
             flush=True,
         )
 

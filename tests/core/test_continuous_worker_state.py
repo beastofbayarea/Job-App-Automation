@@ -49,8 +49,5 @@ def test_interrupted_application_reconciliation_is_idempotent() -> None:
     assert reconcile_interrupted_submissions(state) == 1
     assert reconcile_interrupted_submissions(state) == 0
     assert state["jobs"]["started"]["status"] == "manual_review"
-    assert state["jobs"]["started"]["result_status"] == (
-        "INTERRUPTED_AFTER_APPLICATION_START"
-    )
+    assert state["jobs"]["started"]["result_status"] == ("INTERRUPTED_AFTER_APPLICATION_START")
     assert state["jobs"]["ready"]["status"] == "documents_ready"
-

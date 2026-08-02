@@ -10,7 +10,7 @@ import tempfile
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 
 
 DEFAULT_LOCK_TIMEOUT_SECONDS = 30.0
@@ -30,7 +30,7 @@ def interprocess_file_lock(
     *,
     timeout_seconds: float = DEFAULT_LOCK_TIMEOUT_SECONDS,
     stale_seconds: float = DEFAULT_STALE_LOCK_SECONDS,
-):
+) -> Iterator[None]:
     """Serialize read-modify-write updates made by independent processes."""
     if timeout_seconds <= 0:
         raise ValueError("timeout_seconds must be greater than zero")

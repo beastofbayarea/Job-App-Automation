@@ -55,11 +55,7 @@ def read_worker_state_records(path: Path) -> dict[str, Mapping[str, Any]]:
     if not isinstance(payload, dict) or not isinstance(payload.get("jobs"), dict):
         raise ValueError(f"invalid continuous ATS state: {path}")
     jobs = cast(dict[object, object], payload["jobs"])
-    return {
-        str(url): record
-        for url, record in jobs.items()
-        if isinstance(record, Mapping)
-    }
+    return {str(url): record for url, record in jobs.items() if isinstance(record, Mapping)}
 
 
 def reconcile_interrupted_submissions(state: WorkerState) -> int:

@@ -180,4 +180,3 @@ def test_runtime_delegates_non_once_pacing_and_stop_behavior() -> None:
     assert sleeps == [17]
     assert telemetry.events[0][1]["level"] == "warning"
     assert telemetry.flush_count == 1
-

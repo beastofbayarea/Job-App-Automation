@@ -24,12 +24,15 @@ from .continuous_ats import (
     DEFAULT_SUBMISSION_LOG,
     RESUMABLE_STATUSES,
     SHARED_INPUT,
-    _eligible_jobs,
-    _validate_platform,
     process_one,
 )
 from .continuous_worker_models import SOURCE_ONCE_EXIT_POLICY, CycleStatus
 from .continuous_worker_runtime import WorkerRuntime, run_worker
+from .continuous_worker_sources import (
+    SourceServices,
+    load_source_jobs,
+    validate_worker_platform,
+)
 from .continuous_worker_state import (
     load_worker_state,
     read_worker_state_records,
@@ -156,30 +159,18 @@ def _source_jobs(
     input_path: Path,
     tracker_path: Path | None,
 ) -> list[dict[str, Any]]:
-    if source == "search":
-        if not input_path.is_file():
-            return []
-        return _eligible_jobs(read_json(input_path), ats_platform)
-    if tracker_path is None:
-        raise ValueError("--tracker is required for tracker source workers")
-    jobs = load_jobs_from_tracker(tracker_path)
-    eligible: list[dict[str, Any]] = []
-    for job in jobs:
-        job_url = str(job["url"]).strip()
-        if str(job["ats"]).strip().lower() != ats_platform:
-            continue
-        if detect_ats_job_url(job_url) != ats_platform:
-            continue
-        eligible.append(
-            {
-                "job_url": job_url,
-                "company": str(job["company"]),
-                "title": str(job["role"]),
-                "platform": ats_platform,
-                "tracker_row": int(job["row_number"]),
-            }
-        )
-    return eligible
+    """Compatibility facade over the shared search/tracker source strategies."""
+    return load_source_jobs(
+        source=source,
+        ats_platform=ats_platform,
+        input_path=input_path,
+        tracker_path=tracker_path,
+        services=SourceServices(
+            read_json=read_json,
+            read_tracker=load_jobs_from_tracker,
+            detect_ats=detect_ats_job_url,
+        ),
+    )
 
 
 def _candidate_url(job: Mapping[str, Any]) -> str:
@@ -467,7 +458,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    ats_platform = _validate_platform(args.ats_platform)
+    ats_platform = validate_worker_platform(args.ats_platform)
     worker_id = str(args.worker_id).strip().lower()
     if not WORKER_ID_PATTERN.fullmatch(worker_id):
         raise SystemExit(
