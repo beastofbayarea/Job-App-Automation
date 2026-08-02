@@ -67,7 +67,7 @@ print(f"requeued_clarification={job_url}")
 PY
 "@
 } else { "" }
-$RemoteCommand = "$RequeueCommand`nsystemctl reset-failed '$Unit'; systemctl start '$Unit'; systemctl show '$Unit' --property=Id,ActiveState,SubState,NRestarts,MainPID"
+$RemoteCommand = "set -eu`n$RequeueCommand`nsystemctl reset-failed '$Unit'; systemctl start '$Unit'; systemctl show '$Unit' --property=Id,ActiveState,SubState,NRestarts,MainPID"
 
 try {
     $Execution = Invoke-ExternalCommandWithTimeout -FilePath $PlinkPath -ArgumentList @(
