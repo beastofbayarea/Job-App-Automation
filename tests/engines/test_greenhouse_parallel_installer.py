@@ -28,3 +28,25 @@ def test_greenhouse_source_template_has_independent_supervision_and_limits() -> 
     assert "continuous_source_ats" in template
     assert "MemoryMax=1050M" in template
     assert "__SOURCE_ARGS__" in template
+
+
+def test_excel_fleet_installer_uses_three_isolated_workers_and_shared_claims() -> None:
+    script = (ROOT / "scripts" / "install_vps_greenhouse_excel_fleet.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    for source in (
+        "greenhouse_all_jobs.xlsx",
+        "greenhouse_marketing_jobs.xlsx",
+        "greenhouse_product_management_jobs.xlsx",
+    ):
+        assert source in script
+    for worker_id in ("all", "marketing", "product-management"):
+        assert f'Id = "{worker_id}"' in script
+    assert "continuous_greenhouse_claims.json" in script
+    assert "--peer-state" in script
+    assert (
+        "systemctl disable --now job-app-greenhouse-excel.service "
+        "job-app-smartrecruiters.service job-app-workable.service"
+    ) in script
+    assert "for unit in $NewServices; do systemctl is-active --quiet" in script

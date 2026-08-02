@@ -398,6 +398,13 @@ and tracker-backed Greenhouse workers with shared claims, verifies both services
 and then disables the competing Ashby worker. This topology is intentionally an
 alternative to running every provider worker simultaneously.
 
+For the three-workbook Greenhouse fleet, use
+`scripts/install_vps_greenhouse_excel_fleet.ps1`. It installs independent
+`all`, `marketing`, and `product-management` Excel workers, keeps the
+search-backed Greenhouse worker running, and coordinates all four through the
+same provider job-ID claims. The fleet installer disables the superseded
+single-Excel, SmartRecruiters, and Workable workers.
+
 ```powershell
 pwsh scripts\install_vps_continuous_ats.ps1 -AtsPlatform providername
 ```

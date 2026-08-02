@@ -187,6 +187,14 @@ coordinates both through shared provider job-ID claims, verifies them, and only
 then disables `job-app-ashby.service`. Treat this as a deliberate alternative
 topology; do not describe it as the all-provider parallel layout.
 
+To run the three canonical Greenhouse workbooks concurrently, execute
+`pwsh scripts/install_vps_greenhouse_excel_fleet.ps1`. The installer uploads
+the ignored private workbooks, validates each tracker, creates isolated state,
+selection, result, and document paths, and uses one shared claims file across
+the three Excel workers and the existing search-backed Greenhouse worker. It
+then disables `job-app-greenhouse-excel.service`,
+`job-app-smartrecruiters.service`, and `job-app-workable.service`.
+
 Each cycle selects exactly one unattempted, verified-live record for the
 configured ATS from `output/continuous_<ats>_jobs.json`, initially seeded from
 the latest `output/vps_generation_jobs.json`. It chooses a random email from
