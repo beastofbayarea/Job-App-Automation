@@ -40,6 +40,12 @@ if pgrep -f '[j]ob_automation.py (apply|documents generate)' >/dev/null; then
   exit 76
 fi
 
+systemctl stop `$services
+restore_workers() {
+  systemctl start `$services
+}
+trap restore_workers EXIT INT TERM
+
 PYTHONPATH="`$repo/src" "`$repo/.venv/bin/python" - \
   "`$state" "`$tracker" "`$repo/output/submission_log.json" "`$retry_root/tracker.xlsx" <<'PY'
 import json
@@ -52,6 +58,48 @@ from job_application_automation.core.orchestrator import load_jobs_from_tracker
 
 state_path, tracker_path, ledger_path, retry_path = map(Path, sys.argv[1:])
 state = json.loads(state_path.read_text(encoding="utf-8"))
+
+# Reconcile verified terminal outcomes from earlier isolated retries before
+# choosing the next workbook failure. The services are stopped while this
+# source state is updated, preventing concurrent state-writer races.
+reconciled = 0
+for prior_path in state_path.parent.glob("greenhouse-tracker-retry.*/state.json"):
+    try:
+        prior_state = json.loads(prior_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        continue
+    for prior in prior_state.get("jobs", {}).values():
+        if not isinstance(prior, dict):
+            continue
+        prior_result = prior.get("result") if isinstance(prior.get("result"), dict) else {}
+        prior_status = prior.get("result_status") or prior_result.get("status")
+        if prior_status != "JOB_CONTEXT_UNAVAILABLE":
+            continue
+        prior_url = str(prior.get("job_url", ""))
+        for source_record in state.get("jobs", {}).values():
+            if not isinstance(source_record, dict) or source_record.get("job_url") != prior_url:
+                continue
+            source_record.update({
+                "status": "failed",
+                "stage": "application",
+                "result_status": "JOB_CONTEXT_UNAVAILABLE",
+                "result": prior_result,
+                "exit_code": prior.get("exit_code"),
+                "timed_out": prior.get("timed_out", False),
+                "stdout_tail": prior.get("stdout_tail", ""),
+                "stderr_tail": prior.get("stderr_tail", ""),
+                "updated_at": prior.get("updated_at", source_record.get("updated_at")),
+            })
+            reconciled += 1
+if reconciled:
+    temporary = state_path.with_suffix(state_path.suffix + ".reconcile.tmp")
+    temporary.write_text(
+        json.dumps(state, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(state_path)
+    print(f"reconciled_terminal_retries={reconciled}")
+
 candidates = []
 for record in state.get("jobs", {}).values():
     if not isinstance(record, dict):
@@ -97,12 +145,6 @@ print(f"retry_company={job['company']}")
 print(f"retry_title={job['role']}")
 print(f"retry_url={job['url']}")
 PY
-
-systemctl stop `$services
-restore_workers() {
-  systemctl start `$services
-}
-trap restore_workers EXIT INT TERM
 
 set +e
 PYTHONPATH="`$repo/src" xvfb-run -a --server-args="-screen 0 1280x1024x24" \
