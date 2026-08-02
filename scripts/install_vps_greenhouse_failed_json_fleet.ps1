@@ -27,7 +27,7 @@ $RepoPath = $RemoteRepoPath.TrimEnd("/")
 $Repo = ConvertTo-PosixShellLiteral $RepoPath
 $Token = [guid]::NewGuid().ToString("N")
 $PasswordFile = New-TemporaryPasswordFile -Password $Connection.Password -Prefix "greenhouse-failed-json"
-$Template = (Get-Content -LiteralPath $ServiceTemplatePath -Raw).Replace("Restart=always", "Restart=on-failure")
+$Template = Get-Content -LiteralPath $ServiceTemplatePath -Raw
 $TemporaryFiles = [Collections.Generic.List[string]]::new()
 $Transfers = [Collections.Generic.List[object]]::new()
 $Units = [Collections.Generic.List[string]]::new()
