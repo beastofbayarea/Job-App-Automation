@@ -20,6 +20,7 @@ from job_application_automation.engines.greenhouse import (
     _option_text_matches,
     _resume_employer_answer,
     _select_first_greenhouse_combobox,
+    _select_greenhouse_combobox,
     _select_native_control,
     _required_empty_fields,
     _skip_application_topic,
@@ -47,6 +48,26 @@ def test_required_combobox_fallback_clicks_first_visible_option() -> None:
 
     first.click.assert_called_once_with()
     second.click.assert_not_called()
+
+
+def test_combobox_fallback_clears_failed_search_before_selecting_first_option() -> None:
+    page = MagicMock()
+    control = MagicMock()
+    filtered = MagicMock()
+    filtered.count.return_value = 1
+    filtered.first.wait_for.return_value = None
+    full_menu = MagicMock()
+    first = MagicMock()
+    full_menu.count.return_value = 1
+    full_menu.nth.return_value = first
+    first.is_visible.return_value = True
+    first.inner_text.return_value = "First available choice"
+    page.locator.side_effect = [filtered, filtered, filtered, full_menu]
+
+    assert _select_greenhouse_combobox(page, control, ())
+
+    control.fill.assert_called_once_with("")
+    first.click.assert_called_once_with()
 
 
 def test_native_select_falls_back_to_first_nonempty_option() -> None:

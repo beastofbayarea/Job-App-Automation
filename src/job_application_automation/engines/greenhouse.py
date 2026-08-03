@@ -417,12 +417,25 @@ def _select_greenhouse_combobox(
                     return True
             except Exception:
                 pass
-        # Do not guess when no configured option matches.
+        # Configured matching may leave a searchable React-select filtered to
+        # an empty "No options" menu. Clear that search and reopen the complete
+        # menu before applying the deterministic first-option fallback.
+        try:
+            control.fill("")
+            control.click()
+            control.press("ArrowDown")
+            page.wait_for_timeout(400)
+            options = page.locator(option_locator)
+        except Exception:
+            pass
         visible_options = []
         for index in range(options.count()):
             option = options.nth(index)
             if option.is_visible():
-                visible_options.append(" ".join(option.inner_text().split()))
+                option_text = " ".join(option.inner_text().split())
+                visible_options.append(option_text)
+                if re.fullmatch(r"no options", option_text, re.I):
+                    continue
                 option.click()
                 logger.info(
                     "Greenhouse best-assumption fallback selected first available option=%r preferred=%s",
