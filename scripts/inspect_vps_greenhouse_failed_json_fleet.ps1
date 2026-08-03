@@ -14,6 +14,22 @@ $RemoteCommand = @"
 set -eu
 repo=$Repo
 systemctl show 'job-app-greenhouse-failed-*.service' --property=Id,ActiveState,SubState,NRestarts,ExecMainStatus
+echo '=== ACTIVE WORKER PROCESSES ==='
+ps -eo pid,etimes,pcpu,pmem,args --sort=-etimes |
+    grep -E 'continuous_source_ats|job_automation\.py' |
+    grep -v grep |
+    sed -E 's/[A-Za-z0-9.!#$%&*+\/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/[REDACTED_EMAIL]/g' || true
+echo '=== RECENT WORKER MILESTONES ==='
+journalctl \
+    -u job-app-greenhouse-failed-core-product-management.service \
+    -u job-app-greenhouse-failed-growth-general-marketing.service \
+    -u job-app-greenhouse-failed-product-marketing-gtm.service \
+    -u job-app-greenhouse-failed-program-project-management.service \
+    -u job-app-greenhouse-failed-technical-ai-platform-product-management.service \
+    --since '20 minutes ago' --no-pager -n 200 |
+    grep -E -A 12 'SOURCE_(PROCESSING|RESULT|RETRY|SLEEP|STOPPED)|CYCLE_(FAILED|COMPLETE)|SUBMITTED|CONFIRMED|REQUIRED_FIELDS|JOB_CONTEXT|DOCUMENT_GENERATION|timed out|timeout|ERROR|Traceback' |
+    sed -E 's/[A-Za-z0-9.!#$%&*+\/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/[REDACTED_EMAIL]/g' |
+    tail -n 100 || true
 python3 - "`$repo/output" <<'PY'
 import json
 import re
