@@ -158,6 +158,7 @@ for path in sorted(root.glob("continuous_greenhouse_failed_*_state.json")):
             failed_jobs.append({
                 "company": item.get("company"),
                 "title": item.get("title"),
+                "job_url": item.get("job_url"),
                 "status": status,
                 "missing_fields": sorted(set(fields)),
                 "detail": detail or None,

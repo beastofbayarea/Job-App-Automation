@@ -1528,6 +1528,33 @@ def run(
                         page, screenshot_dir, company or "Greenhouse", "job_unavailable"
                     ),
                 }
+            if (
+                not _confirmation_visible(page)
+                and _first_visible(
+                    page.locator(
+                        'input[name="first_name"], input[name="last_name"], '
+                        'input[type="email"], input[type="file"]'
+                    )
+                )
+                is None
+            ):
+                return {
+                    "success": False,
+                    "status": "JOB_CONTEXT_UNAVAILABLE",
+                    "ats": ATS_NAME,
+                    "submitted": False,
+                    "confirmed": False,
+                    "test_mode": not live_submit,
+                    "filled_fields": {},
+                    "custom_questions": {},
+                    "eeo_fields": {},
+                    "consent_fields": [],
+                    "missing_required": [],
+                    "detail": "Greenhouse application form is unavailable for this job URL",
+                    "screenshot": _screenshot(
+                        page, screenshot_dir, company or "Greenhouse", "form_unavailable"
+                    ),
+                }
             if _confirmation_visible(page):
                 confirmed_screenshot = _screenshot(
                     page, screenshot_dir, company or "Greenhouse", "submitted_verified"
