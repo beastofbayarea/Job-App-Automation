@@ -78,13 +78,18 @@ for path in matched_paths:
             continue
         result = record.get("result") if isinstance(record.get("result"), dict) else {}
         status = str(record.get("result_status") or result.get("status") or "")
-        if status != "REQUIRED_FIELDS_NOT_FILLED":
-            raise SystemExit(f"refusing target with status {status}: {identity}")
         job_url = str(record.get("job_url") or key)
+        matching_claims = [
+            claim for claim in claims.get("jobs", {}).values()
+            if isinstance(claim, dict) and claim.get("job_url") == job_url
+        ]
+        already_queued = any(claim.get("status") == "retry_requested" for claim in matching_claims)
+        if status != "REQUIRED_FIELDS_NOT_FILLED" and not already_queued:
+            raise SystemExit(f"refusing target with status {status}: {identity}")
         del state["jobs"][key]
-        for claim in claims.get("jobs", {}).values():
-            if isinstance(claim, dict) and claim.get("job_url") == job_url:
-                claim["status"] = "retry_requested"
+        for claim in matching_claims:
+            claim["status"] = "retry_requested"
+            claim.pop("next_retry_at", None)
         matched.append("|".join(identity))
     atomic_write_text(path, json.dumps(state, indent=2, sort_keys=True) + "\n")
 

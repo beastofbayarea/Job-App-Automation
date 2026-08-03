@@ -910,6 +910,60 @@ def _fill_custom_questions(
     return results
 
 
+def _repair_missing_required_controls(
+    page: Page,
+    missing: Sequence[str],
+    profile: Mapping[str, Any],
+    rules: Mapping[str, Any],
+    eeo: Mapping[str, Any],
+    field_matchers: Mapping[str, Sequence[str]],
+    option_variants: Mapping[str, Sequence[str]],
+) -> dict[str, bool]:
+    """Reacquire and commit labeled controls rejected by React validation."""
+    repaired: dict[str, bool] = {}
+    for label in missing:
+        controls = page.get_by_label(label, exact=True)
+        success = False
+        for index in range(controls.count()):
+            control = controls.nth(index)
+            try:
+                if not control.is_visible():
+                    continue
+                desired = _configured_answer(label, profile, rules, eeo, field_matchers)
+                role_name = control.get_attribute("role") or ""
+                tag = control.evaluate("el => el.tagName.toLowerCase()")
+                if role_name == "combobox":
+                    preferred = (
+                        _answer_variants(label, desired, option_variants) if desired else ()
+                    )
+                    success = _select_greenhouse_combobox(page, control, preferred)
+                elif tag == "select":
+                    preferred = (
+                        _answer_variants(label, desired, option_variants) if desired else ()
+                    )
+                    success = _select_native_control(
+                        control,
+                        preferred,
+                        fallback_first=True,
+                    )
+                elif tag == "input" and desired:
+                    control.fill(str(desired))
+                    if control.get_attribute("aria-autocomplete") == "list" or control.get_attribute(
+                        "aria-controls"
+                    ):
+                        control.press("ArrowDown")
+                        control.press("Enter")
+                    success = bool(control.input_value().strip())
+                if success:
+                    control.blur()
+                    logger.info("Greenhouse repaired rejected required control label=%r", label)
+                    break
+            except Exception as exc:
+                logger.debug("Required-control repair failed for %r: %s", label, exc)
+        repaired[label] = success
+    return repaired
+
+
 def _fill_eeo_fields(
     page: Page,
     profile: Mapping[str, Any],
@@ -1674,6 +1728,20 @@ def run(
             challenge_filled = form_sections.challenge_filled
             page.wait_for_timeout(300)
             missing = validate_required_fields(page, _required_empty_fields)
+            if missing:
+                repaired = _repair_missing_required_controls(
+                    page,
+                    missing,
+                    profile,
+                    config.get("rules", {}),
+                    config.get("eeo_defaults", {}),
+                    config.get("field_matchers", {}),
+                    config.get("answer_variants", {}),
+                )
+                custom_questions.update(repaired)
+                if any(repaired.values()):
+                    page.wait_for_timeout(300)
+                    missing = validate_required_fields(page, _required_empty_fields)
             if live_submit and challenge_visible and not challenge_filled:
                 missing = sorted({*missing, "Security code"})
             prefill_screenshot = _screenshot(

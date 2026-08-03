@@ -69,7 +69,7 @@ for path in sorted(root.glob("continuous_greenhouse_failed_*_state.json")):
         )
         diagnostics.extend(
             line.strip() for line in text.splitlines()
-            if re.search(r"required|missing|question|manual.review", line, re.I)
+            if re.search(r"required|missing|question|manual.review|combobox|option", line, re.I)
         )
     if diagnostics:
         print(json.dumps({"worker": path.stem, "diagnostics": diagnostics[-12:]}, ensure_ascii=False))

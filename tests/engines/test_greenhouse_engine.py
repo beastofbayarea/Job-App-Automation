@@ -23,6 +23,7 @@ from job_application_automation.engines.greenhouse import (
     _select_greenhouse_combobox,
     _select_native_control,
     _required_empty_fields,
+    _repair_missing_required_controls,
     _skip_application_topic,
     _submit_control_enabled,
     _upload_cover_letter,
@@ -68,6 +69,47 @@ def test_combobox_fallback_clears_failed_search_before_selecting_first_option() 
 
     control.fill.assert_called_once_with("")
     first.click.assert_called_once_with()
+
+
+def test_missing_required_repair_reacquires_exact_labeled_combobox() -> None:
+    page = MagicMock()
+    controls = MagicMock()
+    control = MagicMock()
+    controls.count.return_value = 1
+    controls.nth.return_value = control
+    control.is_visible.return_value = True
+    control.get_attribute.side_effect = lambda name: {
+        "role": "combobox",
+    }.get(name)
+    control.evaluate.return_value = "input"
+    page.get_by_label.return_value = controls
+
+    with (
+        patch(
+            "job_application_automation.engines.greenhouse._configured_answer",
+            return_value="India",
+        ),
+        patch(
+            "job_application_automation.engines.greenhouse._select_greenhouse_combobox",
+            return_value=True,
+        ) as select,
+    ):
+        result = _repair_missing_required_controls(
+            page,
+            ["What is the country of your birth?"],
+            {"country_of_birth": "India"},
+            {},
+            {},
+            {},
+            {},
+        )
+
+    assert result == {"What is the country of your birth?": True}
+    page.get_by_label.assert_called_once_with(
+        "What is the country of your birth?", exact=True
+    )
+    select.assert_called_once_with(page, control, ("India",))
+    control.blur.assert_called_once_with()
 
 
 def test_native_select_falls_back_to_first_nonempty_option() -> None:
