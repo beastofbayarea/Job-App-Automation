@@ -125,6 +125,25 @@ def _fill_all_visible(page: Page, selectors: Sequence[str], value: str) -> bool:
     return _shared_fill_all_visible(page, selectors, value)
 
 
+def _fill_all_labeled(page: Page, pattern: str, value: str) -> bool:
+    """Fill every visible control with an exact semantic label."""
+    if not value:
+        return False
+    controls = page.get_by_label(re.compile(pattern, re.I))
+    filled = False
+    for index in range(controls.count()):
+        control = controls.nth(index)
+        try:
+            if not control.is_visible():
+                continue
+            control.fill(value)
+            control.blur()
+            filled = bool(control.input_value().strip()) or filled
+        except Exception:
+            continue
+    return filled
+
+
 def _security_challenge_visible(page: Page) -> bool:
     return page.locator('input[id^="security-input"]').count() >= 8
 
@@ -258,6 +277,36 @@ def _select_native(page: Page, label_pattern: str, preferred: Sequence[str]) -> 
                     return True
     except Exception:
         pass
+    return False
+
+
+def _select_native_control(
+    control: Locator,
+    preferred: Sequence[str],
+    *,
+    fallback_first: bool,
+) -> bool:
+    """Select directly on a native select, optionally falling back to its first value."""
+    options = control.locator("option")
+    available: list[tuple[str, str]] = []
+    for index in range(options.count()):
+        option = options.nth(index)
+        value = option.get_attribute("value") or ""
+        label = " ".join(option.inner_text().split())
+        if value:
+            available.append((value, label))
+    for desired in preferred:
+        for value, label in available:
+            if _option_text_matches(str(desired), label):
+                control.select_option(value=value)
+                return True
+    if fallback_first and available:
+        control.select_option(value=available[0][0])
+        logger.info(
+            "Greenhouse native dropdown fallback selected first option=%r",
+            available[0][1],
+        )
+        return True
     return False
 
 
@@ -797,21 +846,13 @@ def _fill_custom_questions(
                         control.select_option(value=select_values[-1])
                         success = True
                 elif desired:
-                    success = _select_native(
-                        page, re.escape(label), _answer_variants(label, desired, option_variants)
+                    success = _select_native_control(
+                        control,
+                        _answer_variants(label, desired, option_variants),
+                        fallback_first=control.get_attribute("aria-required") == "true",
                     )
                 elif control.get_attribute("aria-required") == "true":
-                    options = control.locator("option")
-                    for item in range(options.count()):
-                        option_value = options.nth(item).get_attribute("value")
-                        if option_value:
-                            control.select_option(value=option_value)
-                            success = True
-                            logger.info(
-                                "Greenhouse required native dropdown fallback selected first option label=%r",
-                                label,
-                            )
-                            break
+                    success = _select_native_control(control, (), fallback_first=True)
             elif control_type in {"radio", "checkbox"}:
                 handled_groups.add(group_key)
                 if desired:
@@ -972,6 +1013,14 @@ def _fill_standard_fields(
     }
     if cover_letter is not None:
         fields["cover_letter"] = _upload_cover_letter(page, cover_letter)
+    fields["first_name"] = (
+        _fill_all_labeled(page, r"^\s*(?:legal\s+)?first name\s*$", str(profile.get("first_name", "")))
+        or fields["first_name"]
+    )
+    fields["last_name"] = (
+        _fill_all_labeled(page, r"^\s*(?:legal\s+)?last name\s*$", str(profile.get("last_name", "")))
+        or fields["last_name"]
+    )
     location_control = _first_visible(
         page.get_by_label(re.compile(r"(?:location|city)", re.IGNORECASE))
     )

@@ -7,6 +7,7 @@ import pytest
 from job_application_automation.engines.greenhouse import (
     _valid_greenhouse_url,
     _fill_all_visible,
+    _fill_all_labeled,
     _load_candidate_evidence,
     _load_personalized_resume_evidence,
     _fill_explicit_required_consents,
@@ -19,6 +20,7 @@ from job_application_automation.engines.greenhouse import (
     _option_text_matches,
     _resume_employer_answer,
     _select_first_greenhouse_combobox,
+    _select_native_control,
     _required_empty_fields,
     _skip_application_topic,
     _submit_control_enabled,
@@ -45,6 +47,41 @@ def test_required_combobox_fallback_clicks_first_visible_option() -> None:
 
     first.click.assert_called_once_with()
     second.click.assert_not_called()
+
+
+def test_native_select_falls_back_to_first_nonempty_option() -> None:
+    control = MagicMock()
+    options = MagicMock()
+    placeholder = MagicMock()
+    first = MagicMock()
+    options.count.return_value = 2
+    options.nth.side_effect = [placeholder, first]
+    placeholder.get_attribute.return_value = ""
+    placeholder.inner_text.return_value = "Select..."
+    first.get_attribute.return_value = "yes"
+    first.inner_text.return_value = "Yes"
+    control.locator.return_value = options
+
+    assert _select_native_control(control, ("Unknown",), fallback_first=True)
+    control.select_option.assert_called_once_with(value="yes")
+
+
+def test_fill_all_labeled_populates_duplicate_identity_controls() -> None:
+    page = MagicMock()
+    controls = MagicMock()
+    first = MagicMock()
+    second = MagicMock()
+    controls.count.return_value = 2
+    controls.nth.side_effect = [first, second]
+    first.is_visible.return_value = True
+    second.is_visible.return_value = True
+    first.input_value.return_value = "Candidate"
+    second.input_value.return_value = "Candidate"
+    page.get_by_label.return_value = controls
+
+    assert _fill_all_labeled(page, r"^first name$", "Candidate")
+    first.fill.assert_called_once_with("Candidate")
+    second.fill.assert_called_once_with("Candidate")
 
 
 def test_pre_submit_security_challenge_uses_newest_gmail_code_only_in_live_mode() -> None:
