@@ -83,6 +83,7 @@ from .form_sections import (
 )
 
 ATS_NAME = "greenhouse"
+FIRST_OPTION_ANSWER = "__FIRST_OPTION__"
 SUBMIT_BUTTON_TEXT_PATTERN = re.compile(
     r"submit application|envoyer.*candidature|postuler",
     re.I,
@@ -484,6 +485,17 @@ def _greenhouse_semantic_answer(
 ) -> str | None:
     """Resolve observed Greenhouse wording before broader aliases can collide."""
     normalized = " ".join(label.lower().split())
+    if re.search(r"\brelocation (?:support|assistance)\b", normalized):
+        return str(rules.get("relocation_support") or "").strip() or None
+    if re.search(r"\badditional countries\b.*\bpermanent resident", normalized):
+        return str(rules.get("additional_permanent_residencies") or "").strip() or None
+    if re.search(r"\bexport controls?\b", normalized):
+        return str(rules.get("export_control_eligibility") or "").strip() or None
+    if re.search(r"\bcountry\b.*\btime zone\b", normalized):
+        return str(rules.get("work_country_timezone") or "").strip() or None
+    if re.search(r"\b(?:what|which|in what) cities\b.*\bavailable to work\b", normalized):
+        if str(rules.get("city_availability_selection") or "").casefold() == "first_option":
+            return FIRST_OPTION_ANSWER
     if re.search(r"\bsecurity clearance\b|\bclearance status\b", normalized):
         return str(rules.get("security_clearance") or "").strip() or None
     if re.search(
@@ -675,6 +687,11 @@ def _fill_custom_questions(
             if role_name == "combobox":
                 if maximum_policy:
                     success = _select_greenhouse_combobox_max(page, control)
+                elif desired == FIRST_OPTION_ANSWER:
+                    control.click()
+                    control.press("ArrowDown")
+                    control.press("Enter")
+                    success = True
                 elif desired:
                     preferred = (
                         location_answer_candidates(profile)

@@ -275,17 +275,40 @@ def test_greenhouse_policy_answers_cover_user_supplied_screening_defaults() -> N
         "visa_sponsorship": "No",
         "visa_type_not_applicable": "N/A",
         "target_country_work_authorization": "Yes",
+        "relocation_support": "No",
+        "additional_permanent_residencies": "N/A",
+        "export_control_eligibility": "No",
+        "work_country_timezone": "USA, ET",
+        "city_availability_selection": "first_option",
     }
     assert _greenhouse_semantic_answer("Do you hold a security clearance?", {}, rules) == "No"
     assert (
         _greenhouse_semantic_answer("What is your expected hourly rate?", {}, rules) == "$50/hour"
     )
     assert _greenhouse_semantic_answer("Will you relocate to London?", {}, rules) == "Yes"
+    assert _greenhouse_semantic_answer("Will you require relocation support?", {}, rules) == "No"
     assert _greenhouse_semantic_answer("Are you authorized to work in France?", {}, rules) == "Yes"
     assert _greenhouse_semantic_answer("Do you require visa sponsorship?", {}, rules) == "No"
     assert _greenhouse_semantic_answer("If yes, what type of visa are you on?", {}, rules) == "N/A"
     assert (
         _greenhouse_semantic_answer("Do you reside within the United States?", {}, rules) == "Yes"
+    )
+    assert (
+        _greenhouse_semantic_answer(
+            "Please list any additional countries of which you are a lawful permanent resident.",
+            {},
+            rules,
+        )
+        == "N/A"
+    )
+    assert _greenhouse_semantic_answer("EXPORT CONTROLS", {}, rules) == "No"
+    assert (
+        _greenhouse_semantic_answer("What country and time zone are you based in?", {}, rules)
+        == "USA, ET"
+    )
+    assert (
+        _greenhouse_semantic_answer("In what cities are you available to work?", {}, rules)
+        == "__FIRST_OPTION__"
     )
 
 
