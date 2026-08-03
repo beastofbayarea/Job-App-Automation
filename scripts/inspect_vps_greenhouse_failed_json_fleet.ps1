@@ -69,6 +69,21 @@ for path in sorted(root.glob("continuous_greenhouse_failed_*_state.json")):
         result = item.get("result") if isinstance(item.get("result"), dict) else {}
         fields = list(result.get("missing_required") or []) + list(result.get("missing_critical") or [])
         combined_tail = "\n".join(str(item.get(field, "")) for field in ("stdout_tail", "stderr_tail"))
+        artifact_result = {}
+        result_path = Path(str(item.get("result_path") or ""))
+        if result_path.is_file():
+            try:
+                artifact_payload = json.loads(result_path.read_text(encoding="utf-8"))
+                if isinstance(artifact_payload, list) and artifact_payload and isinstance(artifact_payload[0], dict):
+                    artifact_result = artifact_payload[0]
+                elif isinstance(artifact_payload, dict):
+                    artifact_result = artifact_payload
+                if isinstance(artifact_result.get("result"), dict):
+                    artifact_result = artifact_result["result"]
+            except (OSError, json.JSONDecodeError):
+                pass
+        fields.extend(artifact_result.get("missing_required") or [])
+        fields.extend(artifact_result.get("missing_critical") or [])
         for match in re.finditer(r"ENGINE_RESULT_JSON:(\{.*\})", combined_tail):
             try:
                 engine_result = json.loads(match.group(1))
@@ -122,12 +137,35 @@ for path in sorted(root.glob("continuous_greenhouse_failed_*_state.json")):
             generation_diagnostics[detail] += 1
         if status not in {"preparing", "application_started", "SUBMITTED & CONFIRMED"}:
             detail = str(result.get("detail") or result.get("error") or item.get("detail") or "").strip()
+            failure_diagnostics = [
+                re.sub(
+                    r"(?i)[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}",
+                    "[REDACTED_EMAIL]",
+                    line.strip(),
+                )
+                for line in combined_tail.splitlines()
+                if re.search(r"unconfigured|required|missing|ENGINE_RESULT|question", line, re.I)
+            ]
+            if not failure_diagnostics and status == "REQUIRED_FIELDS_NOT_FILLED":
+                failure_diagnostics = [
+                    re.sub(
+                        r"(?i)[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}",
+                        "[REDACTED_EMAIL]",
+                        line.strip(),
+                    )
+                    for line in combined_tail.splitlines() if line.strip()
+                ]
             failed_jobs.append({
                 "company": item.get("company"),
                 "title": item.get("title"),
                 "status": status,
                 "missing_fields": sorted(set(fields)),
                 "detail": detail or None,
+                "diagnostics": failure_diagnostics[-8:],
+                "unfilled_controls": sorted({
+                    str(label) for section in ("custom_questions", "eeo_fields", "filled_fields")
+                    for label, filled in (artifact_result.get(section) or {}).items() if filled is False
+                }),
             })
     print(json.dumps({
         "worker": path.stem,
