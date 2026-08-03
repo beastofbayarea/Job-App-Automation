@@ -280,6 +280,8 @@ def test_greenhouse_policy_answers_cover_user_supplied_screening_defaults() -> N
         "export_control_eligibility": "No",
         "work_country_timezone": "USA, ET",
         "city_availability_selection": "first_option",
+        "financial_content_experience": "Yes",
+        "dealer_partner_supplier_relationship": "No",
     }
     assert _greenhouse_semantic_answer("Do you hold a security clearance?", {}, rules) == "No"
     assert (
@@ -309,6 +311,22 @@ def test_greenhouse_policy_answers_cover_user_supplied_screening_defaults() -> N
     assert (
         _greenhouse_semantic_answer("In what cities are you available to work?", {}, rules)
         == "__FIRST_OPTION__"
+    )
+    assert (
+        _greenhouse_semantic_answer(
+            "Have you worked with earnings call transcripts, event transcripts, or financial content/data products?",
+            {},
+            rules,
+        )
+        == "Yes"
+    )
+    assert (
+        _greenhouse_semantic_answer(
+            "Do you currently, or in the past year, work for or with a dealer, partner or supplier?",
+            {},
+            rules,
+        )
+        == "No"
     )
 
 

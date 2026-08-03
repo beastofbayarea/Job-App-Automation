@@ -496,6 +496,18 @@ def _greenhouse_semantic_answer(
     if re.search(r"\b(?:what|which|in what) cities\b.*\bavailable to work\b", normalized):
         if str(rules.get("city_availability_selection") or "").casefold() == "first_option":
             return FIRST_OPTION_ANSWER
+    if re.search(
+        r"\b(?:earnings call|event) transcripts?\b|"
+        r"\bfinancial (?:content|data)(?: products?)?\b",
+        normalized,
+    ):
+        return str(rules.get("financial_content_experience") or "").strip() or None
+    if re.search(
+        r"\b(?:work|worked)\b.{0,80}\b(?:dealer|partner|supplier)\b|"
+        r"\b(?:dealer|partner|supplier)\b.{0,80}\b(?:work|worked)\b",
+        normalized,
+    ):
+        return str(rules.get("dealer_partner_supplier_relationship") or "").strip() or None
     if re.search(r"\bsecurity clearance\b|\bclearance status\b", normalized):
         return str(rules.get("security_clearance") or "").strip() or None
     if re.search(
