@@ -581,6 +581,8 @@ def _greenhouse_semantic_answer(
 ) -> str | None:
     """Resolve observed Greenhouse wording before broader aliases can collide."""
     normalized = " ".join(label.lower().split())
+    if re.search(r"\bcountry\b.{0,24}\bbirth\b|\bbirth\b.{0,24}\bcountry\b", normalized):
+        return str(profile.get("country_of_birth") or "").strip() or None
     language_answers = rules.get("language_answers")
     if isinstance(language_answers, Mapping):
         for language, answer in language_answers.items():
@@ -959,7 +961,9 @@ def _repair_missing_required_controls(
                         "aria_autocomplete": control.get_attribute("aria-autocomplete"),
                     }
                 )
-                desired = _configured_answer(label, profile, rules, eeo, field_matchers)
+                desired = _greenhouse_semantic_answer(label, profile, rules)
+                if not desired:
+                    desired = _configured_answer(label, profile, rules, eeo, field_matchers)
                 role_name = control.get_attribute("role") or ""
                 tag = control.evaluate("el => el.tagName.toLowerCase()")
                 if role_name == "combobox":

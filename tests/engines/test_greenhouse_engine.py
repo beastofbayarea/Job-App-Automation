@@ -160,6 +160,17 @@ def test_missing_required_repair_reuses_discovered_question_mapping() -> None:
     control.blur.assert_called_once_with()
 
 
+def test_country_of_your_birth_uses_dedicated_profile_value() -> None:
+    assert (
+        _greenhouse_semantic_answer(
+            "What is the country of your birth?",
+            {"country_of_birth": "India", "country": "United States"},
+            {},
+        )
+        == "India"
+    )
+
+
 def test_native_select_falls_back_to_first_nonempty_option() -> None:
     control = MagicMock()
     options = MagicMock()
