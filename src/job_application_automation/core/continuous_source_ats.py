@@ -390,8 +390,12 @@ def _sync_claim_from_state(
         result_status = str(record.get("result_status") or "")
         critical_failure = claim_status in {"failed", "manual_review"}
         if critical_failure:
-            retry_count += 1
             claim_status = "retry_requested"
+            if not (
+                isinstance(prior_claim, Mapping)
+                and prior_claim.get("status") == "retry_requested"
+            ):
+                retry_count += 1
         claim = {
             "owner": worker_id,
             "status": claim_status,
@@ -403,8 +407,18 @@ def _sync_claim_from_state(
             "retry_count": retry_count,
         }
         if critical_failure:
-            delay = _critical_retry_delay_seconds(retry_count, result_status)
-            claim["next_retry_at"] = (datetime.now(UTC) + timedelta(seconds=delay)).isoformat()
+            prior_retry_at = (
+                str(prior_claim.get("next_retry_at") or "")
+                if isinstance(prior_claim, Mapping)
+                else ""
+            )
+            if prior_retry_at:
+                claim["next_retry_at"] = prior_retry_at
+            else:
+                delay = _critical_retry_delay_seconds(retry_count, result_status)
+                claim["next_retry_at"] = (
+                    datetime.now(UTC) + timedelta(seconds=delay)
+                ).isoformat()
             claim["critical_error"] = True
         claims["jobs"][identity] = claim
         claims["updated_at"] = _now()
@@ -415,7 +429,7 @@ def _sync_claim_from_state(
         )
 
 
-def _sync_interrupted_claims(
+def _sync_terminal_claims(
     *,
     state: Mapping[str, Any],
     ats_platform: str,
@@ -427,14 +441,14 @@ def _sync_interrupted_claims(
     jobs = state.get("jobs", {})
     if not isinstance(jobs, Mapping):
         return 0
-    for interrupted in jobs.values():
+    for terminal in jobs.values():
         if (
-            not isinstance(interrupted, Mapping)
-            or interrupted.get("result_status") != "INTERRUPTED_AFTER_APPLICATION_START"
+            not isinstance(terminal, Mapping)
+            or terminal.get("status") not in {"failed", "manual_review"}
         ):
             continue
         _sync_claim_from_state(
-            job=interrupted,
+            job=terminal,
             ats_platform=ats_platform,
             worker_id=worker_id,
             state_path=state_path,
@@ -608,18 +622,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     reconciled = reconcile_interrupted_submissions(state)
     if reconciled:
         save_worker_state(args.state, state)
-        _sync_interrupted_claims(
-            state=state,
-            ats_platform=ats_platform,
-            worker_id=worker_id,
-            state_path=args.state,
-            claims_path=args.claims,
-        )
         print(
             f"{ats_platform.upper()}_SOURCE_INTERRUPTED_QUARANTINED "
             f"worker={worker_id} count={reconciled}",
             flush=True,
         )
+    _sync_terminal_claims(
+        state=state,
+        ats_platform=ats_platform,
+        worker_id=worker_id,
+        state_path=args.state,
+        claims_path=args.claims,
+    )
 
     def run_cycle() -> CycleStatus:
         jobs = _source_jobs(

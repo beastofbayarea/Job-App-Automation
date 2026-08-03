@@ -315,6 +315,19 @@ def test_critical_failure_is_automatically_scheduled_for_retry(tmp_path: Path) -
     assert claim["retry_count"] == 2
     assert claim["critical_error"] is True
     assert claim["next_retry_at"]
+    first_retry_at = claim["next_retry_at"]
+
+    continuous_source_ats._sync_claim_from_state(
+        job=job,
+        ats_platform="greenhouse",
+        worker_id="failed-core-product-management",
+        state_path=state_path,
+        claims_path=claims_path,
+        fallback_status="failed",
+    )
+    repeated = read_json(claims_path)["jobs"]["greenhouse:12345"]
+    assert repeated["retry_count"] == 2
+    assert repeated["next_retry_at"] == first_retry_at
 
 
 def test_retry_due_honors_future_backoff() -> None:
@@ -348,7 +361,7 @@ def test_interrupted_application_claim_is_scheduled_for_retry(tmp_path: Path) ->
         encoding="utf-8",
     )
 
-    assert continuous_source_ats._sync_interrupted_claims(
+    assert continuous_source_ats._sync_terminal_claims(
         state=state,
         ats_platform="greenhouse",
         worker_id="failed-program-project-management",

@@ -24,6 +24,7 @@ claims = json.loads((output / "continuous_greenhouse_failed_claims.json").read_t
 status_counts = Counter()
 pending_by_owner = Counter()
 pending = []
+claimed = []
 for claim in claims.get("jobs", {}).values():
     if not isinstance(claim, dict):
         continue
@@ -38,11 +39,21 @@ for claim in claims.get("jobs", {}).values():
             "title": claim.get("title"),
             "job_url": claim.get("job_url"),
         })
+    elif status == "claimed":
+        claimed.append({
+            "owner": str(claim.get("owner") or "UNKNOWN"),
+            "company": claim.get("company"),
+            "title": claim.get("title"),
+            "job_url": claim.get("job_url"),
+        })
 print(json.dumps({
     "claim_status_counts": dict(status_counts),
     "pending_retry_count": len(pending),
     "pending_by_owner": dict(pending_by_owner),
+    "claimed_count": len(claimed),
 }, sort_keys=True))
+for item in claimed:
+    print(json.dumps({"claimed": item}, sort_keys=True))
 for item in pending:
     print(json.dumps({"pending_retry": item}, sort_keys=True))
 PY
