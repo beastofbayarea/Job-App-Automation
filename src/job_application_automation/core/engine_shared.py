@@ -419,7 +419,7 @@ _LOCATION_QUESTION_PATTERNS = (
     # Where the candidate currently is.
     r"\blocation\b",
     r"\bcit(?:y|ies)\b",
-    r"where are you (?:located|based)",
+    r"where are you (?:currently )?(?:located|based)",
     r"where do you (?:currently )?(?:reside|live)",
     r"currently reside",
     # Where the candidate intends to work from.  Ashby and Lever both ask this

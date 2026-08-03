@@ -611,6 +611,9 @@ def _greenhouse_semantic_answer(
     if re.search(r"\b(?:what|which|in what) cities\b.*\bavailable to work\b", normalized):
         if str(rules.get("city_availability_selection") or "").casefold() == "first_option":
             return FIRST_OPTION_ANSWER
+    if is_location_question(label):
+        candidates = location_answer_candidates(profile)
+        return candidates[0] if candidates else None
     if re.search(
         r"\b(?:earnings call|event) transcripts?\b|"
         r"\bfinancial (?:content|data)(?: products?)?\b",

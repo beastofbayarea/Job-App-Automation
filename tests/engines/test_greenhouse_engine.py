@@ -171,6 +171,21 @@ def test_country_of_your_birth_uses_dedicated_profile_value() -> None:
     )
 
 
+def test_current_location_text_prompt_uses_full_profile_location() -> None:
+    assert (
+        _greenhouse_semantic_answer(
+            "Where are you currently located?",
+            {
+                "location": "San Francisco, California, United States",
+                "city": "San Francisco",
+                "country": "United States",
+            },
+            {},
+        )
+        == "San Francisco, California, United States"
+    )
+
+
 def test_native_select_falls_back_to_first_nonempty_option() -> None:
     control = MagicMock()
     options = MagicMock()
