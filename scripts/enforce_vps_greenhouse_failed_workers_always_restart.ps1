@@ -26,9 +26,10 @@ done
 systemctl daemon-reload
 systemctl enable $UnitNames
 systemctl reset-failed $UnitNames || true
-systemctl start job-app-greenhouse-failed-core-product-management.service
+systemctl restart $UnitNames
+sleep 10
 for unit in $UnitNames; do
-  systemctl show "`$unit" --property=Id,ActiveState,SubState,NRestarts,Restart
+  systemctl show "`$unit" --property=Id,ActiveState,SubState,NRestarts,Restart,ExecMainStartTimestamp
   systemctl cat "`$unit" | grep -F -- '--skip-cover-letter'
   if systemctl cat "`$unit" | grep -F -- '--pause-on-unconfirmed'; then exit 1; fi
 done
