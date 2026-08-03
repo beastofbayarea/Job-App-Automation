@@ -62,6 +62,7 @@ for path in sorted(root.glob("continuous_greenhouse_failed_*_state.json")):
     missing_fields = Counter()
     affected_jobs = defaultdict(list)
     generation_diagnostics = Counter()
+    standard_field_diagnostics = []
     for item in records:
         status = str(item.get("result_status") or item.get("status") or "UNKNOWN")
         result = item.get("result") if isinstance(item.get("result"), dict) else {}
@@ -88,6 +89,27 @@ for path in sorted(root.glob("continuous_greenhouse_failed_*_state.json")):
             job = f"{item.get('company', '')} | {item.get('title', '')}".strip(" |")
             if job and job not in affected_jobs[normalized]:
                 affected_jobs[normalized].append(job)
+        standard_names = {
+            "first name", "first_name", "last name", "last_name", "email", "resume",
+            "legal first name (english)", "what is your legal first name?", "address line 1",
+        }
+        standard_missing = sorted({str(field).strip() for field in fields if str(field).strip().casefold() in standard_names})
+        if standard_missing:
+            diagnostic_lines = [
+                re.sub(
+                    r"(?i)[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}",
+                    "[REDACTED_EMAIL]",
+                    line.strip(),
+                )
+                for line in combined_tail.splitlines()
+                if re.search(r"ENGINE_RESULT|missing|required|error|traceback|timeout|navigation|selector|resume", line, re.I)
+            ]
+            standard_field_diagnostics.append({
+                "job": f"{item.get('company', '')} | {item.get('title', '')}".strip(" |"),
+                "status": status,
+                "fields": standard_missing,
+                "diagnostics": diagnostic_lines[-8:],
+            })
         if status == "DOCUMENT_GENERATION_FAILED":
             detail = str(result.get("detail") or result.get("error") or item.get("detail") or "").strip()
             if not detail:
@@ -103,6 +125,7 @@ for path in sorted(root.glob("continuous_greenhouse_failed_*_state.json")):
         "missing_fields": dict(missing_fields),
         "affected_jobs": {field: jobs for field, jobs in affected_jobs.items()},
         "document_generation_diagnostics": dict(generation_diagnostics),
+        "standard_field_diagnostics": standard_field_diagnostics,
     }, ensure_ascii=False, sort_keys=True))
 PY
 "@
