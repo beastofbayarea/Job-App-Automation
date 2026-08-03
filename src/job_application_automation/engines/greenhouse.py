@@ -819,10 +819,10 @@ def _fill_custom_questions(
                         control,
                         preferred,
                     )
-                elif control.get_attribute("aria-required") == "true":
+                else:
                     try:
                         logger.info(
-                            "Unconfigured required combobox label=%r; selecting first option",
+                            "Unanswered combobox label=%r; selecting first option",
                             label,
                         )
                         success = _select_first_greenhouse_combobox(page, control)
@@ -849,9 +849,9 @@ def _fill_custom_questions(
                     success = _select_native_control(
                         control,
                         _answer_variants(label, desired, option_variants),
-                        fallback_first=control.get_attribute("aria-required") == "true",
+                        fallback_first=True,
                     )
-                elif control.get_attribute("aria-required") == "true":
+                else:
                     success = _select_native_control(control, (), fallback_first=True)
             elif control_type in {"radio", "checkbox"}:
                 handled_groups.add(group_key)
