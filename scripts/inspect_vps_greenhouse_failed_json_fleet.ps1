@@ -63,6 +63,7 @@ for path in sorted(root.glob("continuous_greenhouse_failed_*_state.json")):
     affected_jobs = defaultdict(list)
     generation_diagnostics = Counter()
     standard_field_diagnostics = []
+    failed_jobs = []
     for item in records:
         status = str(item.get("result_status") or item.get("status") or "UNKNOWN")
         result = item.get("result") if isinstance(item.get("result"), dict) else {}
@@ -119,6 +120,15 @@ for path in sorted(root.glob("continuous_greenhouse_failed_*_state.json")):
                 ]
                 detail = diagnostic_lines[-1] if diagnostic_lines else "No detailed generation diagnostic recorded"
             generation_diagnostics[detail] += 1
+        if status not in {"preparing", "application_started", "SUBMITTED & CONFIRMED"}:
+            detail = str(result.get("detail") or result.get("error") or item.get("detail") or "").strip()
+            failed_jobs.append({
+                "company": item.get("company"),
+                "title": item.get("title"),
+                "status": status,
+                "missing_fields": sorted(set(fields)),
+                "detail": detail or None,
+            })
     print(json.dumps({
         "worker": path.stem,
         "status_counts": dict(status_counts),
@@ -126,6 +136,7 @@ for path in sorted(root.glob("continuous_greenhouse_failed_*_state.json")):
         "affected_jobs": {field: jobs for field, jobs in affected_jobs.items()},
         "document_generation_diagnostics": dict(generation_diagnostics),
         "standard_field_diagnostics": standard_field_diagnostics,
+        "failed_jobs": failed_jobs,
     }, ensure_ascii=False, sort_keys=True))
 PY
 "@
