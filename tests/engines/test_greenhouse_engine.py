@@ -18,6 +18,7 @@ from job_application_automation.engines.greenhouse import (
     _job_unavailable_after_navigation,
     _option_text_matches,
     _resume_employer_answer,
+    _select_first_greenhouse_combobox,
     _required_empty_fields,
     _skip_application_topic,
     _submit_control_enabled,
@@ -26,6 +27,24 @@ from job_application_automation.engines.greenhouse import (
     _parser,
     main,
 )
+
+
+def test_required_combobox_fallback_clicks_first_visible_option() -> None:
+    page = MagicMock()
+    control = MagicMock()
+    options = MagicMock()
+    first = MagicMock()
+    second = MagicMock()
+    options.count.return_value = 2
+    options.nth.side_effect = [first, second]
+    first.is_visible.return_value = True
+    first.inner_text.return_value = "First choice"
+    page.locator.return_value = options
+
+    assert _select_first_greenhouse_combobox(page, control)
+
+    first.click.assert_called_once_with()
+    second.click.assert_not_called()
 
 
 def test_pre_submit_security_challenge_uses_newest_gmail_code_only_in_live_mode() -> None:

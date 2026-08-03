@@ -466,6 +466,40 @@ def _fill_radio_or_checkbox_group(
     return False
 
 
+def _select_first_greenhouse_combobox(page: Page, control: Locator) -> bool:
+    """Select the first available option for a required unanswered dropdown."""
+    try:
+        control.scroll_into_view_if_needed()
+        control.click()
+        control.press("ArrowDown")
+        page.wait_for_timeout(400)
+        options = page.locator('[role="option"], [id*="-option-"]')
+        for index in range(options.count()):
+            option = options.nth(index)
+            if option.is_visible():
+                selected = " ".join(option.inner_text().split())
+                option.click()
+                logger.info(
+                    "Greenhouse required-dropdown fallback selected first option=%r",
+                    selected,
+                )
+                return True
+        control.press("Enter")
+        container_text = control.evaluate(
+            "el => (el.parentElement?.parentElement?.innerText || '').trim()"
+        )
+        success = bool(
+            container_text
+            and not re.fullmatch(r"(?:select|choose)(?:\.\.\.)?", container_text, re.I)
+        )
+        if success:
+            logger.info("Greenhouse required-dropdown keyboard fallback selected first option")
+        return success
+    except Exception as exc:
+        logger.debug("Greenhouse first-option fallback failed: %s", exc)
+        return False
+
+
 def _load_candidate_evidence(config: Mapping[str, Any]) -> str:
     return _shared_candidate_evidence(config)
 
@@ -717,10 +751,7 @@ def _fill_custom_questions(
                 if maximum_policy:
                     success = _select_greenhouse_combobox_max(page, control)
                 elif desired == FIRST_OPTION_ANSWER:
-                    control.click()
-                    control.press("ArrowDown")
-                    control.press("Enter")
-                    success = True
+                    success = _select_first_greenhouse_combobox(page, control)
                 elif desired:
                     preferred = (
                         location_answer_candidates(profile)
@@ -741,37 +772,11 @@ def _fill_custom_questions(
                     )
                 elif control.get_attribute("aria-required") == "true":
                     try:
-                        control.click()
-                        control.press("ArrowDown")
-                        page.wait_for_timeout(400)
-                        available = [
-                            " ".join(page.get_by_role("option").nth(i).inner_text().split())
-                            for i in range(page.get_by_role("option").count())
-                            if page.get_by_role("option").nth(i).is_visible()
-                        ]
                         logger.info(
-                            "Unconfigured required combobox label=%r options=%s",
+                            "Unconfigured required combobox label=%r; selecting first option",
                             label,
-                            available,
                         )
-                        if available:
-                            success = _select_greenhouse_combobox(
-                                page,
-                                control,
-                                (available[0],),
-                            )
-                        else:
-                            control.press("ArrowDown")
-                            control.press("Enter")
-                            container_text = control.evaluate(
-                                "el => (el.parentElement?.parentElement?.innerText || '').trim()"
-                            )
-                            success = bool(
-                                container_text
-                                and not re.fullmatch(
-                                    r"(?:select|choose)(?:\.\.\.)?", container_text, re.I
-                                )
-                            )
+                        success = _select_first_greenhouse_combobox(page, control)
                         if not success:
                             control.press("Escape")
                     except Exception as exc:
@@ -795,6 +800,18 @@ def _fill_custom_questions(
                     success = _select_native(
                         page, re.escape(label), _answer_variants(label, desired, option_variants)
                     )
+                elif control.get_attribute("aria-required") == "true":
+                    options = control.locator("option")
+                    for item in range(options.count()):
+                        option_value = options.nth(item).get_attribute("value")
+                        if option_value:
+                            control.select_option(value=option_value)
+                            success = True
+                            logger.info(
+                                "Greenhouse required native dropdown fallback selected first option label=%r",
+                                label,
+                            )
+                            break
             elif control_type in {"radio", "checkbox"}:
                 handled_groups.add(group_key)
                 if desired:
