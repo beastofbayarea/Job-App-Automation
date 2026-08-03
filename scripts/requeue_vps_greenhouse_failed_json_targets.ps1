@@ -15,9 +15,15 @@ $Repo = ConvertTo-PosixShellLiteral $RemoteRepoPath.TrimEnd("/")
 $TargetPayload = [Convert]::ToBase64String(
     [Text.Encoding]::UTF8.GetBytes(($Target | ConvertTo-Json -Compress))
 )
+$TargetWorkers = @($Target | ForEach-Object { ($_ -split '\|', 2)[0].Trim() } | Sort-Object -Unique)
+$UnitNames = @($TargetWorkers | ForEach-Object {
+    "job-app-greenhouse-failed-$($_.Replace('_', '-')).service"
+}) -join " "
 $RemoteCommand = @"
 set -eu
 repo=$Repo
+systemctl stop $UnitNames
+trap 'systemctl start $UnitNames' EXIT
 PYTHONPATH="`$repo/src" "`$repo/.venv/bin/python" - "`$repo/output" '$TargetPayload' <<'PY'
 import base64
 import json
@@ -94,6 +100,7 @@ for item in sorted(matched):
     print(f"requeued={item}")
 subprocess.run(["systemctl", "show", *units, "--property=Id,ActiveState,SubState,NRestarts"], check=True)
 PY
+trap - EXIT
 "@
 try {
     $Execution = Invoke-ExternalCommandWithTimeout -FilePath $PlinkPath -ArgumentList @(
