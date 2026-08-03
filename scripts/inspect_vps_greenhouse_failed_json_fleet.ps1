@@ -18,9 +18,16 @@ python3 - "`$repo/output" <<'PY'
 import json
 import re
 import sys
+from collections import Counter, defaultdict
 from pathlib import Path
 
 root = Path(sys.argv[1])
+resume_source = root.parent / "data" / "resumes" / "base-resume.txt"
+print(json.dumps({
+    "artifact": str(resume_source),
+    "exists": resume_source.is_file(),
+    "bytes": resume_source.stat().st_size if resume_source.is_file() else 0,
+}, sort_keys=True))
 for path in sorted(root.glob("continuous_greenhouse_failed_*_state.json")):
     payload = json.loads(path.read_text(encoding="utf-8"))
     records = list(payload.get("jobs", {}).values())
@@ -50,6 +57,53 @@ for path in sorted(root.glob("continuous_greenhouse_failed_*_state.json")):
         )
     if diagnostics:
         print(json.dumps({"worker": path.stem, "diagnostics": diagnostics[-12:]}, ensure_ascii=False))
+
+    status_counts = Counter(str(item.get("result_status") or item.get("status") or "UNKNOWN") for item in records)
+    missing_fields = Counter()
+    affected_jobs = defaultdict(list)
+    generation_diagnostics = Counter()
+    for item in records:
+        status = str(item.get("result_status") or item.get("status") or "UNKNOWN")
+        result = item.get("result") if isinstance(item.get("result"), dict) else {}
+        fields = list(result.get("missing_required") or []) + list(result.get("missing_critical") or [])
+        combined_tail = "\n".join(str(item.get(field, "")) for field in ("stdout_tail", "stderr_tail"))
+        for match in re.finditer(r"ENGINE_RESULT_JSON:(\{.*\})", combined_tail):
+            try:
+                engine_result = json.loads(match.group(1))
+            except json.JSONDecodeError:
+                continue
+            fields.extend(engine_result.get("missing_required") or [])
+            fields.extend(engine_result.get("missing_critical") or [])
+        for key in ("missing_required", "missing_critical"):
+            for match in re.finditer(rf'"{key}"\s*:\s*(\[[^\]]*\])', combined_tail):
+                try:
+                    fields.extend(json.loads(match.group(1)))
+                except json.JSONDecodeError:
+                    continue
+        for field in fields:
+            normalized = str(field).strip()
+            if not normalized:
+                continue
+            missing_fields[normalized] += 1
+            job = f"{item.get('company', '')} | {item.get('title', '')}".strip(" |")
+            if job and job not in affected_jobs[normalized]:
+                affected_jobs[normalized].append(job)
+        if status == "DOCUMENT_GENERATION_FAILED":
+            detail = str(result.get("detail") or result.get("error") or item.get("detail") or "").strip()
+            if not detail:
+                diagnostic_lines = [
+                    line.strip() for line in combined_tail.splitlines()
+                    if re.search(r"document|generation|resume|cover.letter|pdf|claim|gemini|timeout|error", line, re.I)
+                ]
+                detail = diagnostic_lines[-1] if diagnostic_lines else "No detailed generation diagnostic recorded"
+            generation_diagnostics[detail] += 1
+    print(json.dumps({
+        "worker": path.stem,
+        "status_counts": dict(status_counts),
+        "missing_fields": dict(missing_fields),
+        "affected_jobs": {field: jobs for field, jobs in affected_jobs.items()},
+        "document_generation_diagnostics": dict(generation_diagnostics),
+    }, ensure_ascii=False, sort_keys=True))
 PY
 "@
 
