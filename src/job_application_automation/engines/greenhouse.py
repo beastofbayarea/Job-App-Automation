@@ -485,6 +485,23 @@ def _greenhouse_semantic_answer(
 ) -> str | None:
     """Resolve observed Greenhouse wording before broader aliases can collide."""
     normalized = " ".join(label.lower().split())
+    language_answers = rules.get("language_answers")
+    if isinstance(language_answers, Mapping):
+        for language, answer in language_answers.items():
+            language_name = str(language).strip().casefold()
+            if language_name and (
+                normalized == language_name
+                or re.search(rf"\b(?:level of |speak |fluent in ){re.escape(language_name)}\b", normalized)
+            ):
+                return str(answer).strip() or None
+    if re.fullmatch(r"start date month", normalized):
+        return str(rules.get("employment_start_month") or "").strip() or None
+    if re.fullmatch(r"start date year", normalized):
+        return str(rules.get("employment_start_year") or "").strip() or None
+    if re.fullmatch(r"end date month", normalized):
+        return str(rules.get("employment_end_month") or "").strip() or None
+    if re.fullmatch(r"end date year", normalized):
+        return str(rules.get("employment_end_year") or "").strip() or None
     if re.search(r"\brelocation (?:support|assistance)\b", normalized):
         return str(rules.get("relocation_support") or "").strip() or None
     if re.search(r"\badditional countries\b.*\bpermanent resident", normalized):
@@ -666,7 +683,7 @@ def _fill_custom_questions(
                 language_question
                 and re.search(r"\b(proficien|language\s+level|fluency\s+level)\b", label, re.I)
             )
-            if language_question and not language_proficiency_question:
+            if not desired and language_question and not language_proficiency_question:
                 desired = "Yes"
             success = False
             role_name = control.get_attribute("role") or ""

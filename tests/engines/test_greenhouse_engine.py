@@ -282,6 +282,11 @@ def test_greenhouse_policy_answers_cover_user_supplied_screening_defaults() -> N
         "city_availability_selection": "first_option",
         "financial_content_experience": "Yes",
         "dealer_partner_supplier_relationship": "No",
+        "employment_start_month": "June",
+        "employment_start_year": "2022",
+        "employment_end_month": "Present",
+        "employment_end_year": "Present",
+        "language_answers": {"English": "Yes", "German": "No", "Korean": "No"},
     }
     assert _greenhouse_semantic_answer("Do you hold a security clearance?", {}, rules) == "No"
     assert (
@@ -328,6 +333,13 @@ def test_greenhouse_policy_answers_cover_user_supplied_screening_defaults() -> N
         )
         == "No"
     )
+    assert _greenhouse_semantic_answer("Start date month", {}, rules) == "June"
+    assert _greenhouse_semantic_answer("Start date year", {}, rules) == "2022"
+    assert _greenhouse_semantic_answer("End date month", {}, rules) == "Present"
+    assert _greenhouse_semantic_answer("End date year", {}, rules) == "Present"
+    assert _greenhouse_semantic_answer("English", {}, rules) == "Yes"
+    assert _greenhouse_semantic_answer("What is your level of German?", {}, rules) == "No"
+    assert _greenhouse_semantic_answer("Korean", {}, rules) == "No"
 
 
 def test_resume_employer_answer_uses_generated_resume_companies() -> None:
