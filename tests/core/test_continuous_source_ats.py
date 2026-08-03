@@ -263,13 +263,69 @@ def test_sleep_until_next_cycle_handles_keyboard_interrupt(
         ats_platform="greenhouse",
         worker_id="search",
     )
-
     assert completed is False
     assert (
         capsys.readouterr().out == "GREENHOUSE_SOURCE_WORKER_STOPPED "
         "worker=search signal=keyboard_interrupt\n"
     )
 
+
+def test_critical_failure_is_automatically_scheduled_for_retry(tmp_path: Path) -> None:
+    state_path = tmp_path / "state.json"
+    claims_path = tmp_path / "claims.json"
+    job = _job()
+    state_path.write_text(
+        json.dumps({
+            "version": 1,
+            "jobs": {
+                job["job_url"]: {
+                    "status": "failed",
+                    "result_status": "REQUIRED_FIELDS_NOT_FILLED",
+                    "updated_at": "2026-08-03T00:00:00+00:00",
+                }
+            },
+        }),
+        encoding="utf-8",
+    )
+    claims_path.write_text(
+        json.dumps({
+            "version": 1,
+            "jobs": {
+                "greenhouse:12345": {
+                    "owner": "failed-core-product-management",
+                    "status": "claimed",
+                    "retry_count": 1,
+                }
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    continuous_source_ats._sync_claim_from_state(
+        job=job,
+        ats_platform="greenhouse",
+        worker_id="failed-core-product-management",
+        state_path=state_path,
+        claims_path=claims_path,
+        fallback_status="failed",
+    )
+
+    claim = read_json(claims_path)["jobs"]["greenhouse:12345"]
+    assert claim["status"] == "retry_requested"
+    assert claim["retry_count"] == 2
+    assert claim["critical_error"] is True
+    assert claim["next_retry_at"]
+
+
+def test_retry_due_honors_future_backoff() -> None:
+    now = continuous_source_ats.datetime(2026, 8, 3, tzinfo=continuous_source_ats.UTC)
+
+    assert continuous_source_ats._retry_due(
+        {"next_retry_at": "2026-08-02T23:59:59+00:00"}, now=now
+    )
+    assert not continuous_source_ats._retry_due(
+        {"next_retry_at": "2026-08-03T00:00:01+00:00"}, now=now
+    )
 
 def test_source_main_runs_runtime_claim_application_and_claim_sync(
     tmp_path: Path,

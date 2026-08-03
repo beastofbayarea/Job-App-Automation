@@ -3,7 +3,8 @@ param(
     [string]$ConfigPath = "config/vps_config.json",
     [ValidateRange(1, 300)]
     [int]$TimeoutSeconds = 120,
-    [switch]$IncludeAmbiguousUnconfirmed
+    [switch]$IncludeAmbiguousUnconfirmed,
+    [switch]$IncludeAllUnconfirmedFailures
 )
 
 . "$PSScriptRoot/lib/vps_script_helpers.ps1"
@@ -24,7 +25,7 @@ set -eu
 repo=$Repo
 test -s "`$repo/data/resumes/base-resume.txt"
 systemctl stop $UnitNames
-PYTHONPATH="`$repo/src" "`$repo/.venv/bin/python" - "`$repo/output" "$($IncludeAmbiguousUnconfirmed.IsPresent.ToString().ToLowerInvariant())" <<'PY'
+PYTHONPATH="`$repo/src" "`$repo/.venv/bin/python" - "`$repo/output" "$($IncludeAmbiguousUnconfirmed.IsPresent.ToString().ToLowerInvariant())" "$($IncludeAllUnconfirmedFailures.IsPresent.ToString().ToLowerInvariant())" <<'PY'
 import json
 import shutil
 import sys
@@ -36,6 +37,7 @@ from job_application_automation.core.identity import canonical_job_url
 
 output = Path(sys.argv[1])
 include_ambiguous = sys.argv[2].lower() == "true"
+include_all = sys.argv[3].lower() == "true"
 stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 backup = output / "requeue_backups" / stamp
 backup.mkdir(parents=True, exist_ok=False)
@@ -86,8 +88,11 @@ for state_path in state_paths:
             continue
         record_status = str(record.get("status") or "")
         is_ambiguous = result_status in ambiguous or record_status == "application_started"
+        is_unconfirmed_terminal = record_status not in {"confirmed"} and result_status != "SUBMITTED & CONFIRMED"
         if canonical in confirmed or not (
-            result_status in retryable or (include_ambiguous and is_ambiguous)
+            result_status in retryable
+            or (include_ambiguous and is_ambiguous)
+            or (include_all and is_unconfirmed_terminal)
         ):
             continue
         del state["jobs"][key]

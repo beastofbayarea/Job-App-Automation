@@ -8,7 +8,7 @@ import random
 import re
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlsplit
@@ -60,6 +60,25 @@ CLAIMS_VERSION = 1
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _retry_due(claim: Mapping[str, Any], *, now: datetime | None = None) -> bool:
+    value = str(claim.get("next_retry_at") or "").strip()
+    if not value:
+        return True
+    try:
+        due = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return True
+    if due.tzinfo is None:
+        due = due.replace(tzinfo=UTC)
+    return due <= (now or datetime.now(UTC))
+
+
+def _critical_retry_delay_seconds(retry_count: int, result_status: str) -> int:
+    if result_status == "JOB_CONTEXT_UNAVAILABLE":
+        return 21_600
+    return min(3_600, 30 * (2 ** max(0, min(retry_count - 1, 7))))
 
 
 def _job_identity(job_url: str, ats_platform: str) -> str:
@@ -235,6 +254,7 @@ def _claim_next_job(
                 isinstance(claim, Mapping)
                 and claim.get("owner") == worker_id
                 and claim.get("status") == "retry_requested"
+                and _retry_due(claim)
             ):
                 selected = job
                 break
@@ -270,6 +290,12 @@ def _claim_next_job(
             return None
 
         identity = candidate_identity(selected)
+        prior_claim = claim_records.get(identity)
+        retry_count = (
+            int(prior_claim.get("retry_count") or 0)
+            if isinstance(prior_claim, Mapping)
+            else 0
+        )
         claim_records[identity] = {
             "owner": worker_id,
             "status": "claimed",
@@ -277,7 +303,19 @@ def _claim_next_job(
             "company": str(selected.get("company") or ""),
             "title": str(selected.get("title") or ""),
             "updated_at": _now(),
+            "retry_count": retry_count,
         }
+        selected_url = _candidate_url(selected)
+        selected_record = own_records.get(selected_url)
+        if (
+            isinstance(prior_claim, Mapping)
+            and prior_claim.get("status") == "retry_requested"
+            and isinstance(selected_record, Mapping)
+            and selected_record.get("status") not in {"preparing", "documents_ready"}
+        ):
+            state = load_worker_state(state_path, ats_platform)
+            state.get("jobs", {}).pop(selected_url, None)
+            save_worker_state(state_path, state)
         claims["updated_at"] = _now()
         atomic_write_text(
             claims_path,
@@ -341,15 +379,34 @@ def _sync_claim_from_state(
     record = _state_records(state_path).get(canonical_url, {})
     with interprocess_file_lock(claims_path):
         claims = _load_claims(claims_path)
-        claims["jobs"][_job_identity(str(job["job_url"]), ats_platform)] = {
+        identity = _job_identity(str(job["job_url"]), ats_platform)
+        prior_claim = claims["jobs"].get(identity)
+        retry_count = (
+            int(prior_claim.get("retry_count") or 0)
+            if isinstance(prior_claim, Mapping)
+            else 0
+        )
+        claim_status = str(record.get("status") or fallback_status)
+        result_status = str(record.get("result_status") or "")
+        critical_failure = claim_status in {"failed", "manual_review"}
+        if critical_failure:
+            retry_count += 1
+            claim_status = "retry_requested"
+        claim = {
             "owner": worker_id,
-            "status": str(record.get("status") or fallback_status),
-            "result_status": str(record.get("result_status") or ""),
+            "status": claim_status,
+            "result_status": result_status,
             "job_url": str(job["job_url"]),
             "company": str(job.get("company") or ""),
             "title": str(job.get("title") or ""),
             "updated_at": str(record.get("updated_at") or _now()),
+            "retry_count": retry_count,
         }
+        if critical_failure:
+            delay = _critical_retry_delay_seconds(retry_count, result_status)
+            claim["next_retry_at"] = (datetime.now(UTC) + timedelta(seconds=delay)).isoformat()
+            claim["critical_error"] = True
+        claims["jobs"][identity] = claim
         claims["updated_at"] = _now()
         atomic_write_text(
             claims_path,
