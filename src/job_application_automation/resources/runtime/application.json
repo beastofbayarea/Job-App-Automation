@@ -1,8 +1,8 @@
 {
   "application": {
     "tracker_file": "data/ai_product_manager_job_tracker.xlsx",
-    "base_resume_file": "data/shivam_singh_ai_product_manager_resume.pdf",
-    "resume_source_file": "data/base_resume.txt",
+    "base_resume_file": "data/resumes/product-management.pdf",
+    "resume_source_file": "data/resumes/base-resume.txt",
     "results_file": "output/orchestration_results.json",
     "submission_log_file": "output/submission_log.json",
     "queue_progress_file": "output/job_url_queue_progress.json",

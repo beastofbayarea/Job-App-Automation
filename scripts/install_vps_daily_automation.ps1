@@ -59,7 +59,7 @@ if (-not $PlinkCmd -or -not $PscpCmd) {
 $PrivateInputs = @(
     @{ Local = "config/candidate_profile_config.json"; Remote = "config/candidate_profile_config.json" },
     @{ Local = "config/vps_config.json"; Remote = "config/vps_config.json" },
-    @{ Local = "data/base_resume.txt"; Remote = "data/base_resume.txt" },
+    @{ Local = "data/resumes/base-resume.txt"; Remote = "data/resumes/base-resume.txt" },
     @{ Local = "config/vertex_service_account.json"; Remote = "config/vertex_service_account.json" },
     @{ Local = "config/credentials.json"; Remote = "config/credentials.json" },
     @{ Local = "config/token.json"; Remote = "config/token.json" }
@@ -81,7 +81,7 @@ set -eu
 test -x $Repo/scripts/vps_search_sync.sh
 git -C $Repo pull --ff-only origin main
 install -d -m 0700 $Archive
-install -d -m 0700 $Repo/config $Repo/data
+install -d -m 0700 $Repo/config $Repo/data $Repo/data/resumes
 if ! command -v plink >/dev/null 2>&1 || ! command -v pscp >/dev/null 2>&1 || ! command -v xvfb-run >/dev/null 2>&1; then
   apt-get update -qq
   DEBIAN_FRONTEND=noninteractive apt-get install -y -qq putty-tools xvfb
@@ -116,7 +116,7 @@ try {
         }
     }
     if ($RemoteExitCode -eq 0) {
-        $ProtectCommand = "chmod 0600 $Repo/config/candidate_profile_config.json $Repo/config/vps_config.json $Repo/config/vertex_service_account.json $Repo/config/credentials.json $Repo/config/token.json $Repo/data/base_resume.txt"
+        $ProtectCommand = "chmod 0600 $Repo/config/candidate_profile_config.json $Repo/config/vps_config.json $Repo/config/vertex_service_account.json $Repo/config/credentials.json $Repo/config/token.json $Repo/data/resumes/base-resume.txt"
         & $PlinkCmd.Source -ssh -batch -P $SshPort -hostkey $SshHostKey -pwfile $PasswordFile `
             "$SshUser@$VpsHost" $ProtectCommand
         $RemoteExitCode = $LASTEXITCODE

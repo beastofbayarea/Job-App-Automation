@@ -4,7 +4,7 @@ from pathlib import Path
 import openpyxl
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
-TRACKER_PATH = DATA_DIR / "new_ats_product_management_jobs.xlsx"
+TRACKER_PATH = DATA_DIR / "workbooks" / "other" / "product-management.xlsx"
 
 ROLES = [
     # Workable

@@ -97,11 +97,11 @@ def parse_tagged_source(text: str) -> tuple[list[dict[str, Any]], list[dict[str,
 
     if len(experience) != 5:
         raise ValueError(
-            f"base_resume.txt must contain exactly 5 tagged companies; found {len(experience)}"
+            f"base-resume.txt must contain exactly 5 tagged companies; found {len(experience)}"
         )
     if len(education) < 3:
         raise ValueError(
-            f"base_resume.txt must contain at least 3 education records; found {len(education)}"
+            f"base-resume.txt must contain at least 3 education records; found {len(education)}"
         )
     required_experience = ("company", "title", "dates", "location")
     for entry in experience:
@@ -132,7 +132,7 @@ def parse_tagged_candidate(text: str) -> dict[str, str]:
     required = ("name", "location", "email", "phone", "linkedin")
     missing = [key for key in required if not candidate.get(key)]
     if missing:
-        raise ValueError("base_resume.txt candidate section is missing: " + ", ".join(missing))
+        raise ValueError("base-resume.txt candidate section is missing: " + ", ".join(missing))
     return candidate
 
 

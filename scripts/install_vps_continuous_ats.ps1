@@ -87,7 +87,7 @@ test -f "`$repo/src/job_application_automation/core/continuous_ats.py"
 test -f "`$repo/src/job_application_automation/engines/$AtsPlatform.py"
 test -f "`$repo/config/candidate_profile_config.json"
 test -f "`$repo/config/vertex_service_account.json"
-test -f "`$repo/data/base_resume.txt"
+test -f "`$repo/data/resumes/base-resume.txt"
 if ! command -v xvfb-run >/dev/null 2>&1; then
   apt-get update -qq
   DEBIAN_FRONTEND=noninteractive apt-get install -y -qq xvfb

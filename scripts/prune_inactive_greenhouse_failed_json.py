@@ -109,13 +109,15 @@ def check_url(url: str, timeout: float) -> Check:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data-dir", type=Path, default=Path("data"))
+    parser.add_argument(
+        "--data-dir", type=Path, default=Path("data/application-queues/greenhouse")
+    )
     parser.add_argument("--output-dir", type=Path, default=Path("output"))
     parser.add_argument("--timeout-seconds", type=float, default=15.0)
     parser.add_argument("--workers", type=int, default=12)
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
-    paths = sorted(args.data_dir.glob("greenhouse_failed_*.json"))
+    paths = sorted(args.data_dir.glob("*.json"))
     payloads = {path: json.loads(path.read_text(encoding="utf-8")) for path in paths}
     urls = sorted(
         {

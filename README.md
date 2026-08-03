@@ -61,7 +61,7 @@ Copy-Item config\candidate_profile_config.example.json config\candidate_profile_
 Copy-Item config\candidate_email_pool.example.json config\candidate_email_pool.json
 
 # Create your resume source file
-# Edit data\base_resume.txt with your actual resume content
+# Edit data\resumes\base-resume.txt with your actual resume content
 
 # Verify setup
 uv run python src/job_automation.py email-pool --count 1
@@ -126,7 +126,12 @@ Job-App-Automation/
 ├── config/                            # Configuration files
 │   ├── runtime/                       # Runtime settings by domain
 │   └── *.example.json                 # Configuration templates
-├── data/                              # Source material (resume, etc.)
+├── data/                              # Private local inputs and queues
+│   ├── application-queues/            # Provider-specific retry/review JSON
+│   ├── assets/                        # Local branding and image assets
+│   ├── resumes/                       # Role-based PDF and text resumes
+│   ├── templates/                     # Search and generation prompt templates
+│   └── workbooks/                     # Private provider tracker workbooks
 ├── output/                            # Generated artifacts
 ├── scripts/                           # VPS deployment & maintenance
 ├── docs/                              # Documentation
@@ -142,7 +147,7 @@ Job-App-Automation/
 | **Python 3.10+** | Runtime environment | All commands |
 | **Chromium** | Browser automation | Application workflows |
 | **Candidate config** | Profile, answers, policies | Resume & application workflows |
-| **Resume source** | Base resume content (`data/base_resume.txt`) | Resume generation |
+| **Resume source** | Base resume content (`data/resumes/base-resume.txt`) | Resume generation |
 | **Google OAuth** | Gmail API access | Gmail commands |
 | **Vertex AI** (optional) | AI-powered resume/cover letter | Falls back to rule-based if absent |
 | **PuTTY tools** | VPS document archive | `documents store/retrieve` commands |
@@ -210,7 +215,7 @@ Tracked examples are safe templates. Copy and personalize them; the resulting fi
 | --- | --- | --- |
 | Candidate profile and answer policy | `config/candidate_profile_config.json` | `config/candidate_profile_config.example.json` |
 | Candidate email addresses | `config/candidate_email_pool.json` | `config/candidate_email_pool.example.json` |
-| Resume source material | `data/base_resume.txt` | Create from the candidate's resume; this is required for tailored resumes. |
+| Resume source material | `data/resumes/base-resume.txt` | Create from the candidate's resume; this is required for tailored resumes. |
 | Runtime defaults | `config/runtime/*.json` | Already tracked by domain; adjust the relevant section file when needed. |
 | Vertex service account | `config/vertex_service_account.json` | `config/vertex_service_account.example.json` |
 | Gmail desktop OAuth client and token | `config/credentials.json`, `config/token.json` | Download OAuth desktop-client credentials from Google Cloud; the token is created during authorization. |
@@ -674,7 +679,7 @@ Common issues and solutions:
 | OAuth authentication failures | Re-authorize using Gmail flow; check `credentials.json` |
 | VPS connection refused | Verify SSH host key fingerprint in `vps_config.json` |
 | Application timeouts | Increase `--timeout` flag or check network stability |
-| Resume generation fails | Ensure `data/base_resume.txt` exists with valid content |
+| Resume generation fails | Ensure `data/resumes/base-resume.txt` exists with valid content |
 
 📖 See the comprehensive [Troubleshooting Guide](docs/troubleshooting.md) for detailed diagnostics.
 

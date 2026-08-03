@@ -61,7 +61,11 @@ def check_url(url: str, timeout: float) -> Check:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", type=Path, default=Path("data/lever_failed_product_management.json"))
+    parser.add_argument(
+        "--input",
+        type=Path,
+        default=Path("data/application-queues/lever/product-management.json"),
+    )
     parser.add_argument("--output-dir", type=Path, default=Path("output"))
     parser.add_argument("--timeout-seconds", type=float, default=20.0)
     parser.add_argument("--workers", type=int, default=16)

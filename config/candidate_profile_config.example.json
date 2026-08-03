@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "download_root": "output",
-  "candidate_evidence_file": "base_resume.txt",
+  "candidate_evidence_file": "resumes/base-resume.txt",
   "headless": true,
   "headless_overrides": {
     "workday": false,

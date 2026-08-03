@@ -22,7 +22,8 @@ $PasswordFile = New-TemporaryPasswordFile -Password $Connection.Password -Prefix
 
 try {
     foreach ($Source in $Sources) {
-        $LocalPath = "data/greenhouse_failed_$Source.json"
+        $QueueName = $Source.Replace('_', '-')
+        $LocalPath = "data/application-queues/greenhouse/$QueueName.json"
         if (-not (Test-Path -LiteralPath $LocalPath -PathType Leaf)) { throw "Missing $LocalPath" }
         $Payload = Get-Content -LiteralPath $LocalPath -Raw | ConvertFrom-Json
         if ($Payload -isnot [array]) { throw "$LocalPath must contain a JSON array" }
@@ -31,9 +32,10 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "Upload failed for $LocalPath" }
     }
     $Installs = $Sources | ForEach-Object {
-        "python3 -m json.tool '/tmp/greenhouse_failed_$_.json-$Token' >/dev/null; install -m 0600 '/tmp/greenhouse_failed_$_.json-$Token' `$repo/data/greenhouse_failed_$_.json"
+        $QueueName = $_.Replace('_', '-')
+        "python3 -m json.tool '/tmp/greenhouse_failed_$_.json-$Token' >/dev/null; install -m 0600 '/tmp/greenhouse_failed_$_.json-$Token' `$repo/data/application-queues/greenhouse/$QueueName.json"
     }
-    $RemoteCommand = "set -eu`nrepo=$Repo`n$($Installs -join "`n")`nrm -f /tmp/greenhouse_failed_*.json-$Token"
+    $RemoteCommand = "set -eu`nrepo=$Repo`ninstall -d -m 0700 `$repo/data/application-queues/greenhouse`n$($Installs -join "`n")`nrm -f /tmp/greenhouse_failed_*.json-$Token"
     $Execution = Invoke-ExternalCommandWithTimeout -FilePath $PlinkPath -ArgumentList @(
         "-ssh", "-batch", "-P", $Connection.Port, "-hostkey", $Connection.HostKey,
         "-pwfile", $PasswordFile, "$($Connection.User)@$($Connection.Host)",

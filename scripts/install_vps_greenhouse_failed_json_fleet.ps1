@@ -15,7 +15,9 @@ $Sources = @(
     "program_project_management",
     "technical_ai_platform_product_management"
 )
-$SourceFiles = @($Sources | ForEach-Object { "data/greenhouse_failed_$_.json" })
+$SourceFiles = @($Sources | ForEach-Object {
+    "data/application-queues/greenhouse/$($_.Replace('_', '-')).json"
+})
 foreach ($Path in @($ConfigPath, $ServiceTemplatePath) + $SourceFiles) {
     if (-not (Test-Path -LiteralPath $Path)) { throw "Required deployment input not found: $Path" }
 }
@@ -36,7 +38,8 @@ try {
     foreach ($Source in $Sources) {
         $Unit = "job-app-greenhouse-failed-$($Source.Replace('_', '-')).service"
         $Units.Add($Unit)
-        $RemoteSource = "$RepoPath/data/greenhouse_failed_$Source.json"
+        $QueueName = $Source.Replace('_', '-')
+        $RemoteSource = "$RepoPath/data/application-queues/greenhouse/$QueueName.json"
         $State = "$RepoPath/output/continuous_greenhouse_failed_${Source}_state.json"
         $PeerArgs = @($Sources | Where-Object { $_ -ne $Source } | ForEach-Object {
             "--peer-state $RepoPath/output/continuous_greenhouse_failed_${_}_state.json"
@@ -58,7 +61,10 @@ try {
         $LocalUnit = Join-Path ([IO.Path]::GetTempPath()) "$Unit-$Token"
         [IO.File]::WriteAllText($LocalUnit, $UnitText, [Text.UTF8Encoding]::new($false))
         $TemporaryFiles.Add($LocalUnit)
-        $Transfers.Add([pscustomobject]@{ Local = "data/greenhouse_failed_$Source.json"; Remote = "/tmp/greenhouse_failed_$Source.json-$Token" })
+        $Transfers.Add([pscustomobject]@{
+            Local = "data/application-queues/greenhouse/$QueueName.json"
+            Remote = "/tmp/greenhouse_failed_$Source.json-$Token"
+        })
         $Transfers.Add([pscustomobject]@{ Local = $LocalUnit; Remote = "/tmp/$Unit-$Token" })
     }
 
@@ -70,14 +76,15 @@ try {
 
     $Install = foreach ($Source in $Sources) {
         $Unit = "job-app-greenhouse-failed-$($Source.Replace('_', '-')).service"
-        "install -m 0600 '/tmp/greenhouse_failed_$Source.json-$Token' '$RepoPath/data/greenhouse_failed_$Source.json'`ninstall -m 0644 '/tmp/$Unit-$Token' '/etc/systemd/system/$Unit'"
+        $QueueName = $Source.Replace('_', '-')
+        "install -m 0600 '/tmp/greenhouse_failed_$Source.json-$Token' '$RepoPath/data/application-queues/greenhouse/$QueueName.json'`ninstall -m 0644 '/tmp/$Unit-$Token' '/etc/systemd/system/$Unit'"
     }
     $UnitNames = $Units -join " "
     $RemoteCommand = @"
 set -eu
 repo=$Repo
 git -C "`$repo" pull --ff-only origin main
-install -d -m 0700 "`$repo/data" "`$repo/output"
+install -d -m 0700 "`$repo/data" "`$repo/data/application-queues" "`$repo/data/application-queues/greenhouse" "`$repo/output"
 $($Install -join "`n")
 systemctl disable --now job-app-greenhouse.service job-app-greenhouse-excel-all.service job-app-greenhouse-excel-marketing.service job-app-greenhouse-excel-product-management.service || true
 systemctl daemon-reload
@@ -87,6 +94,7 @@ systemctl restart $UnitNames
 sleep 10
 systemctl show $UnitNames --property=Id,LoadState,UnitFileState,ActiveState,SubState,MainPID,NRestarts,ExecMainStatus
 for unit in $UnitNames; do systemctl cat "`$unit" | grep -F -- '--skip-cover-letter'; done
+rm -f "`$repo"/data/greenhouse_failed_*.json
 "@
     $Execution = Invoke-ExternalCommandWithTimeout -FilePath $PlinkPath -ArgumentList @(
         "-ssh", "-batch", "-P", $Connection.Port, "-hostkey", $Connection.HostKey,

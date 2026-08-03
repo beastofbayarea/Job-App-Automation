@@ -101,7 +101,7 @@ class RuntimeConfigTests(unittest.TestCase):
         )
         self.assertEqual(
             resolve_runtime_path(config.application.resume_source_file),
-            ROOT / "data" / "base_resume.txt",
+            ROOT / "data" / "resumes" / "base-resume.txt",
         )
         self.assertEqual(
             resolve_runtime_path(config.application.seo_config_file),

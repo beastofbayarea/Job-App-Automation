@@ -29,7 +29,7 @@ def audit(data_dir: Path) -> dict[str, Any]:
     records_with_questions = 0
     question_occurrences = 0
 
-    for path in sorted(data_dir.glob("greenhouse_failed_*.json")):
+    for path in sorted(data_dir.glob("*.json")):
         payload = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(payload, list):
             raise ValueError(f"{path} must contain a JSON list")
@@ -92,7 +92,9 @@ def audit(data_dir: Path) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data-dir", type=Path, default=Path("data"))
+    parser.add_argument(
+        "--data-dir", type=Path, default=Path("data/application-queues/greenhouse")
+    )
     parser.add_argument("--json-output", type=Path, required=True)
     parser.add_argument("--csv-output", type=Path, required=True)
     args = parser.parse_args()

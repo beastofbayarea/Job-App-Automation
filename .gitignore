@@ -15,9 +15,11 @@ output/*
 !output/.gitkeep
 
 # Candidate job-tracker data and source resume text (keep the resume PDFs)
-data/*
-!data/shivam_singh_ai_product_manager_resume.pdf
-!data/shivam_singh_growth_marketing_resume.pdf
+data/**
+!data/resumes/
+data/resumes/*
+!data/resumes/product-management.pdf
+!data/resumes/growth-marketing.pdf
 
 # OAuth credentials and tokens
 config/credentials.json

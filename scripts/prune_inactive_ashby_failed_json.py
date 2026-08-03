@@ -112,7 +112,9 @@ def check_urls(urls: list[str], timeout: float, workers: int) -> dict[str, Check
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--input", type=Path, default=Path("data/ashby_failed_product_management.json")
+        "--input",
+        type=Path,
+        default=Path("data/application-queues/ashby/product-management.json"),
     )
     parser.add_argument("--output-dir", type=Path, default=Path("output"))
     parser.add_argument("--timeout-seconds", type=float, default=20.0)
