@@ -415,6 +415,36 @@ def _sync_claim_from_state(
         )
 
 
+def _sync_interrupted_claims(
+    *,
+    state: Mapping[str, Any],
+    ats_platform: str,
+    worker_id: str,
+    state_path: Path,
+    claims_path: Path,
+) -> int:
+    synced = 0
+    jobs = state.get("jobs", {})
+    if not isinstance(jobs, Mapping):
+        return 0
+    for interrupted in jobs.values():
+        if (
+            not isinstance(interrupted, Mapping)
+            or interrupted.get("result_status") != "INTERRUPTED_AFTER_APPLICATION_START"
+        ):
+            continue
+        _sync_claim_from_state(
+            job=interrupted,
+            ats_platform=ats_platform,
+            worker_id=worker_id,
+            state_path=state_path,
+            claims_path=claims_path,
+            fallback_status="failed",
+        )
+        synced += 1
+    return synced
+
+
 def _process_selected_job(
     *,
     job: Mapping[str, Any],
@@ -578,6 +608,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     reconciled = reconcile_interrupted_submissions(state)
     if reconciled:
         save_worker_state(args.state, state)
+        _sync_interrupted_claims(
+            state=state,
+            ats_platform=ats_platform,
+            worker_id=worker_id,
+            state_path=args.state,
+            claims_path=args.claims,
+        )
         print(
             f"{ats_platform.upper()}_SOURCE_INTERRUPTED_QUARANTINED "
             f"worker={worker_id} count={reconciled}",

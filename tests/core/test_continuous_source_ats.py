@@ -327,6 +327,38 @@ def test_retry_due_honors_future_backoff() -> None:
         {"next_retry_at": "2026-08-03T00:00:01+00:00"}, now=now
     )
 
+
+def test_interrupted_application_claim_is_scheduled_for_retry(tmp_path: Path) -> None:
+    job = _job()
+    record = {
+        **job,
+        "status": "failed",
+        "result_status": "INTERRUPTED_AFTER_APPLICATION_START",
+        "updated_at": "2026-08-03T00:00:00+00:00",
+    }
+    state = {"version": 1, "jobs": {job["job_url"]: record}}
+    state_path = tmp_path / "state.json"
+    claims_path = tmp_path / "claims.json"
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    claims_path.write_text(
+        json.dumps({
+            "version": 1,
+            "jobs": {"greenhouse:12345": {"status": "claimed", "retry_count": 0}},
+        }),
+        encoding="utf-8",
+    )
+
+    assert continuous_source_ats._sync_interrupted_claims(
+        state=state,
+        ats_platform="greenhouse",
+        worker_id="failed-program-project-management",
+        state_path=state_path,
+        claims_path=claims_path,
+    ) == 1
+    claim = read_json(claims_path)["jobs"]["greenhouse:12345"]
+    assert claim["status"] == "retry_requested"
+    assert claim["critical_error"] is True
+
 def test_source_main_runs_runtime_claim_application_and_claim_sync(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
