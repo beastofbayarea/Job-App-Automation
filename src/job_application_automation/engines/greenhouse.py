@@ -923,12 +923,42 @@ def _repair_missing_required_controls(
     repaired: dict[str, bool] = {}
     for label in missing:
         controls = page.get_by_label(label, exact=True)
+        candidates: list[Locator] = [controls.nth(index) for index in range(controls.count())]
+        # Greenhouse sometimes renders the visible question text outside a
+        # semantic <label>.  The initial custom-question pass can still map
+        # that text to its control via label_for(), but get_by_label() cannot
+        # reacquire it after React rejects the value.  Reuse that same mapping
+        # so the repair pass always targets the control that produced the
+        # missing-field diagnostic.
+        if not candidates:
+            normalized_label = " ".join(label.casefold().split()).rstrip(" *")
+            discovered = page.locator(CUSTOM_QUESTION_CONTROL_SELECTOR)
+            for index in range(discovered.count()):
+                candidate = discovered.nth(index)
+                try:
+                    candidate_label = " ".join(
+                        (_label_for(page, candidate) or "").casefold().split()
+                    ).rstrip(" *")
+                    if candidate_label == normalized_label:
+                        candidates.append(candidate)
+                except Exception:
+                    continue
         success = False
-        for index in range(controls.count()):
-            control = controls.nth(index)
+        diagnostics: list[dict[str, str | None]] = []
+        for control in candidates:
             try:
                 if not control.is_visible():
                     continue
+                diagnostics.append(
+                    {
+                        "tag": control.evaluate("el => el.tagName.toLowerCase()"),
+                        "id": control.get_attribute("id"),
+                        "role": control.get_attribute("role"),
+                        "type": control.get_attribute("type"),
+                        "aria_controls": control.get_attribute("aria-controls"),
+                        "aria_autocomplete": control.get_attribute("aria-autocomplete"),
+                    }
+                )
                 desired = _configured_answer(label, profile, rules, eeo, field_matchers)
                 role_name = control.get_attribute("role") or ""
                 tag = control.evaluate("el => el.tagName.toLowerCase()")
@@ -960,6 +990,13 @@ def _repair_missing_required_controls(
                     break
             except Exception as exc:
                 logger.debug("Required-control repair failed for %r: %s", label, exc)
+        if not success:
+            logger.info(
+                "Greenhouse required-control repair unresolved label=%r candidates=%d controls=%s",
+                label,
+                len(candidates),
+                diagnostics,
+            )
         repaired[label] = success
     return repaired
 

@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from job_application_automation.engines.greenhouse import (
+    CUSTOM_QUESTION_CONTROL_SELECTOR,
     _valid_greenhouse_url,
     _fill_all_visible,
     _fill_all_labeled,
@@ -108,6 +109,53 @@ def test_missing_required_repair_reacquires_exact_labeled_combobox() -> None:
     page.get_by_label.assert_called_once_with(
         "What is the country of your birth?", exact=True
     )
+    select.assert_called_once_with(page, control, ("India",))
+    control.blur.assert_called_once_with()
+
+
+def test_missing_required_repair_reuses_discovered_question_mapping() -> None:
+    page = MagicMock()
+    semantic_controls = MagicMock()
+    semantic_controls.count.return_value = 0
+    discovered = MagicMock()
+    control = MagicMock()
+    discovered.count.return_value = 1
+    discovered.nth.return_value = control
+    control.is_visible.return_value = True
+    control.get_attribute.side_effect = lambda name: {
+        "role": "combobox",
+        "id": "question_country_of_birth",
+    }.get(name)
+    control.evaluate.return_value = "input"
+    page.get_by_label.return_value = semantic_controls
+    page.locator.return_value = discovered
+
+    with (
+        patch(
+            "job_application_automation.engines.greenhouse._label_for",
+            return_value="What is the country of your birth? *",
+        ),
+        patch(
+            "job_application_automation.engines.greenhouse._configured_answer",
+            return_value="India",
+        ),
+        patch(
+            "job_application_automation.engines.greenhouse._select_greenhouse_combobox",
+            return_value=True,
+        ) as select,
+    ):
+        result = _repair_missing_required_controls(
+            page,
+            ["What is the country of your birth?"],
+            {"country_of_birth": "India"},
+            {},
+            {},
+            {},
+            {},
+        )
+
+    assert result == {"What is the country of your birth?": True}
+    page.locator.assert_called_once_with(CUSTOM_QUESTION_CONTROL_SELECTOR)
     select.assert_called_once_with(page, control, ("India",))
     control.blur.assert_called_once_with()
 
