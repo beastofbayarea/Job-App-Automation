@@ -56,6 +56,8 @@ UTC = timezone.utc
 WORKER_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_-]*$")
 GREENHOUSE_JOB_PATH = re.compile(r"/jobs/(?:[^/]+/)?(?P<job_id>\d+)(?:/|$)", re.IGNORECASE)
 CLAIMS_VERSION = 1
+MAX_CRITICAL_FIXING_ATTEMPTS = 2
+SKIPPED_AFTER_FIXING_ATTEMPTS = "skipped_after_fixing_attempts"
 
 
 def _now() -> str:
@@ -390,12 +392,22 @@ def _sync_claim_from_state(
         result_status = str(record.get("result_status") or "")
         critical_failure = claim_status in {"failed", "manual_review"}
         if critical_failure:
-            claim_status = "retry_requested"
-            if not (
-                isinstance(prior_claim, Mapping)
-                and prior_claim.get("status") == "retry_requested"
-            ):
+            prior_status = (
+                str(prior_claim.get("status") or "")
+                if isinstance(prior_claim, Mapping)
+                else ""
+            )
+            if prior_status not in {
+                "retry_requested",
+                SKIPPED_AFTER_FIXING_ATTEMPTS,
+            }:
                 retry_count += 1
+            fixing_attempts_used = max(retry_count - 1, 0)
+            claim_status = (
+                SKIPPED_AFTER_FIXING_ATTEMPTS
+                if fixing_attempts_used >= MAX_CRITICAL_FIXING_ATTEMPTS
+                else "retry_requested"
+            )
         claim = {
             "owner": worker_id,
             "status": claim_status,
@@ -406,7 +418,7 @@ def _sync_claim_from_state(
             "updated_at": str(record.get("updated_at") or _now()),
             "retry_count": retry_count,
         }
-        if critical_failure:
+        if critical_failure and claim_status == "retry_requested":
             prior_retry_at = (
                 str(prior_claim.get("next_retry_at") or "")
                 if isinstance(prior_claim, Mapping)
@@ -420,6 +432,11 @@ def _sync_claim_from_state(
                     datetime.now(UTC) + timedelta(seconds=delay)
                 ).isoformat()
             claim["critical_error"] = True
+        elif critical_failure:
+            claim["critical_error"] = True
+            claim["skip_reason"] = (
+                f"failed after {MAX_CRITICAL_FIXING_ATTEMPTS} fixing attempts"
+            )
         claims["jobs"][identity] = claim
         claims["updated_at"] = _now()
         atomic_write_text(

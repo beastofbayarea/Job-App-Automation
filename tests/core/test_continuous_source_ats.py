@@ -330,6 +330,66 @@ def test_critical_failure_is_automatically_scheduled_for_retry(tmp_path: Path) -
     assert repeated["next_retry_at"] == first_retry_at
 
 
+def test_critical_failure_is_skipped_after_two_fixing_attempts(tmp_path: Path) -> None:
+    job = _job()
+    state_path = tmp_path / "state.json"
+    claims_path = tmp_path / "claims.json"
+    state_path.write_text(
+        json.dumps({
+            "version": 1,
+            "jobs": {
+                job["job_url"]: {
+                    **job,
+                    "status": "failed",
+                    "result_status": "TIMED_OUT",
+                }
+            },
+        }),
+        encoding="utf-8",
+    )
+    claims_path.write_text(
+        json.dumps({
+            "version": 1,
+            "jobs": {
+                "greenhouse:12345": {
+                    "owner": "failed-core-product-management",
+                    "status": "claimed",
+                    "retry_count": 2,
+                }
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    continuous_source_ats._sync_claim_from_state(
+        job=job,
+        ats_platform="greenhouse",
+        worker_id="failed-core-product-management",
+        state_path=state_path,
+        claims_path=claims_path,
+        fallback_status="failed",
+    )
+
+    claim = read_json(claims_path)["jobs"]["greenhouse:12345"]
+    assert claim["status"] == "skipped_after_fixing_attempts"
+    assert claim["retry_count"] == 3
+    assert claim["critical_error"] is True
+    assert claim["skip_reason"] == "failed after 2 fixing attempts"
+    assert "next_retry_at" not in claim
+
+    continuous_source_ats._sync_claim_from_state(
+        job=job,
+        ats_platform="greenhouse",
+        worker_id="failed-core-product-management",
+        state_path=state_path,
+        claims_path=claims_path,
+        fallback_status="failed",
+    )
+    repeated = read_json(claims_path)["jobs"]["greenhouse:12345"]
+    assert repeated["status"] == "skipped_after_fixing_attempts"
+    assert repeated["retry_count"] == 3
+
+
 def test_retry_due_honors_future_backoff() -> None:
     now = continuous_source_ats.datetime(2026, 8, 3, tzinfo=continuous_source_ats.UTC)
 
