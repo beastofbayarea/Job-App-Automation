@@ -1,0 +1,4 @@
+interface:
+  display_name: "ATS Queue Liveness Cleanup"
+  short_description: "Remove closed and unconfirmed ATS queue jobs"
+  default_prompt: "Use $ats-queue-liveness-cleanup to verify ATS queue URLs, remove closed or unconfirmed jobs, and retain backups."
