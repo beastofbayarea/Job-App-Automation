@@ -18,8 +18,8 @@
       "sleep_min_seconds": 5,
       "sleep_max_seconds": 15,
       "document_timeout_seconds": 1800,
-      "engine_timeout_seconds": 180,
-      "application_timeout_seconds": 300
+      "engine_timeout_seconds": 900,
+      "application_timeout_seconds": 1200
     },
     "providers": {
       "ashby": {
