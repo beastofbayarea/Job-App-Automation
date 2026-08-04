@@ -105,7 +105,7 @@ for state_path in state_paths:
             record.get("retry_policy_status") == "skipped_after_fixing_attempts"
             or any(
                 claim.get("status") == "skipped_after_fixing_attempts"
-                or int(claim.get("fixing_attempts", max(int(claim.get("retry_count") or 0) - 1, 0))) >= 2
+                or int(claim.get("fixing_attempts", 0)) >= 2
                 for claim in matching_claims
             )
         )

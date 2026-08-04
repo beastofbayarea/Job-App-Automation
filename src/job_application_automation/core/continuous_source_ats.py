@@ -69,16 +69,13 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def _fixing_attempts_used(retry_count: int) -> int:
-    """Translate the failure counter into retries after the original attempt."""
-    return max(retry_count - 1, 0)
-
-
 def _claim_fixing_attempts(claim: Mapping[str, Any]) -> int:
     explicit = claim.get("fixing_attempts")
     if explicit is not None:
         return max(int(explicit), 0)
-    return _fixing_attempts_used(int(claim.get("retry_count") or 0))
+    # Pre-policy retry_count values include unchanged blind reruns. They are
+    # retained for diagnostics but must not consume a fixing attempt.
+    return 0
 
 
 def _remediation_revision(
@@ -261,7 +258,7 @@ def _seed_claims_from_state(
         fixing_attempts = (
             max(int(record["fixing_attempts"]), 0)
             if record.get("fixing_attempts") is not None
-            else _fixing_attempts_used(retry_count)
+            else 0
         )
         claim_records[identity] = {
             "owner": owner,
@@ -575,7 +572,7 @@ def _sync_claim_from_state(
             else (
                 max(int(record["fixing_attempts"]), 0)
                 if record.get("fixing_attempts") is not None
-                else _fixing_attempts_used(retry_count)
+                else 0
             )
         )
         record_status = str(record.get("status") or fallback_status)
@@ -636,7 +633,12 @@ def _sync_claim_from_state(
                     if isinstance(prior_claim, Mapping)
                     else ""
                 )
-                or remediation_revision
+                or (
+                    "legacy-unversioned"
+                    if prior_status in {"claimed", "retry_requested"}
+                    or recorded_policy_status == "retry_requested"
+                    else remediation_revision
+                )
             )
             claim["critical_error"] = True
             claim["failure_revision"] = failure_revision
@@ -658,7 +660,11 @@ def _sync_claim_from_state(
                     if isinstance(prior_claim, Mapping)
                     else ""
                 )
-                or remediation_revision
+                or (
+                    "legacy-unversioned"
+                    if prior_status == "claimed"
+                    else remediation_revision
+                )
             )
             claim["skip_reason"] = (
                 f"failed after {MAX_CRITICAL_FIXING_ATTEMPTS} fixing attempts"

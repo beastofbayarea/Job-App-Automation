@@ -40,7 +40,7 @@ for claim in claims.get("jobs", {}).values():
     fixing_attempts = int(
         claim.get(
             "fixing_attempts",
-            max(int(claim.get("retry_count") or 0) - 1, 0),
+            0,
         )
     )
     fixing_attempt_counts[fixing_attempts] += 1

@@ -406,6 +406,70 @@ def test_critical_failure_waits_for_a_distinct_remediation_revision(
     assert repeated["failure_revision"] == "broken-revision"
 
 
+def test_legacy_blind_retries_start_with_zero_fixing_attempts(
+    tmp_path: Path,
+) -> None:
+    job = _job()
+    state_path = tmp_path / "state.json"
+    claims_path = tmp_path / "claims.json"
+    submission_log = tmp_path / "submission_log.json"
+    submission_log.write_text("{}\n", encoding="utf-8")
+    state_path.write_text(
+        json.dumps({
+            "version": 1,
+            "jobs": {
+                job["job_url"]: {
+                    **job,
+                    "status": "failed",
+                    "result_status": "TIMED_OUT",
+                }
+            },
+        }),
+        encoding="utf-8",
+    )
+    claims_path.write_text(
+        json.dumps({
+            "version": 1,
+            "jobs": {
+                "greenhouse:12345": {
+                    "owner": "failed-core-product-management",
+                    "status": "retry_requested",
+                    "retry_count": 11,
+                }
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    continuous_source_ats._sync_claim_from_state(
+        job=job,
+        ats_platform="greenhouse",
+        worker_id="failed-core-product-management",
+        state_path=state_path,
+        claims_path=claims_path,
+        fallback_status="failed",
+        remediation_revision="first-policy-fix",
+    )
+    migrated = read_json(claims_path)["jobs"]["greenhouse:12345"]
+    assert migrated["retry_count"] == 11
+    assert migrated["fixing_attempts"] == 0
+    assert migrated["failure_revision"] == "legacy-unversioned"
+
+    assert continuous_source_ats._claim_next_job(
+        [job],
+        ats_platform="greenhouse",
+        worker_id="failed-core-product-management",
+        state_path=state_path,
+        peer_states=[],
+        claims_path=claims_path,
+        submission_log=submission_log,
+        remediation_revision="first-policy-fix",
+    ) == job
+    first_fix = read_json(claims_path)["jobs"]["greenhouse:12345"]
+    assert first_fix["retry_count"] == 11
+    assert first_fix["fixing_attempts"] == 1
+
+
 def test_critical_failure_is_skipped_after_two_fixing_attempts(tmp_path: Path) -> None:
     job = _job()
     state_path = tmp_path / "state.json"
@@ -501,6 +565,7 @@ def test_full_failure_lifecycle_requires_two_distinct_remediations_before_skip(
                     "status": "claimed",
                     "retry_count": 0,
                     "fixing_attempts": 0,
+                    "attempt_revision": "broken-revision",
                 }
             },
         }),
@@ -663,11 +728,17 @@ def test_exhausted_queued_retries_are_reconciled_before_selection() -> None:
             "greenhouse:exhausted": {
                 "status": "retry_requested",
                 "retry_count": 3,
+                "fixing_attempts": 2,
                 "next_retry_at": "2026-08-03T00:00:00+00:00",
             },
             "greenhouse:last-fix-available": {
                 "status": "retry_requested",
                 "retry_count": 2,
+                "fixing_attempts": 1,
+            },
+            "greenhouse:legacy-blind-retries": {
+                "status": "retry_requested",
+                "retry_count": 11,
             },
             "greenhouse:confirmed": {
                 "status": "confirmed",
@@ -682,6 +753,9 @@ def test_exhausted_queued_retries_are_reconciled_before_selection() -> None:
     assert exhausted["skip_reason"] == "failed after 2 fixing attempts"
     assert "next_retry_at" not in exhausted
     assert claims["jobs"]["greenhouse:last-fix-available"]["status"] == "retry_requested"
+    legacy = claims["jobs"]["greenhouse:legacy-blind-retries"]
+    assert continuous_source_ats._claim_fixing_attempts(legacy) == 0
+    assert legacy["status"] == "retry_requested"
     assert claims["jobs"]["greenhouse:confirmed"]["status"] == "confirmed"
 
 

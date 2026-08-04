@@ -88,7 +88,7 @@ with interprocess_file_lock(claims_path):
             fixing_attempts = int(
                 claim.get(
                     "fixing_attempts",
-                    max(int(claim.get("retry_count") or 0) - 1, 0),
+                    0,
                 )
             )
             if claim.get("status") == "skipped_after_fixing_attempts" or fixing_attempts >= 2:
