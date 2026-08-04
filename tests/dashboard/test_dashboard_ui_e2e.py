@@ -37,7 +37,6 @@ def test_dashboard_ui_pages_exist_and_render() -> None:
     page_files = {
         "search.html": "Sky Bison",
         "generation.html": "Sky Bison",
-        "logs.html": "Sky Bison",
         "inspector.html": "Sky Bison",
         "cent-capital.html": "Cent Capital",
         "system-status.html": "Sky Bison",

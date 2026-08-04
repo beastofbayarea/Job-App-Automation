@@ -146,7 +146,6 @@ def build_kpi_metrics(sources: MetricSources) -> dict[str, Any]:
     infra_status = sources.load_json_file("vps_infra_status.json", default={})
     worker_summaries = sources.build_worker_summaries()
     backlog = sources.load_json_file("job_backlog.json", default={})
-    run_status = sources.load_json_file("vps_run_status.json", default={})
     jobs = sources.load_csv_jobs()
     vps_cfg = sources.load_vps_config()
 
@@ -220,6 +219,5 @@ def build_kpi_metrics(sources: MetricSources) -> dict[str, Any]:
         "vps_info": vps_info,
         "hostinger_info": hostinger_info,
         "vps_infra": infra_status if isinstance(infra_status, dict) else {},
-        "run_status": run_status if isinstance(run_status, dict) else {},
         "workers": worker_summaries,
     }

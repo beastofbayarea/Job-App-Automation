@@ -13,7 +13,6 @@ from job_application_automation.dashboard.server import (
     get_output_file_path,
     load_json_file,
     load_vps_config,
-    load_vps_log,
     public_backlog_jobs,
     public_submission_records,
     summarize_backlog,
@@ -117,14 +116,7 @@ def test_dashboard_rejects_all_post_requests():
 
     source = Path(server.__file__).read_text(encoding="utf-8")
     assert "subprocess" not in source
-    assert "_handle_vps_sync" not in source
     assert "_handle_vps_status" not in source
-
-
-def test_load_vps_log_missing(tmp_path):
-    with patch("job_application_automation.dashboard.server.OUTPUT_DIR", tmp_path):
-        log = load_vps_log()
-        assert "not found" in log
 
 
 def test_backlog_database_is_summarized_and_public_fields_are_returned(tmp_path):
@@ -269,7 +261,6 @@ def test_build_kpi_metrics_includes_vps_infra_snapshot_when_present():
             "job-app-ashby",
             "job-app-greenhouse",
             "job-app-lever",
-            "job-app-search-sync",
         ],
         "uptime": "up 15 hours, 42 minutes",
     }
@@ -305,7 +296,6 @@ def test_dashboard_request_handler_route_mappings():
         ("/site.webmanifest", "/site.webmanifest"),
         ("/search", "/search.html"),
         ("/generation", "/generation.html"),
-        ("/logs", "/logs.html"),
         ("/inspector", "/inspector.html"),
         ("/system-status", "/system-status.html"),
         ("/system-status/", "/system-status.html"),

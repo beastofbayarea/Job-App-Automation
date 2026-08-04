@@ -1,9 +1,0 @@
-# Template installed with: bash scripts/install_vps_logrotate.sh
-@VPS_SYNC_LOG_PATH@ {
-    weekly
-    rotate 4
-    compress
-    missingok
-    notifempty
-    copytruncate
-}

@@ -8,9 +8,6 @@ let state = {
   archives: {},
   operations: {},
   adminOverview: {},
-  rawLog: '',
-  parsedLogs: [],
-  currentLogFilter: 'all',
   activeFunnelStage: 'all'
 };
 
@@ -20,7 +17,6 @@ const NAV_PAGES = [
   { slug: 'index', href: 'index.html', icon: '📜', desktopLabel: 'Submissions', drawerLabel: 'Submissions & Failures', bottomLabel: 'Matrix' },
   { slug: 'search', href: 'search.html', icon: '🌊', desktopLabel: 'Job Search', drawerLabel: 'Job Search', bottomLabel: 'Search' },
   { slug: 'generation', href: 'generation.html', icon: '🪨', desktopLabel: 'Application Queue', drawerLabel: 'Application Queue', bottomLabel: 'Queue' },
-  { slug: 'logs', href: 'logs.html', icon: '🔥', desktopLabel: 'Sync Logs', drawerLabel: 'Real-Time VPS Logs', bottomLabel: 'Logs' },
   { slug: 'inspector', href: 'inspector.html', icon: '📁', desktopLabel: 'Inspector', drawerLabel: 'Raw File Inspector', bottomLabel: 'Files' },
   { slug: 'system-status', href: 'system-status.html', icon: '🛰️', desktopLabel: 'System Status', drawerLabel: 'System Status', bottomLabel: 'Status' },
   { slug: 'admin', href: 'admin.html', icon: '🔐', desktopLabel: 'Admin Vault', drawerLabel: 'Admin Vault', bottomLabel: 'Admin' }
@@ -81,9 +77,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   if (document.getElementById('generationQueueView') || document.getElementById('archiveStateView')) {
     fetchSection2();
-  }
-  if (document.getElementById('structuredLogBody')) {
-    fetchVpsLog();
   }
   if (document.getElementById('inspectorSections')) {
     renderInspectorSections();
@@ -421,158 +414,6 @@ async function fetchSection2() {
   }
 }
 
-async function fetchVpsLog() {
-  const container = document.getElementById('structuredLogBody');
-  if (!container) return;
-
-  try {
-    const res = await fetch('/api/vps/log');
-    const data = await res.json();
-    state.rawLog = data.log || '';
-    parseLogData(state.rawLog);
-    renderStructuredLogs();
-  } catch (err) {
-    if (container) container.innerHTML = '<div style="padding: 2rem; color: var(--rose); text-align: center;">Failed to fetch VPS log data.</div>';
-  }
-}
-
-function parseLogData(rawText) {
-  if (!rawText) {
-    state.parsedLogs = [];
-    return;
-  }
-
-  const lines = rawText.split('\n').filter(l => l.trim().length > 0);
-  const parsed = [];
-
-  let countError = 0;
-  let countAi = 0;
-  let countHttp = 0;
-  let countSub = 0;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    let timestamp = '';
-    let text = line;
-    let level = 'info';
-    let category = 'info';
-    let badgeClass = 'log-badge-info';
-    let badgeLabel = 'INFO';
-
-    // Extract Timestamp if present
-    const tsMatch = line.match(/^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}(?:,\d{3})?)/);
-    if (tsMatch) {
-      timestamp = tsMatch[1];
-      text = line.slice(tsMatch[1].length).trim();
-    } else {
-      timestamp = 'LIVE-LOG';
-    }
-
-    const lower = text.toLowerCase();
-
-    // Categorization
-    if (lower.includes('error') || lower.includes('failed') || lower.includes('retry') || lower.includes('exhausted')) {
-      level = 'error';
-      category = 'error';
-      badgeClass = 'log-badge-error';
-      badgeLabel = lower.includes('failed') ? 'FAILED' : 'WARN/ERR';
-      countError++;
-    } else if (lower.includes('score:') || lower.includes('resumeai') || lower.includes('generating tailored') || lower.includes('attempt')) {
-      level = 'ai';
-      category = 'ai';
-      badgeClass = lower.includes('score:') ? 'log-badge-score' : 'log-badge-ai';
-      badgeLabel = lower.includes('score:') ? 'SCORE' : 'AI MODEL';
-      countAi++;
-    } else if (lower.includes('http request:') || lower.includes('httpx') || lower.includes('post https:')) {
-      level = 'http';
-      category = 'http';
-      badgeClass = 'log-badge-http';
-      badgeLabel = 'HTTP 200';
-      countHttp++;
-    } else if (lower.includes('document archive') || lower.includes('submission') || lower.includes('passthrough')) {
-      level = 'sub';
-      category = 'sub';
-      badgeClass = 'log-badge-score';
-      badgeLabel = 'ARCHIVE';
-      countSub++;
-    }
-
-    parsed.push({
-      id: i,
-      timestamp,
-      level,
-      category,
-      badgeClass,
-      badgeLabel,
-      raw: line,
-      text
-    });
-  }
-
-  state.parsedLogs = parsed;
-
-  // Update KPI Stats
-  if (document.getElementById('logKpiTotal')) document.getElementById('logKpiTotal').textContent = parsed.length;
-  if (document.getElementById('logKpiAi')) document.getElementById('logKpiAi').textContent = countAi;
-  if (document.getElementById('logKpiHttp')) document.getElementById('logKpiHttp').textContent = countHttp;
-  if (document.getElementById('logKpiErrors')) document.getElementById('logKpiErrors').textContent = countError;
-
-  if (document.getElementById('pillCountError')) document.getElementById('pillCountError').textContent = countError;
-  if (document.getElementById('pillCountAi')) document.getElementById('pillCountAi').textContent = countAi;
-  if (document.getElementById('pillCountHttp')) document.getElementById('pillCountHttp').textContent = countHttp;
-  if (document.getElementById('pillCountSub')) document.getElementById('pillCountSub').textContent = countSub;
-}
-
-function setLogCategory(cat) {
-  state.currentLogFilter = cat;
-  document.querySelectorAll('.pill-btn, .pill').forEach(btn => {
-    if (btn.getAttribute('data-filter')) {
-      btn.classList.toggle('active', btn.getAttribute('data-filter') === cat);
-    }
-  });
-  renderStructuredLogs();
-}
-
-function renderStructuredLogs() {
-  const container = document.getElementById('structuredLogBody');
-  if (!container) return;
-
-  const searchInput = document.getElementById('logSearch');
-  const query = (searchInput ? searchInput.value : '').toLowerCase();
-
-  let filtered = state.parsedLogs;
-
-  if (state.currentLogFilter !== 'all') {
-    filtered = filtered.filter(item => item.category === state.currentLogFilter);
-  }
-
-  if (query) {
-    filtered = filtered.filter(item => item.raw.toLowerCase().includes(query));
-  }
-
-  if (filtered.length === 0) {
-    container.innerHTML = '<div style="padding: 2.5rem; text-align: center; color: var(--text-muted);">No log entries matching current filters.</div>';
-    return;
-  }
-
-  const html = filtered.map(item => `
-    <div class="log-entry-row">
-      <span class="log-time">${escapeHtml(item.timestamp)}</span>
-      <div class="log-badge-wrapper">
-        <span class="log-badge ${item.badgeClass}">${escapeHtml(item.badgeLabel)}</span>
-      </div>
-      <span class="log-text">${escapeHtml(item.text)}</span>
-    </div>
-  `).join('');
-
-  container.innerHTML = html;
-
-  const autoCheck = document.getElementById('autoScrollCheck');
-  if (autoCheck && autoCheck.checked) {
-    container.scrollTop = container.scrollHeight;
-  }
-}
-
 function renderSubmissionsTable() {
   const tbody = document.getElementById('submissionsTableBody');
   if (!tbody) return;
@@ -697,26 +538,6 @@ function detailTiles(items) {
 
 function renderOperations() {
   const data = state.operations || {};
-  const run = data.run_status || {};
-  const runGrid = document.getElementById('runStatusGrid');
-  if (runGrid) {
-    runGrid.innerHTML = detailTiles([
-      ['State', run.state],
-      ['Stage', run.stage],
-      ['Started', formatDate(run.started_at)],
-      ['Updated', formatDate(run.updated_at)],
-      ['Finished', formatDate(run.finished_at)],
-      ['Exit Code', run.exit_code],
-      ['PID', run.pid],
-      ['Git Commit', run.commit]
-    ]);
-  }
-  const runBadge = document.getElementById('runStateBadge');
-  if (runBadge) {
-    runBadge.textContent = `${run.state || 'unknown'} · ${run.stage || 'unknown'}`;
-    runBadge.className = `badge ${run.state === 'success' || run.state === 'running' ? 'badge-confirmed' : 'badge-warn'}`;
-  }
-
   const workers = Array.isArray(data.workers) ? data.workers : [];
   const workerBody = document.getElementById('workerStatusBody');
   if (workerBody) {
@@ -914,7 +735,6 @@ const RAW_FILES = [
   { key: 'job_search_coverage', filename: 'job_search_coverage.json', label: 'job_search_coverage.json (Section 1)' },
   { key: 'ats_boards_cache', filename: 'ats_boards_cache.json', label: 'ats_boards_cache.json (Section 1)' },
   { key: 'job_backlog', filename: 'job_backlog.json', label: 'job_backlog.json (Persistent Job Database)' },
-  { key: 'vps_run_status', filename: 'vps_run_status.json', label: 'vps_run_status.json (Current Search Run)' },
   { key: 'vps_infra_status', filename: 'vps_infra_status.json', label: 'vps_infra_status.json (VPS Infrastructure)' }
 ];
 
@@ -971,18 +791,6 @@ function copyViewerText(key) {
   });
 }
 
-function copyLogsToClipboard() {
-  if (!state.rawLog) {
-    alert('No log text available to copy.');
-    return;
-  }
-  navigator.clipboard.writeText(state.rawLog).then(() => {
-    alert('Full VPS log copied to clipboard!');
-  }).catch(err => {
-    console.error('Failed to copy logs', err);
-  });
-}
-
 async function refreshDashboardData() {
   const btn = document.getElementById('refreshBtn');
   const originalText = btn ? btn.innerHTML : '';
@@ -991,7 +799,7 @@ async function refreshDashboardData() {
     btn.innerHTML = '<span>⏳ Refreshing...</span>';
   }
 
-  const loaders = [fetchMetrics, fetchSubmissions, fetchJobs, fetchBacklog, fetchCoverageAndCache, fetchSection2, fetchVpsLog, fetchOperations, fetchAdminOverview];
+  const loaders = [fetchMetrics, fetchSubmissions, fetchJobs, fetchBacklog, fetchCoverageAndCache, fetchSection2, fetchOperations, fetchAdminOverview];
   try {
     await Promise.allSettled(
       loaders.map((load) => (typeof load === 'function' ? load() : undefined)),

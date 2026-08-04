@@ -373,7 +373,7 @@ python src/job_automation.py documents retrieve `
   --email "candidate@example.com"
 ```
 
-Archives use opaque IDs, immutable manifests, pinned SSH host keys, private VPS permissions, and SHA-256 verification. They are stored outside the repository and never enter `vps-search-output`. See the [operations runbook](docs/operations-runbook.md) for one-time VPS setup.
+Archives use opaque IDs, immutable manifests, pinned SSH host keys, private VPS permissions, and SHA-256 verification. They are stored outside the repository and never enter public generated output. See the [operations runbook](docs/operations-runbook.md) for one-time VPS setup.
 
 ### Apply to jobs
 
@@ -433,45 +433,21 @@ Provider adapters are intentionally orchestrator-only. For an authorized diagnos
 python src/job_automation.py apply --url "<authorized-url>" --fill-only --headed
 ```
 
-### VPS synchronization and maintenance scripts
+### VPS maintenance scripts
 
 These are operational helpers rather than `job-automation` subcommands:
 
 ```powershell
-# Pull one complete generated-output snapshot from origin/vps-search-output.
-pwsh scripts\pull_search_output.ps1
-
 # Privately download the confirmed-submission list and latest failure report.
 pwsh scripts\pull_vps_application_reports.ps1
 
-# Inspect every supervised ATS/search worker without starting a run.
+# Inspect every supervised ATS worker without starting a run.
 pwsh scripts\check_vps_parallel_ats.ps1
-
-# Check output/job_search_coverage.json age (24 hours by default).
-pwsh scripts\check_sync_freshness.ps1 -ThresholdHours 24
-
-# Trigger an out-of-cycle search on the VPS, then pull it on success.
-pwsh scripts\trigger_vps_search.ps1 `
-  -RemoteRepoPath /absolute/path/to/Job-App-Automation
 
 # Preview old top-level generated resume/cover-letter PDFs; deletion is explicit.
 pwsh scripts\prune_old_outputs.ps1 -Days 14
 pwsh scripts\prune_old_outputs.ps1 -Days 14 -Delete
 ```
-
-On the VPS, `scripts/vps_search_sync.sh` runs the configured search under a nonblocking lock and publishes one coherent four-file result set—including the persistent backlog—to the dedicated `vps-search-output` branch. Install repository-aware log rotation with `bash scripts/install_vps_logrotate.sh`; add `--stdout` to preview the rendered policy. These workflows, their prerequisites, cron guidance, and safe branch boundary are detailed in the [operations runbook](docs/operations-runbook.md).
-
-Install or repair the unattended daily schedule and private archive root from
-Windows with:
-
-```powershell
-pwsh scripts\install_vps_daily_automation.ps1 `
-  -RemoteRepoPath /absolute/path/to/Job-App-Automation
-```
-
-The installer pins the configured SSH host key, replaces only its own marked
-cron entry, installs log rotation, and creates the private archive directory
-with mode `0700`.
 
 Install any or all supervised one-job ATS workers:
 
@@ -481,12 +457,6 @@ pwsh scripts\install_vps_continuous_greenhouse.ps1
 pwsh scripts\install_vps_continuous_lever.ps1
 pwsh scripts\install_vps_continuous_smartrecruiters.ps1
 pwsh scripts\install_vps_continuous_workable.ps1
-```
-
-Install the independent continuous job-discovery and safe-publication service:
-
-```powershell
-pwsh scripts\install_vps_continuous_search.ps1
 ```
 
 Audit all persistent and scheduled VPS workloads without changing remote state:
@@ -509,10 +479,9 @@ pwsh scripts\install_vps_memory_guard.ps1
 
 The installers deploy the ignored candidate email pool, remove the older daily
 cron entry, and enable one independent `job-app-<ats>.service` per provider.
-Installing one worker does not stop or restart another or the search service.
-Ashby, Greenhouse, Lever, SmartRecruiters, Workable, and continuous job
-discovery therefore run in parallel, and a future installed ATS engine can use
-the same supervisor:
+Installing one worker does not stop or restart another. Ashby, Greenhouse,
+Lever, SmartRecruiters, and Workable therefore run independently, and a future
+installed ATS engine can use the same supervisor:
 
 For the coordinated two-source Greenhouse topology, use
 `scripts/install_vps_greenhouse_excel_parallel.ps1`. It installs the search-backed
@@ -542,25 +511,7 @@ before the next cycle. Systemd restarts the worker after crashes and boots.
 Ambiguous, CAPTCHA-gated, or interrupted submission attempts are quarantined
 for review and are never retried automatically.
 
-The search service continuously refreshes verified Greenhouse, Lever, Ashby,
-SmartRecruiters, and Workable listings, publishes only the safe
-coverage/jobs/board-cache/active-backlog snapshot, waits five minutes, and
-repeats. It never generates documents or submits applications, so those
-boundaries remain owned by the guarded ATS workers and the explicit full
-daily/on-demand pipeline.
-
-Each successful scheduled search publishes its complete safe snapshot before
-starting private document work. The workflow then processes a bounded number of
-tailored CV/cover-letter pairs per run (10 by default, including two reserved
-retry slots) and uploads successful pairs to the private VPS archive. An
-ignored state file records completed URLs, so later runs skip archived pairs
-while continuing through both new jobs and prior failures. Full job
-descriptions and document-generation state remain private on the VPS and are
-never copied to `vps-search-output`. After the application stage, it publishes
-the safe snapshot once more when confirmed submissions changed the backlog, so
-the next local pull does not continue showing those submitted jobs.
-
-The explicit full daily/on-demand pipeline can then submit eligible
+The application pipeline can submit eligible
 verified-live jobs whose document pair is already archived, including
 Greenhouse, Lever, Ashby, SmartRecruiters, and Workable results. Document
 failures remain visible without suppressing safe application work for other
@@ -570,7 +521,7 @@ attempted state. A CAPTCHA, missing required field, timeout, engine failure, or
 unconfirmed attempt is recorded and skipped so processing can continue. Full
 failure details are written privately to
 `output/vps_application_failures.json` and per-job result files. Application
-results, submission logs, and state never enter `vps-search-output`.
+results, submission logs, and state remain private.
 Application screenshots are temporary and are deleted at the end of every
 successful, failed, timed-out, or quarantined attempt.
 

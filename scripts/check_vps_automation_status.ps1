@@ -29,30 +29,20 @@ repo=$Repo
 printf '%s\n' '=== VPS CLOCK AND UPTIME ==='
 date --iso-8601=seconds
 uptime
-printf '%s\n' '=== AUTOMATION CRON ==='
-crontab -l 2>/dev/null | grep '# job-app-automation-daily-search' || printf '%s\n' 'MISSING'
 printf '%s\n' '=== CONTINUOUS SERVICES ==='
-systemctl show job-app-search-sync.service job-app-greenhouse.service \
+systemctl show job-app-greenhouse.service \
   --property=Id,LoadState,UnitFileState,ActiveState,SubState,MainPID,NRestarts,ExecMainStartTimestamp \
   2>/dev/null || true
 printf '%s\n' '=== AUTOMATION PROCESSES ==='
-pgrep -af '[v]ps_continuous_search_sync|[c]ontinuous-greenhouse|[v]ps_search_sync.sh|[s]earch_applications|[s]earch_documents|[j]ob_automation.py (apply|search)' |
+pgrep -af '[c]ontinuous-greenhouse|[j]ob_automation.py apply' |
   sed -E 's/(--email )[[:graph:]]+/\1[REDACTED]/g' || true
 printf '%s\n' '=== REPOSITORY STATE ==='
 git -C "`$repo" status --short --branch
 git -C "`$repo" log -1 --date=iso-strict --pretty=format:'%H|%ad|%s'
 printf '\n'
-printf '%s\n' '=== RUN STATUS ==='
-if [ -f "`$repo/output/vps_run_status.json" ]; then
-  cat "`$repo/output/vps_run_status.json"
-else
-  printf '%s\n' 'MISSING'
-fi
 printf '%s\n' '=== OUTPUT FILES ==='
-for name in job_search_coverage.json ai_jobs.csv ats_boards_cache.json job_backlog.json \
-  vps_generation_jobs.json vps_document_archive_state.json \
-  submission_log.json vps_application_failures.json \
-  vps_application_state.json continuous_greenhouse_state.json vps_sync.log; do
+for name in vps_document_archive_state.json submission_log.json vps_application_failures.json \
+  vps_application_state.json continuous_greenhouse_state.json; do
   if [ -f "`$repo/output/`$name" ]; then
     stat -c '%n|%s bytes|%y' "`$repo/output/`$name"
   else
@@ -111,7 +101,6 @@ else:
             print("\n".join(nonempty[-12:]))
 PY
 printf '%s\n' '=== RECENT LOG ==='
-tail -n $LogLines "`$repo/output/vps_sync.log" 2>/dev/null || true
 printf '%s\n' '=== RECENT CONTINUOUS GREENHOUSE JOURNAL ==='
 journalctl -u job-app-greenhouse.service -n $LogLines --no-pager 2>/dev/null || true
 "@

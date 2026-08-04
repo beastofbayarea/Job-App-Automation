@@ -21,7 +21,6 @@ class RouteKey(str, Enum):
     OPERATIONS = "operations"
     METRICS = "metrics"
     SYSTEM_VPS = "system_vps"
-    VPS_LOG = "vps_log"
     SECTION1_JOBS = "section1_jobs"
     SECTION1_BACKLOG = "section1_backlog"
     SECTION1_COVERAGE = "section1_coverage"
@@ -64,7 +63,6 @@ STATIC_ROUTE_SPECS: tuple[StaticRouteSpec, ...] = (
     StaticRouteSpec("/admin.html", ("/admin", "/admin/")),
     StaticRouteSpec("/search.html", ("/search", "/search/")),
     StaticRouteSpec("/generation.html", ("/generation", "/generation/")),
-    StaticRouteSpec("/logs.html", ("/logs", "/logs/")),
     StaticRouteSpec("/inspector.html", ("/inspector", "/inspector/")),
     StaticRouteSpec(
         "/cent-capital.html",
@@ -86,7 +84,6 @@ API_ROUTE_SPECS: tuple[ApiRouteSpec, ...] = (
     ApiRouteSpec(RouteKey.OPERATIONS, ("/api/operations",)),
     ApiRouteSpec(RouteKey.METRICS, ("/api/metrics",)),
     ApiRouteSpec(RouteKey.SYSTEM_VPS, ("/api/system/vps",)),
-    ApiRouteSpec(RouteKey.VPS_LOG, ("/api/vps/log",)),
     ApiRouteSpec(RouteKey.SECTION1_JOBS, ("/api/section1/jobs",)),
     ApiRouteSpec(RouteKey.SECTION1_BACKLOG, ("/api/section1/backlog",)),
     ApiRouteSpec(RouteKey.SECTION1_COVERAGE, ("/api/section1/coverage",)),
@@ -179,7 +176,6 @@ class DashboardRouteServices:
     operations: PayloadProvider
     metrics: PayloadProvider
     system_vps: PayloadProvider
-    vps_log: PayloadProvider
     section1_jobs: PayloadProvider
     section1_backlog: PayloadProvider
     section1_coverage: PayloadProvider
@@ -202,7 +198,6 @@ class DashboardApplication:
             RouteKey.OPERATIONS: services.operations,
             RouteKey.METRICS: services.metrics,
             RouteKey.SYSTEM_VPS: services.system_vps,
-            RouteKey.VPS_LOG: services.vps_log,
             RouteKey.SECTION1_JOBS: services.section1_jobs,
             RouteKey.SECTION1_BACKLOG: services.section1_backlog,
             RouteKey.SECTION1_COVERAGE: services.section1_coverage,

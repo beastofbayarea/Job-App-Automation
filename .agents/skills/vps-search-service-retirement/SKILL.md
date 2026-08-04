@@ -33,18 +33,17 @@ dashboard services, and shared environment configuration.
 
 ## Procedure
 
-1. Run `scripts/remove_vps_search_service.ps1 -AuditOnly` from the local repo.
-   Capture `systemctl show`, `systemctl cat`, every resolved related path,
-   matching cron lines, and matching processes.
+1. Connect with the repository's pinned VPS SSH configuration. Capture
+   `systemctl show`, `systemctl cat`, every resolved related path, matching cron
+   lines, and matching processes before changing anything.
 2. Confirm the resolved repository is exactly the intended absolute VPS path.
    Never delete a computed broad directory, the repo root, `output/` itself,
    `/root`, or `.ssh`; delete only the enumerated paths.
-3. Run `scripts/stop_vps_search_service.ps1` if the unit is active. The script
-   bounds graceful shutdown and escalates only within the target unit.
-4. Run `scripts/remove_vps_search_service.ps1`. It disables and stops the unit,
-   removes the unit file, filters only matching cron hooks, removes the private
-   deploy-key pair, prunes the sync worktree, deletes the named lock/artifacts
-   and VPS executable wrappers, clears staged unit files, and reloads systemd.
+3. If the unit is active, disable it and request a bounded graceful stop.
+   Escalate with `systemctl kill --kill-who=all` only within the target unit.
+4. Remove the unit file, filter only matching cron hooks, remove the private
+   deploy-key pair, prune the sync worktree, delete the named lock/artifacts and
+   VPS executable wrappers, clear staged unit files, and reload systemd.
 5. Run the audit command again in a fresh SSH session. Require:
    - `LoadState=not-found`, `ActiveState=inactive`, and `MainPID=0`;
    - no related paths listed;

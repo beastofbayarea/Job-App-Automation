@@ -172,5 +172,5 @@ if ($RemoteExitCode -ne 0) {
 
 Write-Host (
     "Installed and started $ServiceName without stopping or restarting other ATS " +
-    "workers or the continuous job-search service. The replaced daily cron remains disabled."
+    "workers. The replaced daily cron remains disabled."
 )

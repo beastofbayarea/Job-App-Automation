@@ -101,7 +101,7 @@ operation before deciding whether another notification is appropriate.
 
 ## Private VPS document archive
 
-This archive is separate from VPS search synchronization. Do not place its root below the repository clone, a Git worktree, `public_html`, `www`, or another web root.
+Do not place the private archive root below the repository clone, a Git worktree, `public_html`, `www`, or another web root.
 
 One-time VPS setup should use a dedicated unprivileged SSH account. As an administrator on the VPS:
 
@@ -136,15 +136,12 @@ python src/job_automation.py documents retrieve `
 
 The default destination is `output/retrieved_documents/<archive-id>/`. Existing files are not replaced unless `--overwrite` is explicit. Keep encrypted/offsite backups of the private archive; SSH permissions do not protect against VPS disk loss.
 
-## VPS search synchronization
-
-### Persistent parallel ATS workers
+## Persistent parallel ATS workers
 
 Install the continuous worker from Windows after the VPS checkout and private
 candidate/Vertex/Gmail inputs are present:
 
 ```powershell
-pwsh scripts\install_vps_continuous_search.ps1
 pwsh scripts\install_vps_continuous_ashby.ps1
 pwsh scripts\install_vps_continuous_greenhouse.ps1
 pwsh scripts\install_vps_continuous_lever.ps1
@@ -152,23 +149,16 @@ pwsh scripts\install_vps_continuous_smartrecruiters.ps1
 pwsh scripts\install_vps_continuous_workable.ps1
 ```
 
-These installations replace the marked daily cron entry with the systemd
-units `job-app-search-sync.service`, `job-app-ashby.service`,
+These installations provide the systemd units `job-app-ashby.service`,
 `job-app-greenhouse.service`, `job-app-lever.service`,
-`job-app-smartrecruiters.service`, and `job-app-workable.service`. In the standard
-topology all six run in parallel. The search service continuously refreshes verified Greenhouse,
-Lever, Ashby, SmartRecruiters, and Workable job discovery, publishes only the
-safe coverage/jobs/board-cache/backlog snapshot, waits five minutes, and
-repeats. It does not generate documents or submit applications.
+`job-app-smartrecruiters.service`, and `job-app-workable.service`.
 
-Installing or repairing one provider does not stop or restart another or the
-search service. When replacing an already-active instance of that same
+Installing or repairing one provider does not stop or restart another. When
+replacing an already-active instance of that same
 provider, the installer waits for active `apply` subprocesses before restarting
 it onto newly deployed code. The ignored candidate email pool is copied to the
 VPS with mode `0600`. Each provider service runs headed Chromium under its own
 Xvfb display, starts automatically on boot, and has `Restart=always`. The
-search-only service does not launch a browser and runs with lower CPU, memory,
-I/O, and process limits so submission workers retain priority.
 
 Future ATS engines use the same provider-neutral unit without changes to the
 supervisor:
@@ -327,149 +317,7 @@ requires at least 1 GiB of disk headroom beyond the requested swap, refuses to
 overwrite an unrelated `/swapfile`, persists the mount in `/etc/fstab`, and
 sets `vm.swappiness=10`. Use `-SwapSizeMiB` to select 512–4096 MiB.
 
-The `vps-search-output` branch is a dedicated generated-data branch with
-unrelated history. Keep it separate from `main`; use the synchronization
-scripts instead of merging it.
-
-On the VPS, install the repository-path-aware logrotate policy once:
-
-```bash
-bash scripts/install_vps_logrotate.sh
-```
-
-Alternatively, install or repair the cron entry, log rotation, and private
-archive directory together from Windows:
-
-```powershell
-pwsh scripts\install_vps_daily_automation.ps1 `
-  -RemoteRepoPath /absolute/path/to/Job-App-Automation
-```
-
-The default schedule is 03:00 UTC daily; use `-HourUtc` to select another UTC
-hour. The operation is idempotent and replaces only the cron line marked
-`job-app-automation-daily-search`.
-
-After search and liveness verification, the scheduled workflow first publishes
-the complete coverage, current jobs, board cache, and active backlog snapshot.
-Private document work cannot delay that publication. It then generates and
-archives a bounded set of CV/cover-letter pairs:
-`application.vps_max_document_jobs` controls the total per run (10 by default),
-while `application.vps_document_retry_jobs` reserves part of that capacity for
-prior failures (two by default). Remaining capacity advances new jobs, so
-permanent document failures cannot starve new work. Archived URLs are skipped.
-
-### Persistent active-job backlog
-
-The VPS search passes
-`--backlog-output output/job_backlog.json`. That one JSON file is the durable
-list of discovered jobs that are still eligible to remain under consideration;
-there is deliberately no archive or tombstone file.
-
-On each complete search, the workflow:
-
-1. loads the existing backlog (or migrates the prior CSV/private search input
-   on the first rollout);
-2. merges newly discovered roles and deduplicates provider and canonical URL
-   identities;
-3. rechecks prior-only roles as well as newly found roles;
-4. removes only exact `SUBMITTED & CONFIRMED` ledger matches and roles whose
-   provider/page conclusively returns `closed`; and
-5. atomically replaces the same `job_backlog.json`.
-
-Failed, CAPTCHA-gated, interrupted, and manual-review application attempts stay
-in the backlog even though private application state prevents unsafe automatic
-retries. Request failures, timeouts, `429`, `5xx`, bot blocks, malformed
-responses, and uncertain identity also stay. A closed job may re-enter if it is
-genuinely published again because no deletion archive exists; a submitted job
-cannot re-enter while its permanent confirmation remains in
-`submission_log.json`.
-
-Individual document failures keep the final cron status nonzero and remain
-visible in `output/vps_sync.log`, but they do not suppress the guarded
-application stage for other jobs with archived pairs.
-
-The installer also transfers the candidate profile, resume source, Vertex
-credential, and pre-authorized Gmail OAuth credential/token needed by
-unattended resume generation and Greenhouse verification. These files are
-stored with mode `0600`. Complete Gmail authorization locally before running
-the installer; cron cannot complete an interactive OAuth browser flow.
-
-The installer also provisions `xvfb` if missing. The application-stage
-engines always launch a headed (non-headless) Chrome so ATS anti-bot checks
-cannot fingerprint a headless browser; `vps_search_sync.sh` transparently
-re-execs itself under `xvfb-run` when no `DISPLAY` is set, so headed Chrome
-still launches on a display-less VPS instead of crashing with "Missing X
-server or $DISPLAY".
-
-### Automatic VPS application stage
-
-After publishing the safe search snapshot and completing the bounded document
-stage, the explicit full daily/on-demand workflow invokes the guarded
-application runner. Only complete `live` records with an `archived` entry in
-`output/vps_document_archive_state.json` are eligible; current search sources
-include Greenhouse, Lever, Ashby, SmartRecruiters, and Workable. The runner
-calls the existing orchestrator with `--live-submit`, processes records
-sequentially, and uses `application.vps_max_attempts_per_ats` as its
-per-provider limit.
-
-`output/vps_application_state.json`, `output/vps_application_results/`, and
-`output/submission_log.json` are private VPS artifacts. They must never be added
-to `vps-search-output`. ATS screenshots are isolated to the current attempt and
-deleted after every terminal result, including timeout and manual-review
-outcomes. A prior exact `SUBMITTED & CONFIRMED` log entry is skipped.
-Every attempted job is recorded atomically. A result is marked confirmed only
-when the engine result and permanent ledger agree; that URL is then removed
-from the active backlog under an interprocess lock. If cleanup is temporarily
-unavailable, the next search reconciles it from the ledger.
-
-The full daily/on-demand script publishes once before private work and again
-after applications. The second coherent publication is a no-op when nothing
-changed; when one or more jobs were confirmed, it makes their backlog removal
-available to the next local pull immediately. Provider workers also prune the
-VPS file directly, and the search-only service publishes their latest state on
-its next successful cycle.
-
-Any CAPTCHA, required-field failure, timeout, malformed result, engine error,
-or submission lacking exact confirmation is saved as `failed`. The runner
-prints the failure and continues with the remaining eligible roles, including
-later roles on the same ATS. It returns nonzero after completing the lists when
-one or more failures occurred, keeping cron visibly unhealthy without hiding
-successful applications.
-
-Inspect `output/vps_application_failures.json` for the URL, ATS, company, role,
-exit code, result status, error/detail text, missing fields, stdout/stderr
-tails, and per-job evidence path. Failed URLs remain skipped on later runs to
-avoid duplicate submissions. If a reviewed failure is definitely safe to
-retry, remove only that URL's entry from
-`output/vps_application_state.json`; never clear ambiguous state merely to
-increase throughput.
-
-The cron entry and an on-demand trigger both run
-`scripts/vps_search_sync.sh`. That script uses a nonblocking lock and exits
-without starting when another sync is active. It also refuses to publish unless
-the search produced coverage, current jobs, board-cache, and backlog artifacts
-for that run.
-The continuous service invokes the same script with `--search-only`, which
-exits after publication and never enters document or application stages.
-
-From Windows, trigger a reviewed out-of-cycle run with the confirmed absolute
-POSIX clone path:
-
-```powershell
-pwsh scripts\trigger_vps_search.ps1 -RemoteRepoPath /absolute/path/to/Job-App-Automation
-```
-
-The trigger pulls output only after a successful remote run. A standalone pull
-requires coverage, current jobs, board-cache, and backlog files from the same
-remote commit and updates the worktree without staging generated files:
-
-```powershell
-pwsh scripts\pull_search_output.ps1
-pwsh scripts\check_sync_freshness.ps1
-```
-
-Private application reports are pulled separately over pinned SSH and never
-through the generated-data branch:
+Private application reports are pulled separately over pinned SSH:
 
 ```powershell
 pwsh scripts\pull_vps_application_reports.ps1
@@ -487,12 +335,9 @@ Check a live run without acquiring its lock or starting another workflow:
 pwsh scripts\check_vps_parallel_ats.ps1 -LogLines 120
 ```
 
-This read-only command has a bounded SSH timeout and prints the installed cron
-entry, remote clock/uptime, self-filtered automation processes, repository
-commit/state, structured `output/vps_run_status.json`, key artifact timestamps
-and sizes, and the requested tail of `output/vps_sync.log`. The status JSON is
-updated atomically at every stage and on normal success or failure; a stale
-`running` record after a reboot indicates an interrupted run.
+This read-only command has a bounded SSH timeout and prints remote clock and
+uptime, supervised ATS unit state, self-filtered automation processes,
+repository commit/state, worker-state timestamps, and recent ATS journals.
 
 Generated resume and cover-letter cleanup is dry-run by default:
 
@@ -501,6 +346,5 @@ pwsh scripts\prune_old_outputs.ps1
 ```
 
 Add `-Delete` only after reviewing the listed files. Keep
-`config/vps_config.json` restricted and out of Git. The search trigger retains
-its legacy password compatibility, while private document operations require
-host-key pinning and support a dedicated archive key.
+`config/vps_config.json` restricted and out of Git. Private document operations
+require host-key pinning and support a dedicated archive key.

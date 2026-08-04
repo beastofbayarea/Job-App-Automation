@@ -109,19 +109,6 @@ def load_vps_config(context: DashboardContext) -> dict[str, Any]:
         return {}
 
 
-def load_vps_log(context: DashboardContext, lines: int = 250) -> str:
-    """Read a bounded tail of the public VPS synchronization log."""
-
-    log_path = get_output_file_path(context, "vps_sync.log")
-    if not log_path.exists():
-        return "vps_sync.log not found."
-    try:
-        with log_path.open(encoding="utf-8", errors="replace") as stream:
-            return "".join(stream.readlines()[-lines:])
-    except Exception as exc:
-        return f"Error reading log file: {exc}"
-
-
 def file_metadata(path: Path, *, scope: str, relative_path: str) -> dict[str, Any]:
     """Describe a file without exposing its contents."""
 

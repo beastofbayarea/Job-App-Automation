@@ -42,7 +42,6 @@ PRIVATE_ARCHIVE_DIR = Path(
 )
 WORKER_PROVIDERS = ("ashby", "greenhouse", "lever")
 _ADMIN_LOG_FILES = {
-    "vps-sync": OUTPUT_DIR / "vps_sync.log",
     "nginx-access": Path("/var/log/nginx/access.log"),
     "nginx-error": Path("/var/log/nginx/error.log"),
     "system": Path("/var/log/syslog"),
@@ -85,7 +84,6 @@ _PUBLIC_RAW_FILES = {
     "job_backlog.json",
     "job_search_coverage.json",
     "vps_infra_status.json",
-    "vps_run_status.json",
 }
 _REPOSITORY_EXCLUDED_DIRECTORIES = {
     ".agents",
@@ -171,12 +169,6 @@ def load_vps_config() -> dict[str, Any]:
     """Load only public operational VPS metadata."""
 
     return artifacts.load_vps_config(_dashboard_context())
-
-
-def load_vps_log(lines: int = 250) -> str:
-    """Return the bounded VPS synchronization log tail."""
-
-    return artifacts.load_vps_log(_dashboard_context(), lines)
 
 
 def _file_metadata(path: Path, *, scope: str, relative_path: str) -> dict[str, Any]:
@@ -323,7 +315,6 @@ def _dashboard_application() -> DashboardApplication:
             operations=build_operations_overview,
             metrics=build_kpi_metrics,
             system_vps=load_vps_config,
-            vps_log=lambda: {"log": load_vps_log(250)},
             section1_jobs=load_csv_jobs,
             section1_backlog=public_backlog_jobs,
             section1_coverage=lambda: load_json_file("job_search_coverage.json"),

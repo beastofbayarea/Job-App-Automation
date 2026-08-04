@@ -19,10 +19,9 @@ This project processes identity, contact, resume, employment, and application da
 - A browser fill is not a submission. Depend on explicit confirmation and `submission_log.json`.
 - Gmail sends require confirmation unless `--yes` is supplied. Use `--draft` for reviewable outreach.
 - Do not use queue processing for exploratory testing; it is a live submission workflow.
-- The VPS daily workflow is explicitly authorized for unattended live
-  submission. It is capped at 10 attempts per ATS. Failed applications are
-  recorded and skipped while later roles continue; do not weaken the
-  no-automatic-retry rule or exact confirmation requirement.
+- VPS ATS workers are explicitly authorized for unattended live submission.
+  Failed applications are recorded and skipped while later roles continue; do
+  not weaken the no-automatic-retry rule or exact confirmation requirement.
 
 ## Retention and sharing
 
@@ -42,15 +41,8 @@ The final `before_send` filter drops all non-allow-listed event content.
 
 - Use a dedicated unprivileged SSH account, archive root mode `0700`, file mode `0600`, and a separately managed authentication key.
 - Pin the expected SSH host key. Never accept an unexpected key merely to make a transfer work.
-- Do not reuse the Git search-publication deploy key for private documents.
-- `vps-search-output` is public generated data and must remain limited to search
-  coverage, the current job CSV, the board cache, and `job_backlog.json`.
-  Backlog records contain only public ATS metadata and liveness identity—never
-  descriptions, emails, application state/errors, documents, or submission
-  evidence. Never add archive paths or content to its allow-list.
 - VPS application state, results, temporary screenshots, submission logs, Gmail OAuth
-  files, and candidate inputs are private and must never enter the search
-  publication worktree.
+  files, and candidate inputs are private and must never enter a public worktree.
 - Pull confirmed submissions and failure reports only with
   `pull_vps_application_reports.ps1`; its local destination remains ignored by
   Git. Review and securely remove downloaded copies when no longer needed.

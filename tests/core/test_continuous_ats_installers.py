@@ -28,7 +28,6 @@ def test_all_provider_wrappers_use_guarded_generic_supervision() -> None:
     assert "[j]ob_automation.py apply" in installer
     assert "exit 76" in installer
     assert "disable --now" not in installer
-    assert "continuous job-search service" in installer
     assert "OtherAtsService" not in installer
     assert "Restart=always" in unit
     assert "job_application_automation.core.continuous_ats" in unit
@@ -42,7 +41,6 @@ def test_all_unattended_worker_units_load_optional_observability_environment() -
         "templates/job-app-continuous-ats.service.template",
         "templates/job-app-greenhouse-source.service.template",
         "templates/job-app-greenhouse.service.template",
-        "templates/job-app-search-sync.service.template",
     ):
         unit = (SCRIPTS / filename).read_text(encoding="utf-8")
         assert "EnvironmentFile=-/etc/job-application-automation/observability.env" in unit
@@ -57,8 +55,6 @@ def test_parallel_status_probe_discovers_all_services_and_redacts_email() -> Non
     assert "continuous-lever" in script
     assert "email_selection=" in script
     assert '"outside_pool"' in script
-    assert "job-app-search-sync.service" in script
-    assert "[v]ps_continuous_search_sync" in script
     assert "grep -v '[b]ash -c set -eu repo='" in script
     assert "[REDACTED]" in script
     assert "free -h" in script

@@ -1,4 +1,4 @@
-# Reads every continuous ATS service and the search service without changing work.
+# Reads every continuous ATS service without changing work.
 param(
     [string]$RemoteRepoPath = "/root/Job-App-Automation",
     [string]$ConfigPath = "config/vps_config.json",
@@ -26,10 +26,6 @@ printf '%s\n' '=== VPS CAPACITY ==='
 date --iso-8601=seconds
 uptime
 free -h
-printf '%s\n' '=== CONTINUOUS SEARCH SERVICE ==='
-systemctl show job-app-search-sync.service \
-  --property=Id,LoadState,UnitFileState,ActiveState,SubState,MainPID,NRestarts,ExecMainStartTimestamp \
-  2>/dev/null || true
 printf '%s\n' '=== PARALLEL ATS SERVICES ==='
 ats_services=`$(systemctl list-unit-files 'job-app-*.service' --no-legend --no-pager |
   awk '{print `$1}' |
@@ -50,7 +46,7 @@ else
 fi
 printf '%s\n' '=== SEARCH AND ATS PROCESSES ==='
 ps -eo pid,ppid,lstart,etime,%cpu,%mem,rss,stat,args |
-  grep -E '[v]ps_continuous_search_sync|[v]ps_search_sync.sh|[c]ontinuous-(ashby|greenhouse|lever)|[c]ontinuous_(source_)?ats|[j]ob_automation.py (apply|search)' |
+  grep -E '[c]ontinuous-(ashby|greenhouse|lever)|[c]ontinuous_(source_)?ats|[j]ob_automation.py apply' |
   grep -v '[b]ash -c set -eu repo=' |
   sed -E 's/(--email )[[:graph:]]+/\1[REDACTED]/g' || true
 printf '%s\n' '=== PROVIDER STATE ==='
@@ -359,22 +355,6 @@ for unit in sys.argv[1:]:
         + json.dumps(failure_statuses, sort_keys=True)
     )
 PY
-printf '%s\n' '=== CONTINUOUS SEARCH RUN STATUS ==='
-if [ -f "`$repo/output/vps_run_status.json" ]; then
-  cat "`$repo/output/vps_run_status.json"
-else
-  printf '%s\n' 'MISSING'
-fi
-search_journal=`$(journalctl -u job-app-search-sync.service -b --no-pager -o cat \
-  2>/dev/null || true)
-printf 'search_cycles_started=%s\n' \
-  "`$(printf '%s\n' "`$search_journal" | grep -c 'Beginning VPS search sync cycle' || true)"
-printf 'search_cycles_completed=%s\n' \
-  "`$(printf '%s\n' "`$search_journal" | grep -c 'search sync cycle completed successfully' || true)"
-printf 'search_cycles_failed=%s\n' \
-  "`$(printf '%s\n' "`$search_journal" | grep -c 'search sync cycle finished with exit status' || true)"
-printf '%s\n' '=== CONTINUOUS SEARCH JOURNAL ==='
-printf '%s\n' "`$search_journal" | tail -n $LogLines
 for service in `$ats_services; do
   printf '=== %s JOURNAL ===\n' "`$service"
   journalctl -u "`$service" -n $LogLines --no-pager 2>/dev/null || true

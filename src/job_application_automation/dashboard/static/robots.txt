@@ -4,7 +4,6 @@ Allow: /
 Allow: /index.html
 Allow: /search.html
 Allow: /generation.html
-Allow: /logs.html
 Allow: /inspector.html
 Allow: /system-status.html
 Allow: /cent-capital.html

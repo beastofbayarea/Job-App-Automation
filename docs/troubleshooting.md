@@ -245,9 +245,9 @@ Get-Content output/job_backlog.json | ConvertFrom-Json | Measure-Object
 
 ## VPS Operations Issues
 
-### VPS cron is installed but search output is stale
+### VPS ATS workers are active but making no progress
 
-**Symptoms:** Old artifact timestamps, services running but no new output.
+**Symptoms:** Worker services are running but their state and result timestamps do not advance.
 
 **Resolution:**
 1. Run status check: `pwsh scripts\check_vps_parallel_ats.ps1 -LogLines 120`
@@ -255,19 +255,16 @@ Get-Content output/job_backlog.json | ConvertFrom-Json | Measure-Object
    - Service state (`systemctl status job-app-*`)
    - Process list (Xvfb, Chromium, Python workers)
    - Repository commit (`git rev-parse HEAD`)
-   - `vps_run_status.json` timestamps
-   - Artifact modification times
-   - Recent log tail
+   - Worker state and result modification times
+   - Recent service journals
 
-**Common cause:** Search publication now precedes bounded document generation, so an old public snapshot with a run stuck in `documents` usually means the VPS is running older code.
+**Common cause:** The VPS checkout or installed unit may point to older code or stale runtime configuration.
 
-**Action:** Deploy the current `main` commit before retrying. **Do not start a second run while the lock holder is active.**
+**Action:** Deploy the current `main` commit and verify the installed unit before retrying.
 
 **Diagnostic script output interpretation:**
-- `search-service active (running)` ✓
 - `job-app-<ats> active (running)` ✓
 - `Main PID: <pid>` - note for process inspection
-- `Status: ACTIVE` in vps_run_status.json ✓
 - Artifact timestamps within expected window ✓
 
 ### Status helper times out
@@ -297,9 +294,9 @@ sudo ufw status
 **Symptoms:** Services inactive after reboot, manual start required.
 
 **Resolution:**
-1. Check service enablement: `systemctl is-enabled job-app-search-sync`
-2. Enable if needed: `sudo systemctl enable job-app-search-sync`
-3. Review journal for startup failures: `journalctl -u job-app-search-sync -n 50`
+1. Check service enablement: `systemctl is-enabled job-app-<ats>.service`
+2. Enable if needed: `sudo systemctl enable job-app-<ats>.service`
+3. Review journal for startup failures: `journalctl -u job-app-<ats>.service -n 50`
 4. Verify dependencies (network, filesystem mounts) are available at boot time
 
 ## Archive and Document Issues

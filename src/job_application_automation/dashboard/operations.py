@@ -239,11 +239,7 @@ def build_log_overview(
 ) -> dict[str, Any]:
     """Return public or full log tails without command execution."""
 
-    log_paths = (
-        context.paths.admin_log_files
-        if include_admin_logs
-        else {"vps-sync": context.paths.admin_log_files["vps-sync"]}
-    )
+    log_paths = context.paths.admin_log_files if include_admin_logs else {}
     return {
         name: {"path": str(path), "content": tail_text_file(path)}
         for name, path in log_paths.items()
@@ -258,7 +254,6 @@ def build_operations_overview(
     """Compose the public operations snapshot from injected read services."""
 
     backlog = sources.load_json_file("job_backlog.json", default={})
-    run_status = sources.load_json_file("vps_run_status.json", default={})
     infra_status = sources.load_json_file("vps_infra_status.json", default={})
     workers = sources.build_worker_summaries()
     nonconfirmed = sum(
@@ -268,7 +263,6 @@ def build_operations_overview(
     )
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "run_status": run_status if isinstance(run_status, dict) else {},
         "backlog": summarize_backlog(backlog),
         "workers": workers,
         "continuous_nonconfirmed_count": nonconfirmed,
