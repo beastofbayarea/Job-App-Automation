@@ -77,14 +77,27 @@ for path in matched_paths:
         if identity not in wanted:
             continue
         result = record.get("result") if isinstance(record.get("result"), dict) else {}
-        status = str(record.get("result_status") or result.get("status") or "")
+        status = str(
+            record.get("result_status")
+            or result.get("status")
+            or record.get("status")
+            or ""
+        )
         job_url = str(record.get("job_url") or key)
         matching_claims = [
             claim for claim in claims.get("jobs", {}).values()
             if isinstance(claim, dict) and claim.get("job_url") == job_url
         ]
         already_queued = any(claim.get("status") == "retry_requested" for claim in matching_claims)
-        if status != "REQUIRED_FIELDS_NOT_FILLED" and not already_queued:
+        retry_safe_statuses = {
+            "preparing",
+            "application_started",
+            "INTERRUPTED_AFTER_APPLICATION_START",
+            "REQUIRED_FIELDS_NOT_FILLED",
+            "TIMED_OUT",
+            "SUBMISSION_UNCONFIRMED",
+        }
+        if status not in retry_safe_statuses and not already_queued:
             raise SystemExit(f"refusing target with status {status}: {identity}")
         del state["jobs"][key]
         for claim in matching_claims:
