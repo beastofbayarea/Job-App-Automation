@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ashby Job Search"
+  short_description: "Find and validate current Ashby job postings"
+  default_prompt: "Use $ashby-job-search to create a fresh, filtered JSON list of current Ashby postings."
