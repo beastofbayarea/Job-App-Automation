@@ -46,6 +46,10 @@ printf '%s\n' '=== SCHEDULING AND PROCESSES ==='
 crontab -l 2>/dev/null | grep -E 'job-app-automation-daily-search|vps_search_sync|job-app-search-sync' || true
 pgrep -af '[v]ps_continuous_search_sync|[v]ps_search_sync[.]sh|[s]earch_applications|[s]earch_documents' |
   awk -v self="`$`$" '`$1 != self' || true
+printf '%s\n' '=== QUEUE CANDIDATES ==='
+find "`$repo" -maxdepth 4 -type f \
+  \( -iname '*queue*.json' -o -iname '*backlog*.json' -o -iname '*generation_jobs*.json' \) \
+  -printf '%p|%s bytes|%TY-%Tm-%TdT%TH:%TM:%TS\n' 2>/dev/null | sort
 if [ "`$mode" = audit ]; then
   printf '%s\n' 'JOB_SEARCH_SERVICE_AUDIT_COMPLETE'
   exit 0
