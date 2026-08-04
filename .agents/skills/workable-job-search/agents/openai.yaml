@@ -1,0 +1,4 @@
+interface:
+  display_name: "Workable Job Search"
+  short_description: "Find and validate current Workable job URLs"
+  default_prompt: "Use $workable-job-search to create a fresh, filtered JSON list of current Workable postings."
