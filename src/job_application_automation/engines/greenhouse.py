@@ -19,7 +19,9 @@ OUT-OF-THE-BOX ALTERNATE APPROACHES / ARCHITECTURAL OPTIONS:
 from __future__ import annotations
 
 import argparse
+import faulthandler
 import logging
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,6 +34,7 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
 from ..core.engine_shared import (
+    ORCHESTRATOR_INVOCATION_ENV,
     SENSITIVE_FIELD_PATTERN as SENSITIVE_EEO,
     answer_variants as _answer_variants,
     build_engine_parser,
@@ -2012,51 +2015,65 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
-    live_submit = requested_live_mode(args)
+    diagnostics_enabled = os.environ.get(ORCHESTRATOR_INVOCATION_ENV) == "1"
+    if diagnostics_enabled:
+        # The continuous worker captures stderr even when it terminates an
+        # overlong engine process.  Periodic stacks therefore preserve the
+        # exact Playwright call responsible for a hard timeout instead of a
+        # context-free TIMED_OUT record.
+        faulthandler.enable()
+        faulthandler.dump_traceback_later(120, repeat=True)
     try:
-        require_orchestrated_invocation(args.url)
-        if getattr(args, "direct_api", False):
-            if args.cover_letter:
-                raise ValueError("--direct-api does not support cover-letter uploads")
-            logger.info("Opt-in --direct-api enabled: using direct Greenhouse POST handler")
-            result = submit_greenhouse_direct_post(
-                url=args.url,
-                resume=Path(args.resume).expanduser().resolve(),
-                email_override=args.email,
-                config=_load_config(),
-                company=args.company,
-                role=args.role,
-                live_submit=live_submit,
-            )
-        else:
-            result = run(
-                url=args.url,
-                resume=Path(args.resume).expanduser().resolve(),
-                cover_letter=(
-                    Path(args.cover_letter).expanduser().resolve() if args.cover_letter else None
-                ),
-                email_override=args.email,
-                config=_load_config(),
-                company=args.company,
-                role=args.role,
-                headed=args.headed,
-                live_submit=live_submit,
-            )
-    except Exception as exc:
-        logger.exception("Greenhouse engine failed")
-        result = {
-            "success": False,
-            "status": "ENGINE_EXECUTION_ERROR",
-            "ats": ATS_NAME,
-            "submitted": False,
-            "confirmed": False,
-            "test_mode": not live_submit,
-            "error": f"{type(exc).__name__}: {exc}",
-        }
+        args = _parser().parse_args(argv)
+        live_submit = requested_live_mode(args)
+        try:
+            require_orchestrated_invocation(args.url)
+            if getattr(args, "direct_api", False):
+                if args.cover_letter:
+                    raise ValueError("--direct-api does not support cover-letter uploads")
+                logger.info("Opt-in --direct-api enabled: using direct Greenhouse POST handler")
+                result = submit_greenhouse_direct_post(
+                    url=args.url,
+                    resume=Path(args.resume).expanduser().resolve(),
+                    email_override=args.email,
+                    config=_load_config(),
+                    company=args.company,
+                    role=args.role,
+                    live_submit=live_submit,
+                )
+            else:
+                result = run(
+                    url=args.url,
+                    resume=Path(args.resume).expanduser().resolve(),
+                    cover_letter=(
+                        Path(args.cover_letter).expanduser().resolve()
+                        if args.cover_letter
+                        else None
+                    ),
+                    email_override=args.email,
+                    config=_load_config(),
+                    company=args.company,
+                    role=args.role,
+                    headed=args.headed,
+                    live_submit=live_submit,
+                )
+        except Exception as exc:
+            logger.exception("Greenhouse engine failed")
+            result = {
+                "success": False,
+                "status": "ENGINE_EXECUTION_ERROR",
+                "ats": ATS_NAME,
+                "submitted": False,
+                "confirmed": False,
+                "test_mode": not live_submit,
+                "error": f"{type(exc).__name__}: {exc}",
+            }
 
-    emit_engine_result(result)
-    return 0 if result["success"] else 1
+        emit_engine_result(result)
+        return 0 if result["success"] else 1
+    finally:
+        if diagnostics_enabled:
+            faulthandler.cancel_dump_traceback_later()
 
 
 if __name__ == "__main__":
