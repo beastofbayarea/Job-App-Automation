@@ -559,6 +559,31 @@ def _select_greenhouse_combobox(
                 return True
         except Exception:
             pass
+        # Some current Greenhouse forms wrap the autocomplete input in a
+        # clickable React-select shell but do not react to clicks or key
+        # events dispatched through the input locator itself. Focus the shell
+        # and send real page-level keyboard events before declaring the
+        # required question unresolved.
+        try:
+            shell = control.locator(
+                "xpath=ancestor::*[contains(@class, 'select') or @role='combobox'][1]"
+            )
+            if shell.count():
+                shell.first.click(force=True)
+                page.keyboard.press("ArrowDown")
+                page.keyboard.press("Enter")
+                page.wait_for_timeout(400)
+                container_text = shell.first.inner_text().strip()
+                if container_text and not re.fullmatch(
+                    r"(?:select|choose)(?:\.\.\.)?", container_text, re.I
+                ):
+                    logger.info(
+                        "Greenhouse React-select shell fallback selected an option preferred=%s",
+                        list(preferred),
+                    )
+                    return True
+        except Exception:
+            pass
         visible_listboxes = []
         listboxes = page.locator('[role="listbox"]')
         for index in range(listboxes.count()):

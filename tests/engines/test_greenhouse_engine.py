@@ -76,6 +76,27 @@ def test_combobox_fallback_clears_failed_search_before_selecting_first_option() 
     first.click.assert_called_once_with()
 
 
+def test_combobox_fallback_uses_react_select_shell_and_page_keyboard() -> None:
+    page = MagicMock()
+    control = MagicMock()
+    no_options = MagicMock()
+    no_options.count.return_value = 0
+    no_options.first.wait_for.side_effect = RuntimeError("not mounted")
+    page.locator.return_value = no_options
+    shell = MagicMock()
+    shell.count.return_value = 1
+    shell.first.inner_text.return_value = "Yes"
+    control.locator.return_value = shell
+    control.evaluate.return_value = ""
+    control.get_attribute.return_value = None
+
+    assert _select_greenhouse_combobox(page, control, ())
+
+    shell.first.click.assert_called_once_with(force=True)
+    page.keyboard.press.assert_any_call("ArrowDown")
+    page.keyboard.press.assert_any_call("Enter")
+
+
 def test_missing_required_repair_reacquires_exact_labeled_combobox() -> None:
     page = MagicMock()
     controls = MagicMock()
