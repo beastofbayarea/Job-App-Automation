@@ -52,6 +52,7 @@ from .form_sections import (
     FormSectionReport,
     run_section_handlers,
 )
+from .submission_outcomes import classify_rejection, confirms_submission
 from ..core.engine_shared import (
     answer_variants,
     build_engine_parser,
@@ -70,7 +71,6 @@ from ..core.engine_shared import (
     requested_live_mode,
     resolve_candidate_email,
     safe_filename,
-    text_confirms_submission,
     validate_ats_url,
     validate_required_fields,
 )
@@ -2211,7 +2211,7 @@ def disallowed_screening_questions(page: Page) -> list[str]:
 
 
 def _submission_confirmed(body_text: str) -> bool:
-    return text_confirms_submission(
+    return confirms_submission(
         body_text,
         success_phrases=SUBMISSION_CONFIRMATION_PHRASES,
         failure_phrases=SUBMISSION_FAILURE_PHRASES,
@@ -2220,11 +2220,11 @@ def _submission_confirmed(body_text: str) -> bool:
 
 def _submission_failure_status(body_text: str) -> str | None:
     """Classify an explicit Ashby rejection without collapsing all failures into spam."""
-    if any(phrase in body_text for phrase in SUBMISSION_SPAM_PHRASES):
-        return "FLAGGED_POSSIBLE_SPAM"
-    if any(phrase in body_text for phrase in SUBMISSION_REJECTION_PHRASES):
-        return "SUBMISSION_REJECTED"
-    return None
+    return classify_rejection(
+        body_text,
+        spam_phrases=SUBMISSION_SPAM_PHRASES,
+        rejection_phrases=SUBMISSION_REJECTION_PHRASES,
+    )
 
 
 def _submission_page_outcome(
