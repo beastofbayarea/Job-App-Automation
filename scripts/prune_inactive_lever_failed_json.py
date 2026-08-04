@@ -69,6 +69,11 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, default=Path("output"))
     parser.add_argument("--timeout-seconds", type=float, default=20.0)
     parser.add_argument("--workers", type=int, default=16)
+    parser.add_argument(
+        "--remove-unsure",
+        action="store_true",
+        help="Remove records whose liveness cannot be authoritatively confirmed.",
+    )
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
     payload = json.loads(args.input.read_text(encoding="utf-8"))
@@ -78,10 +83,11 @@ def main() -> int:
         futures = {executor.submit(check_url, url, args.timeout_seconds): url for url in urls}
         for future in as_completed(futures):
             checks[futures[future]] = future.result()
-    retained = [item for item in payload if checks[str(item.get("job_url", "")).strip()].status != "closed"]
+    retained_statuses = {"live"} if args.remove_unsure else {"live", "unknown"}
+    retained = [item for item in payload if checks[str(item.get("job_url", "")).strip()].status in retained_statuses]
     removed = [
         {"record": item, "check": asdict(checks[str(item.get("job_url", "")).strip()])}
-        for item in payload if checks[str(item.get("job_url", "")).strip()].status == "closed"
+        for item in payload if checks[str(item.get("job_url", "")).strip()].status not in retained_statuses
     ]
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     backup = args.output_dir / f"lever_failed_product_management_backup_{stamp}.json"

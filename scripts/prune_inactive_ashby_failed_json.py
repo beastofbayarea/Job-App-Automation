@@ -119,6 +119,11 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, default=Path("output"))
     parser.add_argument("--timeout-seconds", type=float, default=20.0)
     parser.add_argument("--workers", type=int, default=12)
+    parser.add_argument(
+        "--remove-unsure",
+        action="store_true",
+        help="Remove records whose liveness cannot be authoritatively confirmed.",
+    )
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
 
@@ -133,13 +138,14 @@ def main() -> int:
         )
     )
     checks = check_urls(urls, args.timeout_seconds, args.workers)
+    retained_statuses = {"live"} if args.remove_unsure else {"live", "unknown"}
     retained = [
-        record for record in payload if checks[str(record.get("job_url", "")).strip()].status != "closed"
+        record for record in payload if checks[str(record.get("job_url", "")).strip()].status in retained_statuses
     ]
     removed = [
         {"record": record, "check": asdict(checks[str(record.get("job_url", "")).strip()])}
         for record in payload
-        if checks[str(record.get("job_url", "")).strip()].status == "closed"
+        if checks[str(record.get("job_url", "")).strip()].status not in retained_statuses
     ]
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")

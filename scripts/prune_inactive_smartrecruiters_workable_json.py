@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import html
 import json
+import re
 import shutil
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -13,6 +15,12 @@ from pathlib import Path
 from urllib.parse import quote, urlsplit
 
 import requests
+
+
+CANONICAL_LINK = re.compile(
+    r'<link\b(?=[^>]*\brel=["\']canonical["\'])(?=[^>]*\bhref=["\']([^"\']+)["\'])[^>]*>',
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -109,6 +117,10 @@ def check_workable(urls: list[str], timeout: float, workers: int) -> dict[str, C
                     )
                     continue
                 resolved = identity(response.url, "workable")
+                if resolved is None and response.status_code < 400:
+                    canonical = CANONICAL_LINK.search(response.text)
+                    if canonical:
+                        resolved = identity(html.unescape(canonical.group(1)), "workable")
                 if response.status_code >= 400 or resolved is None:
                     checks[url] = Check(
                         url, "unknown", "short_link_not_resolved", response.status_code
@@ -152,6 +164,11 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, default=Path("output"))
     parser.add_argument("--timeout-seconds", type=float, default=20.0)
     parser.add_argument("--workers", type=int, default=16)
+    parser.add_argument(
+        "--remove-unsure",
+        action="store_true",
+        help="Remove records whose liveness cannot be authoritatively confirmed.",
+    )
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
     payload = json.loads(args.input.read_text(encoding="utf-8"))
@@ -164,8 +181,9 @@ def main() -> int:
             futures = {executor.submit(check_smartrecruiters, url, args.timeout_seconds): url for url in urls}
             for future in as_completed(futures):
                 checks[futures[future]] = future.result()
-    retained = [item for item in payload if checks[str(item.get("job_url", "")).strip()].status != "closed"]
-    removed = [{"record": item, "check": asdict(checks[str(item.get("job_url", "")).strip()])} for item in payload if checks[str(item.get("job_url", "")).strip()].status == "closed"]
+    retained_statuses = {"live"} if args.remove_unsure else {"live", "unknown"}
+    retained = [item for item in payload if checks[str(item.get("job_url", "")).strip()].status in retained_statuses]
+    removed = [{"record": item, "check": asdict(checks[str(item.get("job_url", "")).strip()])} for item in payload if checks[str(item.get("job_url", "")).strip()].status not in retained_statuses]
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     backup = args.output_dir/f"{args.platform}_failed_product_management_backup_{stamp}.json"
     if args.apply:
