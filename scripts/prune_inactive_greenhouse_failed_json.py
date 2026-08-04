@@ -91,7 +91,11 @@ def check_url(url: str, timeout: float) -> Check:
         return Check(url, True, f"http_{response.status_code}", response.status_code, response.url)
     if response.status_code >= 400:
         return Check(
-            url, False, f"indeterminate_http_{response.status_code}", response.status_code, response.url
+            url,
+            False,
+            f"indeterminate_http_{response.status_code}",
+            response.status_code,
+            response.url,
         )
     if identity is not None:
         try:
@@ -112,7 +116,13 @@ def check_url(url: str, timeout: float) -> Check:
                             response.url,
                         )
                 except ValueError:
-                    return Check(url, False, "invalid_application_deadline", response.status_code, response.url)
+                    return Check(
+                        url,
+                        False,
+                        "invalid_application_deadline",
+                        response.status_code,
+                        response.url,
+                    )
             return Check(url, False, "active_api_job", response.status_code, response.url)
         return Check(url, False, "unexpected_api_identity", response.status_code, response.url)
     lowered = response.text.casefold()
@@ -123,9 +133,7 @@ def check_url(url: str, timeout: float) -> Check:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--data-dir", type=Path, default=Path("data/application-queues/greenhouse")
-    )
+    parser.add_argument("--data-dir", type=Path, default=Path("data/application-queues/greenhouse"))
     parser.add_argument("--output-dir", type=Path, default=Path("output"))
     parser.add_argument("--timeout-seconds", type=float, default=15.0)
     parser.add_argument("--workers", type=int, default=12)
@@ -191,8 +199,18 @@ def main() -> int:
     }
     args.output_dir.mkdir(parents=True, exist_ok=True)
     report_path = args.output_dir / "greenhouse_failed_url_prune_report.json"
-    report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(json.dumps({key: report[key] for key in ("applied", "unique_urls_checked", "removed_by_file", "backup_dir")}, sort_keys=True))
+    report_path.write_text(
+        json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    print(
+        json.dumps(
+            {
+                key: report[key]
+                for key in ("applied", "unique_urls_checked", "removed_by_file", "backup_dir")
+            },
+            sort_keys=True,
+        )
+    )
     return 0
 
 

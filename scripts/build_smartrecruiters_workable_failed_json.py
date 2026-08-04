@@ -76,7 +76,9 @@ def merge_records(base: list[dict[str, object]], incoming: list[dict[str, object
         if url is None:
             continue
         updated = dict(merged.get(url, {}))
-        updated.update({str(key): value for key, value in record.items() if value not in (None, "", [])})
+        updated.update(
+            {str(key): value for key, value in record.items() if value not in (None, "", [])}
+        )
         updated["job_url"] = url
         merged[url] = updated
     return list(merged.values())
@@ -94,9 +96,13 @@ def main() -> int:
         payload = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(payload, list):
             raise ValueError(f"merge JSON must contain a list: {path}")
-        records = merge_records(records, [item for item in payload if isinstance(item, dict)], args.platform)
+        records = merge_records(
+            records, [item for item in payload if isinstance(item, dict)], args.platform
+        )
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(records, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    args.output.write_text(
+        json.dumps(records, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
     print(f"platform={args.platform} records={len(records)} output={args.output}")
     return 0
 

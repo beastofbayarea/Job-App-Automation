@@ -86,9 +86,7 @@ def check_urls(urls: list[str], timeout: float, workers: int) -> dict[str, Check
 
     results: dict[str, tuple[set[str] | None, str, int | None]] = {}
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = {
-            executor.submit(fetch_active_ids, board, timeout): board for board in by_board
-        }
+        futures = {executor.submit(fetch_active_ids, board, timeout): board for board in by_board}
         for future in as_completed(futures):
             results[futures[future]] = future.result()
 
@@ -103,7 +101,11 @@ def check_urls(urls: list[str], timeout: float, workers: int) -> dict[str, Check
                 )
             else:
                 checks[url] = Check(
-                    url, "closed", "job_missing_from_current_board_response", board, job_id,
+                    url,
+                    "closed",
+                    "job_missing_from_current_board_response",
+                    board,
+                    job_id,
                     http_status,
                 )
     return checks
@@ -140,7 +142,9 @@ def main() -> int:
     checks = check_urls(urls, args.timeout_seconds, args.workers)
     retained_statuses = {"live"} if args.remove_unsure else {"live", "unknown"}
     retained = [
-        record for record in payload if checks[str(record.get("job_url", "")).strip()].status in retained_statuses
+        record
+        for record in payload
+        if checks[str(record.get("job_url", "")).strip()].status in retained_statuses
     ]
     removed = [
         {"record": record, "check": asdict(checks[str(record.get("job_url", "")).strip()])}
@@ -168,16 +172,32 @@ def main() -> int:
         "removed": len(removed),
         "status_counts": dict(Counter(check.status for check in checks.values())),
         "reason_counts": {
-            f"{status}:{reason}": count
-            for (status, reason), count in sorted(reason_counts.items())
+            f"{status}:{reason}": count for (status, reason), count in sorted(reason_counts.items())
         },
         "removed_records": removed,
         "backup_path": str(backup_path) if args.apply else "",
     }
     args.output_dir.mkdir(parents=True, exist_ok=True)
     report_path = args.output_dir / "ashby_failed_url_prune_report.json"
-    report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(json.dumps({key: report[key] for key in ("applied", "unique_urls_checked", "retained", "removed", "status_counts", "backup_path")}, sort_keys=True))
+    report_path.write_text(
+        json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    print(
+        json.dumps(
+            {
+                key: report[key]
+                for key in (
+                    "applied",
+                    "unique_urls_checked",
+                    "retained",
+                    "removed",
+                    "status_counts",
+                    "backup_path",
+                )
+            },
+            sort_keys=True,
+        )
+    )
     return 0
 
 

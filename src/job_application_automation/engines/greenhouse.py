@@ -734,7 +734,9 @@ def _greenhouse_semantic_answer(
             language_name = str(language).strip().casefold()
             if language_name and (
                 normalized == language_name
-                or re.search(rf"\b(?:level of |speak |fluent in ){re.escape(language_name)}\b", normalized)
+                or re.search(
+                    rf"\b(?:level of |speak |fluent in ){re.escape(language_name)}\b", normalized
+                )
             ):
                 return str(answer).strip() or None
     if re.fullmatch(r"start date month", normalized):
@@ -1164,9 +1166,7 @@ def _repair_missing_required_controls(
                 role_name = control.get_attribute("role") or ""
                 tag = control.evaluate("el => el.tagName.toLowerCase()")
                 if role_name == "combobox":
-                    preferred = (
-                        _answer_variants(label, desired, option_variants) if desired else ()
-                    )
+                    preferred = _answer_variants(label, desired, option_variants) if desired else ()
                     success = _select_greenhouse_combobox(
                         page,
                         control,
@@ -1174,9 +1174,7 @@ def _repair_missing_required_controls(
                         budget=budget,
                     )
                 elif tag == "select":
-                    preferred = (
-                        _answer_variants(label, desired, option_variants) if desired else ()
-                    )
+                    preferred = _answer_variants(label, desired, option_variants) if desired else ()
                     success = _select_native_control(
                         control,
                         preferred,
@@ -1185,9 +1183,9 @@ def _repair_missing_required_controls(
                     )
                 elif tag == "input" and desired:
                     control.fill(str(desired))
-                    if control.get_attribute("aria-autocomplete") == "list" or control.get_attribute(
-                        "aria-controls"
-                    ):
+                    if control.get_attribute(
+                        "aria-autocomplete"
+                    ) == "list" or control.get_attribute("aria-controls"):
                         control.press("ArrowDown")
                         control.press("Enter")
                     success = bool(control.input_value().strip())
@@ -1459,9 +1457,7 @@ def _fill_standard_fields(
     if _budget_available(budget, "standard-country"):
         country = _first_visible(
             page.locator('input[role="combobox"][id="country"]')
-        ) or _first_visible(
-            page.get_by_label(re.compile(r"^(?:country|pays)", re.IGNORECASE))
-        )
+        ) or _first_visible(page.get_by_label(re.compile(r"^(?:country|pays)", re.IGNORECASE)))
     if country is not None:
         fields["country"] = _select_greenhouse_combobox(
             page,
@@ -1667,9 +1663,7 @@ def _required_empty_fields(
             control_type = (control.get_attribute("type") or "").lower()
             if control_type in {"checkbox", "radio"}:
                 if not _required_choice_group_has_selection(control):
-                    missing.append(
-                        label or control.get_attribute("name") or f"choice-{index}"
-                    )
+                    missing.append(label or control.get_attribute("name") or f"choice-{index}")
             elif control.get_attribute("role") == "combobox":
                 if not _required_combobox_has_value(control):
                     missing.append(label or control.get_attribute("id") or f"field-{index}")
@@ -1885,15 +1879,22 @@ def _commit_react_form_values(
         return 0
 
 
+def _configured_timeout_ms(configured: object) -> int:
+    """Return a validated integer timeout from runtime configuration."""
+    if isinstance(configured, bool) or not isinstance(configured, (int, str)):
+        raise TypeError("configured timeout must be an integer")
+    return int(configured)
+
+
 def _effective_action_timeout_ms(configured: object) -> int:
     """Bound one selector action while retaining time for slow React controls."""
-    return min(max(int(configured), 1_000), ACTION_TIMEOUT_MAX_MS)
+    return min(max(_configured_timeout_ms(configured), 1_000), ACTION_TIMEOUT_MAX_MS)
 
 
 def _effective_form_work_timeout_ms(configured: object) -> int:
     """Reserve most of the worker deadline for retry/reporting after form work."""
     return min(
-        max(int(configured), FORM_WORK_TIMEOUT_MIN_MS),
+        max(_configured_timeout_ms(configured), FORM_WORK_TIMEOUT_MIN_MS),
         FORM_WORK_TIMEOUT_MAX_MS,
     )
 
@@ -2007,9 +2008,7 @@ def _run_form_sections(
         if not _budget_available(budget, "required-consent-section"):
             return FormSectionOutcome("required_consent", completed=())
         consent_result = _fill_consent(page)
-        consent_result.extend(
-            _fill_explicit_required_consents(page, budget=budget)
-        )
+        consent_result.extend(_fill_explicit_required_consents(page, budget=budget))
         return FormSectionOutcome("required_consent", completed=tuple(consent_result))
 
     def security_challenge() -> FormSectionOutcome:
@@ -2280,6 +2279,7 @@ def run(
                         page, screenshot_dir, company or "Greenhouse", "skipped_policy"
                     ),
                 }
+
             def inspect_required_fields(current_page: Page) -> list[str]:
                 return _required_empty_fields(current_page, budget=form_budget)
 
@@ -2329,9 +2329,7 @@ def run(
                 for repaired_label, repaired_ok in repaired.items():
                     if not repaired_ok:
                         continue
-                    normalized_label = " ".join(
-                        repaired_label.casefold().split()
-                    ).rstrip(" *")
+                    normalized_label = " ".join(repaired_label.casefold().split()).rstrip(" *")
                     field_key = standard_field_keys.get(normalized_label)
                     if field_key:
                         fields[field_key] = True
@@ -2435,9 +2433,7 @@ def run(
                 for _ in range(8):
                     refreshed_submit = _first_visible(
                         page.get_by_role("button", name=SUBMIT_BUTTON_TEXT_PATTERN)
-                    ) or _first_visible(
-                        page.locator('button[type="submit"], input[type="submit"]')
-                    )
+                    ) or _first_visible(page.locator('button[type="submit"], input[type="submit"]'))
                     if refreshed_submit is not None:
                         submit = refreshed_submit
                     if _submit_control_enabled(submit):

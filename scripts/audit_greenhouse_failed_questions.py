@@ -92,9 +92,7 @@ def audit(data_dir: Path) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--data-dir", type=Path, default=Path("data/application-queues/greenhouse")
-    )
+    parser.add_argument("--data-dir", type=Path, default=Path("data/application-queues/greenhouse"))
     parser.add_argument("--json-output", type=Path, required=True)
     parser.add_argument("--csv-output", type=Path, required=True)
     args = parser.parse_args()

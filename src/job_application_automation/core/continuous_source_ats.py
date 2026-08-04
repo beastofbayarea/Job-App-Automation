@@ -78,6 +78,13 @@ def _claim_fixing_attempts(claim: Mapping[str, Any]) -> int:
     return 0
 
 
+def _nonnegative_count(value: object) -> int:
+    """Normalize persisted counters while rejecting unsupported values."""
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        raise TypeError("persisted count must be an integer")
+    return max(int(value), 0)
+
+
 def _remediation_revision(
     *,
     ats_platform: str,
@@ -139,9 +146,7 @@ def _reconcile_exhausted_retry_claims(claims: Mapping[str, Any]) -> int:
             continue
         claim["status"] = SKIPPED_AFTER_FIXING_ATTEMPTS
         claim["critical_error"] = True
-        claim["skip_reason"] = (
-            f"failed after {MAX_CRITICAL_FIXING_ATTEMPTS} fixing attempts"
-        )
+        claim["skip_reason"] = f"failed after {MAX_CRITICAL_FIXING_ATTEMPTS} fixing attempts"
         claim["remediation_required"] = False
         claim.pop("next_retry_at", None)
         reconciled += 1
@@ -172,10 +177,7 @@ def _persist_exhausted_claims_to_state(
         except ValueError:
             continue
         claim = claim_jobs.get(identity)
-        if (
-            not isinstance(claim, Mapping)
-            or claim.get("status") != SKIPPED_AFTER_FIXING_ATTEMPTS
-        ):
+        if not isinstance(claim, Mapping) or claim.get("status") != SKIPPED_AFTER_FIXING_ATTEMPTS:
             continue
         desired = {
             "retry_policy_status": SKIPPED_AFTER_FIXING_ATTEMPTS,
@@ -262,11 +264,7 @@ def _seed_claims_from_state(
         )
         claim_records[identity] = {
             "owner": owner,
-            "status": str(
-                record.get("retry_policy_status")
-                or record.get("status")
-                or "recorded"
-            ),
+            "status": str(record.get("retry_policy_status") or record.get("status") or "recorded"),
             "result_status": str(record.get("result_status") or ""),
             "job_url": job_url,
             "company": str(record.get("company") or ""),
@@ -439,25 +437,20 @@ def _claim_next_job(
         identity = candidate_identity(selected)
         prior_claim = claim_records.get(identity)
         retry_count = (
-            int(prior_claim.get("retry_count") or 0)
-            if isinstance(prior_claim, Mapping)
-            else 0
+            int(prior_claim.get("retry_count") or 0) if isinstance(prior_claim, Mapping) else 0
         )
         fixing_attempts = (
             _claim_fixing_attempts(prior_claim) + 1
-            if isinstance(prior_claim, Mapping)
-            and prior_claim.get("status") == "retry_requested"
+            if isinstance(prior_claim, Mapping) and prior_claim.get("status") == "retry_requested"
             else (
                 _claim_fixing_attempts(prior_claim)
-                if isinstance(prior_claim, Mapping)
-                and prior_claim.get("status") == "claimed"
+                if isinstance(prior_claim, Mapping) and prior_claim.get("status") == "claimed"
                 else 0
             )
         )
         attempt_revision = (
             str(prior_claim.get("attempt_revision") or remediation_revision)
-            if isinstance(prior_claim, Mapping)
-            and prior_claim.get("status") == "claimed"
+            if isinstance(prior_claim, Mapping) and prior_claim.get("status") == "claimed"
             else remediation_revision
         )
         claim_records[identity] = {
@@ -560,10 +553,9 @@ def _sync_claim_from_state(
         claims = _load_claims(claims_path)
         identity = _job_identity(str(job["job_url"]), ats_platform)
         prior_claim = claims["jobs"].get(identity)
-        retry_count = int(
+        retry_count = _nonnegative_count(
             prior_claim.get("retry_count")
-            if isinstance(prior_claim, Mapping)
-            and prior_claim.get("retry_count") is not None
+            if isinstance(prior_claim, Mapping) and prior_claim.get("retry_count") is not None
             else record.get("retry_count") or 0
         )
         fixing_attempts = (
@@ -587,9 +579,7 @@ def _sync_claim_from_state(
             claim_status == SKIPPED_AFTER_FIXING_ATTEMPTS
         )
         prior_status = (
-            str(prior_claim.get("status") or "")
-            if isinstance(prior_claim, Mapping)
-            else ""
+            str(prior_claim.get("status") or "") if isinstance(prior_claim, Mapping) else ""
         )
         if critical_failure:
             if prior_status not in {
@@ -621,8 +611,7 @@ def _sync_claim_from_state(
         if critical_failure and claim_status == "retry_requested":
             prior_failure_revision = (
                 str(prior_claim.get("failure_revision") or "")
-                if isinstance(prior_claim, Mapping)
-                and prior_status == "retry_requested"
+                if isinstance(prior_claim, Mapping) and prior_status == "retry_requested"
                 else ""
             )
             failure_revision = (
@@ -660,15 +649,9 @@ def _sync_claim_from_state(
                     if isinstance(prior_claim, Mapping)
                     else ""
                 )
-                or (
-                    "legacy-unversioned"
-                    if prior_status == "claimed"
-                    else remediation_revision
-                )
+                or ("legacy-unversioned" if prior_status == "claimed" else remediation_revision)
             )
-            claim["skip_reason"] = (
-                f"failed after {MAX_CRITICAL_FIXING_ATTEMPTS} fixing attempts"
-            )
+            claim["skip_reason"] = f"failed after {MAX_CRITICAL_FIXING_ATTEMPTS} fixing attempts"
             state_updates = {
                 "retry_policy_status": SKIPPED_AFTER_FIXING_ATTEMPTS,
                 "retry_count": retry_count,
@@ -707,10 +690,10 @@ def _sync_terminal_claims(
     if not isinstance(jobs, Mapping):
         return 0
     for terminal in jobs.values():
-        if (
-            not isinstance(terminal, Mapping)
-            or terminal.get("status") not in {"failed", "manual_review"}
-        ):
+        if not isinstance(terminal, Mapping) or terminal.get("status") not in {
+            "failed",
+            "manual_review",
+        }:
             continue
         _sync_claim_from_state(
             job=terminal,
@@ -770,9 +753,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Continuously process disjoint ATS jobs from search output or an Excel tracker."
     )
     parser.add_argument("--ats-platform", required=True)
-    parser.add_argument(
-        "--source", choices=("search", "tracker", "failed-json"), required=True
-    )
+    parser.add_argument("--source", choices=("search", "tracker", "failed-json"), required=True)
     parser.add_argument("--worker-id", required=True)
     parser.add_argument("--input", type=Path, default=SHARED_INPUT)
     parser.add_argument("--tracker", type=Path)

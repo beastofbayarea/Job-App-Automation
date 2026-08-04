@@ -131,9 +131,7 @@ def test_missing_required_repair_reacquires_exact_labeled_combobox() -> None:
         )
 
     assert result == {"What is the country of your birth?": True}
-    page.get_by_label.assert_called_once_with(
-        "What is the country of your birth?", exact=True
-    )
+    page.get_by_label.assert_called_once_with("What is the country of your birth?", exact=True)
     select.assert_called_once_with(page, control, ("India",), budget=None)
     control.blur.assert_called_once_with()
 

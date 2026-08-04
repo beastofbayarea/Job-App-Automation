@@ -60,9 +60,9 @@ class PowerShellMaintenanceTests(unittest.TestCase):
             self.assertIn(">= 2", script, name)
             self.assertIn("_job_identity", script, name)
 
-        resume = (
-            SCRIPTS / "resume_vps_greenhouse_failed_json_worker.ps1"
-        ).read_text(encoding="utf-8")
+        resume = (SCRIPTS / "resume_vps_greenhouse_failed_json_worker.ps1").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("[switch]$StopOnly", resume)
         self.assertIn("systemctl stop '$Unit'", resume)
         self.assertLess(
@@ -70,20 +70,20 @@ class PowerShellMaintenanceTests(unittest.TestCase):
             resume.index('del state["jobs"][key]'),
         )
         self.assertLess(
-            resume.index('atomic_write_text(claims_path'),
+            resume.index("atomic_write_text(claims_path"),
             resume.index('del state["jobs"][key]'),
         )
 
-        fleet = (
-            SCRIPTS / "requeue_vps_greenhouse_failed_json_fleet.ps1"
-        ).read_text(encoding="utf-8")
+        fleet = (SCRIPTS / "requeue_vps_greenhouse_failed_json_fleet.ps1").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("trap 'systemctl start $UnitNames' EXIT", fleet)
         self.assertIn("trap - EXIT", fleet)
 
     def test_failed_job_retry_audit_supports_concise_policy_summary(self) -> None:
-        script = (
-            SCRIPTS / "audit_vps_greenhouse_failed_json_retry_queue.ps1"
-        ).read_text(encoding="utf-8")
+        script = (SCRIPTS / "audit_vps_greenhouse_failed_json_retry_queue.ps1").read_text(
+            encoding="utf-8"
+        )
 
         self.assertIn("[switch]$SummaryOnly", script)
         self.assertIn("fixing_attempt_count_distribution", script)

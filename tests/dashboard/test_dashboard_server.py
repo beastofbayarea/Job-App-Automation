@@ -93,9 +93,8 @@ def test_dashboard_handler_api_routes() -> None:
 
     handler, wfile = make_mock_handler("/api/vps/log")
     handler._handle_api_get()
-    handler.send_response.assert_called_once_with(200)
-    data = json.loads(wfile.getvalue().decode("utf-8"))
-    assert "log" in data
+    handler.send_response.assert_called_once_with(404)
+    assert json.loads(wfile.getvalue().decode("utf-8")) == {"error": "Unknown API route"}
 
     handler, wfile = make_mock_handler("/api/vps/sync")
     handler.do_POST()

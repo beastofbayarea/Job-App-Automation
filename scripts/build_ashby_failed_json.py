@@ -116,7 +116,9 @@ def main() -> int:
             raise ValueError(f"merge JSON must contain a list: {merge_path}")
         records = merge_records(records, [item for item in payload if isinstance(item, dict)])
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(records, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    args.output.write_text(
+        json.dumps(records, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
     print(f"records={len(records)} output={args.output}")
     return 0
 

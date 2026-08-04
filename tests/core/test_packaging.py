@@ -23,6 +23,12 @@ def _single_wheel(directory: Path) -> Path:
 
 
 def _build_wheel(output_dir: Path) -> Path:
+    source_dir = output_dir.parent / "source"
+    shutil.copytree(PROJECT_ROOT / "src", source_dir / "src")
+    shutil.copytree(PROJECT_ROOT / "config" / "runtime", source_dir / "config" / "runtime")
+    for filename in ("pyproject.toml", "README.md"):
+        shutil.copy2(PROJECT_ROOT / filename, source_dir / filename)
+
     uv = shutil.which("uv")
     if uv:
         command = [uv, "build", "--wheel", "--out-dir", str(output_dir)]
@@ -36,12 +42,12 @@ def _build_wheel(output_dir: Path) -> Path:
             "--no-build-isolation",
             "--wheel-dir",
             str(output_dir),
-            str(PROJECT_ROOT),
+            str(source_dir),
         ]
 
     result = subprocess.run(
         command,
-        cwd=PROJECT_ROOT,
+        cwd=source_dir,
         check=False,
         capture_output=True,
         text=True,

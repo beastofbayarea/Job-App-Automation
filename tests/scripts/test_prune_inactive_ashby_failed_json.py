@@ -16,9 +16,7 @@ def test_check_urls_preserves_unknown_and_classifies_live_and_closed(monkeypatch
             return None, "request_failed", None
         return {"live-id"}, "active_board", 200
 
-    monkeypatch.setattr(
-        "scripts.prune_inactive_ashby_failed_json.fetch_active_ids", fake_fetch
-    )
+    monkeypatch.setattr("scripts.prune_inactive_ashby_failed_json.fetch_active_ids", fake_fetch)
     urls = [
         "https://jobs.ashbyhq.com/acme/live-id",
         "https://jobs.ashbyhq.com/acme/closed-id",

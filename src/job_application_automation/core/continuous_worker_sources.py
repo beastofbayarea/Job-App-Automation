@@ -85,14 +85,14 @@ def load_source_jobs(
         payload = services.read_json(input_path)
         if not isinstance(payload, list):
             raise ValueError("failed JSON source must contain a list")
-        eligible = []
+        failed_jobs: list[dict[str, Any]] = []
         for record in payload:
             if not isinstance(record, Mapping):
                 continue
             job_url = str(record.get("job_url", "")).strip()
             if services.detect_ats(job_url) != ats_platform:
                 continue
-            eligible.append(
+            failed_jobs.append(
                 {
                     "job_url": job_url,
                     "company": str(record.get("company", "")),
@@ -102,7 +102,7 @@ def load_source_jobs(
                     "prior_missing_required": str(record.get("missing_required", "")),
                 }
             )
-        return eligible
+        return failed_jobs
     if source != "tracker":
         raise ValueError(f"unsupported continuous worker source: {source}")
     if tracker_path is None:

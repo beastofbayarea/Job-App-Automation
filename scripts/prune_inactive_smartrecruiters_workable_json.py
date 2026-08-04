@@ -35,7 +35,10 @@ def identity(url: str, platform: str) -> tuple[str, str] | None:
     parsed = urlsplit(url)
     parts = [part for part in parsed.path.split("/") if part]
     if platform == "smartrecruiters":
-        if parsed.hostname not in {"jobs.smartrecruiters.com", "www.smartrecruiters.com"} or len(parts) < 2:
+        if (
+            parsed.hostname not in {"jobs.smartrecruiters.com", "www.smartrecruiters.com"}
+            or len(parts) < 2
+        ):
             return None
         return parts[0], parts[1].split("-", 1)[0]
     if parsed.hostname != "apply.workable.com":
@@ -66,7 +69,8 @@ def check_smartrecruiters(url: str, timeout: float) -> Check:
         return Check(url, "unknown", "invalid_smartrecruiters_url")
     company, posting = parsed
     payload, reason, code = fetch_json(
-        f"https://api.smartrecruiters.com/v1/companies/{quote(company, safe='')}/postings/{quote(posting, safe='')}", timeout
+        f"https://api.smartrecruiters.com/v1/companies/{quote(company, safe='')}/postings/{quote(posting, safe='')}",
+        timeout,
     )
     if payload == {} and reason.startswith("http_"):
         return Check(url, "closed", reason, code)
@@ -74,7 +78,10 @@ def check_smartrecruiters(url: str, timeout: float) -> Check:
         return Check(url, "unknown", reason, code)
     if str(payload.get("id", "")) != posting:
         return Check(url, "unknown", "unexpected_posting_identity", code)
-    if payload.get("active") is False or str(payload.get("visibility", "")).upper() not in {"", "PUBLIC"}:
+    if payload.get("active") is False or str(payload.get("visibility", "")).upper() not in {
+        "",
+        "PUBLIC",
+    }:
         return Check(url, "closed", "posting_not_active_or_public", code)
     return Check(url, "live", "active_public_posting_present", code)
 
@@ -130,7 +137,11 @@ def check_workable(urls: list[str], timeout: float, workers: int) -> dict[str, C
     results = {}
     with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = {
-            executor.submit(fetch_json, f"https://www.workable.com/api/accounts/{quote(board, safe='')}?details=true", timeout): board
+            executor.submit(
+                fetch_json,
+                f"https://www.workable.com/api/accounts/{quote(board, safe='')}?details=true",
+                timeout,
+            ): board
             for board in by_board
         }
         for future in as_completed(futures):
@@ -153,7 +164,9 @@ def check_workable(urls: list[str], timeout: float, workers: int) -> dict[str, C
             elif job_id in active_ids:
                 checks[url] = Check(url, "live", "job_present_in_current_account_response", code)
             else:
-                checks[url] = Check(url, "closed", "job_missing_from_current_account_response", code)
+                checks[url] = Check(
+                    url, "closed", "job_missing_from_current_account_response", code
+                )
     return checks
 
 
@@ -178,14 +191,25 @@ def main() -> int:
     else:
         checks = {}
         with ThreadPoolExecutor(max_workers=args.workers) as executor:
-            futures = {executor.submit(check_smartrecruiters, url, args.timeout_seconds): url for url in urls}
+            futures = {
+                executor.submit(check_smartrecruiters, url, args.timeout_seconds): url
+                for url in urls
+            }
             for future in as_completed(futures):
                 checks[futures[future]] = future.result()
     retained_statuses = {"live"} if args.remove_unsure else {"live", "unknown"}
-    retained = [item for item in payload if checks[str(item.get("job_url", "")).strip()].status in retained_statuses]
-    removed = [{"record": item, "check": asdict(checks[str(item.get("job_url", "")).strip()])} for item in payload if checks[str(item.get("job_url", "")).strip()].status not in retained_statuses]
+    retained = [
+        item
+        for item in payload
+        if checks[str(item.get("job_url", "")).strip()].status in retained_statuses
+    ]
+    removed = [
+        {"record": item, "check": asdict(checks[str(item.get("job_url", "")).strip()])}
+        for item in payload
+        if checks[str(item.get("job_url", "")).strip()].status not in retained_statuses
+    ]
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    backup = args.output_dir/f"{args.platform}_failed_product_management_backup_{stamp}.json"
+    backup = args.output_dir / f"{args.platform}_failed_product_management_backup_{stamp}.json"
     if args.apply:
         args.output_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(args.input, backup)
@@ -194,10 +218,38 @@ def main() -> int:
             json.dumps(retained, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
         )
         temporary.replace(args.input)
-    report = {"applied": args.apply, "platform": args.platform, "checked_at": datetime.now(timezone.utc).isoformat(), "unique_urls_checked": len(urls), "retained": len(retained), "removed": len(removed), "status_counts": dict(Counter(check.status for check in checks.values())), "removed_records": removed, "backup_path": str(backup) if args.apply else ""}
+    report = {
+        "applied": args.apply,
+        "platform": args.platform,
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "unique_urls_checked": len(urls),
+        "retained": len(retained),
+        "removed": len(removed),
+        "status_counts": dict(Counter(check.status for check in checks.values())),
+        "removed_records": removed,
+        "backup_path": str(backup) if args.apply else "",
+    }
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    (args.output_dir/f"{args.platform}_failed_url_prune_report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(json.dumps({key: report[key] for key in ("platform", "applied", "unique_urls_checked", "retained", "removed", "status_counts", "backup_path")}, sort_keys=True))
+    (args.output_dir / f"{args.platform}_failed_url_prune_report.json").write_text(
+        json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    print(
+        json.dumps(
+            {
+                key: report[key]
+                for key in (
+                    "platform",
+                    "applied",
+                    "unique_urls_checked",
+                    "retained",
+                    "removed",
+                    "status_counts",
+                    "backup_path",
+                )
+            },
+            sort_keys=True,
+        )
+    )
     return 0
 
 
