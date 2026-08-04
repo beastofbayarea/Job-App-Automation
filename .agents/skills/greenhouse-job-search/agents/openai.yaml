@@ -1,0 +1,4 @@
+interface:
+  display_name: "Greenhouse Job Search"
+  short_description: "Find and verify current Greenhouse jobs"
+  default_prompt: "Use $greenhouse-job-search to search Greenhouse broadly, verify every posting, and save a filtered JSON list."

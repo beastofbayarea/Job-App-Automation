@@ -99,6 +99,20 @@ def check_url(url: str, timeout: float) -> Check:
         except ValueError:
             return Check(url, False, "unexpected_api_response", response.status_code, response.url)
         if isinstance(payload, dict) and str(payload.get("id", "")) == expected_id:
+            deadline_raw = payload.get("application_deadline")
+            if deadline_raw:
+                try:
+                    deadline = datetime.fromisoformat(str(deadline_raw).replace("Z", "+00:00"))
+                    if deadline.astimezone(timezone.utc) <= datetime.now(timezone.utc):
+                        return Check(
+                            url,
+                            True,
+                            "application_deadline_elapsed",
+                            response.status_code,
+                            response.url,
+                        )
+                except ValueError:
+                    return Check(url, False, "invalid_application_deadline", response.status_code, response.url)
             return Check(url, False, "active_api_job", response.status_code, response.url)
         return Check(url, False, "unexpected_api_identity", response.status_code, response.url)
     lowered = response.text.casefold()
@@ -115,9 +129,16 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, default=Path("output"))
     parser.add_argument("--timeout-seconds", type=float, default=15.0)
     parser.add_argument("--workers", type=int, default=12)
+    parser.add_argument("--exclude-name", action="append", default=[])
+    parser.add_argument(
+        "--remove-unsure",
+        action="store_true",
+        help="Remove every record not authoritatively confirmed by the Greenhouse job API.",
+    )
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
-    paths = sorted(args.data_dir.glob("*.json"))
+    excluded_names = set(args.exclude_name)
+    paths = sorted(path for path in args.data_dir.glob("*.json") if path.name not in excluded_names)
     payloads = {path: json.loads(path.read_text(encoding="utf-8")) for path in paths}
     urls = sorted(
         {
@@ -145,7 +166,8 @@ def main() -> int:
         for record in payload:
             url = str(record.get("job_url", "")).strip() if isinstance(record, dict) else ""
             check = checks[url]
-            if check.removable:
+            confirmed_live = check.reason == "active_api_job"
+            if check.removable or (args.remove_unsure and not confirmed_live):
                 removed.append({"record": record, "check": asdict(check)})
             else:
                 retained.append(record)
