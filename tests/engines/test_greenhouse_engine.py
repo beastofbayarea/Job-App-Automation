@@ -16,6 +16,7 @@ from job_application_automation.engines.greenhouse import (
     _fill_custom_questions,
     _fill_pre_submit_security_challenge,
     _fill_source_checkbox,
+    _effective_action_timeout_ms,
     _greenhouse_semantic_answer,
     _job_unavailable_after_navigation,
     _option_text_matches,
@@ -158,6 +159,40 @@ def test_missing_required_repair_reuses_discovered_question_mapping() -> None:
     page.locator.assert_called_once_with(CUSTOM_QUESTION_CONTROL_SELECTOR)
     select.assert_called_once_with(page, control, ("India",))
     control.blur.assert_called_once_with()
+
+
+def test_missing_required_repair_refills_runtime_email() -> None:
+    page = MagicMock()
+    controls = MagicMock()
+    control = MagicMock()
+    controls.count.return_value = 1
+    controls.nth.return_value = control
+    control.is_visible.return_value = True
+    control.get_attribute.side_effect = lambda name: {"type": "text"}.get(name)
+    control.evaluate.return_value = "input"
+    control.input_value.return_value = "candidate@example.com"
+    page.get_by_label.return_value = controls
+
+    result = _repair_missing_required_controls(
+        page,
+        ["Email"],
+        {},
+        {},
+        {},
+        {},
+        {},
+        "candidate@example.com",
+    )
+
+    assert result == {"Email": True}
+    control.fill.assert_called_once_with("candidate@example.com")
+    control.blur.assert_called_once_with()
+
+
+def test_greenhouse_action_timeout_is_bounded_per_control() -> None:
+    assert _effective_action_timeout_ms(30_000) == 5_000
+    assert _effective_action_timeout_ms(2_500) == 2_500
+    assert _effective_action_timeout_ms(100) == 1_000
 
 
 def test_country_of_your_birth_uses_dedicated_profile_value() -> None:

@@ -926,6 +926,7 @@ def _repair_missing_required_controls(
     eeo: Mapping[str, Any],
     field_matchers: Mapping[str, Sequence[str]],
     option_variants: Mapping[str, Sequence[str]],
+    email: str = "",
 ) -> dict[str, bool]:
     """Reacquire and commit labeled controls rejected by React validation."""
     repaired: dict[str, bool] = {}
@@ -967,7 +968,19 @@ def _repair_missing_required_controls(
                         "aria_autocomplete": control.get_attribute("aria-autocomplete"),
                     }
                 )
-                desired = _greenhouse_semantic_answer(label, profile, rules)
+                normalized_standard_label = " ".join(label.casefold().split()).rstrip(" *")
+                standard_answers = {
+                    "email": email,
+                    "email address": email,
+                    "first name": str(profile.get("first_name") or ""),
+                    "legal first name": str(profile.get("first_name") or ""),
+                    "last name": str(profile.get("last_name") or ""),
+                    "phone": str(profile.get("phone") or ""),
+                    "phone number": str(profile.get("phone") or ""),
+                }
+                desired = standard_answers.get(normalized_standard_label) or None
+                if not desired:
+                    desired = _greenhouse_semantic_answer(label, profile, rules)
                 if not desired:
                     desired = _configured_answer(label, profile, rules, eeo, field_matchers)
                 role_name = control.get_attribute("role") or ""
@@ -1274,13 +1287,15 @@ def _required_empty_fields(page: Page) -> list[str]:
                         continue
                     if control.evaluate(
                         """el => {
-                            const container = el.closest(
-                                'fieldset, [role="group"], [role="radiogroup"], [data-testid*="question"]'
-                            );
-                            if (!container) return false;
-                            return Boolean(container.querySelector(
-                                'input[type="checkbox"]:checked, input[type="radio"]:checked'
-                            ));
+                            let container = el;
+                            for (let depth = 0; depth < 8 && container; depth += 1) {
+                                if (container.querySelector?.(
+                                    'input[type="checkbox"]:checked, input[type="radio"]:checked'
+                                )) return true;
+                                if (container.matches?.('form')) break;
+                                container = container.parentElement;
+                            }
+                            return false;
                         }"""
                     ):
                         # Greenhouse frequently gives every option in a
@@ -1414,6 +1429,24 @@ def _submit_control_enabled(submit: Locator) -> bool:
         return submit.is_enabled() and submit.get_attribute("aria-disabled") != "true"
     except Exception:
         return False
+
+
+def _commit_react_form_values(page: Page) -> None:
+    """Commit visible values to React before judging a disabled submit control."""
+    page.locator(
+        "input:not([type='hidden']), textarea, select, [role='combobox']"
+    ).evaluate_all(
+        """elements => elements.forEach(element => {
+            element.dispatchEvent(new Event('input', { bubbles: true }));
+            element.dispatchEvent(new Event('change', { bubbles: true }));
+            element.dispatchEvent(new Event('blur', { bubbles: true }));
+        })"""
+    )
+
+
+def _effective_action_timeout_ms(configured: object) -> int:
+    """Bound one selector action so a malformed control cannot stall a job."""
+    return min(max(int(configured), 1_000), 5_000)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1579,7 +1612,9 @@ def run(
             target_url=url,
         )
         browser, page = session.browser, session.page
-        page.set_default_timeout(int(config.get("action_timeout_ms", 14_000)))
+        page.set_default_timeout(
+            _effective_action_timeout_ms(config.get("action_timeout_ms", 14_000))
+        )
         try:
             # If the reused tab is already on the target URL and showing the
             # 8-box code challenge, a prior run already filled the form and is
@@ -1784,6 +1819,7 @@ def run(
                     config.get("eeo_defaults", {}),
                     config.get("field_matchers", {}),
                     config.get("answer_variants", {}),
+                    email,
                 )
                 custom_questions.update(repaired)
                 if any(repaired.values()):
@@ -1879,6 +1915,16 @@ def run(
                         "screenshot": confirmed_screenshot,
                     }
                 raise RuntimeError("submit button was not found")
+            if not _submit_control_enabled(submit):
+                _commit_react_form_values(page)
+                page.wait_for_timeout(500)
+                refreshed_submit = _first_visible(
+                    page.get_by_role("button", name=SUBMIT_BUTTON_TEXT_PATTERN)
+                ) or _first_visible(
+                    page.locator('button[type="submit"], input[type="submit"]')
+                )
+                if refreshed_submit is not None:
+                    submit = refreshed_submit
             if not _submit_control_enabled(submit):
                 disabled_missing = validate_required_fields(page, _required_empty_fields)
                 if not disabled_missing:
