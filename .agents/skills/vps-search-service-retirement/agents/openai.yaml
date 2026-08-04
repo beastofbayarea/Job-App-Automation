@@ -1,0 +1,4 @@
+interface:
+  display_name: "VPS Search Service Retirement"
+  short_description: "Remove the VPS search service and runtime files"
+  default_prompt: "Use $vps-search-service-retirement to audit and permanently remove the VPS job-search service and its private runtime footprint."
