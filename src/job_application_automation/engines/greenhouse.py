@@ -1699,15 +1699,33 @@ def _fill_security_code_from_gmail(
     company: str,
     *,
     excluded_message_ids: set[str] | None = None,
+    budget: _FormWorkBudget | None = None,
 ) -> bool:
     """Read the five newest matching emails and fill Greenhouse's 8-box code."""
+    if not _budget_available(budget, "security-code-email-wait"):
+        return False
     code_inputs = page.locator('input[id^="security-input"]')
     if code_inputs.count() < 8:
         return False
     try:
         # Gmail can briefly lag the form's code-generation request. Waiting here
         # prevents reusing the previous application's otherwise newest code.
-        page.wait_for_timeout(RUNTIME_CONFIG.gmail.greenhouse_security_code_wait_ms)
+        wait_ms = int(RUNTIME_CONFIG.gmail.greenhouse_security_code_wait_ms)
+        if budget is not None:
+            wait_ms = min(wait_ms, budget.remaining_ms())
+        if wait_ms <= 0:
+            return False
+        page.wait_for_timeout(wait_ms)
+        if not _budget_available(budget, "security-code-email-poll"):
+            return False
+        poll_timeout_seconds = int(
+            RUNTIME_CONFIG.gmail.greenhouse_security_code_poll_timeout_seconds
+        )
+        if budget is not None:
+            remaining_seconds = budget.remaining_ms() // 1_000
+            if remaining_seconds <= 0:
+                return False
+            poll_timeout_seconds = min(poll_timeout_seconds, remaining_seconds)
         service = get_gmail_read_service(
             resolve_runtime_path(RUNTIME_CONFIG.gmail.credentials_file),
             resolve_runtime_path(RUNTIME_CONFIG.gmail.token_file),
@@ -1719,7 +1737,7 @@ def _fill_security_code_from_gmail(
             service,
             _greenhouse_security_code_query(company),
             r"security code field on your application:\s*([A-Za-z0-9]{8})",
-            timeout_seconds=int(RUNTIME_CONFIG.gmail.greenhouse_security_code_poll_timeout_seconds),
+            timeout_seconds=poll_timeout_seconds,
             sender_domains=("us.greenhouse-mail.io", "eu.greenhouse-mail.io"),
             expected_recipient="",
             excluded_message_ids=excluded_ids,
@@ -1748,6 +1766,7 @@ def _fill_pre_submit_security_challenge(
     company: str,
     *,
     live_submit: bool,
+    budget: _FormWorkBudget | None = None,
 ) -> bool:
     """Fill Greenhouse security codes that are required before form submission."""
     if not live_submit or not _security_challenge_visible(page):
@@ -1757,7 +1776,7 @@ def _fill_pre_submit_security_challenge(
         code_inputs.nth(index).input_value().strip() for index in range(8)
     ):
         return True
-    return _fill_security_code_from_gmail(page, company)
+    return _fill_security_code_from_gmail(page, company, budget=budget)
 
 
 def _submit_control_enabled(submit: Locator) -> bool:
@@ -1980,6 +1999,7 @@ def _run_form_sections(
             page,
             company,
             live_submit=live_submit,
+            budget=budget,
         )
         return FormSectionOutcome(
             "security_challenge",
@@ -2049,6 +2069,11 @@ def run(
         page.set_default_timeout(
             _effective_action_timeout_ms(config.get("action_timeout_ms", 14_000))
         )
+        form_budget = _FormWorkBudget(
+            _effective_form_work_timeout_ms(
+                config.get("form_work_timeout_ms", FORM_WORK_TIMEOUT_MS)
+            )
+        )
         try:
             # If the reused tab is already on the target URL and showing the
             # 8-box code challenge, a prior run already filled the form and is
@@ -2070,7 +2095,11 @@ def run(
                         "missing_required": [],
                         "screenshot": "",
                     }
-                if _fill_security_code_from_gmail(page, company):
+                if _fill_security_code_from_gmail(
+                    page,
+                    company,
+                    budget=form_budget,
+                ):
                     code_inputs = page.locator('input[id^="security-input"]')
                     if code_inputs.count():
                         try:
@@ -2110,6 +2139,8 @@ def run(
                                 "missing_required": [],
                                 "screenshot": screenshot,
                             }
+                        if not form_budget.available("reused-challenge-confirmation"):
+                            break
                         page.wait_for_timeout(1_000)
                     screenshot = _screenshot(
                         page,
@@ -2224,12 +2255,6 @@ def run(
                         page, screenshot_dir, company or "Greenhouse", "skipped_policy"
                     ),
                 }
-            form_budget = _FormWorkBudget(
-                _effective_form_work_timeout_ms(
-                    config.get("form_work_timeout_ms", FORM_WORK_TIMEOUT_MS)
-                )
-            )
-
             def inspect_required_fields(current_page: Page) -> list[str]:
                 return _required_empty_fields(current_page, budget=form_budget)
 
@@ -2440,6 +2465,7 @@ def run(
                         page,
                         company,
                         excluded_message_ids=verification_message_baseline,
+                        budget=form_budget,
                     ):
                         code_inputs = page.locator('input[id^="security-input"]')
                         if code_inputs.count():
@@ -2462,6 +2488,8 @@ def run(
                                 challenge_submit.click()
                             except Exception:
                                 pass
+                if not form_budget.available("submission-confirmation"):
+                    break
                 page.wait_for_timeout(1_000)
             submitted_screenshot = _screenshot(
                 page, screenshot_dir, company or "Greenhouse", "submitted_verified"

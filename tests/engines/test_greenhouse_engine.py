@@ -16,6 +16,7 @@ from job_application_automation.engines.greenhouse import (
     _fill_export_control_questions,
     _fill_custom_questions,
     _fill_pre_submit_security_challenge,
+    _fill_security_code_from_gmail,
     _fill_source_checkbox,
     _effective_action_timeout_ms,
     _effective_form_work_timeout_ms,
@@ -324,7 +325,7 @@ def test_pre_submit_security_challenge_uses_newest_gmail_code_only_in_live_mode(
             "Example Company",
             live_submit=True,
         )
-        fill_code.assert_called_once_with(page, "Example Company")
+        fill_code.assert_called_once_with(page, "Example Company", budget=None)
         assert not _fill_pre_submit_security_challenge(
             page,
             "Example Company",
@@ -356,6 +357,39 @@ def test_pre_submit_security_challenge_accepts_an_already_filled_code() -> None:
             live_submit=True,
         )
     fill_code.assert_not_called()
+
+
+def test_security_code_poll_is_capped_by_the_shared_form_budget() -> None:
+    page = MagicMock()
+    code_inputs = MagicMock()
+    code_inputs.count.return_value = 8
+    page.locator.return_value = code_inputs
+    budget = MagicMock(spec=_FormWorkBudget)
+    budget.available.return_value = True
+    budget.remaining_ms.side_effect = [5_000, 4_000]
+
+    with (
+        patch(
+            "job_application_automation.engines.greenhouse.get_gmail_read_service",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "job_application_automation.engines.greenhouse.load_used_verification_message_ids",
+            return_value=set(),
+        ),
+        patch(
+            "job_application_automation.engines.greenhouse.poll_for_verification_code",
+            return_value=None,
+        ) as poll,
+    ):
+        assert not _fill_security_code_from_gmail(
+            page,
+            "Example Company",
+            budget=budget,
+        )
+
+    page.wait_for_timeout.assert_called_once_with(5_000)
+    assert poll.call_args.kwargs["timeout_seconds"] == 4
 
 
 def test_submit_control_must_be_enabled_and_not_aria_disabled() -> None:
