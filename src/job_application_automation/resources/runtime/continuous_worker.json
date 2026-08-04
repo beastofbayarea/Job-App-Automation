@@ -22,6 +22,10 @@
       "application_timeout_seconds": 1200
     },
     "providers": {
+      "greenhouse": {
+        "engine_timeout_seconds": 180,
+        "application_timeout_seconds": 300
+      },
       "ashby": {
         "sleep_min_seconds": 900,
         "sleep_max_seconds": 1800,

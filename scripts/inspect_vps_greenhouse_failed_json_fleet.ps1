@@ -69,7 +69,12 @@ for path in sorted(root.glob("continuous_greenhouse_failed_*_state.json")):
         )
         diagnostics.extend(
             line.strip() for line in text.splitlines()
-            if re.search(r"required|missing|question|manual.review|combobox|option", line, re.I)
+            if re.search(
+                r"required|missing|question|manual.review|combobox|option|"
+                r"Timeout \(|Current thread|greenhouse\.py|playwright|_sync_base|sync_api",
+                line,
+                re.I,
+            )
         )
     if diagnostics:
         print(json.dumps({"worker": path.stem, "diagnostics": diagnostics[-12:]}, ensure_ascii=False))
@@ -160,7 +165,12 @@ for path in sorted(root.glob("continuous_greenhouse_failed_*_state.json")):
                     line.strip(),
                 )
                 for line in combined_tail.splitlines()
-                if re.search(r"unconfigured|required|missing|ENGINE_RESULT|question", line, re.I)
+                if re.search(
+                    r"unconfigured|required|missing|ENGINE_RESULT|question|"
+                    r"Timeout \(|Current thread|greenhouse\.py|playwright|_sync_base|sync_api",
+                    line,
+                    re.I,
+                )
             ]
             if not failure_diagnostics and status == "REQUIRED_FIELDS_NOT_FILLED":
                 failure_diagnostics = [
