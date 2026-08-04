@@ -1,4 +1,9 @@
-# Operations runbook
+# Operations Runbook
+
+This document provides safe operating procedures for the Job Application Automation toolkit. For quick command examples, see [Quick Reference](quick-reference.md). For troubleshooting, see [Troubleshooting Guide](troubleshooting.md).
+
+## Safe operating sequence
+
 
 ## Safe operating sequence
 
@@ -348,3 +353,12 @@ pwsh scripts\prune_old_outputs.ps1
 Add `-Delete` only after reviewing the listed files. Keep
 `config/vps_config.json` restricted and out of Git. Private document operations
 require host-key pinning and support a dedicated archive key.
+
+---
+
+**See Also:**
+- [Quick Reference](quick-reference.md) - Common commands and examples
+- [CLI Reference](cli-reference.md) - Complete command documentation
+- [Configuration Guide](configuration.md) - Configuration options
+- [FAQ](faq.md) - Frequently asked questions
+- [Troubleshooting Guide](troubleshooting.md) - Issue resolution

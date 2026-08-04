@@ -1,4 +1,7 @@
-# Security and privacy
+# Security and Privacy
+
+This document outlines the security and privacy considerations for operating the Job Application Automation toolkit. **Read this before deploying or using the system with real candidate data.** For safe operating procedures, see [Operations Runbook](operations-runbook.md). For troubleshooting security issues, see [Troubleshooting Guide](troubleshooting.md).
+
 
 This project processes identity, contact, resume, employment, and application data. Operate it only for a candidate account and target applications you are explicitly authorized to use.
 
@@ -49,3 +52,11 @@ The final `before_send` filter drops all non-allow-listed event content.
 - Archive records are immutable. A content conflict requires review; it is never silently overwritten.
 - Retrieval validates the supplied identity and every document hash before replacing local files.
 - Maintain encrypted backups appropriate for the candidate's retention policy. Private permissions alone do not protect against disk loss or account compromise.
+
+---
+
+**See Also:**
+- [Operations Runbook](operations-runbook.md) - Safe operating procedures
+- [Configuration Guide](configuration.md) - Configuration options
+- [FAQ](faq.md#is-this-safe-to-use) - Security FAQ
+- [Troubleshooting Guide](troubleshooting.md) - Issue resolution

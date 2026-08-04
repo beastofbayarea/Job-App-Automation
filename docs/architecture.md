@@ -1,5 +1,8 @@
 # Architecture
 
+This document describes the system architecture, component boundaries, and extension points. For implementation details, see the source code in `src/job_application_automation/`. For contributing guidelines, see [CONTRIBUTING](../CONTRIBUTING.md).
+
+
 The package is organized by workflow boundary. `src/job_automation.py` is the
 source-tree launcher, and `job_application_automation.cli` performs lazy command
 dispatch without importing browser or network integrations until they are used.
@@ -90,3 +93,11 @@ runtime, controls, and section handlers where their contracts fit; keep
 provider-only navigation and widgets in the provider module. Add registry,
 production-path, selector, safety-gate, and confirmation tests. Add new
 artifacts through `core.artifacts` so writes remain atomic and testable.
+
+---
+
+**See Also:**
+- [CONTRIBUTING](../CONTRIBUTING.md) - Development setup and guidelines
+- [Data Formats](data-formats.md) - Input/output file specifications
+- [ATS Support](ats-support.md) - Provider-specific capabilities
+- [FAQ](faq.md) - Frequently asked questions

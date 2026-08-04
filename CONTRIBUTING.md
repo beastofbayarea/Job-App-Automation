@@ -1,5 +1,10 @@
 # Contributing
 
+Thank you for your interest in contributing to the Job Application Automation toolkit! This document provides guidelines for development and contribution. For system architecture, see [Architecture](docs/architecture.md). For documentation standards, see [Documentation Guide](docs/README.md).
+
+## Local development
+
+
 ## Local development
 
 Use Python 3.10+, create a virtual environment, install both dependency files, and install Playwright Chromium when changing browser flows.
@@ -39,3 +44,11 @@ Tests run with sockets disabled. Mock browser, ATS, Gmail, and LLM boundaries; d
 ## Pull requests
 
 Describe the user-visible behaviour, safety impact, tests run, and documentation changes. When changing a command, configuration schema, data artifact, or provider support boundary, update the relevant document under `docs/` and `CHANGELOG.md`.
+
+---
+
+**See Also:**
+- [Architecture](docs/architecture.md) - System design and extension points
+- [Documentation Guide](docs/README.md) - Documentation structure
+- [CLI Reference](docs/cli-reference.md) - Command documentation
+- [Data Formats](docs/data-formats.md) - Input/output specifications

@@ -6,7 +6,7 @@
 
 A local, safety-first toolkit for discovering public ATS vacancies, generating tailored PDF resumes and cover letters, privately archiving those documents on a VPS, and filling applications on five supported ATS providers. It also includes a Gmail OAuth utility and a candidate-email pool selector.
 
-**Quick Links:** [Documentation](docs/README.md) | [Configuration Guide](docs/configuration.md) | [CLI Reference](docs/cli-reference.md) | [Operations Runbook](docs/operations-runbook.md) | [Contributing](CONTRIBUTING.md) | [Changelog](CHANGELOG.md)
+**Quick Links:** [Documentation](docs/README.md) | [FAQ](docs/faq.md) | [Quick Reference](docs/quick-reference.md) | [Configuration Guide](docs/configuration.md) | [CLI Reference](docs/cli-reference.md) | [Operations Runbook](docs/operations-runbook.md) | [Contributing](CONTRIBUTING.md) | [Changelog](CHANGELOG.md)
 
 ---
 
@@ -672,6 +672,36 @@ When submitting PRs, include:
 - Documentation updates (especially for CLI, config, or ATS support changes)
 
 📖 Read the full [Contributing Guide](CONTRIBUTING.md) for detailed standards.
+
+---
+
+##  Documentation
+
+The complete documentation is available in the [`docs/`](docs/) directory:
+
+###  Getting Started
+- **[Documentation Guide](docs/README.md)** - Complete documentation index and navigation
+- **[FAQ](docs/faq.md)** - Frequently asked questions and answers
+- **[Quick Reference](docs/quick-reference.md)** - Cheat sheet with common commands
+
+###  User Guides
+- **[Configuration Guide](docs/configuration.md)** - All configuration options explained
+- **[CLI Reference](docs/cli-reference.md)** - Complete command-line documentation
+- **[Operations Runbook](docs/operations-runbook.md)** - Safe operating procedures
+- **[Data Formats](docs/data-formats.md)** - Input/output file specifications
+
+###  Advanced Topics
+- **[ATS Support](docs/ats-support.md)** - Supported providers and capabilities
+- **[Architecture](docs/architecture.md)** - System design and extension points
+- **[Security & Privacy](docs/security-and-privacy.md)** - Data protection guidelines
+
+###  Troubleshooting
+- **[Troubleshooting Guide](docs/troubleshooting.md)** - Common issues and solutions
+
+###  For Developers
+- **[Contributing Guide](CONTRIBUTING.md)** - Development setup and contribution guidelines
+- **[Changelog](CHANGELOG.md)** - Version history and recent changes
+
 
 ---
 

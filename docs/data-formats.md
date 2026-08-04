@@ -1,4 +1,7 @@
-# Data formats
+# Data Formats
+
+This document specifies all input and output file formats for the Job Application Automation toolkit. For examples of working with these formats, see [Quick Reference](quick-reference.md). For troubleshooting data format issues, see [Troubleshooting Guide](troubleshooting.md).
+
 
 All JSON artifacts are UTF-8. Persisted JSON, CSV, and text outputs are written atomically. Paths below are defaults and can be overridden by CLI or runtime configuration.
 
@@ -197,3 +200,10 @@ The URL and normalized email derive the opaque archive ID. Retrieval also requir
   "candidate+applications@example.com"
 ]
 ```
+
+---
+
+**See Also:**
+- [Quick Reference](quick-reference.md) - Common commands and examples
+- [Configuration Guide](configuration.md) - Configuration options
+- [Operations Runbook](operations-runbook.md) - Operating procedures

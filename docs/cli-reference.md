@@ -1,4 +1,6 @@
-# CLI reference
+# CLI Reference
+
+This document provides a comprehensive reference for all CLI commands. For quick examples, see [Quick Reference](quick-reference.md). For detailed workflows, see [Operations Runbook](operations-runbook.md).
 
 Run commands with either `python src/job_automation.py` from the repository root or the installed `job-automation` command. Use `<command> --help` for the version-specific argparse help.
 
@@ -17,11 +19,15 @@ Run commands with either `python src/job_automation.py` from the repository root
 | `google-indexing sitemap` | Submit the configured sitemap through Search Console | SEO config plus private cloud/key inventory |
 | `google-indexing submit` | Notify Google about an eligible updated/deleted page | Same-domain eligible URL |
 | `google-indexing status` | Read the last received notification metadata | Same-domain URL |
+
+> **Note:** Google indexing commands require configuration in `config/seo_config.json` and `config/cent_capital_config.json`. See [Configuration Guide](configuration.md#google-submission-and-cent-capital-reference-inventory).
 | `engine <provider>` | Direct ATS diagnostic | Provider-specific URL and resume |
 
 ## Safety modes
 
 `apply` accepts at most one of `--live-submit`, `--fill-only`, and `--dry-run`; without an explicit mode it remains dry-run. `queue` deliberately invokes `apply --live-submit` for each URL and stops after an unconfirmed result.
+
+> ** SAFETY FIRST:** Always start with `--dry-run` or `--fill-only --headed` to review before using `--live-submit`. The queue command always submits live - use only for intentional, reviewed queues. See [Operations Runbook](operations-runbook.md#safe-operating-sequence) for safe operating procedures.
 
 ## Common options
 
@@ -44,3 +50,11 @@ Run commands with either `python src/job_automation.py` from the repository root
 ## Exit status
 
 Commands generally return `0` on success, `1` for an unsuccessful workflow or remote API/archive failure, and `2` for invalid command-line input. Gmail additionally uses `3` for a Gmail API error, `4` for a missing dependency or authentication/configuration error, and `130` when interrupted. Google URL submission returns `1` for Google authentication, permission, or API failures and `2` when configuration, URL ownership, or content eligibility validation fails. Treat an application as submitted only when its non-test result reports confirmed submission and the submission log contains it.
+
+---
+
+**See Also:**
+- [Quick Reference](quick-reference.md) - Common commands and examples
+- [Operations Runbook](operations-runbook.md) - Safe operating procedures
+- [FAQ](faq.md) - Frequently asked questions
+- [Configuration Guide](configuration.md) - Configuration options

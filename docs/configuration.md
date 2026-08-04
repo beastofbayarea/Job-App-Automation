@@ -1,5 +1,11 @@
 # Configuration
 
+This guide covers all configuration options for the Job Application Automation toolkit. For quick setup, see [Quick Reference](quick-reference.md#configuration-quick-reference). For troubleshooting configuration issues, see [Troubleshooting Guide](troubleshooting.md#configuration-file-missing-or-invalid).
+
+Copy the tracked examples before adding personal data. Local candidate data, credentials, OAuth tokens, generated files, and caches are intentionally Git-ignored.
+
+# Configuration
+
 Copy the tracked examples before adding personal data. Local candidate data, credentials, OAuth tokens, generated files, and caches are intentionally Git-ignored.
 
 | Need | Local path | Source |
@@ -130,3 +136,11 @@ python src/job_automation.py email-pool --count 1
 ```
 
 The email-pool command verifies only that the local pool can be read. It does not validate a mailbox.
+
+---
+
+**See Also:**
+- [Quick Reference](quick-reference.md#configuration-quick-reference) - Configuration examples
+- [Operations Runbook](operations-runbook.md) - Operating procedures
+- [Security & Privacy](security-and-privacy.md) - Data protection guidelines
+- [FAQ](faq.md#configuration) - Configuration FAQ

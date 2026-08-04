@@ -1,4 +1,7 @@
-# ATS support
+# ATS Support
+
+This document describes the supported Applicant Tracking System (ATS) providers, their capabilities, and diagnostic procedures. For adding support for new providers, see [Architecture](architecture.md#extension-points). For troubleshooting provider-specific issues, see [Troubleshooting Guide](troubleshooting.md).
+
 
 The application orchestrator supports five ATS providers. Search has first-class public-board discovery for Ashby, Greenhouse, Lever, SmartRecruiters, and Workable. Generic `web` discovery can still find other providers, but only a job-specific URL for one of the five supported providers is eligible for automated application.
 
@@ -33,3 +36,11 @@ This path detects the provider, selects the configured candidate email, creates 
 ## Reporting a compatibility gap
 
 Record the provider, sanitized URL, mode used, current browser visibility, result status, and a redacted diagnostic log excerpt. Application screenshots are deleted automatically after every terminal attempt. Never attach OAuth tokens, candidate profile content, resume source data, or an unredacted application page to an issue.
+
+---
+
+**See Also:**
+- [Architecture](architecture.md#extension-points) - How to add new ATS providers
+- [Operations Runbook](operations-runbook.md) - Operating procedures
+- [CLI Reference](cli-reference.md) - Command documentation
+- [FAQ](faq.md#what-providers-are-supported) - Provider FAQ
