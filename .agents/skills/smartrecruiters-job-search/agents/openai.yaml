@@ -1,0 +1,4 @@
+interface:
+  display_name: "SmartRecruiters Job Search"
+  short_description: "Find and validate current SmartRecruiters jobs"
+  default_prompt: "Use $smartrecruiters-job-search to create a fresh, filtered JSON list of current SmartRecruiters postings."
