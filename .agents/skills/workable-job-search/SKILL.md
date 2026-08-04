@@ -61,4 +61,3 @@ candidate source unless the user explicitly asks to refresh it.
   as `NOT_ATTEMPTED`, `FAILED`, or `CAPTCHA_REQUIRED`.
 - Respect repository ignore rules for private queue data. Do not force-add an
   ignored artifact unless the user explicitly requests public synchronization.
-
