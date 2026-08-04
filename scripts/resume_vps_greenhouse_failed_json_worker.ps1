@@ -7,6 +7,7 @@ param(
         "technical-ai-platform-product-management"
     )]
     [string]$Worker,
+    [switch]$StopOnly,
     [switch]$RequeueClarification,
     [switch]$RequeueManualReview,
     [string]$ConfigPath = "config/vps_config.json",
@@ -15,8 +16,8 @@ param(
 )
 
 . "$PSScriptRoot/lib/vps_script_helpers.ps1"
-if ($RequeueClarification -and $RequeueManualReview) {
-    throw "Choose either -RequeueClarification or -RequeueManualReview, not both."
+if (($RequeueClarification -and $RequeueManualReview) -or ($StopOnly -and ($RequeueClarification -or $RequeueManualReview))) {
+    throw "Choose exactly one worker action: stop, requeue clarification, or requeue manual review."
 }
 $Connection = Read-VpsConnectionConfig -Path $ConfigPath
 $PlinkPath = Get-RequiredCommandPath -Name "plink"
@@ -45,6 +46,13 @@ import sys
 from pathlib import Path
 
 from job_application_automation.core.artifacts import atomic_write_text, interprocess_file_lock
+from job_application_automation.core.continuous_source_ats import _job_identity
+
+def greenhouse_identity(job_url):
+    try:
+        return _job_identity(str(job_url or ""), "greenhouse")
+    except ValueError:
+        return ""
 
 state_path, claims_path = map(Path, sys.argv[1:3])
 retry_kind = sys.argv[3]
@@ -66,23 +74,41 @@ if not candidates:
     raise SystemExit(f"no {retry_kind} outcome is available to requeue")
 _, key, record = max(candidates)
 job_url = str(record.get("job_url", key))
-del state["jobs"][key]
-atomic_write_text(state_path, json.dumps(state, indent=2, sort_keys=True) + "\n")
+job_identity = greenhouse_identity(job_url)
+if record.get("retry_policy_status") == "skipped_after_fixing_attempts":
+    raise SystemExit("refusing exhausted state after two fixing attempts")
 with interprocess_file_lock(claims_path):
     claims = json.loads(claims_path.read_text(encoding="utf-8"))
     matched_claim = False
     for identity, claim in list(claims.get("jobs", {}).items()):
-        if isinstance(claim, dict) and claim.get("job_url") == job_url:
+        if (
+            isinstance(claim, dict)
+            and greenhouse_identity(claim.get("job_url")) == job_identity
+        ):
+            fixing_attempts = int(
+                claim.get(
+                    "fixing_attempts",
+                    max(int(claim.get("retry_count") or 0) - 1, 0),
+                )
+            )
+            if claim.get("status") == "skipped_after_fixing_attempts" or fixing_attempts >= 2:
+                raise SystemExit("refusing exhausted claim after two fixing attempts")
             claim["status"] = "retry_requested"
             matched_claim = True
     if not matched_claim:
         raise SystemExit("retry claim was not found")
     atomic_write_text(claims_path, json.dumps(claims, indent=2, sort_keys=True) + "\n")
+del state["jobs"][key]
+atomic_write_text(state_path, json.dumps(state, indent=2, sort_keys=True) + "\n")
 print(f"requeued_{retry_kind}={job_url}")
 PY
 "@
 } else { "" }
-$RemoteCommand = "set -eu`n$RequeueCommand`nsystemctl reset-failed '$Unit'; systemctl start '$Unit'; systemctl show '$Unit' --property=Id,ActiveState,SubState,NRestarts,MainPID"
+$RemoteCommand = if ($StopOnly) {
+    "set -eu`nsystemctl stop '$Unit'; systemctl show '$Unit' --property=Id,ActiveState,SubState,NRestarts,MainPID"
+} else {
+    "set -eu`n$RequeueCommand`nsystemctl reset-failed '$Unit'; systemctl start '$Unit'; systemctl show '$Unit' --property=Id,ActiveState,SubState,NRestarts,MainPID"
+}
 
 try {
     $Execution = Invoke-ExternalCommandWithTimeout -FilePath $PlinkPath -ArgumentList @(

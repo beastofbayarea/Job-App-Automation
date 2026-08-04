@@ -104,6 +104,7 @@ class ResumeAIClientTests(unittest.TestCase):
         page = context.new_page.return_value
         page.evaluate.return_value = "Product Manager job description " * 20
         page.locator.return_value.all.return_value = []
+        page.locator.return_value.first.inner_text.return_value = "Product Manager"
         manager = MagicMock()
         manager.__enter__.return_value = playwright
         manager.__exit__.return_value = False
@@ -112,6 +113,7 @@ class ResumeAIClientTests(unittest.TestCase):
             result = ai.scrape_job("https://apply.workable.com/example/j/ABC123/")
 
         self.assertEqual(result["ats"], "workable")
+        self.assertEqual(result["job_title"], "Product Manager")
         playwright.chromium.launch.assert_called_once_with(headless=True)
         playwright.chromium.connect_over_cdp.assert_not_called()
         page.close.assert_not_called()

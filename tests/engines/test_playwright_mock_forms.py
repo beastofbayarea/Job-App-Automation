@@ -4,6 +4,11 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import sync_playwright
 
+from job_application_automation.engines.greenhouse import (
+    _commit_react_form_values,
+    _required_empty_fields,
+)
+
 pytestmark = pytest.mark.allow_hosts(["127.0.0.1", "localhost", "::1"])
 
 
@@ -77,6 +82,118 @@ def test_playwright_mock_greenhouse_form(tmp_path: Path) -> None:
         assert page.input_value("#email") == "jane.doe@example.com"
         assert page.input_value("#phone") == "+15550199"
 
+        browser.close()
+
+
+@pytest.mark.enable_socket
+def test_greenhouse_required_react_select_uses_rendered_selection() -> None:
+    html = """
+    <form>
+      <div class="field-wrapper">
+        <div class="select__container">
+          <label id="veteran-label" for="veteran">Are you a veteran?</label>
+          <div class="select-shell">
+            <div class="select__control">
+              <div class="select__value-container">
+                <div class="select__single-value">No</div>
+                <input id="veteran" role="combobox" aria-required="true"
+                       aria-labelledby="veteran-label" value="" />
+              </div>
+            </div>
+            <input required aria-hidden="true" tabindex="-1"
+                   style="opacity:0;position:absolute;width:100%" value="" />
+          </div>
+        </div>
+      </div>
+    </form>
+    """
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.set_content(html)
+
+        assert _required_empty_fields(page) == []
+
+        page.locator(".select__single-value").evaluate("element => element.remove()")
+        assert _required_empty_fields(page) == ["Are you a veteran?"]
+        browser.close()
+
+
+@pytest.mark.enable_socket
+def test_greenhouse_required_choices_are_scoped_to_their_question() -> None:
+    html = """
+    <form>
+      <div class="field-wrapper">
+        <fieldset id="industry-question">
+          <legend>Industries</legend>
+          <input id="saas" type="checkbox" name="saas" required checked />
+          <label for="saas">SaaS</label>
+          <input id="finance" type="checkbox" name="finance" required />
+          <label for="finance">Finance</label>
+        </fieldset>
+      </div>
+      <div class="field-wrapper">
+        <fieldset id="veteran-question">
+          <legend>Veteran status</legend>
+          <input id="veteran-yes" type="radio" name="veteran" required />
+          <label for="veteran-yes">Veteran yes</label>
+          <input id="veteran-no" type="radio" name="veteran" required />
+          <label for="veteran-no">Veteran no</label>
+        </fieldset>
+      </div>
+    </form>
+    """
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.set_content(html)
+
+        missing = _required_empty_fields(page)
+
+        assert "SaaS" not in missing
+        assert "Finance" not in missing
+        assert missing == ["Veteran no", "Veteran yes"]
+        browser.close()
+
+
+@pytest.mark.enable_socket
+def test_greenhouse_controlled_value_commit_emits_react_event_sequence() -> None:
+    html = """
+    <form>
+      <label for="email">Email</label>
+      <input id="email" value="candidate@example.com" />
+      <button id="submit" type="submit" disabled>Submit application</button>
+    </form>
+    <script>
+      window.commitEvents = [];
+      const email = document.querySelector('#email');
+      const submit = document.querySelector('#submit');
+      for (const eventName of ['focus', 'input', 'change', 'focusout']) {
+        email.addEventListener(eventName, () => window.commitEvents.push(eventName));
+      }
+      email.addEventListener('focusout', () => { submit.disabled = false; });
+      email._valueTracker = {
+        setValue(value) { window.trackerValue = value; }
+      };
+    </script>
+    """
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.set_content(html)
+
+        assert _commit_react_form_values(page) == 1
+        assert page.evaluate("window.commitEvents") == [
+            "focus",
+            "input",
+            "change",
+            "focusout",
+        ]
+        assert page.evaluate("window.trackerValue") == ""
+        assert page.locator("#submit").is_enabled()
         browser.close()
 
 

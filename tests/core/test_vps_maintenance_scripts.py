@@ -55,6 +55,47 @@ def git(cwd: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
 
 @unittest.skipUnless(PWSH, "PowerShell 7 is required")
 class PowerShellMaintenanceTests(unittest.TestCase):
+    def test_failed_job_requeue_tools_refuse_exhausted_fixing_attempts(self) -> None:
+        for name in (
+            "requeue_vps_greenhouse_failed_json_targets.ps1",
+            "requeue_vps_greenhouse_failed_json_fleet.ps1",
+            "resume_vps_greenhouse_failed_json_worker.ps1",
+        ):
+            script = (SCRIPTS / name).read_text(encoding="utf-8")
+            self.assertIn("skipped_after_fixing_attempts", script, name)
+            self.assertIn("fixing_attempts", script, name)
+            self.assertIn(">= 2", script, name)
+            self.assertIn("_job_identity", script, name)
+
+        resume = (
+            SCRIPTS / "resume_vps_greenhouse_failed_json_worker.ps1"
+        ).read_text(encoding="utf-8")
+        self.assertIn("[switch]$StopOnly", resume)
+        self.assertIn("systemctl stop '$Unit'", resume)
+        self.assertLess(
+            resume.index('record.get("retry_policy_status")'),
+            resume.index('del state["jobs"][key]'),
+        )
+        self.assertLess(
+            resume.index('atomic_write_text(claims_path'),
+            resume.index('del state["jobs"][key]'),
+        )
+
+        fleet = (
+            SCRIPTS / "requeue_vps_greenhouse_failed_json_fleet.ps1"
+        ).read_text(encoding="utf-8")
+        self.assertIn("trap 'systemctl start $UnitNames' EXIT", fleet)
+        self.assertIn("trap - EXIT", fleet)
+
+    def test_failed_job_retry_audit_supports_concise_policy_summary(self) -> None:
+        script = (
+            SCRIPTS / "audit_vps_greenhouse_failed_json_retry_queue.ps1"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("[switch]$SummaryOnly", script)
+        self.assertIn("fixing_attempt_count_distribution", script)
+        self.assertIn("awaiting_remediation_count", script)
+
     def test_runtime_audit_is_read_only_and_covers_persistent_workloads(self) -> None:
         script = (SCRIPTS / "audit_vps_runtime.ps1").read_text(encoding="utf-8")
 

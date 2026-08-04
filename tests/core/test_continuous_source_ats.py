@@ -249,6 +249,72 @@ def test_hydrate_tracker_job_rejects_closed_role(monkeypatch) -> None:
         raise AssertionError("closed tracker job should be rejected")
 
 
+def test_hydrate_tracker_job_rejects_reused_job_id_for_a_different_role(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        continuous_source_ats,
+        "scrape_job",
+        lambda _url: {
+            "jd_text": "UX Designer job description. " + ("x" * 300),
+            "job_title": "UX Designer (Contract)",
+        },
+    )
+
+    with pytest.raises(
+        continuous_source_ats.StaleJobRoleError,
+        match="no longer matches live role",
+    ):
+        continuous_source_ats._hydrate_tracker_job(
+            {
+                **_job(),
+                "title": "Product & UX Program Manager",
+            },
+            "greenhouse",
+        )
+
+
+def test_stale_role_skip_is_not_requeued_as_a_critical_failure(tmp_path: Path) -> None:
+    job = _job()
+    state_path = tmp_path / "state.json"
+    claims_path = tmp_path / "claims.json"
+    state_path.write_text(
+        json.dumps({
+            "version": 1,
+            "jobs": {
+                job["job_url"]: {
+                    **job,
+                    "status": "skipped",
+                    "result_status": "STALE_JOB_ROLE_MISMATCH",
+                }
+            },
+        }),
+        encoding="utf-8",
+    )
+    claims_path.write_text(
+        json.dumps({
+            "version": 1,
+            "jobs": {"greenhouse:12345": {"status": "claimed"}},
+        }),
+        encoding="utf-8",
+    )
+
+    continuous_source_ats._sync_claim_from_state(
+        job=job,
+        ats_platform="greenhouse",
+        worker_id="failed-program-project-management",
+        state_path=state_path,
+        claims_path=claims_path,
+        fallback_status="failed",
+        remediation_revision="fix-one",
+    )
+
+    claim = read_json(claims_path)["jobs"]["greenhouse:12345"]
+    assert claim["status"] == "skipped"
+    assert claim["result_status"] == "STALE_JOB_ROLE_MISMATCH"
+    assert "critical_error" not in claim
+
+
 def test_sleep_until_next_cycle_handles_keyboard_interrupt(
     monkeypatch,
     capsys,
@@ -270,7 +336,9 @@ def test_sleep_until_next_cycle_handles_keyboard_interrupt(
     )
 
 
-def test_critical_failure_is_automatically_scheduled_for_retry(tmp_path: Path) -> None:
+def test_critical_failure_waits_for_a_distinct_remediation_revision(
+    tmp_path: Path,
+) -> None:
     state_path = tmp_path / "state.json"
     claims_path = tmp_path / "claims.json"
     job = _job()
@@ -295,6 +363,8 @@ def test_critical_failure_is_automatically_scheduled_for_retry(tmp_path: Path) -
                     "owner": "failed-core-product-management",
                     "status": "claimed",
                     "retry_count": 1,
+                    "fixing_attempts": 1,
+                    "attempt_revision": "broken-revision",
                 }
             },
         }),
@@ -308,15 +378,20 @@ def test_critical_failure_is_automatically_scheduled_for_retry(tmp_path: Path) -
         state_path=state_path,
         claims_path=claims_path,
         fallback_status="failed",
+        remediation_revision="broken-revision",
     )
 
     claim = read_json(claims_path)["jobs"]["greenhouse:12345"]
     assert claim["status"] == "retry_requested"
     assert claim["retry_count"] == 2
+    assert claim["fixing_attempts"] == 1
     assert claim["critical_error"] is True
-    assert claim["next_retry_at"]
-    first_retry_at = claim["next_retry_at"]
+    assert claim["failure_revision"] == "broken-revision"
+    assert claim["remediation_required"] is True
+    assert "next_retry_at" not in claim
 
+    # Startup reconciliation after a deployment must preserve the revision that
+    # failed, otherwise the newly deployed repair would never become eligible.
     continuous_source_ats._sync_claim_from_state(
         job=job,
         ats_platform="greenhouse",
@@ -324,10 +399,11 @@ def test_critical_failure_is_automatically_scheduled_for_retry(tmp_path: Path) -
         state_path=state_path,
         claims_path=claims_path,
         fallback_status="failed",
+        remediation_revision="fix-one",
     )
     repeated = read_json(claims_path)["jobs"]["greenhouse:12345"]
     assert repeated["retry_count"] == 2
-    assert repeated["next_retry_at"] == first_retry_at
+    assert repeated["failure_revision"] == "broken-revision"
 
 
 def test_critical_failure_is_skipped_after_two_fixing_attempts(tmp_path: Path) -> None:
@@ -355,6 +431,7 @@ def test_critical_failure_is_skipped_after_two_fixing_attempts(tmp_path: Path) -
                     "owner": "failed-core-product-management",
                     "status": "claimed",
                     "retry_count": 2,
+                    "fixing_attempts": 2,
                 }
             },
         }),
@@ -390,15 +467,413 @@ def test_critical_failure_is_skipped_after_two_fixing_attempts(tmp_path: Path) -
     assert repeated["retry_count"] == 3
 
 
-def test_retry_due_honors_future_backoff() -> None:
-    now = continuous_source_ats.datetime(2026, 8, 3, tzinfo=continuous_source_ats.UTC)
+def test_full_failure_lifecycle_requires_two_distinct_remediations_before_skip(
+    tmp_path: Path,
+) -> None:
+    job = _job()
+    state_path = tmp_path / "state.json"
+    claims_path = tmp_path / "claims.json"
+    submission_log = tmp_path / "submission_log.json"
+    submission_log.write_text("{}\n", encoding="utf-8")
 
-    assert continuous_source_ats._retry_due(
-        {"next_retry_at": "2026-08-02T23:59:59+00:00"}, now=now
+    def write_failure() -> None:
+        state_path.write_text(
+            json.dumps({
+                "version": 1,
+                "jobs": {
+                    job["job_url"]: {
+                        **job,
+                        "status": "failed",
+                        "result_status": "TIMED_OUT",
+                    }
+                },
+            }),
+            encoding="utf-8",
+        )
+
+    write_failure()
+    claims_path.write_text(
+        json.dumps({
+            "version": 1,
+            "jobs": {
+                "greenhouse:12345": {
+                    "owner": "failed-core-product-management",
+                    "status": "claimed",
+                    "retry_count": 0,
+                    "fixing_attempts": 0,
+                }
+            },
+        }),
+        encoding="utf-8",
     )
-    assert not continuous_source_ats._retry_due(
-        {"next_retry_at": "2026-08-03T00:00:01+00:00"}, now=now
+    sync_args = {
+        "job": job,
+        "ats_platform": "greenhouse",
+        "worker_id": "failed-core-product-management",
+        "state_path": state_path,
+        "claims_path": claims_path,
+        "fallback_status": "failed",
+    }
+    claim_args = {
+        "jobs": [job],
+        "ats_platform": "greenhouse",
+        "worker_id": "failed-core-product-management",
+        "state_path": state_path,
+        "peer_states": [],
+        "claims_path": claims_path,
+        "submission_log": submission_log,
+    }
+
+    continuous_source_ats._sync_claim_from_state(
+        **sync_args, remediation_revision="broken-revision"
     )
+    original_failure = read_json(claims_path)["jobs"]["greenhouse:12345"]
+    assert original_failure["status"] == "retry_requested"
+    assert original_failure["fixing_attempts"] == 0
+    assert continuous_source_ats._claim_next_job(
+        **claim_args, remediation_revision="broken-revision"
+    ) is None
+
+    assert continuous_source_ats._claim_next_job(
+        **claim_args, remediation_revision="fix-one"
+    ) == job
+    first_fix = read_json(claims_path)["jobs"]["greenhouse:12345"]
+    assert first_fix["fixing_attempts"] == 1
+    write_failure()
+    continuous_source_ats._sync_claim_from_state(
+        **sync_args, remediation_revision="fix-one"
+    )
+    assert read_json(claims_path)["jobs"]["greenhouse:12345"]["status"] == "retry_requested"
+    assert continuous_source_ats._claim_next_job(
+        **claim_args, remediation_revision="fix-one"
+    ) is None
+
+    assert continuous_source_ats._claim_next_job(
+        **claim_args, remediation_revision="fix-two"
+    ) == job
+    second_fix = read_json(claims_path)["jobs"]["greenhouse:12345"]
+    assert second_fix["fixing_attempts"] == 2
+    write_failure()
+    continuous_source_ats._sync_claim_from_state(
+        **sync_args, remediation_revision="fix-two"
+    )
+    exhausted = read_json(claims_path)["jobs"]["greenhouse:12345"]
+    assert exhausted["status"] == "skipped_after_fixing_attempts"
+    assert exhausted["fixing_attempts"] == 2
+    state_record = read_json(state_path)["jobs"][job["job_url"]]
+    assert state_record["retry_policy_status"] == "skipped_after_fixing_attempts"
+
+
+@pytest.mark.parametrize("resumable_status", ["preparing", "documents_ready", None])
+def test_resumed_fixing_attempt_preserves_its_counter_and_revision(
+    tmp_path: Path,
+    resumable_status: str | None,
+) -> None:
+    job = _job()
+    state_path = tmp_path / "state.json"
+    claims_path = tmp_path / "claims.json"
+    submission_log = tmp_path / "submission_log.json"
+    submission_log.write_text("{}\n", encoding="utf-8")
+    state_jobs = (
+        {
+            job["job_url"]: {
+                **job,
+                "status": resumable_status,
+            }
+        }
+        if resumable_status
+        else {}
+    )
+    state_path.write_text(
+        json.dumps({"version": 1, "jobs": state_jobs}),
+        encoding="utf-8",
+    )
+    claims_path.write_text(
+        json.dumps({
+            "version": 1,
+            "jobs": {
+                "greenhouse:12345": {
+                    "owner": "failed-core-product-management",
+                    "status": "claimed",
+                    "retry_count": 1,
+                    "fixing_attempts": 1,
+                    "attempt_revision": "fix-one",
+                }
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    assert continuous_source_ats._claim_next_job(
+        [job],
+        ats_platform="greenhouse",
+        worker_id="failed-core-product-management",
+        state_path=state_path,
+        peer_states=[],
+        claims_path=claims_path,
+        submission_log=submission_log,
+        remediation_revision="fix-two",
+    ) == job
+    resumed = read_json(claims_path)["jobs"]["greenhouse:12345"]
+    assert resumed["fixing_attempts"] == 1
+    assert resumed["attempt_revision"] == "fix-one"
+    assert resumed["attempt_kind"] == "fixing"
+
+
+def test_retry_requires_a_distinct_remediation_revision() -> None:
+    claim = {"failure_revision": "broken-revision"}
+
+    assert not continuous_source_ats._retry_has_new_remediation(
+        claim, "broken-revision"
+    )
+    assert continuous_source_ats._retry_has_new_remediation(claim, "fix-one")
+    assert continuous_source_ats._retry_has_new_remediation({}, "legacy-fix")
+
+
+def test_remediation_revision_tracks_runtime_inputs_not_repository_head(
+    tmp_path: Path,
+) -> None:
+    profile = tmp_path / "profile.json"
+    profile.write_text('{"answer":"yes"}\n', encoding="utf-8")
+    email_pool = tmp_path / "emails.json"
+    email_pool.write_text('["candidate@example.test"]\n', encoding="utf-8")
+    launcher = tmp_path / "launcher.py"
+    launcher.write_text("print('run')\n", encoding="utf-8")
+    revision_args = {
+        "ats_platform": "greenhouse",
+        "profile_path": profile,
+        "email_pool_path": email_pool,
+        "launcher_path": launcher,
+    }
+
+    first = continuous_source_ats._remediation_revision(**revision_args)
+    (tmp_path / "unrelated.txt").write_text("not a repair\n", encoding="utf-8")
+    assert continuous_source_ats._remediation_revision(**revision_args) == first
+
+    profile.write_text('{"answer":"no"}\n', encoding="utf-8")
+    assert continuous_source_ats._remediation_revision(**revision_args) != first
+    source = Path(continuous_source_ats.__file__).read_text(encoding="utf-8")
+    assert "git rev-parse" not in source
+
+
+def test_exhausted_queued_retries_are_reconciled_before_selection() -> None:
+    claims = {
+        "version": 1,
+        "jobs": {
+            "greenhouse:exhausted": {
+                "status": "retry_requested",
+                "retry_count": 3,
+                "next_retry_at": "2026-08-03T00:00:00+00:00",
+            },
+            "greenhouse:last-fix-available": {
+                "status": "retry_requested",
+                "retry_count": 2,
+            },
+            "greenhouse:confirmed": {
+                "status": "confirmed",
+                "retry_count": 9,
+            },
+        },
+    }
+
+    assert continuous_source_ats._reconcile_exhausted_retry_claims(claims) == 1
+    exhausted = claims["jobs"]["greenhouse:exhausted"]
+    assert exhausted["status"] == "skipped_after_fixing_attempts"
+    assert exhausted["skip_reason"] == "failed after 2 fixing attempts"
+    assert "next_retry_at" not in exhausted
+    assert claims["jobs"]["greenhouse:last-fix-available"]["status"] == "retry_requested"
+    assert claims["jobs"]["greenhouse:confirmed"]["status"] == "confirmed"
+
+
+def test_exhausted_policy_survives_claim_file_reconstruction(tmp_path: Path) -> None:
+    job = _job()
+    state_path = tmp_path / "state.json"
+    claims_path = tmp_path / "claims.json"
+    submission_log = tmp_path / "submission_log.json"
+    submission_log.write_text("{}\n", encoding="utf-8")
+    state_path.write_text(
+        json.dumps({
+            "version": 1,
+            "jobs": {
+                job["job_url"]: {
+                    **job,
+                    "status": "failed",
+                    "result_status": "TIMED_OUT",
+                    "retry_policy_status": "skipped_after_fixing_attempts",
+                    "retry_count": 3,
+                    "fixing_attempts": 2,
+                    "critical_error": True,
+                    "skip_reason": "failed after 2 fixing attempts",
+                }
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    selected = continuous_source_ats._claim_next_job(
+        [job],
+        ats_platform="greenhouse",
+        worker_id="failed-core-product-management",
+        state_path=state_path,
+        peer_states=[],
+        claims_path=claims_path,
+        submission_log=submission_log,
+        remediation_revision="later-deployment",
+    )
+
+    assert selected is None
+    rebuilt = read_json(claims_path)["jobs"]["greenhouse:12345"]
+    assert rebuilt["status"] == "skipped_after_fixing_attempts"
+    assert rebuilt["fixing_attempts"] == 2
+
+
+def test_waiting_retry_survives_claim_file_reconstruction(tmp_path: Path) -> None:
+    job = _job()
+    state_path = tmp_path / "state.json"
+    claims_path = tmp_path / "claims.json"
+    submission_log = tmp_path / "submission_log.json"
+    submission_log.write_text("{}\n", encoding="utf-8")
+    state_path.write_text(
+        json.dumps({
+            "version": 1,
+            "jobs": {
+                job["job_url"]: {
+                    **job,
+                    "status": "failed",
+                    "result_status": "REQUIRED_FIELDS_NOT_FILLED",
+                    "retry_policy_status": "retry_requested",
+                    "retry_count": 2,
+                    "fixing_attempts": 1,
+                    "critical_error": True,
+                    "failure_revision": "fix-one",
+                    "remediation_required": True,
+                }
+            },
+        }),
+        encoding="utf-8",
+    )
+    claim_args = {
+        "jobs": [job],
+        "ats_platform": "greenhouse",
+        "worker_id": "failed-core-product-management",
+        "state_path": state_path,
+        "peer_states": [],
+        "claims_path": claims_path,
+        "submission_log": submission_log,
+    }
+
+    assert continuous_source_ats._claim_next_job(
+        **claim_args, remediation_revision="fix-one"
+    ) is None
+    assert continuous_source_ats._claim_next_job(
+        **claim_args, remediation_revision="fix-two"
+    ) == job
+    rebuilt = read_json(claims_path)["jobs"]["greenhouse:12345"]
+    assert rebuilt["status"] == "claimed"
+    assert rebuilt["fixing_attempts"] == 2
+
+
+def test_exhausted_retry_is_skipped_and_next_fresh_job_is_selected(
+    tmp_path: Path,
+) -> None:
+    exhausted_job = _job()
+    fresh_job = _job("67890")
+    state_path = tmp_path / "state.json"
+    claims_path = tmp_path / "claims.json"
+    submission_log = tmp_path / "submission_log.json"
+    submission_log.write_text("{}\n", encoding="utf-8")
+    state_path.write_text(
+        json.dumps({
+            "version": 1,
+            "jobs": {
+                exhausted_job["job_url"]: {
+                    **exhausted_job,
+                    "status": "failed",
+                    "result_status": "TIMED_OUT",
+                }
+            },
+        }),
+        encoding="utf-8",
+    )
+    claims_path.write_text(
+        json.dumps({
+            "version": 1,
+            "jobs": {
+                "greenhouse:12345": {
+                    "owner": "failed-core-product-management",
+                    "status": "retry_requested",
+                    "retry_count": 3,
+                    "fixing_attempts": 2,
+                }
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    selected = continuous_source_ats._claim_next_job(
+        [exhausted_job, fresh_job],
+        ats_platform="greenhouse",
+        worker_id="failed-core-product-management",
+        state_path=state_path,
+        peer_states=[],
+        claims_path=claims_path,
+        submission_log=submission_log,
+        remediation_revision="fix-three",
+    )
+
+    assert selected == fresh_job
+    claims = read_json(claims_path)["jobs"]
+    assert claims["greenhouse:12345"]["status"] == "skipped_after_fixing_attempts"
+    assert claims["greenhouse:67890"]["status"] == "claimed"
+
+
+def test_manual_review_is_skipped_after_two_fixing_attempts(tmp_path: Path) -> None:
+    job = _job()
+    state_path = tmp_path / "state.json"
+    claims_path = tmp_path / "claims.json"
+    state_path.write_text(
+        json.dumps({
+            "version": 1,
+            "jobs": {
+                job["job_url"]: {
+                    **job,
+                    "status": "manual_review",
+                    "result_status": "SUBMISSION_UNCONFIRMED",
+                }
+            },
+        }),
+        encoding="utf-8",
+    )
+    claims_path.write_text(
+        json.dumps({
+            "version": 1,
+            "jobs": {
+                "greenhouse:12345": {
+                    "owner": "failed-core-product-management",
+                    "status": "claimed",
+                    "retry_count": 2,
+                    "fixing_attempts": 2,
+                    "attempt_revision": "fix-two",
+                }
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    continuous_source_ats._sync_claim_from_state(
+        job=job,
+        ats_platform="greenhouse",
+        worker_id="failed-core-product-management",
+        state_path=state_path,
+        claims_path=claims_path,
+        fallback_status="manual_review",
+        remediation_revision="fix-two",
+    )
+
+    claim = read_json(claims_path)["jobs"]["greenhouse:12345"]
+    assert claim["status"] == "skipped_after_fixing_attempts"
+    assert claim["fixing_attempts"] == 2
+    assert claim["result_status"] == "SUBMISSION_UNCONFIRMED"
 
 
 def test_interrupted_application_claim_is_scheduled_for_retry(tmp_path: Path) -> None:
@@ -431,6 +906,7 @@ def test_interrupted_application_claim_is_scheduled_for_retry(tmp_path: Path) ->
     claim = read_json(claims_path)["jobs"]["greenhouse:12345"]
     assert claim["status"] == "retry_requested"
     assert claim["critical_error"] is True
+
 
 def test_source_main_runs_runtime_claim_application_and_claim_sync(
     tmp_path: Path,
@@ -547,6 +1023,81 @@ def test_source_main_runs_runtime_claim_application_and_claim_sync(
     assert claim["owner"] == "search"
     assert claim["status"] == "confirmed"
     assert claim["result_status"] == "SUBMITTED & CONFIRMED"
+
+
+def test_source_main_converts_application_exception_into_retryable_critical_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    input_path = tmp_path / "search_jobs.json"
+    input_path.write_text(json.dumps([_job()]), encoding="utf-8")
+    profile = tmp_path / "profile.json"
+    profile.write_text("{}\n", encoding="utf-8")
+    email_pool = tmp_path / "emails.json"
+    email_pool.write_text('["candidate@example.test"]\n', encoding="utf-8")
+    launcher = tmp_path / "job_automation.py"
+    launcher.write_text("", encoding="utf-8")
+    submission_log = tmp_path / "submission_log.json"
+    submission_log.write_text("{}\n", encoding="utf-8")
+    state_path = tmp_path / "state.json"
+    claims_path = tmp_path / "claims.json"
+
+    def fail_application(_service, _job):
+        raise RuntimeError("browser process crashed")
+
+    monkeypatch.setattr(
+        continuous_source_ats.SelectedJobApplicationService,
+        "process",
+        fail_application,
+    )
+    monkeypatch.setattr(
+        continuous_source_ats,
+        "initialize_observability",
+        lambda **_kwargs: NOOP_TELEMETRY,
+    )
+
+    exit_code = continuous_source_ats.main(
+        [
+            "--ats-platform",
+            "greenhouse",
+            "--source",
+            "search",
+            "--worker-id",
+            "search",
+            "--input",
+            str(input_path),
+            "--state",
+            str(state_path),
+            "--claims",
+            str(claims_path),
+            "--selected-input",
+            str(tmp_path / "selected.json"),
+            "--results-dir",
+            str(tmp_path / "results"),
+            "--documents-dir",
+            str(tmp_path / "documents"),
+            "--profile",
+            str(profile),
+            "--email-pool",
+            str(email_pool),
+            "--launcher",
+            str(launcher),
+            "--submission-log",
+            str(submission_log),
+            "--backlog",
+            str(tmp_path / "backlog.json"),
+            "--once",
+        ]
+    )
+
+    assert exit_code == 1
+    state_record = read_json(state_path)["jobs"][_job()["job_url"]]
+    assert state_record["status"] == "failed"
+    assert state_record["result_status"] == "WORKER_CYCLE_EXCEPTION"
+    claim = read_json(claims_path)["jobs"]["greenhouse:12345"]
+    assert claim["status"] == "retry_requested"
+    assert claim["critical_error"] is True
+    assert claim["remediation_required"] is True
 
 
 def test_source_worker_does_not_import_the_direct_worker_implementation() -> None:

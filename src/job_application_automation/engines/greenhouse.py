@@ -23,10 +23,11 @@ import faulthandler
 import logging
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from time import monotonic
 from typing import Any
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from urllib.parse import parse_qs, urlencode, urlparse
 
 from playwright.sync_api import Locator, Page
@@ -87,6 +88,11 @@ from .form_sections import (
 
 ATS_NAME = "greenhouse"
 FIRST_OPTION_ANSWER = "__FIRST_OPTION__"
+FORM_WORK_TIMEOUT_MS = 240_000
+FORM_WORK_TIMEOUT_MAX_MS = 300_000
+FORM_WORK_TIMEOUT_MIN_MS = 30_000
+ACTION_TIMEOUT_MAX_MS = 20_000
+FORM_WORK_BUDGET_EXHAUSTED = "Form processing time budget exhausted"
 SUBMIT_BUTTON_TEXT_PATTERN = re.compile(
     r"submit application|envoyer.*candidature|postuler",
     re.I,
@@ -108,6 +114,40 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+@dataclass(slots=True)
+class _FormWorkBudget:
+    """Wall-clock budget shared by Greenhouse fill, validation, and repair work."""
+
+    timeout_ms: int
+    clock: Callable[[], float] = field(default=monotonic, repr=False)
+    started_at: float = field(init=False)
+    _reported_exhaustion: bool = field(default=False, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self.timeout_ms = max(1, int(self.timeout_ms))
+        self.started_at = self.clock()
+
+    def remaining_ms(self) -> int:
+        elapsed_ms = int(max(0.0, self.clock() - self.started_at) * 1_000)
+        return max(0, self.timeout_ms - elapsed_ms)
+
+    def available(self, stage: str) -> bool:
+        if self.remaining_ms() > 0:
+            return True
+        if not self._reported_exhaustion:
+            logger.warning(
+                "Greenhouse form-work budget exhausted stage=%s timeout_ms=%d",
+                stage,
+                self.timeout_ms,
+            )
+            self._reported_exhaustion = True
+        return False
+
+
+def _budget_available(budget: _FormWorkBudget | None, stage: str) -> bool:
+    return budget is None or budget.available(stage)
+
+
 def _load_config() -> dict[str, Any]:
     return load_json_config(orchestrated_config_path())
 
@@ -123,18 +163,53 @@ def _job_unavailable_after_navigation(page: Page) -> bool:
     return query.get("error", [""])[0].casefold() == "true" and "/jobs/" not in parsed.path
 
 
-def _fill_all_visible(page: Page, selectors: Sequence[str], value: str) -> bool:
+def _fill_all_visible(
+    page: Page,
+    selectors: Sequence[str],
+    value: str,
+    *,
+    budget: _FormWorkBudget | None = None,
+) -> bool:
     """Fill every visible duplicate of a standard Greenhouse input."""
-    return _shared_fill_all_visible(page, selectors, value)
+    if budget is None:
+        return _shared_fill_all_visible(page, selectors, value)
+    if not value:
+        return False
+    matched = False
+    all_filled = True
+    for selector in selectors:
+        controls = page.locator(selector)
+        for index in range(controls.count()):
+            if not _budget_available(budget, "standard-visible-control"):
+                return matched and all_filled
+            control = controls.nth(index)
+            try:
+                if not control.is_visible():
+                    continue
+                matched = True
+                control.fill(value)
+                control.blur()
+                all_filled = all_filled and control.input_value().strip() == value.strip()
+            except Exception:
+                all_filled = False
+    return matched and all_filled
 
 
-def _fill_all_labeled(page: Page, pattern: str, value: str) -> bool:
+def _fill_all_labeled(
+    page: Page,
+    pattern: str,
+    value: str,
+    *,
+    budget: _FormWorkBudget | None = None,
+) -> bool:
     """Fill every visible control with an exact semantic label."""
     if not value:
         return False
     controls = page.get_by_label(re.compile(pattern, re.I))
     filled = False
     for index in range(controls.count()):
+        if not _budget_available(budget, "standard-labeled-control"):
+            break
         control = controls.nth(index)
         try:
             if not control.is_visible():
@@ -288,11 +363,14 @@ def _select_native_control(
     preferred: Sequence[str],
     *,
     fallback_first: bool,
+    budget: _FormWorkBudget | None = None,
 ) -> bool:
     """Select directly on a native select, optionally falling back to its first value."""
     options = control.locator("option")
     available: list[tuple[str, str]] = []
     for index in range(options.count()):
+        if not _budget_available(budget, "native-select-options"):
+            return False
         option = options.nth(index)
         value = option.get_attribute("value") or ""
         label = " ".join(option.inner_text().split())
@@ -330,8 +408,12 @@ def _select_greenhouse_combobox(
     page: Page,
     control: Locator,
     preferred: Sequence[str],
+    *,
+    budget: _FormWorkBudget | None = None,
 ) -> bool:
     """Select an option from Greenhouse's React-select combobox."""
+    if not _budget_available(budget, "combobox-open"):
+        return False
     try:
         control.scroll_into_view_if_needed()
         control.click()
@@ -346,25 +428,35 @@ def _select_greenhouse_combobox(
             pass
         options = page.locator(option_locator)
         for desired in (item for item in preferred if item):
+            if not _budget_available(budget, "combobox-answer"):
+                return False
             for attempt in range(2):
+                if not _budget_available(budget, "combobox-attempt"):
+                    return False
                 controlled_id = control.get_attribute("aria-controls") or ""
                 if controlled_id:
                     listbox = page.locator(f"#{controlled_id}")
                     if listbox.count():
                         exact_text = listbox.get_by_text(desired, exact=True)
                         for index in range(exact_text.count()):
+                            if not _budget_available(budget, "combobox-exact-option"):
+                                return False
                             option = exact_text.nth(index)
                             if option.is_visible():
                                 option.click()
                                 return True
                         text_matches = listbox.get_by_text(re.compile(re.escape(desired), re.I))
                         for index in range(text_matches.count()):
+                            if not _budget_available(budget, "combobox-text-option"):
+                                return False
                             option = text_matches.nth(index)
                             if option.is_visible():
                                 option.click()
                                 return True
                 exact = page.get_by_role("option", name=desired, exact=True)
                 for index in range(exact.count()):
+                    if not _budget_available(budget, "combobox-role-option"):
+                        return False
                     option = exact.nth(index)
                     if option.is_visible():
                         option.click()
@@ -380,6 +472,8 @@ def _select_greenhouse_combobox(
                 )
                 if not exact_only:
                     for index in range(matches.count()):
+                        if not _budget_available(budget, "combobox-fuzzy-option"):
+                            return False
                         option = matches.nth(index)
                         if option.is_visible():
                             option.click()
@@ -433,6 +527,8 @@ def _select_greenhouse_combobox(
             pass
         visible_options = []
         for index in range(options.count()):
+            if not _budget_available(budget, "combobox-fallback-option"):
+                return False
             option = options.nth(index)
             if option.is_visible():
                 option_text = " ".join(option.inner_text().split())
@@ -486,8 +582,15 @@ def _select_greenhouse_combobox(
     return False
 
 
-def _select_greenhouse_combobox_max(page: Page, control: Locator) -> bool:
+def _select_greenhouse_combobox_max(
+    page: Page,
+    control: Locator,
+    *,
+    budget: _FormWorkBudget | None = None,
+) -> bool:
     """Select the last visible option for explicitly configured maximum policies."""
+    if not _budget_available(budget, "combobox-maximum"):
+        return False
     try:
         control.click()
         control.press("ArrowDown")
@@ -496,7 +599,8 @@ def _select_greenhouse_combobox_max(page: Page, control: Locator) -> bool:
         visible = [
             options.nth(index)
             for index in range(options.count())
-            if options.nth(index).is_visible()
+            if _budget_available(budget, "combobox-maximum-option")
+            and options.nth(index).is_visible()
         ]
         if not visible:
             control.press("Escape")
@@ -511,12 +615,16 @@ def _fill_radio_or_checkbox_group(
     page: Page,
     control: Locator,
     desired: str,
+    *,
+    budget: _FormWorkBudget | None = None,
 ) -> bool:
     name = control.get_attribute("name")
     group = page.locator(
         f'input[name="{name}"]' if name else f'input[id="{control.get_attribute("id")}"]'
     )
     for index in range(group.count()):
+        if not _budget_available(budget, "choice-group-option"):
+            return False
         item = group.nth(index)
         item_id = item.get_attribute("id") or ""
         label = page.locator(f'label[for="{item_id}"]').first if item_id else None
@@ -531,8 +639,15 @@ def _fill_radio_or_checkbox_group(
     return False
 
 
-def _select_first_greenhouse_combobox(page: Page, control: Locator) -> bool:
+def _select_first_greenhouse_combobox(
+    page: Page,
+    control: Locator,
+    *,
+    budget: _FormWorkBudget | None = None,
+) -> bool:
     """Select the first available option for a required unanswered dropdown."""
+    if not _budget_available(budget, "combobox-first-option"):
+        return False
     try:
         control.scroll_into_view_if_needed()
         control.click()
@@ -540,6 +655,8 @@ def _select_first_greenhouse_combobox(page: Page, control: Locator) -> bool:
         page.wait_for_timeout(400)
         options = page.locator('[role="option"], [id*="-option-"]')
         for index in range(options.count()):
+            if not _budget_available(budget, "combobox-first-option-candidate"):
+                return False
             option = options.nth(index)
             if option.is_visible():
                 selected = " ".join(option.inner_text().split())
@@ -745,12 +862,16 @@ def _fill_custom_questions(
     company: str,
     role: str,
     candidate_evidence: str,
+    *,
+    budget: _FormWorkBudget | None = None,
 ) -> dict[str, bool]:
     results: dict[str, bool] = {}
     job_text = page.locator("body").inner_text()[:30_000]
     controls = page.locator(CUSTOM_QUESTION_CONTROL_SELECTOR)
     handled_groups: set[str] = set()
     for index in range(controls.count()):
+        if not _budget_available(budget, "custom-question"):
+            break
         control = controls.nth(index)
         try:
             if not control.is_visible():
@@ -819,9 +940,17 @@ def _fill_custom_questions(
 
             if role_name == "combobox":
                 if maximum_policy:
-                    success = _select_greenhouse_combobox_max(page, control)
+                    success = _select_greenhouse_combobox_max(
+                        page,
+                        control,
+                        budget=budget,
+                    )
                 elif desired == FIRST_OPTION_ANSWER:
-                    success = _select_first_greenhouse_combobox(page, control)
+                    success = _select_first_greenhouse_combobox(
+                        page,
+                        control,
+                        budget=budget,
+                    )
                 elif desired:
                     preferred = (
                         location_answer_candidates(profile)
@@ -839,6 +968,7 @@ def _fill_custom_questions(
                         page,
                         control,
                         preferred,
+                        budget=budget,
                     )
                 else:
                     try:
@@ -846,7 +976,11 @@ def _fill_custom_questions(
                             "Unanswered combobox label=%r; selecting first option",
                             label,
                         )
-                        success = _select_first_greenhouse_combobox(page, control)
+                        success = _select_first_greenhouse_combobox(
+                            page,
+                            control,
+                            budget=budget,
+                        )
                         if not success:
                             control.press("Escape")
                     except Exception as exc:
@@ -871,14 +1005,25 @@ def _fill_custom_questions(
                         control,
                         _answer_variants(label, desired, option_variants),
                         fallback_first=True,
+                        budget=budget,
                     )
                 else:
-                    success = _select_native_control(control, (), fallback_first=True)
+                    success = _select_native_control(
+                        control,
+                        (),
+                        fallback_first=True,
+                        budget=budget,
+                    )
             elif control_type in {"radio", "checkbox"}:
                 handled_groups.add(group_key)
                 if desired:
                     success = any(
-                        _fill_radio_or_checkbox_group(page, control, variant)
+                        _fill_radio_or_checkbox_group(
+                            page,
+                            control,
+                            variant,
+                            budget=budget,
+                        )
                         for variant in _answer_variants(label, desired, option_variants)
                     )
             elif tag == "textarea":
@@ -927,10 +1072,14 @@ def _repair_missing_required_controls(
     field_matchers: Mapping[str, Sequence[str]],
     option_variants: Mapping[str, Sequence[str]],
     email: str = "",
+    *,
+    budget: _FormWorkBudget | None = None,
 ) -> dict[str, bool]:
     """Reacquire and commit labeled controls rejected by React validation."""
     repaired: dict[str, bool] = {}
     for label in missing:
+        if not _budget_available(budget, "required-control-repair"):
+            break
         controls = page.get_by_label(label, exact=True)
         candidates: list[Locator] = [controls.nth(index) for index in range(controls.count())]
         # Greenhouse sometimes renders the visible question text outside a
@@ -943,6 +1092,8 @@ def _repair_missing_required_controls(
             normalized_label = " ".join(label.casefold().split()).rstrip(" *")
             discovered = page.locator(CUSTOM_QUESTION_CONTROL_SELECTOR)
             for index in range(discovered.count()):
+                if not _budget_available(budget, "required-control-discovery"):
+                    break
                 candidate = discovered.nth(index)
                 try:
                     candidate_label = " ".join(
@@ -955,6 +1106,8 @@ def _repair_missing_required_controls(
         success = False
         diagnostics: list[dict[str, str | None]] = []
         for control in candidates:
+            if not _budget_available(budget, "required-control-candidate"):
+                break
             try:
                 if not control.is_visible():
                     continue
@@ -989,7 +1142,12 @@ def _repair_missing_required_controls(
                     preferred = (
                         _answer_variants(label, desired, option_variants) if desired else ()
                     )
-                    success = _select_greenhouse_combobox(page, control, preferred)
+                    success = _select_greenhouse_combobox(
+                        page,
+                        control,
+                        preferred,
+                        budget=budget,
+                    )
                 elif tag == "select":
                     preferred = (
                         _answer_variants(label, desired, option_variants) if desired else ()
@@ -998,6 +1156,7 @@ def _repair_missing_required_controls(
                         control,
                         preferred,
                         fallback_first=True,
+                        budget=budget,
                     )
                 elif tag == "input" and desired:
                     control.fill(str(desired))
@@ -1030,6 +1189,8 @@ def _fill_eeo_fields(
     eeo: Mapping[str, Any],
     field_matchers: Mapping[str, Sequence[str]],
     option_variants: Mapping[str, Sequence[str]],
+    *,
+    budget: _FormWorkBudget | None = None,
 ) -> dict[str, bool]:
     """Fill Greenhouse voluntary demographic controls from explicit configuration."""
     results: dict[str, bool] = {}
@@ -1038,6 +1199,8 @@ def _fill_eeo_fields(
     )
     handled: set[str] = set()
     for index in range(controls.count()):
+        if not _budget_available(budget, "eeo-control"):
+            break
         control = controls.nth(index)
         try:
             if not control.is_visible():
@@ -1058,7 +1221,10 @@ def _fill_eeo_fields(
             control_type = (control.get_attribute("type") or "").lower()
             if role_name == "combobox":
                 results[label] = _select_greenhouse_combobox(
-                    page, control, _answer_variants(label, desired, option_variants)
+                    page,
+                    control,
+                    _answer_variants(label, desired, option_variants),
+                    budget=budget,
                 )
             elif tag == "select":
                 results[label] = _select_native(
@@ -1066,7 +1232,12 @@ def _fill_eeo_fields(
                 )
             elif control_type in {"radio", "checkbox"}:
                 results[label] = any(
-                    _fill_radio_or_checkbox_group(page, control, variant)
+                    _fill_radio_or_checkbox_group(
+                        page,
+                        control,
+                        variant,
+                        budget=budget,
+                    )
                     for variant in _answer_variants(label, desired, option_variants)
                 )
         except Exception as exc:
@@ -1083,6 +1254,8 @@ def _fill_eeo_fields(
         r"transgender",
         r"sexual orientation",
     ):
+        if not _budget_available(budget, "eeo-rerender-repair"):
+            break
         try:
             retry_control = _first_visible(page.get_by_label(re.compile(pattern, re.IGNORECASE)))
             if retry_control is None:
@@ -1096,6 +1269,7 @@ def _fill_eeo_fields(
                     page,
                     retry_control,
                     _answer_variants(label, desired, option_variants),
+                    budget=budget,
                 )
         except Exception as exc:
             logger.debug("EEO retry failed for %s: %s", pattern, exc)
@@ -1108,49 +1282,121 @@ def _fill_standard_fields(
     email: str,
     resume: Path,
     cover_letter: Path | None = None,
+    *,
+    budget: _FormWorkBudget | None = None,
 ) -> dict[str, bool | None]:
+    def fill_if_available(
+        stage: str,
+        operation: Callable[[], bool | None],
+        *,
+        unavailable: bool | None = False,
+    ) -> bool | None:
+        if not _budget_available(budget, stage):
+            return unavailable
+        return operation()
+
     fields: dict[str, bool | None] = {
-        "first_name": _fill_all_visible(
-            page,
-            ('input[name="first_name"]', 'input[id*="first_name" i]'),
-            str(profile.get("first_name", "")),
+        "first_name": fill_if_available(
+            "standard-first-name",
+            lambda: _fill_all_visible(
+                page,
+                ('input[name="first_name"]', 'input[id*="first_name" i]'),
+                str(profile.get("first_name", "")),
+                budget=budget,
+            ),
         ),
-        "last_name": _fill_all_visible(
-            page,
-            ('input[name="last_name"]', 'input[id*="last_name" i]'),
-            str(profile.get("last_name", "")),
+        "last_name": fill_if_available(
+            "standard-last-name",
+            lambda: _fill_all_visible(
+                page,
+                ('input[name="last_name"]', 'input[id*="last_name" i]'),
+                str(profile.get("last_name", "")),
+                budget=budget,
+            ),
         ),
-        "email": _fill_all_visible(
-            page,
-            ('input[name="email"]', 'input[type="email"]', 'input[id*="email" i]'),
-            email,
+        "email": fill_if_available(
+            "standard-email",
+            lambda: _fill_all_visible(
+                page,
+                (
+                    'input[name="email"]',
+                    'input[type="email"]',
+                    'input[id*="email" i]',
+                ),
+                email,
+                budget=budget,
+            ),
         ),
-        "phone": _fill(
-            page,
-            ('input[name="phone"]', 'input[type="tel"]', 'input[id*="phone" i]'),
-            str(profile.get("phone", "")),
+        "phone": fill_if_available(
+            "standard-phone",
+            lambda: _fill(
+                page,
+                (
+                    'input[name="phone"]',
+                    'input[type="tel"]',
+                    'input[id*="phone" i]',
+                ),
+                str(profile.get("phone", "")),
+            ),
         ),
-        "preferred_name": _fill_labeled(
-            page, r"preferred.*(?:first )?name", str(profile.get("preferred_name", ""))
+        "preferred_name": fill_if_available(
+            "standard-preferred-name",
+            lambda: _fill_labeled(
+                page,
+                r"preferred.*(?:first )?name",
+                str(profile.get("preferred_name", "")),
+            ),
         ),
         "location": False,
-        "linkedin": _fill_labeled(page, r"linkedin", str(profile.get("linkedin", ""))),
-        "website": _fill_labeled(page, r"(?:website|portfolio)", str(profile.get("website", ""))),
-        "resume": _upload_resume(page, resume),
+        "linkedin": fill_if_available(
+            "standard-linkedin",
+            lambda: _fill_labeled(
+                page,
+                r"linkedin",
+                str(profile.get("linkedin", "")),
+            ),
+        ),
+        "website": fill_if_available(
+            "standard-website",
+            lambda: _fill_labeled(
+                page,
+                r"(?:website|portfolio)",
+                str(profile.get("website", "")),
+            ),
+        ),
+        "resume": fill_if_available(
+            "standard-resume",
+            lambda: _upload_resume(page, resume),
+        ),
     }
     if cover_letter is not None:
-        fields["cover_letter"] = _upload_cover_letter(page, cover_letter)
+        fields["cover_letter"] = fill_if_available(
+            "standard-cover-letter",
+            lambda: _upload_cover_letter(page, cover_letter),
+        )
     fields["first_name"] = (
-        _fill_all_labeled(page, r"^\s*(?:legal\s+)?first name\s*$", str(profile.get("first_name", "")))
+        _fill_all_labeled(
+            page,
+            r"^\s*(?:legal\s+)?first name\s*$",
+            str(profile.get("first_name", "")),
+            budget=budget,
+        )
         or fields["first_name"]
     )
     fields["last_name"] = (
-        _fill_all_labeled(page, r"^\s*(?:legal\s+)?last name\s*$", str(profile.get("last_name", "")))
+        _fill_all_labeled(
+            page,
+            r"^\s*(?:legal\s+)?last name\s*$",
+            str(profile.get("last_name", "")),
+            budget=budget,
+        )
         or fields["last_name"]
     )
-    location_control = _first_visible(
-        page.get_by_label(re.compile(r"(?:location|city)", re.IGNORECASE))
-    )
+    location_control = None
+    if _budget_available(budget, "standard-location"):
+        location_control = _first_visible(
+            page.get_by_label(re.compile(r"(?:location|city)", re.IGNORECASE))
+        )
     if location_control is not None:
         location_value = str(profile.get("location", ""))
         if (location_control.get_attribute("role") or "") == "combobox":
@@ -1161,9 +1407,12 @@ def _fill_standard_fields(
                     location_value,
                     str(profile.get("city", "")),
                 ),
+                budget=budget,
             )
             if not fields["location"]:
                 try:
+                    if not _budget_available(budget, "standard-location-fallback"):
+                        raise PlaywrightTimeoutError("form-work budget exhausted")
                     location_control.fill(location_value or str(profile.get("city", "")))
                     page.wait_for_timeout(700)
                     location_control.press("ArrowDown")
@@ -1181,9 +1430,13 @@ def _fill_standard_fields(
                 fields["location"] = bool(location_control.input_value().strip())
             except Exception:
                 fields["location"] = False
-    country = _first_visible(
-        page.locator('input[role="combobox"][id="country"]')
-    ) or _first_visible(page.get_by_label(re.compile(r"^(?:country|pays)", re.IGNORECASE)))
+    country = None
+    if _budget_available(budget, "standard-country"):
+        country = _first_visible(
+            page.locator('input[role="combobox"][id="country"]')
+        ) or _first_visible(
+            page.get_by_label(re.compile(r"^(?:country|pays)", re.IGNORECASE))
+        )
     if country is not None:
         fields["country"] = _select_greenhouse_combobox(
             page,
@@ -1194,20 +1447,27 @@ def _fill_standard_fields(
                 "États-Unis",
                 "USA",
             ),
+            budget=budget,
         )
-    else:
+    elif _budget_available(budget, "standard-country-native"):
         fields["country"] = _select_native(
             page, r"country", (str(profile.get("country", "")), "United States")
         )
     return fields
 
 
-def _fill_explicit_required_consents(page: Page) -> list[str]:
+def _fill_explicit_required_consents(
+    page: Page,
+    *,
+    budget: _FormWorkBudget | None = None,
+) -> list[str]:
     checked: list[str] = []
     controls = page.locator(
         'input[type="checkbox"][required], input[type="checkbox"][aria-required="true"]'
     )
     for index in range(controls.count()):
+        if not _budget_available(budget, "required-consent"):
+            break
         control = controls.nth(index)
         try:
             if not control.is_visible() or control.is_checked():
@@ -1254,15 +1514,115 @@ def _fill_source_checkbox(page: Page) -> dict[str, bool]:
     return {"How did you hear about this job? LinkedIn": control.is_checked()}
 
 
-def _required_empty_fields(page: Page) -> list[str]:
+def _required_choice_group_has_selection(control: Locator) -> bool:
+    """Check only the current semantic question for a selected peer choice."""
+    return bool(
+        control.evaluate(
+            r"""el => {
+                const inputType = (el.getAttribute('type') || '').toLowerCase();
+                if (!['checkbox', 'radio'].includes(inputType)) return false;
+                if (el.checked) return true;
+
+                const name = el.getAttribute('name') || '';
+                if (name) {
+                    const formScope = el.form || document;
+                    const sameName = Array.from(
+                        formScope.querySelectorAll(`input[type="${inputType}"]`)
+                    ).filter(candidate => candidate.getAttribute('name') === name);
+                    if (sameName.some(candidate => candidate.checked)) return true;
+                }
+
+                const question = el.closest(
+                    'fieldset, [role="radiogroup"], [role="group"], ' +
+                    '[data-testid*="question"], [data-question-id], .field-wrapper'
+                );
+                if (!question) return false;
+                return Array.from(
+                    question.querySelectorAll(`input[type="${inputType}"]`)
+                ).some(candidate => candidate.checked);
+            }"""
+        )
+    )
+
+
+def _is_react_select_required_sentinel(control: Locator) -> bool:
+    """Identify Greenhouse's transparent native-validity input for a React-select."""
+    if control.get_attribute("aria-hidden") != "true":
+        return False
+    return bool(
+        control.evaluate(
+            """el => {
+                const root = el.closest(
+                    '.select-shell, .select__container, [class*="select-shell"], ' +
+                    '[class*="select__container"]'
+                );
+                return Boolean(root?.querySelector('[role="combobox"]'));
+            }"""
+        )
+    )
+
+
+def _required_combobox_has_value(control: Locator) -> bool:
+    """Read React-select's rendered selection instead of its empty search input."""
+    return bool(
+        control.evaluate(
+            r"""el => {
+                const directValue = String(el.value ?? '').trim();
+                if (directValue) return true;
+
+                const ariaValue = String(el.getAttribute('aria-valuetext') || '').trim();
+                if (ariaValue && !/^(select|choose)(\.\.\.)?$/i.test(ariaValue)) return true;
+
+                const root = el.closest(
+                    '.select__container, .select-shell, [class*="select__container"], ' +
+                    '[class*="select-shell"]'
+                ) || el.parentElement?.parentElement;
+                if (!root) return false;
+
+                const selected = root.querySelector(
+                    '.select__single-value, .select__multi-value, ' +
+                    '[class*="singleValue"], [class*="multiValue"], ' +
+                    '[data-testid*="single-value"], [data-testid*="multi-value"]'
+                );
+                if (String(selected?.textContent || '').trim()) return true;
+
+                const validityInput = root.querySelector(
+                    'input[aria-hidden="true"][required]'
+                );
+                if (String(validityInput?.value || '').trim()) return true;
+
+                if (el.tagName === 'BUTTON') {
+                    const buttonText = String(el.textContent || '').trim();
+                    return Boolean(
+                        buttonText && !/^(select|choose)(\.\.\.)?$/i.test(buttonText)
+                    );
+                }
+                return false;
+            }"""
+        )
+    )
+
+
+def _required_empty_fields(
+    page: Page,
+    *,
+    budget: _FormWorkBudget | None = None,
+) -> list[str]:
     missing: list[str] = []
     controls = page.locator(
         'input[required], select[required], textarea[required], [aria-required="true"]'
     )
     for index in range(controls.count()):
+        if not _budget_available(budget, "required-field-validation"):
+            missing.append(FORM_WORK_BUDGET_EXHAUSTED)
+            break
         control = controls.nth(index)
         try:
-            if not control.is_visible() or control.get_attribute("type") == "hidden":
+            if control.get_attribute("type") == "hidden":
+                continue
+            if _is_react_select_required_sentinel(control):
+                continue
+            if not control.is_visible():
                 continue
             label = _label_for(page, control)
             if (
@@ -1281,35 +1641,12 @@ def _required_empty_fields(page: Page) -> list[str]:
                 continue
             control_type = (control.get_attribute("type") or "").lower()
             if control_type in {"checkbox", "radio"}:
-                if not control.is_checked():
-                    name = control.get_attribute("name")
-                    if name and page.locator(f'input[name="{name}"]:checked').count():
-                        continue
-                    if control.evaluate(
-                        """el => {
-                            let container = el;
-                            for (let depth = 0; depth < 8 && container; depth += 1) {
-                                if (container.querySelector?.(
-                                    'input[type="checkbox"]:checked, input[type="radio"]:checked'
-                                )) return true;
-                                if (container.matches?.('form')) break;
-                                container = container.parentElement;
-                            }
-                            return false;
-                        }"""
-                    ):
-                        # Greenhouse frequently gives every option in a
-                        # checkbox group a distinct name while marking each
-                        # option aria-required. One selected option satisfies
-                        # the question; the unchecked choices are not missing.
-                        continue
-                    missing.append(label or name or f"choice-{index}")
+                if not _required_choice_group_has_selection(control):
+                    missing.append(
+                        label or control.get_attribute("name") or f"choice-{index}"
+                    )
             elif control.get_attribute("role") == "combobox":
-                container_text = control.evaluate(
-                    "el => (el.parentElement?.parentElement?.innerText || '').trim()"
-                )
-                placeholder = re.fullmatch(r"(?:select|choose)(?:\.\.\.)?", container_text, re.I)
-                if not container_text or placeholder:
+                if not _required_combobox_has_value(control):
                     missing.append(label or control.get_attribute("id") or f"field-{index}")
             elif not control.input_value().strip():
                 missing.append(
@@ -1431,22 +1768,90 @@ def _submit_control_enabled(submit: Locator) -> bool:
         return False
 
 
-def _commit_react_form_values(page: Page) -> None:
-    """Commit visible values to React before judging a disabled submit control."""
-    page.locator(
-        "input:not([type='hidden']), textarea, select, [role='combobox']"
-    ).evaluate_all(
-        """elements => elements.forEach(element => {
-            element.dispatchEvent(new Event('input', { bubbles: true }));
-            element.dispatchEvent(new Event('change', { bubbles: true }));
-            element.dispatchEvent(new Event('blur', { bubbles: true }));
-        })"""
-    )
+def _commit_react_form_values(
+    page: Page,
+    *,
+    budget: _FormWorkBudget | None = None,
+) -> int:
+    """Commit populated controls through the event sequence React observes."""
+    if not _budget_available(budget, "react-value-commit"):
+        return 0
+    try:
+        committed = page.locator(
+            "input:not([type='hidden']), textarea, select, [role='combobox']"
+        ).evaluate_all(
+            """elements => {
+                let committed = 0;
+                for (const element of elements) {
+                    if (!element.isConnected || element.disabled || element.readOnly) continue;
+                    if (element.getAttribute('aria-hidden') === 'true') continue;
+
+                    const type = String(element.getAttribute('type') || '').toLowerCase();
+                    if (['button', 'checkbox', 'file', 'radio', 'reset', 'submit'].includes(type)) {
+                        continue;
+                    }
+                    if (!element.getClientRects().length) continue;
+
+                    const value = String(element.value ?? '');
+                    const role = String(element.getAttribute('role') || '').toLowerCase();
+                    if (!value.trim() && role !== 'combobox') continue;
+
+                    element.focus({ preventScroll: true });
+
+                    // React tracks the last observed value on controlled inputs.
+                    // Mark that tracker stale so a same-value input event is not
+                    // discarded when Playwright already populated the DOM value.
+                    const tracker = element._valueTracker;
+                    if (tracker && typeof tracker.setValue === 'function') {
+                        tracker.setValue(value ? '' : '__job_app_stale_value__');
+                    }
+
+                    const inputEvent = typeof InputEvent === 'function'
+                        ? new InputEvent('input', {
+                            bubbles: true,
+                            composed: true,
+                            data: null,
+                            inputType: 'insertText',
+                        })
+                        : new Event('input', { bubbles: true, composed: true });
+                    element.dispatchEvent(inputEvent);
+                    element.dispatchEvent(new Event('change', {
+                        bubbles: true,
+                        composed: true,
+                    }));
+
+                    if (document.activeElement === element) {
+                        // Native blur produces the focusout event React uses for
+                        // delegated onBlur validation.
+                        element.blur();
+                    } else {
+                        element.dispatchEvent(new FocusEvent('focusout', {
+                            bubbles: true,
+                            composed: true,
+                        }));
+                    }
+                    committed += 1;
+                }
+                return committed;
+            }"""
+        )
+        return int(committed)
+    except Exception as exc:
+        logger.debug("Greenhouse React value commit failed: %s", exc)
+        return 0
 
 
 def _effective_action_timeout_ms(configured: object) -> int:
-    """Bound one selector action so a malformed control cannot stall a job."""
-    return min(max(int(configured), 1_000), 5_000)
+    """Bound one selector action while retaining time for slow React controls."""
+    return min(max(int(configured), 1_000), ACTION_TIMEOUT_MAX_MS)
+
+
+def _effective_form_work_timeout_ms(configured: object) -> int:
+    """Reserve most of the worker deadline for retry/reporting after form work."""
+    return min(
+        max(int(configured), FORM_WORK_TIMEOUT_MIN_MS),
+        FORM_WORK_TIMEOUT_MAX_MS,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1474,6 +1879,7 @@ def _run_form_sections(
     candidate_evidence: str,
     *,
     live_submit: bool,
+    budget: _FormWorkBudget | None = None,
 ) -> _GreenhouseFormSections:
     """Execute Greenhouse's provider-specific form phases in stable order."""
     standard_result: dict[str, bool | None] = {}
@@ -1485,7 +1891,16 @@ def _run_form_sections(
 
     def standard_fields() -> FormSectionOutcome:
         nonlocal standard_result
-        standard_result = _fill_standard_fields(page, profile, email, resume, cover_letter)
+        if not _budget_available(budget, "standard-fields-section"):
+            return FormSectionOutcome("standard_fields", {})
+        standard_result = _fill_standard_fields(
+            page,
+            profile,
+            email,
+            resume,
+            cover_letter,
+            budget=budget,
+        )
         return FormSectionOutcome(
             "standard_fields",
             {name: value for name, value in standard_result.items() if value is not None},
@@ -1493,6 +1908,8 @@ def _run_form_sections(
 
     def custom_questions() -> FormSectionOutcome:
         nonlocal custom_result
+        if not _budget_available(budget, "custom-questions-section"):
+            return FormSectionOutcome("custom_questions", {})
         custom_result = _fill_custom_questions(
             page,
             profile,
@@ -1503,6 +1920,7 @@ def _run_form_sections(
             company,
             role,
             candidate_evidence,
+            budget=budget,
         )
         return FormSectionOutcome(
             "custom_questions",
@@ -1510,23 +1928,30 @@ def _run_form_sections(
         )
 
     def export_control() -> FormSectionOutcome:
+        if not _budget_available(budget, "export-control-section"):
+            return FormSectionOutcome("export_control", {})
         values = _fill_export_control_questions(page)
         custom_result.update(values)
         return FormSectionOutcome("export_control", values)
 
     def source_attribution() -> FormSectionOutcome:
+        if not _budget_available(budget, "source-attribution-section"):
+            return FormSectionOutcome("source_attribution", {})
         values = _fill_source_checkbox(page)
         custom_result.update(values)
         return FormSectionOutcome("source_attribution", values)
 
     def eeo_fields() -> FormSectionOutcome:
         nonlocal eeo_result
+        if not _budget_available(budget, "eeo-fields-section"):
+            return FormSectionOutcome("eeo_fields", {})
         eeo_result = _fill_eeo_fields(
             page,
             profile,
             config.get("eeo_defaults", {}),
             config.get("field_matchers", {}),
             config.get("answer_variants", {}),
+            budget=budget,
         )
         return FormSectionOutcome(
             "eeo_fields",
@@ -1535,12 +1960,21 @@ def _run_form_sections(
 
     def required_consent() -> FormSectionOutcome:
         nonlocal consent_result
+        if not _budget_available(budget, "required-consent-section"):
+            return FormSectionOutcome("required_consent", completed=())
         consent_result = _fill_consent(page)
-        consent_result.extend(_fill_explicit_required_consents(page))
+        consent_result.extend(
+            _fill_explicit_required_consents(page, budget=budget)
+        )
         return FormSectionOutcome("required_consent", completed=tuple(consent_result))
 
     def security_challenge() -> FormSectionOutcome:
         nonlocal challenge_filled_result, challenge_visible_result
+        if not _budget_available(budget, "security-challenge-section"):
+            return FormSectionOutcome(
+                "security_challenge",
+                {"visible": False, "filled": False},
+            )
         challenge_visible_result = _security_challenge_visible(page)
         challenge_filled_result = _fill_pre_submit_security_challenge(
             page,
@@ -1790,6 +2224,15 @@ def run(
                         page, screenshot_dir, company or "Greenhouse", "skipped_policy"
                     ),
                 }
+            form_budget = _FormWorkBudget(
+                _effective_form_work_timeout_ms(
+                    config.get("form_work_timeout_ms", FORM_WORK_TIMEOUT_MS)
+                )
+            )
+
+            def inspect_required_fields(current_page: Page) -> list[str]:
+                return _required_empty_fields(current_page, budget=form_budget)
+
             form_sections = _run_form_sections(
                 page,
                 profile,
@@ -1801,6 +2244,7 @@ def run(
                 role,
                 candidate_evidence,
                 live_submit=live_submit,
+                budget=form_budget,
             )
             fields = dict(form_sections.fields)
             custom_questions = dict(form_sections.custom_questions)
@@ -1809,7 +2253,7 @@ def run(
             challenge_visible = form_sections.challenge_visible
             challenge_filled = form_sections.challenge_filled
             page.wait_for_timeout(300)
-            missing = validate_required_fields(page, _required_empty_fields)
+            missing = validate_required_fields(page, inspect_required_fields)
             if missing:
                 repaired = _repair_missing_required_controls(
                     page,
@@ -1820,11 +2264,32 @@ def run(
                     config.get("field_matchers", {}),
                     config.get("answer_variants", {}),
                     email,
+                    budget=form_budget,
                 )
                 custom_questions.update(repaired)
+                standard_field_keys = {
+                    "email": "email",
+                    "email address": "email",
+                    "first name": "first_name",
+                    "legal first name": "first_name",
+                    "last name": "last_name",
+                    "phone": "phone",
+                    "phone number": "phone",
+                }
+                for repaired_label, repaired_ok in repaired.items():
+                    if not repaired_ok:
+                        continue
+                    normalized_label = " ".join(
+                        repaired_label.casefold().split()
+                    ).rstrip(" *")
+                    field_key = standard_field_keys.get(normalized_label)
+                    if field_key:
+                        fields[field_key] = True
                 if any(repaired.values()):
                     page.wait_for_timeout(300)
-                    missing = validate_required_fields(page, _required_empty_fields)
+                    missing = validate_required_fields(page, inspect_required_fields)
+            if not form_budget.available("post-repair-validation"):
+                missing = sorted({*missing, FORM_WORK_BUDGET_EXHAUSTED})
             if live_submit and challenge_visible and not challenge_filled:
                 missing = sorted({*missing, "Security code"})
             prefill_screenshot = _screenshot(
@@ -1916,17 +2381,25 @@ def run(
                     }
                 raise RuntimeError("submit button was not found")
             if not _submit_control_enabled(submit):
-                _commit_react_form_values(page)
-                page.wait_for_timeout(500)
-                refreshed_submit = _first_visible(
-                    page.get_by_role("button", name=SUBMIT_BUTTON_TEXT_PATTERN)
-                ) or _first_visible(
-                    page.locator('button[type="submit"], input[type="submit"]')
-                )
-                if refreshed_submit is not None:
-                    submit = refreshed_submit
+                _commit_react_form_values(page, budget=form_budget)
+                for _ in range(8):
+                    refreshed_submit = _first_visible(
+                        page.get_by_role("button", name=SUBMIT_BUTTON_TEXT_PATTERN)
+                    ) or _first_visible(
+                        page.locator('button[type="submit"], input[type="submit"]')
+                    )
+                    if refreshed_submit is not None:
+                        submit = refreshed_submit
+                    if _submit_control_enabled(submit):
+                        break
+                    if not form_budget.available("submit-enable-wait"):
+                        break
+                    wait_ms = min(250, form_budget.remaining_ms())
+                    if wait_ms <= 0:
+                        break
+                    page.wait_for_timeout(wait_ms)
             if not _submit_control_enabled(submit):
-                disabled_missing = validate_required_fields(page, _required_empty_fields)
+                disabled_missing = validate_required_fields(page, inspect_required_fields)
                 if not disabled_missing:
                     disabled_missing = ["Submit application is disabled"]
                 disabled_screenshot = _screenshot(
@@ -2004,7 +2477,7 @@ def run(
                 "custom_questions": custom_questions,
                 "eeo_fields": eeo_fields,
                 "consent_fields": consent,
-                "missing_required": validate_required_fields(page, _required_empty_fields),
+                "missing_required": validate_required_fields(page, inspect_required_fields),
                 "screenshot": submitted_screenshot,
             }
         finally:

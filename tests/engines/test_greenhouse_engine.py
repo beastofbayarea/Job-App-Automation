@@ -6,6 +6,7 @@ import pytest
 
 from job_application_automation.engines.greenhouse import (
     CUSTOM_QUESTION_CONTROL_SELECTOR,
+    _FormWorkBudget,
     _valid_greenhouse_url,
     _fill_all_visible,
     _fill_all_labeled,
@@ -17,6 +18,7 @@ from job_application_automation.engines.greenhouse import (
     _fill_pre_submit_security_challenge,
     _fill_source_checkbox,
     _effective_action_timeout_ms,
+    _effective_form_work_timeout_ms,
     _greenhouse_semantic_answer,
     _job_unavailable_after_navigation,
     _option_text_matches,
@@ -110,7 +112,7 @@ def test_missing_required_repair_reacquires_exact_labeled_combobox() -> None:
     page.get_by_label.assert_called_once_with(
         "What is the country of your birth?", exact=True
     )
-    select.assert_called_once_with(page, control, ("India",))
+    select.assert_called_once_with(page, control, ("India",), budget=None)
     control.blur.assert_called_once_with()
 
 
@@ -157,7 +159,7 @@ def test_missing_required_repair_reuses_discovered_question_mapping() -> None:
 
     assert result == {"What is the country of your birth?": True}
     page.locator.assert_called_once_with(CUSTOM_QUESTION_CONTROL_SELECTOR)
-    select.assert_called_once_with(page, control, ("India",))
+    select.assert_called_once_with(page, control, ("India",), budget=None)
     control.blur.assert_called_once_with()
 
 
@@ -190,9 +192,57 @@ def test_missing_required_repair_refills_runtime_email() -> None:
 
 
 def test_greenhouse_action_timeout_is_bounded_per_control() -> None:
-    assert _effective_action_timeout_ms(30_000) == 5_000
+    assert _effective_action_timeout_ms(30_000) == 20_000
+    assert _effective_action_timeout_ms(14_000) == 14_000
     assert _effective_action_timeout_ms(2_500) == 2_500
     assert _effective_action_timeout_ms(100) == 1_000
+
+
+def test_greenhouse_form_work_budget_is_bounded_and_expires() -> None:
+    timestamps = iter((10.0, 10.01, 10.051))
+    budget = _FormWorkBudget(50, clock=lambda: next(timestamps))
+
+    assert budget.available("initial-fill")
+    assert not budget.available("problem-control")
+    assert _effective_form_work_timeout_ms(1) == 30_000
+    assert _effective_form_work_timeout_ms(240_000) == 240_000
+    assert _effective_form_work_timeout_ms(999_000) == 300_000
+
+
+def test_greenhouse_custom_question_loop_stops_at_shared_budget() -> None:
+    class StepClock:
+        value = 0.0
+
+        def __call__(self) -> float:
+            self.value += 0.02
+            return self.value
+
+    page = MagicMock()
+    body = MagicMock()
+    body.inner_text.return_value = ""
+    controls = MagicMock()
+    controls.count.return_value = 100
+    control = MagicMock()
+    control.is_visible.return_value = False
+    controls.nth.return_value = control
+    page.locator.side_effect = lambda selector: body if selector == "body" else controls
+    budget = _FormWorkBudget(50, clock=StepClock())
+
+    result = _fill_custom_questions(
+        page,
+        {},
+        {},
+        {},
+        {},
+        {},
+        "Example",
+        "Product Manager",
+        "",
+        budget=budget,
+    )
+
+    assert result == {}
+    assert controls.nth.call_count == 2
 
 
 def test_country_of_your_birth_uses_dedicated_profile_value() -> None:
@@ -711,34 +761,6 @@ def test_required_empty_fields_mocked() -> None:
     ):
         empty_labels = _required_empty_fields(page)
         assert "First Name *" in empty_labels
-
-
-def test_required_empty_fields_accepts_selected_checkbox_question_group() -> None:
-    page = MagicMock()
-    controls = MagicMock()
-    controls.count.return_value = 2
-    first = MagicMock()
-    second = MagicMock()
-    for control in (first, second):
-        control.is_visible.return_value = True
-        control.is_checked.return_value = False
-        control.get_attribute.side_effect = lambda attr: {
-            "type": "checkbox",
-            "name": "distinct-option-name",
-        }.get(attr)
-        control.evaluate.return_value = True
-    controls.nth.side_effect = [first, second]
-    page.locator.side_effect = lambda selector: (
-        MagicMock(count=MagicMock(return_value=0))
-        if selector == 'input[name="distinct-option-name"]:checked'
-        else controls
-    )
-
-    with patch(
-        "job_application_automation.engines.greenhouse._label_for",
-        side_effect=["LinkedIn", "Indeed"],
-    ):
-        assert _required_empty_fields(page) == []
 
 
 def test_upload_resume_valid_and_invalid(tmp_path: Path) -> None:

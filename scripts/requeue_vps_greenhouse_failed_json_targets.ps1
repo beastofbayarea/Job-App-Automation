@@ -34,6 +34,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from job_application_automation.core.artifacts import atomic_write_text
+from job_application_automation.core.continuous_source_ats import _job_identity
+
+def greenhouse_identity(job_url):
+    try:
+        return _job_identity(str(job_url or ""), "greenhouse")
+    except ValueError:
+        return ""
 
 output = Path(sys.argv[1])
 targets = json.loads(base64.b64decode(sys.argv[2]).decode("utf-8"))
@@ -84,10 +91,19 @@ for path in matched_paths:
             or ""
         )
         job_url = str(record.get("job_url") or key)
+        job_identity = greenhouse_identity(job_url)
         matching_claims = [
             claim for claim in claims.get("jobs", {}).values()
-            if isinstance(claim, dict) and claim.get("job_url") == job_url
+            if isinstance(claim, dict)
+            and greenhouse_identity(claim.get("job_url")) == job_identity
         ]
+        exhausted = any(
+            claim.get("status") == "skipped_after_fixing_attempts"
+            or int(claim.get("fixing_attempts", max(int(claim.get("retry_count") or 0) - 1, 0))) >= 2
+            for claim in matching_claims
+        ) or record.get("retry_policy_status") == "skipped_after_fixing_attempts"
+        if exhausted:
+            raise SystemExit(f"refusing exhausted target after two fixing attempts: {identity}")
         already_queued = any(claim.get("status") == "retry_requested" for claim in matching_claims)
         retry_safe_statuses = {
             "preparing",

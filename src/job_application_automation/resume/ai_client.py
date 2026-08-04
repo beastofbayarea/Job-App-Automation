@@ -432,9 +432,18 @@ def scrape_job(url: str) -> dict[str, Any]:
                 except Exception:
                     pass
 
+            job_title = ""
+            try:
+                visible_heading = page.locator("h1:visible").first.inner_text(timeout=2_000)
+                if isinstance(visible_heading, str):
+                    job_title = visible_heading.strip()
+            except Exception:
+                pass
+
             return {
                 "url": url,
                 "ats": ats,
+                "job_title": job_title,
                 "jd_text": body_text[:JOB_TEXT_LIMIT],
                 "questions": questions,
             }

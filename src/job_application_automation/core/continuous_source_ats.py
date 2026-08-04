@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import random
 import re
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlsplit
@@ -60,27 +61,143 @@ MAX_CRITICAL_FIXING_ATTEMPTS = 2
 SKIPPED_AFTER_FIXING_ATTEMPTS = "skipped_after_fixing_attempts"
 
 
+class StaleJobRoleError(RuntimeError):
+    """Raised when a queued URL no longer represents the queued role."""
+
+
 def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def _retry_due(claim: Mapping[str, Any], *, now: datetime | None = None) -> bool:
-    value = str(claim.get("next_retry_at") or "").strip()
-    if not value:
-        return True
-    try:
-        due = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return True
-    if due.tzinfo is None:
-        due = due.replace(tzinfo=UTC)
-    return due <= (now or datetime.now(UTC))
+def _fixing_attempts_used(retry_count: int) -> int:
+    """Translate the failure counter into retries after the original attempt."""
+    return max(retry_count - 1, 0)
 
 
-def _critical_retry_delay_seconds(retry_count: int, result_status: str) -> int:
-    if result_status == "JOB_CONTEXT_UNAVAILABLE":
-        return 21_600
-    return min(3_600, 30 * (2 ** max(0, min(retry_count - 1, 7))))
+def _claim_fixing_attempts(claim: Mapping[str, Any]) -> int:
+    explicit = claim.get("fixing_attempts")
+    if explicit is not None:
+        return max(int(explicit), 0)
+    return _fixing_attempts_used(int(claim.get("retry_count") or 0))
+
+
+def _remediation_revision(
+    *,
+    ats_platform: str,
+    profile_path: Path,
+    email_pool_path: Path,
+    launcher_path: Path,
+) -> str:
+    """Fingerprint only runtime inputs capable of repairing an application."""
+    digest = hashlib.sha256()
+    repo = Path(__file__).resolve().parents[3]
+    runtime_files = (
+        Path(__file__),
+        repo / "src/job_application_automation/core/continuous_worker_application.py",
+        repo / "src/job_application_automation/core/engine_shared.py",
+        repo / "src/job_application_automation/engines/_browser_form.py",
+        repo / "src/job_application_automation/engines/browser_controls.py",
+        repo / "src/job_application_automation/engines/browser_runtime.py",
+        repo / "src/job_application_automation/engines/form_sections.py",
+        repo / f"src/job_application_automation/engines/{ats_platform}.py",
+        repo / "src/job_application_automation/resume/ai_client.py",
+        repo / "src/job_application_automation/resume/generate.py",
+        repo / "config/runtime/application.json",
+        repo / "config/runtime/browser.json",
+        repo / "config/runtime/continuous_worker.json",
+        repo / "config/runtime/resume.json",
+        resolve_runtime_path(RUNTIME_CONFIG.application.base_resume_file),
+        resolve_runtime_path(RUNTIME_CONFIG.application.resume_source_file),
+        profile_path,
+        email_pool_path,
+        launcher_path,
+    )
+    for path in runtime_files:
+        resolved = path.expanduser().resolve()
+        digest.update(str(resolved).encode("utf-8"))
+        digest.update(b"\0")
+        if resolved.is_file():
+            digest.update(resolved.read_bytes())
+        else:
+            digest.update(b"<missing>")
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def _retry_has_new_remediation(claim: Mapping[str, Any], revision: str) -> bool:
+    failed_revision = str(claim.get("failure_revision") or "")
+    return not failed_revision or not revision or failed_revision != revision
+
+
+def _reconcile_exhausted_retry_claims(claims: Mapping[str, Any]) -> int:
+    """Skip queued claims that already consumed both corrective retries."""
+    reconciled = 0
+    jobs = claims.get("jobs")
+    if not isinstance(jobs, Mapping):
+        return reconciled
+    for claim in jobs.values():
+        if not isinstance(claim, dict) or claim.get("status") != "retry_requested":
+            continue
+        if _claim_fixing_attempts(claim) < MAX_CRITICAL_FIXING_ATTEMPTS:
+            continue
+        claim["status"] = SKIPPED_AFTER_FIXING_ATTEMPTS
+        claim["critical_error"] = True
+        claim["skip_reason"] = (
+            f"failed after {MAX_CRITICAL_FIXING_ATTEMPTS} fixing attempts"
+        )
+        claim["remediation_required"] = False
+        claim.pop("next_retry_at", None)
+        reconciled += 1
+    return reconciled
+
+
+def _persist_exhausted_claims_to_state(
+    claims: Mapping[str, Any],
+    *,
+    state_path: Path,
+    ats_platform: str,
+) -> int:
+    """Mirror exhausted claim policy into worker state for reconstruction safety."""
+    claim_jobs = claims.get("jobs")
+    if not isinstance(claim_jobs, Mapping):
+        return 0
+    state = load_worker_state(state_path, ats_platform)
+    records = state.get("jobs")
+    if not isinstance(records, dict):
+        return 0
+    updated = 0
+    for canonical_url, record in records.items():
+        if not isinstance(record, dict):
+            continue
+        job_url = str(record.get("job_url") or canonical_url)
+        try:
+            identity = _job_identity(job_url, ats_platform)
+        except ValueError:
+            continue
+        claim = claim_jobs.get(identity)
+        if (
+            not isinstance(claim, Mapping)
+            or claim.get("status") != SKIPPED_AFTER_FIXING_ATTEMPTS
+        ):
+            continue
+        desired = {
+            "retry_policy_status": SKIPPED_AFTER_FIXING_ATTEMPTS,
+            "retry_count": int(claim.get("retry_count") or 0),
+            "fixing_attempts": _claim_fixing_attempts(claim),
+            "critical_error": True,
+            "failure_revision": str(claim.get("failure_revision") or ""),
+            "remediation_required": False,
+            "skip_reason": str(
+                claim.get("skip_reason")
+                or f"failed after {MAX_CRITICAL_FIXING_ATTEMPTS} fixing attempts"
+            ),
+        }
+        if any(record.get(key) != value for key, value in desired.items()):
+            record.update(desired)
+            updated += 1
+    if updated:
+        save_worker_state(state_path, state)
+    return updated
 
 
 def _job_identity(job_url: str, ats_platform: str) -> str:
@@ -98,6 +215,14 @@ def _job_identity(job_url: str, ats_platform: str) -> str:
         match = GREENHOUSE_JOB_PATH.search(parsed.path)
         job_id = match.group("job_id") if match else ""
     return f"greenhouse:{job_id}" if job_id else canonical
+
+
+def _normalized_role_title(value: str) -> str:
+    return re.sub(
+        r"[^a-z0-9]+",
+        " ",
+        value.casefold().replace("&", " and "),
+    ).strip()
 
 
 def _load_claims(path: Path) -> dict[str, Any]:
@@ -132,14 +257,30 @@ def _seed_claims_from_state(
             continue
         if identity in claim_records:
             continue
+        retry_count = int(record.get("retry_count") or 0)
+        fixing_attempts = (
+            max(int(record["fixing_attempts"]), 0)
+            if record.get("fixing_attempts") is not None
+            else _fixing_attempts_used(retry_count)
+        )
         claim_records[identity] = {
             "owner": owner,
-            "status": str(record.get("status") or "recorded"),
+            "status": str(
+                record.get("retry_policy_status")
+                or record.get("status")
+                or "recorded"
+            ),
             "result_status": str(record.get("result_status") or ""),
             "job_url": job_url,
             "company": str(record.get("company") or ""),
             "title": str(record.get("title") or ""),
             "updated_at": str(record.get("updated_at") or _now()),
+            "retry_count": retry_count,
+            "fixing_attempts": fixing_attempts,
+            "critical_error": bool(record.get("critical_error")),
+            "skip_reason": str(record.get("skip_reason") or ""),
+            "failure_revision": str(record.get("failure_revision") or ""),
+            "remediation_required": bool(record.get("remediation_required")),
         }
 
 
@@ -199,6 +340,7 @@ def _claim_next_job(
     peer_states: Sequence[Path],
     claims_path: Path,
     submission_log: Path,
+    remediation_revision: str = "",
 ) -> dict[str, Any] | None:
     own_records = _state_records(state_path)
     peer_identities: set[str] = set()
@@ -234,6 +376,12 @@ def _claim_next_job(
             identity_for_url=lambda job_url: _job_identity(job_url, ats_platform),
         )
         _seed_claims_from_ledger(claims, ledger_index=ledger_index)
+        _reconcile_exhausted_retry_claims(claims)
+        _persist_exhausted_claims_to_state(
+            claims,
+            state_path=state_path,
+            ats_platform=ats_platform,
+        )
         pools = partition_candidate_state(
             jobs,
             own_records,
@@ -256,7 +404,7 @@ def _claim_next_job(
                 isinstance(claim, Mapping)
                 and claim.get("owner") == worker_id
                 and claim.get("status") == "retry_requested"
-                and _retry_due(claim)
+                and _retry_has_new_remediation(claim, remediation_revision)
             ):
                 selected = job
                 break
@@ -298,6 +446,23 @@ def _claim_next_job(
             if isinstance(prior_claim, Mapping)
             else 0
         )
+        fixing_attempts = (
+            _claim_fixing_attempts(prior_claim) + 1
+            if isinstance(prior_claim, Mapping)
+            and prior_claim.get("status") == "retry_requested"
+            else (
+                _claim_fixing_attempts(prior_claim)
+                if isinstance(prior_claim, Mapping)
+                and prior_claim.get("status") == "claimed"
+                else 0
+            )
+        )
+        attempt_revision = (
+            str(prior_claim.get("attempt_revision") or remediation_revision)
+            if isinstance(prior_claim, Mapping)
+            and prior_claim.get("status") == "claimed"
+            else remediation_revision
+        )
         claim_records[identity] = {
             "owner": worker_id,
             "status": "claimed",
@@ -306,6 +471,9 @@ def _claim_next_job(
             "title": str(selected.get("title") or ""),
             "updated_at": _now(),
             "retry_count": retry_count,
+            "fixing_attempts": fixing_attempts,
+            "attempt_revision": attempt_revision,
+            "attempt_kind": "fixing" if fixing_attempts else "original",
         }
         selected_url = _candidate_url(selected)
         selected_record = own_records.get(selected_url)
@@ -334,7 +502,17 @@ def _hydrate_tracker_job(job: Mapping[str, Any], ats_platform: str) -> dict[str,
         raise RuntimeError("job page did not provide a usable job description")
     lowered = description.casefold()
     if any(marker in lowered for marker in DEAD_ROLE_MARKERS):
-        raise RuntimeError("job page reports that the role is no longer available")
+        raise StaleJobRoleError("job page reports that the role is no longer available")
+    queued_title = str(job.get("title") or job.get("role") or "").strip()
+    live_title = str(scraped.get("job_title") or "").strip()
+    if (
+        queued_title
+        and live_title
+        and _normalized_role_title(queued_title) != _normalized_role_title(live_title)
+    ):
+        raise StaleJobRoleError(
+            f"queued role {queued_title!r} no longer matches live role {live_title!r}"
+        )
     return {
         **dict(job),
         "description": description,
@@ -350,11 +528,12 @@ def _record_source_failure(
     state_path: Path,
     result_status: str,
     detail: str,
+    state_status: str = "failed",
 ) -> None:
     state = load_worker_state(state_path, ats_platform)
     canonical_url = canonical_job_url(job["job_url"])
     state["jobs"][canonical_url] = {
-        "status": "failed",
+        "status": state_status,
         "stage": "source",
         "job_url": str(job["job_url"]),
         "company": str(job.get("company") or ""),
@@ -376,6 +555,7 @@ def _sync_claim_from_state(
     state_path: Path,
     claims_path: Path,
     fallback_status: str,
+    remediation_revision: str = "",
 ) -> None:
     canonical_url = canonical_job_url(job["job_url"])
     record = _state_records(state_path).get(canonical_url, {})
@@ -383,29 +563,50 @@ def _sync_claim_from_state(
         claims = _load_claims(claims_path)
         identity = _job_identity(str(job["job_url"]), ats_platform)
         prior_claim = claims["jobs"].get(identity)
-        retry_count = (
-            int(prior_claim.get("retry_count") or 0)
+        retry_count = int(
+            prior_claim.get("retry_count")
             if isinstance(prior_claim, Mapping)
-            else 0
+            and prior_claim.get("retry_count") is not None
+            else record.get("retry_count") or 0
         )
-        claim_status = str(record.get("status") or fallback_status)
-        result_status = str(record.get("result_status") or "")
-        critical_failure = claim_status in {"failed", "manual_review"}
-        if critical_failure:
-            prior_status = (
-                str(prior_claim.get("status") or "")
-                if isinstance(prior_claim, Mapping)
-                else ""
+        fixing_attempts = (
+            _claim_fixing_attempts(prior_claim)
+            if isinstance(prior_claim, Mapping)
+            else (
+                max(int(record["fixing_attempts"]), 0)
+                if record.get("fixing_attempts") is not None
+                else _fixing_attempts_used(retry_count)
             )
+        )
+        record_status = str(record.get("status") or fallback_status)
+        recorded_policy_status = str(record.get("retry_policy_status") or "")
+        claim_status = (
+            recorded_policy_status
+            if recorded_policy_status == SKIPPED_AFTER_FIXING_ATTEMPTS
+            else record_status
+        )
+        result_status = str(record.get("result_status") or "")
+        critical_failure = record_status in {"failed", "manual_review"} or (
+            claim_status == SKIPPED_AFTER_FIXING_ATTEMPTS
+        )
+        prior_status = (
+            str(prior_claim.get("status") or "")
+            if isinstance(prior_claim, Mapping)
+            else ""
+        )
+        if critical_failure:
             if prior_status not in {
+                "retry_requested",
+                SKIPPED_AFTER_FIXING_ATTEMPTS,
+            } and recorded_policy_status not in {
                 "retry_requested",
                 SKIPPED_AFTER_FIXING_ATTEMPTS,
             }:
                 retry_count += 1
-            fixing_attempts_used = max(retry_count - 1, 0)
             claim_status = (
                 SKIPPED_AFTER_FIXING_ATTEMPTS
-                if fixing_attempts_used >= MAX_CRITICAL_FIXING_ATTEMPTS
+                if recorded_policy_status == SKIPPED_AFTER_FIXING_ATTEMPTS
+                or fixing_attempts >= MAX_CRITICAL_FIXING_ATTEMPTS
                 else "retry_requested"
             )
         claim = {
@@ -417,26 +618,66 @@ def _sync_claim_from_state(
             "title": str(job.get("title") or ""),
             "updated_at": str(record.get("updated_at") or _now()),
             "retry_count": retry_count,
+            "fixing_attempts": fixing_attempts,
         }
+        state_updates: dict[str, Any] = {}
         if critical_failure and claim_status == "retry_requested":
-            prior_retry_at = (
-                str(prior_claim.get("next_retry_at") or "")
+            prior_failure_revision = (
+                str(prior_claim.get("failure_revision") or "")
                 if isinstance(prior_claim, Mapping)
+                and prior_status == "retry_requested"
                 else ""
             )
-            if prior_retry_at:
-                claim["next_retry_at"] = prior_retry_at
-            else:
-                delay = _critical_retry_delay_seconds(retry_count, result_status)
-                claim["next_retry_at"] = (
-                    datetime.now(UTC) + timedelta(seconds=delay)
-                ).isoformat()
+            failure_revision = (
+                prior_failure_revision
+                or str(record.get("failure_revision") or "")
+                or (
+                    str(prior_claim.get("attempt_revision") or "")
+                    if isinstance(prior_claim, Mapping)
+                    else ""
+                )
+                or remediation_revision
+            )
             claim["critical_error"] = True
+            claim["failure_revision"] = failure_revision
+            claim["remediation_required"] = True
+            state_updates = {
+                "retry_policy_status": "retry_requested",
+                "retry_count": retry_count,
+                "fixing_attempts": fixing_attempts,
+                "critical_error": True,
+                "failure_revision": failure_revision,
+                "remediation_required": True,
+            }
         elif critical_failure:
             claim["critical_error"] = True
+            claim["failure_revision"] = (
+                str(record.get("failure_revision") or "")
+                or (
+                    str(prior_claim.get("attempt_revision") or "")
+                    if isinstance(prior_claim, Mapping)
+                    else ""
+                )
+                or remediation_revision
+            )
             claim["skip_reason"] = (
                 f"failed after {MAX_CRITICAL_FIXING_ATTEMPTS} fixing attempts"
             )
+            state_updates = {
+                "retry_policy_status": SKIPPED_AFTER_FIXING_ATTEMPTS,
+                "retry_count": retry_count,
+                "fixing_attempts": fixing_attempts,
+                "critical_error": True,
+                "failure_revision": claim["failure_revision"],
+                "remediation_required": False,
+                "skip_reason": claim["skip_reason"],
+            }
+        if state_updates:
+            state = load_worker_state(state_path, ats_platform)
+            state_record = state.get("jobs", {}).get(canonical_url)
+            if isinstance(state_record, dict):
+                state_record.update(state_updates)
+                save_worker_state(state_path, state)
         claims["jobs"][identity] = claim
         claims["updated_at"] = _now()
         atomic_write_text(
@@ -453,6 +694,7 @@ def _sync_terminal_claims(
     worker_id: str,
     state_path: Path,
     claims_path: Path,
+    remediation_revision: str = "",
 ) -> int:
     synced = 0
     jobs = state.get("jobs", {})
@@ -471,6 +713,7 @@ def _sync_terminal_claims(
             state_path=state_path,
             claims_path=claims_path,
             fallback_status="failed",
+            remediation_revision=remediation_revision,
         )
         synced += 1
     return synced
@@ -615,6 +858,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         provider=ats_platform,
         worker_id=worker_id,
     )
+    remediation_revision = _remediation_revision(
+        ats_platform=ats_platform,
+        profile_path=args.profile,
+        email_pool_path=args.email_pool,
+        launcher_path=args.launcher,
+    )
     application_service = SelectedJobApplicationService(
         config=SelectedJobApplicationConfig(
             ats_platform=ats_platform,
@@ -650,9 +899,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         worker_id=worker_id,
         state_path=args.state,
         claims_path=args.claims,
+        remediation_revision=remediation_revision,
     )
 
     def run_cycle() -> CycleStatus:
+        # Reconcile terminal state on every cycle so a transient claims-write
+        # failure cannot strand a job as claimed until the service restarts.
+        _sync_terminal_claims(
+            state=load_worker_state(args.state, ats_platform),
+            ats_platform=ats_platform,
+            worker_id=worker_id,
+            state_path=args.state,
+            claims_path=args.claims,
+            remediation_revision=remediation_revision,
+        )
         jobs = _source_jobs(
             source=args.source,
             ats_platform=ats_platform,
@@ -667,6 +927,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             peer_states=args.peer_state,
             claims_path=args.claims,
             submission_log=args.submission_log,
+            remediation_revision=remediation_revision,
         )
         if selected is None:
             print(
@@ -678,43 +939,64 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         job = selected
         cycle_status: CycleStatus
-        if args.source in {"tracker", "failed-json"}:
-            try:
+        try:
+            if args.source in {"tracker", "failed-json"}:
                 job = _hydrate_tracker_job(selected, ats_platform)
-            except Exception as exc:
-                _record_source_failure(
-                    job=selected,
-                    ats_platform=ats_platform,
-                    state_path=args.state,
-                    result_status="JOB_CONTEXT_UNAVAILABLE",
-                    detail=f"{type(exc).__name__}: {exc}",
-                )
-                cycle_status = "failed"
-                print(
-                    f"{ats_platform.upper()}_SOURCE_FAILED "
-                    f"worker={worker_id} stage=context "
-                    f"detail={str(exc)[:300]!r}",
-                    file=sys.stderr,
-                    flush=True,
-                )
-                telemetry.emit(
-                    "source_context_failed",
-                    provider=ats_platform,
-                    stage="source_context",
-                    cycle_status="failed",
-                    error_type=type(exc),
-                )
-            else:
-                cycle_status = _process_selected_job(
-                    job=job,
-                    selected_input=args.selected_input,
-                    application_service=application_service,
-                )
-        else:
             cycle_status = _process_selected_job(
                 job=job,
                 selected_input=args.selected_input,
                 application_service=application_service,
+            )
+        except StaleJobRoleError as exc:
+            _record_source_failure(
+                job=selected,
+                ats_platform=ats_platform,
+                state_path=args.state,
+                result_status="STALE_JOB_ROLE_MISMATCH",
+                detail=str(exc),
+                state_status="skipped",
+            )
+            cycle_status = "failed"
+            print(
+                f"{ats_platform.upper()}_SOURCE_SKIPPED "
+                f"worker={worker_id} reason=stale_role "
+                f"detail={str(exc)[:300]!r}",
+                flush=True,
+            )
+            telemetry.emit(
+                "source_stale_role_skipped",
+                level="warning",
+                provider=ats_platform,
+                stage="source_context",
+                cycle_status="failed",
+            )
+        except Exception as exc:
+            result_status = (
+                "JOB_CONTEXT_UNAVAILABLE"
+                if job is selected and args.source in {"tracker", "failed-json"}
+                else "WORKER_CYCLE_EXCEPTION"
+            )
+            _record_source_failure(
+                job=selected,
+                ats_platform=ats_platform,
+                state_path=args.state,
+                result_status=result_status,
+                detail=f"{type(exc).__name__}: {exc}",
+            )
+            cycle_status = "failed"
+            print(
+                f"{ats_platform.upper()}_SOURCE_FAILED "
+                f"worker={worker_id} stage=cycle status={result_status} "
+                f"detail={str(exc)[:300]!r}",
+                file=sys.stderr,
+                flush=True,
+            )
+            telemetry.emit(
+                "source_cycle_failed",
+                provider=ats_platform,
+                stage="source_cycle",
+                cycle_status="failed",
+                error_type=type(exc),
             )
         _sync_claim_from_state(
             job=selected,
@@ -723,6 +1005,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             state_path=args.state,
             claims_path=args.claims,
             fallback_status=cycle_status,
+            remediation_revision=remediation_revision,
         )
         return cycle_status
 

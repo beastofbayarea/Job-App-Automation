@@ -25,6 +25,7 @@ set -eu
 repo=$Repo
 test -s "`$repo/data/resumes/base-resume.txt"
 systemctl stop $UnitNames
+trap 'systemctl start $UnitNames' EXIT
 PYTHONPATH="`$repo/src" "`$repo/.venv/bin/python" - "`$repo/output" "$($IncludeAmbiguousUnconfirmed.IsPresent.ToString().ToLowerInvariant())" "$($IncludeAllUnconfirmedFailures.IsPresent.ToString().ToLowerInvariant())" <<'PY'
 import json
 import shutil
@@ -33,7 +34,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from job_application_automation.core.artifacts import atomic_write_text
+from job_application_automation.core.continuous_source_ats import _job_identity
 from job_application_automation.core.identity import canonical_job_url
+
+def greenhouse_identity(job_url):
+    try:
+        return _job_identity(str(job_url or ""), "greenhouse")
+    except ValueError:
+        return ""
 
 output = Path(sys.argv[1])
 include_ambiguous = sys.argv[2].lower() == "true"
@@ -87,19 +95,32 @@ for state_path in state_paths:
         except ValueError:
             continue
         record_status = str(record.get("status") or "")
+        job_identity = greenhouse_identity(job_url)
+        matching_claims = [
+            claim for claim in claim_jobs.values()
+            if isinstance(claim, dict)
+            and greenhouse_identity(claim.get("job_url")) == job_identity
+        ]
+        exhausted = (
+            record.get("retry_policy_status") == "skipped_after_fixing_attempts"
+            or any(
+                claim.get("status") == "skipped_after_fixing_attempts"
+                or int(claim.get("fixing_attempts", max(int(claim.get("retry_count") or 0) - 1, 0))) >= 2
+                for claim in matching_claims
+            )
+        )
         is_ambiguous = result_status in ambiguous or record_status == "application_started"
         is_unconfirmed_terminal = record_status not in {"confirmed"} and result_status != "SUBMITTED & CONFIRMED"
-        if canonical in confirmed or not (
+        if exhausted or canonical in confirmed or not (
             result_status in retryable
             or (include_ambiguous and is_ambiguous)
             or (include_all and is_unconfirmed_terminal)
         ):
             continue
         del state["jobs"][key]
-        for claim in claim_jobs.values():
-            if isinstance(claim, dict) and claim.get("job_url") == job_url:
-                claim["status"] = "retry_requested"
-                claim["owner"] = worker
+        for claim in matching_claims:
+            claim["status"] = "retry_requested"
+            claim["owner"] = worker
         requeued += 1
     atomic_write_text(state_path, json.dumps(state, indent=2, sort_keys=True) + "\n")
     total += requeued
@@ -115,6 +136,7 @@ systemctl reset-failed $UnitNames || true
 systemctl start $UnitNames
 sleep 12
 systemctl show $UnitNames --property=Id,ActiveState,SubState,NRestarts,ExecMainStartTimestamp
+trap - EXIT
 "@
 try {
     $Execution = Invoke-ExternalCommandWithTimeout -FilePath $PlinkPath -ArgumentList @(
