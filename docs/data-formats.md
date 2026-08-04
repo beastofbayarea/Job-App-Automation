@@ -37,7 +37,9 @@ remove unused ranges and confirmed-closed listings, preserve valid HTTPS links,
 and reapply the standard table format. The command validates every generated
 workbook before replacing a source file and moves recoverable originals to
 `output/workbook-backups/<timestamp>/`. Run `npm run workbooks:check` for a
-read-only structural validation of the canonical files.
+clean-checkout-safe validation of canonical workbooks that are present locally. Run
+`node scripts/cleanup_job_url_workbooks.mjs --check` when every private canonical
+workbook is required for read-only structural validation.
 
 ## Queue file
 

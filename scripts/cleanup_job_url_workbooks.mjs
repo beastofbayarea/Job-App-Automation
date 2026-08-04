@@ -315,15 +315,21 @@ async function validateWorkbook(filePath, expectedSheets) {
   return workbook.worksheets.map((sheet) => ({ sheet: sheet.name, rows: sheet.actualRowCount - 1 }));
 }
 
-async function checkCanonicalWorkbooks() {
+async function checkCanonicalWorkbooks({ ifPresent = false } = {}) {
   const report = [];
+  const missing = [];
   for (const plan of workbookPlans) {
     const targetPath = path.resolve(dataDir, plan.target);
     assertInside(dataDir, targetPath);
-    await fs.access(targetPath);
+    const exists = await fs.access(targetPath).then(() => true).catch(() => false);
+    if (!exists && ifPresent) {
+      missing.push(plan.target);
+      continue;
+    }
+    if (!exists) throw new Error(`Missing canonical workbook: ${plan.target}`);
     report.push({ workbook: plan.target, sheets: await validateWorkbook(targetPath, plan.outputSheets) });
   }
-  console.log(JSON.stringify({ valid: true, workbooks: report }, null, 2));
+  console.log(JSON.stringify({ valid: true, workbooks: report, missing }, null, 2));
 }
 
 async function main() {
@@ -391,14 +397,16 @@ async function main() {
 async function run() {
   const args = new Set(process.argv.slice(2));
   if (args.has("--help")) {
-    console.log("Usage: node scripts/cleanup_job_url_workbooks.mjs [--check]");
+    console.log("Usage: node scripts/cleanup_job_url_workbooks.mjs [--check] [--if-present]");
     console.log("  no arguments  Clean, validate, back up, and rename the private workbooks.");
     console.log("  --check       Validate canonical workbooks without modifying them.");
+    console.log("  --if-present  With --check, skip private canonical workbooks not in this checkout.");
     return;
   }
   if (args.has("--check")) {
-    if (args.size > 1) throw new Error(`Unknown argument(s): ${[...args].filter((arg) => arg !== "--check").join(", ")}`);
-    await checkCanonicalWorkbooks();
+    const unknown = [...args].filter((arg) => !["--check", "--if-present"].includes(arg));
+    if (unknown.length) throw new Error(`Unknown argument(s): ${unknown.join(", ")}`);
+    await checkCanonicalWorkbooks({ ifPresent: args.has("--if-present") });
     return;
   }
   if (args.size > 0) throw new Error(`Unknown argument(s): ${[...args].join(", ")}`);

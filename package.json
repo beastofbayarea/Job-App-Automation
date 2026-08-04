@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "workbooks:clean": "node scripts/cleanup_job_url_workbooks.mjs",
-    "workbooks:check": "node scripts/cleanup_job_url_workbooks.mjs --check"
+    "workbooks:check": "node scripts/cleanup_job_url_workbooks.mjs --check --if-present"
   },
   "dependencies": {
     "exceljs": "^4.4.0"
