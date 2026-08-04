@@ -12,8 +12,20 @@ queue as the candidate source unless the user explicitly requests a refresh.
 
 1. Read the prompt completely. Inspect the destination only for naming and
    format, and preserve existing files.
-2. Search for individual `jobs.ashbyhq.com/{board}/{uuid}` postings across
-   every requested role group using multiple role synonyms.
+2. Search for individual `jobs.ashbyhq.com/{board}/{uuid}` postings using a
+   query matrix rather than one query per role group:
+   - product: product manager, technical product manager, AI product manager,
+     staff/principal/group product manager, product operations, and product
+     director;
+   - program: technical program manager and product-focused program manager;
+   - marketing: growth, performance, paid media, marketing operations, demand
+     generation, product marketing, and GTM marketing;
+   - investment/strategy: corporate development, venture capital, investment,
+     management consultant, and strategy consultant;
+   - location: remote US, remote Europe/UK, France, UAE/Abu Dhabi, India,
+     Australia, and Singapore.
+   Run both title-specific and title-plus-location searches. Continue until a
+   pass through the matrix yields no new qualifying companies.
 3. Extract the company board token and posting UUID from every candidate URL.
 4. Fetch `https://api.ashbyhq.com/posting-api/job-board/{board}` and require
    the exact UUID to be present with `isListed` other than `false`.
