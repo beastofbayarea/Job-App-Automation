@@ -10,6 +10,10 @@ param(
 
 . "$PSScriptRoot\lib\vps_script_helpers.ps1"
 
+if (-not $RemoteRepoPath.StartsWith("/")) {
+    Write-Error "RemoteRepoPath must be an absolute POSIX path."
+    exit 1
+}
 try {
     $Connection = Read-VpsConnectionConfig -Path $ConfigPath
     $PlinkPath = Get-RequiredCommandPath -Name "plink"

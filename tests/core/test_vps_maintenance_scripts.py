@@ -209,23 +209,13 @@ class PowerShellMaintenanceTests(unittest.TestCase):
         self.assertIn("invalid vps.ssh_port", helper)
         self.assertNotIn("git -C $Repo pull origin main", script)
 
-    def test_status_probe_is_bounded_and_excludes_its_own_process_match(self) -> None:
+    def test_status_probe_delegates_to_the_fleet_aware_read_only_report(self) -> None:
         script = (SCRIPTS / "check_vps_automation_status.ps1").read_text(encoding="utf-8")
 
         self.assertIn("[int]$TimeoutSeconds = 30", script)
-        self.assertIn("Invoke-ExternalCommandWithTimeout", script)
-        self.assertIn("[c]ontinuous-greenhouse", script)
-        self.assertIn("[j]ob_automation.py apply", script)
-        self.assertIn("job-app-greenhouse.service", script)
-        self.assertIn("continuous_greenhouse_state.json", script)
-        self.assertIn("CONTINUOUS GREENHOUSE SUMMARY", script)
-        self.assertIn("[REDACTED_EMAIL]", script)
-        self.assertIn("--email )[[:graph:]]+", script)
-        self.assertIn("[REDACTED]", script)
-        self.assertNotIn(
-            "systemctl --no-pager --full status job-app-greenhouse.service",
-            script,
-        )
+        self.assertIn('"check_vps_parallel_ats.ps1"', script)
+        self.assertIn("@PSBoundParameters", script)
+        self.assertNotIn("systemctl", script)
 
     def test_continuous_greenhouse_installer_delegates_to_generic_supervisor(self) -> None:
         wrapper = (SCRIPTS / "install_vps_continuous_greenhouse.ps1").read_text(encoding="utf-8")
