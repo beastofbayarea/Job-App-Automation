@@ -12,7 +12,8 @@ param(
     [switch]$VerifyLive
 )
 
-$records = @(Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json)
+$parsed = Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json
+$records = if ($parsed -is [System.Array]) { @($parsed.GetEnumerator()) } else { @($parsed) }
 $errors = [System.Collections.Generic.List[string]]::new()
 $required = @("posting_date", "company", "title", "location", "url")
 $seenCompanies = [System.Collections.Generic.HashSet[string]]::new(

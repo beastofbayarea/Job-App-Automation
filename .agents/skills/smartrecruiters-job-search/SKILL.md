@@ -10,6 +10,11 @@ queue as the candidate source unless the user explicitly requests a refresh.
 
 ## Workflow
 
+For expanded searches, collect company slugs from current and stale indexed
+results, then scan each company's public endpoint at
+`https://api.smartrecruiters.com/v1/companies/{company}/postings?limit=100`.
+Follow pagination, filter locally, and verify selected jobs individually.
+
 1. Read the requested prompt completely. Inspect the destination only to
    determine naming and format; preserve existing files.
 2. Search for individual `jobs.smartrecruiters.com` postings across every role

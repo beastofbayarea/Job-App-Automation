@@ -10,6 +10,11 @@ candidate source unless the user explicitly asks to refresh it.
 
 ## Workflow
 
+For expanded searches, collect account slugs from current and stale indexed
+results, then scan each account's complete public feed at
+`https://www.workable.com/api/accounts/{account}?details=true`. Filter locally
+and retain canonical shortcode URLs; feeds often surface jobs before web search.
+
 1. Read the requested prompt completely and inspect the destination only to
    determine naming and format. Preserve existing files.
 2. Search the web for individual `apply.workable.com` postings across every

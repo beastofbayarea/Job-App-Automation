@@ -10,6 +10,12 @@ queue as the candidate source unless the user explicitly requests a refresh.
 
 ## Workflow
 
+For expanded searches, collect board tokens from current and stale indexed
+results, then scan each employer's complete public feed at
+`https://api.lever.co/v0/postings/{board}?mode=json` (or the EU API host).
+Filter locally before verifying individual postings; this catches new jobs that
+search engines have not indexed.
+
 1. Read the requested prompt completely. Inspect the destination only to
    determine naming and format; preserve existing files.
 2. Search for individual postings on `jobs.lever.co` and `jobs.eu.lever.co`

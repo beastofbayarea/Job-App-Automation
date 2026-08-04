@@ -12,7 +12,8 @@ param(
     [switch]$VerifyLive
 )
 
-$records = @(Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json)
+$parsed = Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json
+$records = if ($parsed -is [System.Array]) { @($parsed.GetEnumerator()) } else { @($parsed) }
 $errors = [System.Collections.Generic.List[string]]::new()
 $required = @("posting_date", "company", "title", "location", "url")
 $seenCompanies = [System.Collections.Generic.HashSet[string]]::new(
@@ -97,7 +98,7 @@ foreach ($record in $records) {
         if ([string]$posting.id -ne $parts[1]) {
             $errors.Add("Posting ID mismatch for '$($record.company)'")
         }
-        if ([string]$posting.name -ne [string]$record.title) {
+        if ([string]$posting.name.Trim() -ne [string]$record.title.Trim()) {
             $errors.Add("Live title mismatch for '$($record.company)'")
         }
         $releasedDate = ([datetime]$posting.releasedDate).ToUniversalTime().Date
