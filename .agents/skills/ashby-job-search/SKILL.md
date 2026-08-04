@@ -26,22 +26,27 @@ queue as the candidate source unless the user explicitly requests a refresh.
      Australia, and Singapore.
    Run both title-specific and title-plus-location searches. Continue until a
    pass through the matrix yields no new qualifying companies.
-3. Extract the company board token and posting UUID from every candidate URL.
-4. Fetch `https://api.ashbyhq.com/posting-api/job-board/{board}` and require
+3. Build a unique board-token set from every result, including stale or closed
+   indexed postings. Fetch each board's full public API inventory and scan all
+   currently listed jobs for the title matrix and date window. This often
+   reveals newly published jobs that search engines have not indexed. Repeat
+   after newly discovered boards are added.
+4. Extract the company board token and posting UUID from every candidate URL.
+5. Fetch `https://api.ashbyhq.com/posting-api/job-board/{board}` and require
    the exact UUID to be present with `isListed` other than `false`.
-5. Treat API `publishedAt` as the authoritative posting or reposting date.
+6. Treat API `publishedAt` as the authoritative posting or reposting date.
    Use `location`, `secondaryLocations`, and `workplaceType` for location.
    Inspect `descriptionPlain` or `descriptionHtml` for role fit and exclusions.
-6. Apply all prompt constraints:
+7. Apply all prompt constraints:
    - compare dates using the requested calendar window, not search crawl age;
    - reject excluded locations, industries, internships, talent pools,
      clearance requirements, and unlisted jobs;
    - distinguish incidental benefit language from the employer's industry;
    - choose one strongest role per company;
    - prefer locations in the prompt's stated order.
-7. Canonicalize URLs to `https://jobs.ashbyhq.com/{board}/{uuid}`. Remove
+8. Canonicalize URLs to `https://jobs.ashbyhq.com/{board}/{uuid}`. Remove
    trailing slashes, `/application`, `/apply`, query parameters, and fragments.
-8. Sort newest to oldest and save a new JSON file with exactly:
+9. Sort newest to oldest and save a new JSON file with exactly:
 
 ```json
 [
@@ -55,7 +60,7 @@ queue as the candidate source unless the user explicitly requests a refresh.
 ]
 ```
 
-9. Run `scripts/Test-AshbyJobSearch.ps1 -VerifyLive` against the result and
+10. Run `scripts/Test-AshbyJobSearch.ps1 -VerifyLive` against the result and
    confirm only the intended new artifact changed.
 
 ## Evidence rules
