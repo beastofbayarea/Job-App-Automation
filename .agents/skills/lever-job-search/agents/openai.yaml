@@ -1,0 +1,4 @@
+interface:
+  display_name: "Lever Job Search"
+  short_description: "Find and validate current Lever job postings"
+  default_prompt: "Use $lever-job-search to create a fresh, filtered JSON list of current Lever postings."
