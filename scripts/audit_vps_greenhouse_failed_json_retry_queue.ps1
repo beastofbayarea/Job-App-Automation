@@ -27,6 +27,7 @@ claims = json.loads((output / "continuous_greenhouse_failed_claims.json").read_t
 status_counts = Counter()
 retry_counts = Counter()
 fixing_attempt_counts = Counter()
+authorized_retries = 0
 awaiting_remediation = 0
 pending_by_owner = Counter()
 pending = []
@@ -44,9 +45,12 @@ for claim in claims.get("jobs", {}).values():
         )
     )
     fixing_attempt_counts[fixing_attempts] += 1
-    if status == "retry_requested" and claim.get("failure_revision"):
-        awaiting_remediation += 1
     if status == "retry_requested":
+        retry_authorized = claim.get("retry_authorized") is True
+        if retry_authorized:
+            authorized_retries += 1
+        else:
+            awaiting_remediation += 1
         owner = str(claim.get("owner") or "UNKNOWN")
         pending_by_owner[owner] += 1
         pending.append({
@@ -54,6 +58,7 @@ for claim in claims.get("jobs", {}).values():
             "company": claim.get("company"),
             "title": claim.get("title"),
             "job_url": claim.get("job_url"),
+            "retry_authorized": retry_authorized,
         })
     elif status == "claimed":
         claimed.append({
@@ -69,6 +74,7 @@ print(json.dumps({
     "claimed_count": len(claimed),
     "retry_count_distribution": dict(sorted(retry_counts.items())),
     "fixing_attempt_count_distribution": dict(sorted(fixing_attempt_counts.items())),
+    "authorized_retry_count": authorized_retries,
     "awaiting_remediation_count": awaiting_remediation,
 }, sort_keys=True))
 if not summary_only:

@@ -80,6 +80,50 @@ class PowerShellMaintenanceTests(unittest.TestCase):
         self.assertIn("trap 'systemctl start $UnitNames' EXIT", fleet)
         self.assertIn("trap - EXIT", fleet)
 
+    def test_targeted_failed_job_requeue_requires_verified_explicit_authorization(
+        self,
+    ) -> None:
+        script = (SCRIPTS / "requeue_vps_greenhouse_failed_json_targets.ps1").read_text(
+            encoding="utf-8"
+        )
+
+        for worker in (
+            "core-product-management",
+            "growth-general-marketing",
+            "product-marketing-gtm",
+            "program-project-management",
+            "technical-ai-platform-product-management",
+        ):
+            self.assertIn(worker, script)
+        self.assertIn("load_exact_confirmed_ledger_index", script)
+        self.assertIn("SAFE_PRE_SUBMIT_RESULT_STATUSES", script)
+        self.assertIn('record_status != "failed"', script)
+        self.assertIn("REQUIRED_FIELDS_NOT_FILLED", script)
+        self.assertNotIn('"TIMED_OUT",', script)
+        self.assertNotIn('"SUBMISSION_UNCONFIRMED",', script)
+        self.assertIn('result.get("submitted") is not False', script)
+        self.assertIn('result.get("confirmed") is True', script)
+        self.assertIn('"retry_authorized": True', script)
+        self.assertIn('claim.pop("failure_revision", None)', script)
+        self.assertNotIn("import subprocess", script)
+        self.assertNotIn('subprocess.run(["systemctl"', script)
+
+        # Every requested match is validated before any backup or mutation.
+        self.assertLess(script.index("missing = sorted"), script.index("backup.mkdir"))
+        self.assertLess(script.index("if not planned"), script.index("backup.mkdir"))
+        self.assertLess(script.index("shutil.copy2"), script.index('del state_payloads[path]'))
+        self.assertLess(
+            script.index('del state_payloads[path]["jobs"][key]'),
+            script.index("atomic_write_text(path"),
+        )
+        self.assertIn("original_text", script)
+        self.assertIn("except Exception:", script)
+
+        # The outer shell exclusively owns service lifecycle and reports a fresh start.
+        self.assertIn("systemctl stop $UnitNames", script)
+        self.assertIn("systemctl start $UnitNames", script)
+        self.assertIn("ExecMainStartTimestamp", script)
+
     def test_failed_job_retry_audit_supports_concise_policy_summary(self) -> None:
         script = (SCRIPTS / "audit_vps_greenhouse_failed_json_retry_queue.ps1").read_text(
             encoding="utf-8"
@@ -87,7 +131,9 @@ class PowerShellMaintenanceTests(unittest.TestCase):
 
         self.assertIn("[switch]$SummaryOnly", script)
         self.assertIn("fixing_attempt_count_distribution", script)
+        self.assertIn("authorized_retry_count", script)
         self.assertIn("awaiting_remediation_count", script)
+        self.assertIn('claim.get("retry_authorized") is True', script)
 
     def test_runtime_audit_is_read_only_and_covers_persistent_workloads(self) -> None:
         script = (SCRIPTS / "audit_vps_runtime.ps1").read_text(encoding="utf-8")

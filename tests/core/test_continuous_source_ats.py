@@ -396,6 +396,7 @@ def test_critical_failure_waits_for_a_distinct_remediation_revision(
     assert claim["critical_error"] is True
     assert claim["failure_revision"] == "broken-revision"
     assert claim["remediation_required"] is True
+    assert claim["retry_authorized"] is False
     assert "next_retry_at" not in claim
 
     # Startup reconciliation after a deployment must preserve the revision that
@@ -446,6 +447,7 @@ def test_legacy_blind_retries_start_with_zero_fixing_attempts(
                         "owner": "failed-core-product-management",
                         "status": "retry_requested",
                         "retry_count": 11,
+                        "retry_authorized": True,
                     }
                 },
             }
@@ -612,17 +614,28 @@ def test_full_failure_lifecycle_requires_two_distinct_remediations_before_skip(
         "submission_log": submission_log,
     }
 
+    def authorize_retry() -> None:
+        payload = read_json(claims_path)
+        payload["jobs"]["greenhouse:12345"]["retry_authorized"] = True
+        claims_path.write_text(json.dumps(payload), encoding="utf-8")
+
     continuous_source_ats._sync_claim_from_state(
         **sync_args, remediation_revision="broken-revision"
     )
     original_failure = read_json(claims_path)["jobs"]["greenhouse:12345"]
     assert original_failure["status"] == "retry_requested"
     assert original_failure["fixing_attempts"] == 0
+    assert original_failure["retry_authorized"] is False
     assert (
         continuous_source_ats._claim_next_job(**claim_args, remediation_revision="broken-revision")
         is None
     )
 
+    # A changed runtime fingerprint alone cannot authorize a failed application.
+    assert continuous_source_ats._claim_next_job(
+        **claim_args, remediation_revision="fix-one"
+    ) is None
+    authorize_retry()
     assert (
         continuous_source_ats._claim_next_job(**claim_args, remediation_revision="fix-one") == job
     )
@@ -630,11 +643,14 @@ def test_full_failure_lifecycle_requires_two_distinct_remediations_before_skip(
     assert first_fix["fixing_attempts"] == 1
     write_failure()
     continuous_source_ats._sync_claim_from_state(**sync_args, remediation_revision="fix-one")
-    assert read_json(claims_path)["jobs"]["greenhouse:12345"]["status"] == "retry_requested"
+    first_retry = read_json(claims_path)["jobs"]["greenhouse:12345"]
+    assert first_retry["status"] == "retry_requested"
+    assert first_retry["retry_authorized"] is False
     assert (
         continuous_source_ats._claim_next_job(**claim_args, remediation_revision="fix-one") is None
     )
 
+    authorize_retry()
     assert (
         continuous_source_ats._claim_next_job(**claim_args, remediation_revision="fix-two") == job
     )
@@ -847,6 +863,7 @@ def test_waiting_retry_survives_claim_file_reconstruction(tmp_path: Path) -> Non
                         "critical_error": True,
                         "failure_revision": "fix-one",
                         "remediation_required": True,
+                        "retry_authorized": True,
                     }
                 },
             }
@@ -932,7 +949,20 @@ def test_exhausted_retry_is_skipped_and_next_fresh_job_is_selected(
     assert claims["greenhouse:67890"]["status"] == "claimed"
 
 
-def test_manual_review_is_skipped_after_two_fixing_attempts(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("record_status", "result_status"),
+    [
+        ("manual_review", "CAPTCHA_REQUIRED"),
+        ("failed", "SUBMISSION_UNCONFIRMED"),
+        ("failed", "SUBMIT_ATTEMPT_UNCONFIRMED"),
+        ("failed", "INTERRUPTED_AFTER_APPLICATION_START"),
+    ],
+)
+def test_manual_or_ambiguous_results_are_quarantined_without_automatic_retry(
+    tmp_path: Path,
+    record_status: str,
+    result_status: str,
+) -> None:
     job = _job()
     state_path = tmp_path / "state.json"
     claims_path = tmp_path / "claims.json"
@@ -943,8 +973,8 @@ def test_manual_review_is_skipped_after_two_fixing_attempts(tmp_path: Path) -> N
                 "jobs": {
                     job["job_url"]: {
                         **job,
-                        "status": "manual_review",
-                        "result_status": "SUBMISSION_UNCONFIRMED",
+                        "status": record_status,
+                        "result_status": result_status,
                     }
                 },
             }
@@ -975,51 +1005,22 @@ def test_manual_review_is_skipped_after_two_fixing_attempts(tmp_path: Path) -> N
         worker_id="failed-core-product-management",
         state_path=state_path,
         claims_path=claims_path,
-        fallback_status="manual_review",
+        fallback_status=record_status,
         remediation_revision="fix-two",
     )
 
     claim = read_json(claims_path)["jobs"]["greenhouse:12345"]
-    assert claim["status"] == "skipped_after_fixing_attempts"
+    assert claim["status"] == continuous_source_ats.QUARANTINED_MANUAL_REVIEW
     assert claim["fixing_attempts"] == 2
-    assert claim["result_status"] == "SUBMISSION_UNCONFIRMED"
-
-
-def test_interrupted_application_claim_is_scheduled_for_retry(tmp_path: Path) -> None:
-    job = _job()
-    record = {
-        **job,
-        "status": "failed",
-        "result_status": "INTERRUPTED_AFTER_APPLICATION_START",
-        "updated_at": "2026-08-03T00:00:00+00:00",
-    }
-    state = {"version": 1, "jobs": {job["job_url"]: record}}
-    state_path = tmp_path / "state.json"
-    claims_path = tmp_path / "claims.json"
-    state_path.write_text(json.dumps(state), encoding="utf-8")
-    claims_path.write_text(
-        json.dumps(
-            {
-                "version": 1,
-                "jobs": {"greenhouse:12345": {"status": "claimed", "retry_count": 0}},
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    assert (
-        continuous_source_ats._sync_terminal_claims(
-            state=state,
-            ats_platform="greenhouse",
-            worker_id="failed-program-project-management",
-            state_path=state_path,
-            claims_path=claims_path,
-        )
-        == 1
-    )
-    claim = read_json(claims_path)["jobs"]["greenhouse:12345"]
-    assert claim["status"] == "retry_requested"
+    assert claim["result_status"] == result_status
     assert claim["critical_error"] is True
+    assert claim["retry_authorized"] is False
+    assert claim["remediation_required"] is False
+    state_record = read_json(state_path)["jobs"][job["job_url"]]
+    assert state_record["retry_policy_status"] == (
+        continuous_source_ats.QUARANTINED_MANUAL_REVIEW
+    )
+    assert state_record["retry_authorized"] is False
 
 
 def test_source_main_runs_runtime_claim_application_and_claim_sync(
@@ -1212,6 +1213,7 @@ def test_source_main_converts_application_exception_into_retryable_critical_fail
     assert claim["status"] == "retry_requested"
     assert claim["critical_error"] is True
     assert claim["remediation_required"] is True
+    assert claim["retry_authorized"] is False
 
 
 def test_source_worker_does_not_import_the_direct_worker_implementation() -> None:

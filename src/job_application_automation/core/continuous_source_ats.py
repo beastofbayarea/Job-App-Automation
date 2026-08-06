@@ -59,6 +59,14 @@ GREENHOUSE_JOB_PATH = re.compile(r"/jobs/(?:[^/]+/)?(?P<job_id>\d+)(?:/|$)", re.
 CLAIMS_VERSION = 1
 MAX_CRITICAL_FIXING_ATTEMPTS = 2
 SKIPPED_AFTER_FIXING_ATTEMPTS = "skipped_after_fixing_attempts"
+QUARANTINED_MANUAL_REVIEW = "quarantined_manual_review"
+NO_AUTO_RETRY_RESULT_STATUSES = frozenset(
+    {
+        "SUBMISSION_UNCONFIRMED",
+        "SUBMIT_ATTEMPT_UNCONFIRMED",
+        "INTERRUPTED_AFTER_APPLICATION_START",
+    }
+)
 
 
 class StaleJobRoleError(RuntimeError):
@@ -148,6 +156,7 @@ def _reconcile_exhausted_retry_claims(claims: Mapping[str, Any]) -> int:
         claim["critical_error"] = True
         claim["skip_reason"] = f"failed after {MAX_CRITICAL_FIXING_ATTEMPTS} fixing attempts"
         claim["remediation_required"] = False
+        claim["retry_authorized"] = False
         claim.pop("next_retry_at", None)
         reconciled += 1
     return reconciled
@@ -186,6 +195,7 @@ def _persist_exhausted_claims_to_state(
             "critical_error": True,
             "failure_revision": str(claim.get("failure_revision") or ""),
             "remediation_required": False,
+            "retry_authorized": False,
             "skip_reason": str(
                 claim.get("skip_reason")
                 or f"failed after {MAX_CRITICAL_FIXING_ATTEMPTS} fixing attempts"
@@ -276,6 +286,7 @@ def _seed_claims_from_state(
             "skip_reason": str(record.get("skip_reason") or ""),
             "failure_revision": str(record.get("failure_revision") or ""),
             "remediation_required": bool(record.get("remediation_required")),
+            "retry_authorized": record.get("retry_authorized") is True,
         }
 
 
@@ -399,6 +410,7 @@ def _claim_next_job(
                 isinstance(claim, Mapping)
                 and claim.get("owner") == worker_id
                 and claim.get("status") == "retry_requested"
+                and claim.get("retry_authorized") is True
                 and _retry_has_new_remediation(claim, remediation_revision)
             ):
                 selected = job
@@ -464,6 +476,7 @@ def _claim_next_job(
             "fixing_attempts": fixing_attempts,
             "attempt_revision": attempt_revision,
             "attempt_kind": "fixing" if fixing_attempts else "original",
+            "retry_authorized": False,
         }
         selected_url = _candidate_url(selected)
         selected_record = own_records.get(selected_url)
@@ -575,13 +588,34 @@ def _sync_claim_from_state(
             else record_status
         )
         result_status = str(record.get("result_status") or "")
-        critical_failure = record_status in {"failed", "manual_review"} or (
+        quarantine_required = (
+            record_status == "manual_review"
+            or result_status in NO_AUTO_RETRY_RESULT_STATUSES
+            or recorded_policy_status == QUARANTINED_MANUAL_REVIEW
+        )
+        critical_failure = record_status == "failed" or (
             claim_status == SKIPPED_AFTER_FIXING_ATTEMPTS
         )
         prior_status = (
             str(prior_claim.get("status") or "") if isinstance(prior_claim, Mapping) else ""
         )
-        if critical_failure:
+        retry_authorized = (
+            prior_claim.get("retry_authorized") is True
+            if isinstance(prior_claim, Mapping) and prior_status == "retry_requested"
+            else record.get("retry_authorized") is True
+        )
+        if quarantine_required:
+            if prior_status not in {
+                QUARANTINED_MANUAL_REVIEW,
+                SKIPPED_AFTER_FIXING_ATTEMPTS,
+            } and recorded_policy_status not in {
+                QUARANTINED_MANUAL_REVIEW,
+                SKIPPED_AFTER_FIXING_ATTEMPTS,
+            }:
+                retry_count += 1
+            claim_status = QUARANTINED_MANUAL_REVIEW
+            retry_authorized = False
+        elif critical_failure:
             if prior_status not in {
                 "retry_requested",
                 SKIPPED_AFTER_FIXING_ATTEMPTS,
@@ -606,9 +640,33 @@ def _sync_claim_from_state(
             "updated_at": str(record.get("updated_at") or _now()),
             "retry_count": retry_count,
             "fixing_attempts": fixing_attempts,
+            "retry_authorized": retry_authorized,
         }
         state_updates: dict[str, Any] = {}
-        if critical_failure and claim_status == "retry_requested":
+        if quarantine_required:
+            quarantine_reason = (
+                "manual-review or ambiguous submission outcome requires operator review and "
+                "must not be retried automatically"
+            )
+            claim.update(
+                {
+                    "critical_error": True,
+                    "remediation_required": False,
+                    "retry_authorized": False,
+                    "skip_reason": quarantine_reason,
+                }
+            )
+            claim.pop("next_retry_at", None)
+            state_updates = {
+                "retry_policy_status": QUARANTINED_MANUAL_REVIEW,
+                "retry_count": retry_count,
+                "fixing_attempts": fixing_attempts,
+                "critical_error": True,
+                "remediation_required": False,
+                "retry_authorized": False,
+                "skip_reason": quarantine_reason,
+            }
+        elif critical_failure and claim_status == "retry_requested":
             prior_failure_revision = (
                 str(prior_claim.get("failure_revision") or "")
                 if isinstance(prior_claim, Mapping) and prior_status == "retry_requested"
@@ -632,6 +690,7 @@ def _sync_claim_from_state(
             claim["critical_error"] = True
             claim["failure_revision"] = failure_revision
             claim["remediation_required"] = True
+            claim["retry_authorized"] = retry_authorized
             state_updates = {
                 "retry_policy_status": "retry_requested",
                 "retry_count": retry_count,
@@ -639,6 +698,7 @@ def _sync_claim_from_state(
                 "critical_error": True,
                 "failure_revision": failure_revision,
                 "remediation_required": True,
+                "retry_authorized": retry_authorized,
             }
         elif critical_failure:
             claim["critical_error"] = True
@@ -652,6 +712,7 @@ def _sync_claim_from_state(
                 or ("legacy-unversioned" if prior_status == "claimed" else remediation_revision)
             )
             claim["skip_reason"] = f"failed after {MAX_CRITICAL_FIXING_ATTEMPTS} fixing attempts"
+            claim["retry_authorized"] = False
             state_updates = {
                 "retry_policy_status": SKIPPED_AFTER_FIXING_ATTEMPTS,
                 "retry_count": retry_count,
@@ -659,6 +720,7 @@ def _sync_claim_from_state(
                 "critical_error": True,
                 "failure_revision": claim["failure_revision"],
                 "remediation_required": False,
+                "retry_authorized": False,
                 "skip_reason": claim["skip_reason"],
             }
         if state_updates:
