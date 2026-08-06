@@ -1,73 +1,64 @@
-# Python
-__pycache__/
-*.py[cod]
-build/
-dist/
-*.egg-info/
-.venv/
-venv/
-.tox/
-.nox/
-.wheel-smoke/
-
-# Generated artifacts
-output/*
-!output/.gitkeep
-
-# Candidate job-tracker data and source resume text (keep the resume PDFs)
-data/**
-!data/resumes/
-data/resumes/*
-!data/resumes/product-management.pdf
-!data/resumes/growth-marketing.pdf
-
-# OAuth credentials and tokens
-config/credentials.json
-config/token.json
-config/client_secret*.json
-config/vertex_service_account.json
-config/dashboard.env
-
-# Candidate PII configs (see *.example.json for templates)
-config/candidate_profile_config.json
-config/candidate_email_pool.json
-config/nooks_retry_email.json
-
-# Cent Capital project secrets, kept for potential reuse (API keys, service account keys,
-# and the source frontend configuration snapshot)
-config/cent_capital_config.json
-config/cent-capital-*-*.json
-config/config.js
-
-# VPS credentials, split out from cent_capital_config.json for reuse across projects
-config/vps_config.json
-config/*.ppk
-config/*.pem
-
-# Local environment and logs
-.env
-*.log
+```
+# Dependencies
 node_modules/
-
-# Test and coverage artifacts
-.coverage
-coverage.xml
-htmlcov/
+__pycache__/
+*.pyc
 .pytest_cache/
 .mypy_cache/
-.ruff_cache/
-.hypothesis/
+venv/
+.venv/
+julia-*/
+zig*/
 
-# Operating-system metadata
+# Build artifacts
+dist/
+build/
+target/
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+
+# Editors
+.vscode/
+.idea/
+
+# OS
 .DS_Store
 Thumbs.db
-Desktop.ini
 
-# Local editor workspace settings
-.vscode/
+# Coverage
+coverage/
+htmlcov/
+.coverage
 
-# Local agent worktrees
-.claude/
-
-# git worktree used by scripts/vps_search_sync.sh
-.sync-worktree/
+# Compressed files
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
+```

@@ -2,7 +2,7 @@
   "name": "job-app-automation-workbook-tools",
   "private": true,
   "version": "1.0.0",
-  "description": "Repository-local utilities for maintaining private job URL workbooks.",
+  "description": "A local, safety-first toolkit for job seekers: discover ATS vacancies (Greenhouse, Lever, Ashby, SmartRecruiters, Workable), generate tailored PDF resumes & cover letters with AI, privately archive documents on VPS, and automate applications. Includes Gmail OAuth integration and Google Indexing API support.",
   "type": "module",
   "scripts": {
     "workbooks:clean": "node scripts/cleanup_job_url_workbooks.mjs",
