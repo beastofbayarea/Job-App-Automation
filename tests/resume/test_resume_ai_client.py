@@ -60,8 +60,29 @@ class ResumeAIClientTests(unittest.TestCase):
         self.assertEqual(settings.project_id, "project")
         self.assertEqual(settings.location, "global")
         self.assertEqual(settings.model, "model")
+        self.assertEqual(settings.request_timeout_ms, 60_000)
         with self.assertRaisesRegex(ValueError, "project_id"):
             ai.VertexSettings(project_id="")
+        for invalid_timeout in (True, 0, -1, 60_000.0, "60000"):
+            with self.subTest(invalid_timeout=invalid_timeout):
+                with self.assertRaisesRegex(ValueError, "request_timeout_ms"):
+                    ai.VertexSettings(request_timeout_ms=invalid_timeout)
+
+    def test_vertex_gateway_bounds_each_generate_content_request(self) -> None:
+        client = MagicMock()
+        client.models.generate_content.return_value.text = "bounded response"
+        gateway = ai.VertexGateway(vertex=ai.VertexSettings(request_timeout_ms=12_345))
+
+        with patch.object(ai, "get_client", return_value=client):
+            response = gateway.generate(
+                "Prompt",
+                system="System",
+                settings=LLMSettings(model="test-model", max_attempts=1),
+            )
+
+        self.assertEqual(response, "bounded response")
+        config = client.models.generate_content.call_args.kwargs["config"]
+        self.assertEqual(config.http_options.timeout, 12_345)
 
     def test_legacy_credentials_environment_path_is_resolved_without_mutation(self) -> None:
         settings = ai.VertexSettings(service_account_file=Path("configured.json"))

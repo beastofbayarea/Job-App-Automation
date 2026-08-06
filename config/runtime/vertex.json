@@ -6,6 +6,7 @@
     "service_account_file": "config/vertex_service_account.json",
     "max_attempts": 3,
     "retry_delay_seconds": 2,
+    "request_timeout_ms": 60000,
     "job_text_limit": 6000,
     "job_navigation_timeout_ms": 30000
   }

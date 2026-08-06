@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -33,6 +34,23 @@ from .submission_log import SubmissionLog
 logger = logging.getLogger("ATSOrchestrator")
 
 LEDGER_PERSIST_FAILED_STATUS = "LEDGER_PERSIST_FAILED"
+ENGINE_DIAGNOSTIC_TAIL_CHARS = 2_000
+_EMAIL_PATTERN = re.compile(
+    r"(?<![\w.+-])[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}(?![\w.-])",
+    re.IGNORECASE,
+)
+_PHONE_PATTERN = re.compile(r"(?<!\w)(?:\+?\d[\d().\s-]{6,}\d)(?!\w)")
+_USER_HOME_PATTERN = re.compile(r"(?i)(?P<prefix>[A-Z]:\\Users\\|/home/|/Users/)[^\\/\r\n]+")
+_SENSITIVE_DIAGNOSTIC_FIELD_PATTERN = re.compile(
+    r"(?i)\b(?:"
+    r"first[_ -]?name|last[_ -]?name|full[_ -]?name|candidate[_ -]?name|name|"
+    r"email(?:[_ -]?(?:address|used))?|phone(?:[_ -]?number)?|mobile|"
+    r"street(?:[_ -]?address)?|home[_ -]?address|postal[_ -]?code|zip[_ -]?code|"
+    r"linkedin(?:[_ -]?url)?|resume(?:[_ -]?text)?|cover[_ -]?letter|answer|"
+    r"authorization|bearer|api[_ -]?key|access[_ -]?token|refresh[_ -]?token|"
+    r"password|secret|credential"
+    r")\b\s*[:=]"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -383,6 +401,45 @@ RecordSubmission = Callable[
 WriteResults = Callable[[Path, Sequence[Mapping[str, Any]]], None]
 
 
+def _sanitized_engine_output_tail(value: str, mask_email: MaskEmail) -> str:
+    """Return a bounded diagnostics tail without retaining common PII or credentials."""
+
+    def replace_email(match: re.Match[str]) -> str:
+        email = match.group(0)
+        try:
+            masked = str(mask_email(email)).strip()
+        except Exception:
+            masked = ""
+        if not masked or email.casefold() in masked.casefold():
+            return "[redacted-email]"
+        return masked
+
+    sanitized_lines: list[str] = []
+    normalized = str(value or "").replace("\r\n", "\n").replace("\r", "\n")
+    for line in normalized.splitlines():
+        if _SENSITIVE_DIAGNOSTIC_FIELD_PATTERN.search(line):
+            sanitized_lines.append("[redacted-sensitive-line]")
+            continue
+        sanitized = _EMAIL_PATTERN.sub(replace_email, line)
+        sanitized = _PHONE_PATTERN.sub("[redacted-phone]", sanitized)
+        sanitized = _USER_HOME_PATTERN.sub(
+            lambda match: f"{match.group('prefix')}[redacted-user]",
+            sanitized,
+        )
+        sanitized = re.sub(r"[\x00-\x08\x0b-\x1f\x7f]", "?", sanitized)
+        sanitized_lines.append(sanitized)
+    return "\n".join(sanitized_lines)[-ENGINE_DIAGNOSTIC_TAIL_CHARS:].strip()
+
+
+def _timeout_diagnostics(exc: ProcessTimeoutError, mask_email: MaskEmail) -> str:
+    """Format labeled, sanitized output tails captured when a child process times out."""
+    streams = (
+        ("stdout_tail", _sanitized_engine_output_tail(exc.stdout, mask_email)),
+        ("stderr_tail", _sanitized_engine_output_tail(exc.stderr, mask_email)),
+    )
+    return "\n".join(f"{label}:\n{tail}" for label, tail in streams if tail)
+
+
 @dataclass(frozen=True, slots=True)
 class PipelineOperations:
     """Injected side effects used by the otherwise typed pipeline."""
@@ -727,9 +784,19 @@ class ApplicationPipeline:
                     (process_result.stdout + "\n" + process_result.stderr)[-8000:],
                 )
         except ProcessTimeoutError as exc:
+            diagnostics = _timeout_diagnostics(exc, self._operations.mask_email)
+            logger.error(
+                "Engine timed out after %d seconds. Sanitized engine output tails:\n%s",
+                exc.timeout,
+                diagnostics or "<no captured output>",
+            )
+            detail = f"Process exceeded {exc.timeout} seconds"
+            if diagnostics:
+                detail = f"{detail}. Sanitized engine output tails:\n{diagnostics}"
             outcome = EngineOutcome(
                 success=False,
                 status="TIMED_OUT",
+                detail=detail,
                 timeout_seconds=exc.timeout,
             )
         except Exception as exc:

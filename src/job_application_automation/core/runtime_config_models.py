@@ -319,6 +319,7 @@ class VertexSettings(RuntimeSection):
     service_account_file: str
     max_attempts: int
     retry_delay_seconds: float
+    request_timeout_ms: int
     job_text_limit: int
     job_navigation_timeout_ms: int
 
@@ -329,6 +330,7 @@ class VertexSettings(RuntimeSection):
         "service_account_file",
         "max_attempts",
         "retry_delay_seconds",
+        "request_timeout_ms",
         "job_text_limit",
         "job_navigation_timeout_ms",
     )
@@ -343,6 +345,7 @@ class VertexSettings(RuntimeSection):
             service_account_file=_string(values, "vertex", "service_account_file"),
             max_attempts=_positive_integer(values, "vertex", "max_attempts"),
             retry_delay_seconds=_nonnegative_number(values, "vertex", "retry_delay_seconds"),
+            request_timeout_ms=_positive_integer(values, "vertex", "request_timeout_ms"),
             job_text_limit=_positive_integer(values, "vertex", "job_text_limit"),
             job_navigation_timeout_ms=_positive_integer(
                 values, "vertex", "job_navigation_timeout_ms"

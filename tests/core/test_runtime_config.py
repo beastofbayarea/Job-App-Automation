@@ -66,6 +66,7 @@ class RuntimeConfigTests(unittest.TestCase):
 
         self.assertEqual(config.browser.cdp_endpoint, "http://localhost:9222")
         self.assertEqual(config.vertex.project_id, "from-service-account")
+        self.assertEqual(config.vertex.request_timeout_ms, 60_000)
         self.assertGreater(config.ashby.max_submit_attempts, 0)
         ashby_worker = config.continuous_worker.for_provider("ashby")
         self.assertGreaterEqual(ashby_worker.sleep_min_seconds, 900)
@@ -154,6 +155,18 @@ class RuntimeConfigTests(unittest.TestCase):
                 document["vertex"]["retry_delay_seconds"] = invalid_number
 
                 with self.assertRaisesRegex(ConfigurationError, "non-negative number"):
+                    RuntimeConfig.from_mapping(document)
+
+    def test_vertex_request_timeout_requires_a_positive_integer(self) -> None:
+        for invalid_timeout in (True, 0, -1, 60_000.0, "60000"):
+            with self.subTest(invalid_timeout=invalid_timeout):
+                document = _split_document(RUNTIME_CONFIG_DIR)
+                document["vertex"]["request_timeout_ms"] = invalid_timeout
+
+                with self.assertRaisesRegex(
+                    ConfigurationError,
+                    r"vertex\.request_timeout_ms.*positive integer",
+                ):
                     RuntimeConfig.from_mapping(document)
 
     def test_unknown_and_missing_keys_are_rejected_by_exact_section(self) -> None:

@@ -80,6 +80,7 @@ class VertexSettings:
     location: str = RUNTIME_CONFIG.vertex.location
     model: str = RUNTIME_CONFIG.vertex.model
     service_account_file: Path = resolve_runtime_path(RUNTIME_CONFIG.vertex.service_account_file)
+    request_timeout_ms: int = RUNTIME_CONFIG.vertex.request_timeout_ms
 
     def __post_init__(self) -> None:
         for name, value in (
@@ -97,6 +98,12 @@ class VertexSettings:
             "service_account_file",
             Path(self.service_account_file).expanduser(),
         )
+        if (
+            isinstance(self.request_timeout_ms, bool)
+            or not isinstance(self.request_timeout_ms, int)
+            or self.request_timeout_ms <= 0
+        ):
+            raise ValueError("request_timeout_ms must be a positive integer")
 
 
 VERTEX_SETTINGS = VertexSettings()
@@ -265,6 +272,7 @@ class VertexGateway:
         for attempt in range(1, settings.max_attempts + 1):
             try:
                 config = types.GenerateContentConfig(
+                    http_options=types.HttpOptions(timeout=self.vertex.request_timeout_ms),
                     system_instruction=system,
                     temperature=settings.temperature,
                     response_mime_type="application/json" if json_mode else None,

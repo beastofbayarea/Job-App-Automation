@@ -449,7 +449,12 @@ def test_execution_propagates_environment_preserves_extras_and_cleans(
     [
         (
             ProcessTimeoutError(17),
-            {"success": False, "status": "TIMED_OUT", "timeout_seconds": 17},
+            {
+                "success": False,
+                "status": "TIMED_OUT",
+                "detail": "Process exceeded 17 seconds",
+                "timeout_seconds": 17,
+            },
         ),
         (
             RuntimeError("browser crashed"),
@@ -498,6 +503,52 @@ def test_execution_cleans_screenshots_for_timeout_and_error(
     assert {key: results[0][key] for key in expected} == expected
     assert operations.cleanup_paths == [tmp_path / "screenshots-1"]
     assert operations.events[-1] == "write_results"
+
+
+def test_timeout_preserves_only_sanitized_bounded_engine_output_tails(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    engine = tmp_path / "engine.py"
+    engine.write_text("# engine", encoding="utf-8")
+    operations = FakeOperations(tmp_path)
+    operations.process_error = ProcessTimeoutError(
+        900,
+        stdout=(
+            "discarded-old-milestone\n"
+            + ("x" * 2_500)
+            + "\ncandidate@example.test\nLAST_ENGINE_MILESTONE=form_scan"
+        ),
+        stderr=(
+            "phone=+1 (415) 555-0123\n"
+            "C:\\Users\\Private Person\\resume.pdf\n"
+            "LAST_ERROR_MILESTONE=waiting_for_submit"
+        ),
+    )
+
+    with caplog.at_level("ERROR", logger="ATSOrchestrator"):
+        results = _run(
+            targets=[_target()],
+            config=_config(tmp_path, engine),
+            operations=operations,
+        )
+
+    detail = results[0]["detail"]
+    assert "stdout_tail:" in detail
+    assert "stderr_tail:" in detail
+    assert "LAST_ENGINE_MILESTONE=form_scan" in detail
+    assert "LAST_ERROR_MILESTONE=waiting_for_submit" in detail
+    assert "discarded-old-milestone" not in detail
+    assert "candidate@example.test" not in detail
+    assert "+1 (415) 555-0123" not in detail
+    assert "Private Person" not in detail
+    assert "[redacted-email]" in detail
+    assert "[redacted-sensitive-line]" in detail
+    assert "[redacted-user]" in detail
+    assert "LAST_ENGINE_MILESTONE=form_scan" in caplog.text
+    assert "candidate@example.test" not in caplog.text
+    assert "+1 (415) 555-0123" not in caplog.text
+    assert "Private Person" not in caplog.text
 
 
 def test_confirmed_submission_is_recorded_before_result_checkpoint(tmp_path: Path) -> None:
