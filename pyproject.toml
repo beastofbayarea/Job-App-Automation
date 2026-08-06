@@ -1,7 +1,7 @@
 [project]
 name = "job-application-automation"
 version = "0.1.0"
-description = "Compatibility-first tools for job discovery and application workflows."
+description = "A local, safety-first toolkit for job seekers: discover ATS vacancies (Greenhouse, Lever, Ashby, SmartRecruiters, Workable), generate tailored PDF resumes & cover letters with AI, privately archive documents on VPS, and automate applications. Includes Gmail OAuth integration and Google Indexing API support."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
