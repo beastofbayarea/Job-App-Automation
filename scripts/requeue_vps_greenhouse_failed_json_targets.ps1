@@ -17,18 +17,18 @@ $AllowedWorkers = @(
     "technical-ai-platform-product-management"
 )
 if (-not $Target -or $Target.Count -eq 0) {
-    throw "At least one worker|company|title target is required."
+    throw "At least one worker|company|title|job_url target is required."
 }
 $ValidatedTargets = @($Target | ForEach-Object {
-    $Parts = @($_ -split '\|', 3)
-    if ($Parts.Count -ne 3 -or @($Parts | Where-Object { -not $_.Trim() }).Count -gt 0) {
-        throw "Invalid target '$_'; expected worker|company|title."
+    $Parts = @($_ -split '\|', 4)
+    if ($Parts.Count -ne 4 -or @($Parts | Where-Object { -not $_.Trim() }).Count -gt 0) {
+        throw "Invalid target '$_'; expected worker|company|title|job_url."
     }
     $Worker = $Parts[0].Trim().ToLowerInvariant()
     if ($AllowedWorkers -notcontains $Worker) {
         throw "Unsupported failed-JSON worker '$Worker'."
     }
-    "$Worker|$($Parts[1].Trim())|$($Parts[2].Trim())"
+    "$Worker|$($Parts[1].Trim())|$($Parts[2].Trim())|$($Parts[3].Trim())"
 })
 
 $Connection = Read-VpsConnectionConfig -Path $ConfigPath
@@ -47,6 +47,10 @@ $UnitNames = @($TargetWorkers | ForEach-Object {
 $RemoteCommand = @"
 set -eu
 repo=$Repo
+if pgrep -f '[j]ob_automation.py (apply|documents generate)' >/dev/null; then
+  printf '%s\n' 'An ATS application or document-generation process is active; refusing to interrupt it.' >&2
+  exit 76
+fi
 systemctl stop $UnitNames
 trap 'systemctl start $UnitNames' EXIT
 PYTHONPATH="`$repo/src" "`$repo/.venv/bin/python" - "`$repo/output" '$TargetPayload' <<'PY'
@@ -90,14 +94,17 @@ if isinstance(raw_targets, str):
     raw_targets = [raw_targets]
 wanted = set()
 for target in raw_targets:
-    parts = str(target).split("|", 2)
-    if len(parts) != 3 or not all(part.strip() for part in parts):
-        raise SystemExit(f"invalid target {target!r}; expected worker|company|title")
-    worker, company, title = (part.strip() for part in parts)
+    parts = str(target).split("|", 3)
+    if len(parts) != 4 or not all(part.strip() for part in parts):
+        raise SystemExit(f"invalid target {target!r}; expected worker|company|title|job_url")
+    worker, company, title, job_url = (part.strip() for part in parts)
     worker = worker.casefold()
     if worker not in ALLOWED_WORKERS:
         raise SystemExit(f"unsupported failed-JSON worker: {worker}")
-    wanted.add((worker, company.casefold(), title.casefold()))
+    identity = greenhouse_identity(job_url)
+    if not identity:
+        raise SystemExit(f"target has no valid Greenhouse identity: {target!r}")
+    wanted.add((worker, company.casefold(), title.casefold(), identity))
 
 claims_path = output / "continuous_greenhouse_failed_claims.json"
 ledger_path = output / "submission_log.json"
@@ -117,7 +124,7 @@ confirmed = load_exact_confirmed_ledger_index(
 )
 
 state_payloads = {}
-for worker, _company, _title in wanted:
+for worker, _company, _title, _identity in wanted:
     path = output / f"continuous_greenhouse_failed_{worker.replace('-', '_')}_state.json"
     if not path.is_file():
         raise SystemExit(f"target worker state not found: {path}")
@@ -135,10 +142,15 @@ for path, state in state_payloads.items():
     for key, record in state["jobs"].items():
         if not isinstance(record, dict):
             continue
+        job_url = str(record.get("job_url") or key)
+        identity = greenhouse_identity(job_url)
+        if not identity:
+            continue
         target_key = (
             worker,
             str(record.get("company", "")).strip().casefold(),
             str(record.get("title", "")).strip().casefold(),
+            identity,
         )
         if target_key not in wanted:
             continue
@@ -153,10 +165,6 @@ for path, state in state_payloads.items():
             record.get("result_status") or result.get("status") or record.get("status") or ""
         )
         record_status = str(record.get("status") or "")
-        job_url = str(record.get("job_url") or key)
-        identity = greenhouse_identity(job_url)
-        if not identity:
-            raise SystemExit(f"target has no valid Greenhouse identity: {target_key}")
         if confirmed.contains(identity):
             raise SystemExit(f"refusing target already present in exact confirmed ledger: {target_key}")
         if record.get("ledger_confirmed") is True or result_status == "SUBMITTED & CONFIRMED":

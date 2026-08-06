@@ -270,6 +270,40 @@ job-application unit resource counters, log usage, and reboot/update status.
 It pins the configured SSH host key, redacts email addresses in command lines,
 and does not start, stop, enable, or restart workloads.
 
+### Recover role-specific Greenhouse failed jobs
+
+Audit the five failed-JSON workers and their retry policy before changing them:
+
+```powershell
+pwsh scripts/audit_vps_greenhouse_failed_json_retry_queue.ps1 -SummaryOnly
+pwsh scripts/inspect_vps_greenhouse_failed_json_fleet.ps1
+```
+
+An active service may simply be idle; use the state artifacts and exact
+`output/submission_log.json` identities to determine application outcomes.
+Manual-review, interrupted, unconfirmed-submission, and timed-out records are
+not safe automatic retries. After fixing and deploying a concrete pre-submit
+failure, authorize only reviewed `worker|company|title|job_url` tuples:
+
+```powershell
+$targets = @(
+    "core-product-management|Example Company|Product Manager|https://job-boards.greenhouse.io/example/jobs/123456"
+)
+pwsh scripts/requeue_vps_greenhouse_failed_json_targets.ps1 `
+    -Target $targets `
+    -TimeoutSeconds 120
+```
+
+The targeted command accepts only the five hyphenated role names, matches the
+exact Greenhouse URL identity, validates the complete request before mutation,
+rejects confirmed or exhausted records, requires allowlisted `submitted=false`
+evidence, refuses to interrupt active application or document-generation
+processes, creates a remote backup, and sets a one-shot retry authorization. It
+restarts only affected units. Do not use the fleet-wide requeue as a fallback
+for a rejected tuple. Monitor the summary and fleet inspector until all
+authorized claims are terminal, and investigate any new failure before
+authorizing another attempt.
+
 Install or repair the dashboard as a loopback service behind the VPS's
 validated Nginx configuration:
 

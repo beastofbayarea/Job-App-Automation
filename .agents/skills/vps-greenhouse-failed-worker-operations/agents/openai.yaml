@@ -1,0 +1,4 @@
+interface:
+  display_name: "VPS Greenhouse Failed Workers"
+  short_description: "Safely diagnose and rerun failed VPS jobs"
+  default_prompt: "Use $vps-greenhouse-failed-worker-operations to diagnose failed Greenhouse workers and rerun only verified-safe jobs."

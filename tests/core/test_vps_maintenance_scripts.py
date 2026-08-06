@@ -97,6 +97,8 @@ class PowerShellMaintenanceTests(unittest.TestCase):
             self.assertIn(worker, script)
         self.assertIn("load_exact_confirmed_ledger_index", script)
         self.assertIn("SAFE_PRE_SUBMIT_RESULT_STATUSES", script)
+        self.assertIn("worker|company|title|job_url", script)
+        self.assertIn("greenhouse_identity(job_url)", script)
         self.assertIn('record_status != "failed"', script)
         self.assertIn("REQUIRED_FIELDS_NOT_FILLED", script)
         self.assertNotIn('"TIMED_OUT",', script)
@@ -123,6 +125,8 @@ class PowerShellMaintenanceTests(unittest.TestCase):
         self.assertIn("systemctl stop $UnitNames", script)
         self.assertIn("systemctl start $UnitNames", script)
         self.assertIn("ExecMainStartTimestamp", script)
+        self.assertIn("refusing to interrupt it", script)
+        self.assertLess(script.index("pgrep -f"), script.index("systemctl stop $UnitNames"))
 
     def test_failed_job_retry_audit_supports_concise_policy_summary(self) -> None:
         script = (SCRIPTS / "audit_vps_greenhouse_failed_json_retry_queue.ps1").read_text(
