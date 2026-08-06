@@ -726,6 +726,7 @@ def _greenhouse_semantic_answer(
 ) -> str | None:
     """Resolve observed Greenhouse wording before broader aliases can collide."""
     normalized = " ".join(label.lower().split())
+    plain_label = normalized.rstrip(" ?.:*")
     if re.search(r"\bcountry\b.{0,24}\bbirth\b|\bbirth\b.{0,24}\bcountry\b", normalized):
         return str(profile.get("country_of_birth") or "").strip() or None
     language_answers = rules.get("language_answers")
@@ -826,13 +827,49 @@ def _greenhouse_semantic_answer(
         return str(rules.get("product_usage") or "Yes").strip()
     if "notice period" in normalized:
         return str(rules.get("notice_period") or "").strip() or None
+    if re.search(r"\bcurrent\s+ctc\b", normalized):
+        return str(rules.get("current_salary") or "").strip() or None
     if re.search(
         r"\bwhere\s+(?:are\s+you\s+currently|were\s+you\s+last)\s+employed\b",
         normalized,
     ):
         return str(profile.get("current_company") or "").strip() or None
-    if re.search(r"\b(?:current|most recent|previous) (?:job )?title\b", normalized):
+    if re.search(
+        r"\b(?:current|most recent|previous)"
+        r"(?:\s*(?:/|or)\s*(?:(?:most|more)\s+recent|previous))?"
+        r"\s+(?:employer|company)\b",
+        normalized,
+    ):
+        return str(profile.get("current_company") or "").strip() or None
+    if re.search(
+        r"\b(?:current|most recent|previous)"
+        r"(?:\s*(?:/|or)\s*(?:(?:most|more)\s+recent|previous))?"
+        r"\s+(?:job\s+)?title\b",
+        normalized,
+    ):
         return str(profile.get("current_job_title") or "").strip() or None
+    if re.fullmatch(r"preferred first name|preferred given name", plain_label):
+        return str(profile.get("preferred_name") or profile.get("first_name") or "").strip() or None
+    if re.fullmatch(r"legal first name(?: \(english\))?", plain_label):
+        return str(profile.get("first_name") or "").strip() or None
+    if re.fullmatch(
+        r"(?:what is your |please (?:enter|provide) (?:your )?)?"
+        r"(?:(?:home|full|legal|mailing|residential) )?"
+        r"(?:(?:street|mailing) )?address(?: line 1)?",
+        plain_label,
+    ):
+        return str(profile.get("street_address") or "").strip() or None
+    if re.fullmatch(r"state\s*(?:/\s*province)?|province", plain_label):
+        return str(profile.get("state") or "").strip() or None
+    if re.fullmatch(r"(?:zip|postal)(?: code)?", plain_label):
+        return str(profile.get("zip_code") or "").strip() or None
+    if re.fullmatch(r"city", plain_label):
+        return str(profile.get("city") or "").strip() or None
+    if re.fullmatch(r"country", plain_label) or re.search(
+        r"\b(?:which|what)\s+country\b.*\b(?:based|located|resid(?:e|ing))\b",
+        normalized,
+    ):
+        return str(profile.get("country") or "").strip() or None
     if re.search(r"\b(?:samples?\s+of\s+your\s+work|work\s+samples?)\b", normalized):
         return str(profile.get("website") or profile.get("portfolio") or "").strip() or None
     education = profile.get("education_history")

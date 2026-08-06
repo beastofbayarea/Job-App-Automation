@@ -547,14 +547,22 @@ def test_load_personalized_resume_evidence_extracts_attached_pdf(tmp_path: Path)
 
 def test_greenhouse_semantic_answers_prevent_observed_matcher_collisions() -> None:
     profile = {
+        "first_name": "Preferred",
+        "preferred_name": "Preferred",
         "current_company": "Current Company",
+        "current_job_title": "Senior Product Manager",
+        "street_address": "1 Example Road",
+        "city": "Example City",
+        "state": "Example State",
+        "zip_code": "12345",
+        "country": "United States",
         "portfolio": "https://example.test/portfolio",
         "education_history": {
             "school": "Example University",
             "field_of_study": "Computer Science",
         },
     }
-    rules = {"notice_period": "2 weeks"}
+    rules = {"notice_period": "2 weeks", "current_salary": "Configured compensation"}
 
     assert (
         _greenhouse_semantic_answer(
@@ -579,6 +587,39 @@ def test_greenhouse_semantic_answers_prevent_observed_matcher_collisions() -> No
             rules,
         )
         == "https://example.test/portfolio"
+    )
+    assert (
+        _greenhouse_semantic_answer(
+            "Who is your current or previous employer?",
+            profile,
+            rules,
+        )
+        == "Current Company"
+    )
+    assert (
+        _greenhouse_semantic_answer(
+            "What is your current or more recent job title?",
+            profile,
+            rules,
+        )
+        == "Senior Product Manager"
+    )
+    assert _greenhouse_semantic_answer("Address", profile, rules) == "1 Example Road"
+    assert (
+        _greenhouse_semantic_answer("Full Mailing Address", profile, rules)
+        == "1 Example Road"
+    )
+    assert _greenhouse_semantic_answer("State/Province", profile, rules) == "Example State"
+    assert _greenhouse_semantic_answer("Country", profile, rules) == "United States"
+    assert (
+        _greenhouse_semantic_answer("Which country are you based in?", profile, rules)
+        == "United States"
+    )
+    assert _greenhouse_semantic_answer("Preferred First Name", profile, rules) == "Preferred"
+    assert _greenhouse_semantic_answer("Legal First Name (English)", profile, rules) == "Preferred"
+    assert (
+        _greenhouse_semantic_answer("What is your current CTC (in LPA)?", profile, rules)
+        == "Configured compensation"
     )
     assert _greenhouse_semantic_answer("School", profile, rules) == "Example University"
     assert _greenhouse_semantic_answer("Discipline", profile, rules) == "Computer Science"
