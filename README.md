@@ -4,7 +4,7 @@
 [![uv](https://img.shields.io/badge/uv-supported-green.svg)](https://github.com/astral-sh/uv)
 [![License](https://img.shields.io/badge/license-private-red.svg)]()
 
-A local, safety-first toolkit for discovering public ATS vacancies, generating tailored PDF resumes and cover letters, privately archiving those documents on a VPS, and filling applications on five supported ATS providers. It also includes a Gmail OAuth utility and a candidate-email pool selector.
+**Job Application Automation** is a local, safety-first Python engine for discovering public vacancies across 5 major ATS platforms (Greenhouse, Lever, Ashby, SmartRecruiters, Workable), generating AI-tailored PDF resumes & cover letters via Vertex AI, privately archiving documents on a VPS, and automating submissions with Playwright stealth browser automation. Includes Gmail OAuth integration and multi-candidate email rotation.
 
 **Quick Links:** [Documentation](docs/README.md) | [FAQ](docs/faq.md) | [Quick Reference](docs/quick-reference.md) | [Configuration Guide](docs/configuration.md) | [CLI Reference](docs/cli-reference.md) | [Operations Runbook](docs/operations-runbook.md) | [Contributing](CONTRIBUTING.md) | [Changelog](CHANGELOG.md)
 
