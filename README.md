@@ -48,7 +48,7 @@
 
 ```powershell
 # Clone and enter the repository
-cd Job-App-Automation
+cd job-flow-ai
 
 # Create virtual environment and install dependencies
 uv sync --locked --no-dev
@@ -112,7 +112,7 @@ uv run python src/job_automation.py apply `
 ## Project Structure
 
 ```
-Job-App-Automation/
+job-flow-ai/
 ├── src/
 │   ├── job_automation.py              # CLI entry point
 │   └── job_application_automation/    # Main package
