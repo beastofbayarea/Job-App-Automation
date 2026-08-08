@@ -6,6 +6,8 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Removed
 
+- The packaged `resources/runtime/` fallback; `config/runtime_config.json` is now
+  the single required runtime configuration source.
 - The redundant `data/assets/` directory and the separate documentation tree;
   the root README is now the single canonical guide.
 - The development-only test suite and test dependencies.

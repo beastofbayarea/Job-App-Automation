@@ -51,8 +51,6 @@ py-modules = ["job_automation"]
 [tool.setuptools.package-data]
 job_application_automation = [
     "dashboard/static/*",
-    "resources/*.json",
-    "resources/runtime/*.json",
 ]
 
 [tool.mypy]

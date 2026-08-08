@@ -197,7 +197,7 @@ python -m pip install ".[structured]"
 python -m pip install ".[observability]"
 ```
 
-> **Note:** Installed commands look for local candidate files and an optional `config/runtime_config.json` in the project where they are run. When that file is absent, they use packaged defaults.
+> **Note:** All commands require `config/runtime_config.json` in the project where they run. The wheel no longer contains a second runtime-default copy.
 
 ---
 
