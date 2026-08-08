@@ -8,7 +8,7 @@ import math
 from types import MappingProxyType
 from typing import ClassVar
 
-from .exceptions import ConfigurationError
+from .foundation import ConfigurationError
 
 
 def _object_mapping(value: object, path: str) -> dict[str, object]:

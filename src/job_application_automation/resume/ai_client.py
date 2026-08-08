@@ -46,7 +46,7 @@ import pypdf
 from playwright.sync_api import sync_playwright
 
 from ..core.adapters import LLMClient, LLMSettings
-from ..core.ats_urls import detect_ats_job_url
+from ..core.foundation import detect_ats_job_url
 from ..core.engine_shared import (
     close_browser_session,
     open_chrome_session,

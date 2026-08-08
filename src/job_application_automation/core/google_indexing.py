@@ -20,8 +20,8 @@ from urllib.parse import quote, urlparse
 
 import requests
 
-from .artifacts import read_json, write_json
-from .paths import PROJECT_ROOT
+from .foundation import read_json, write_json
+from .foundation import PROJECT_ROOT
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 
 

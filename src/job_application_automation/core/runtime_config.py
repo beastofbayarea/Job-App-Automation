@@ -6,8 +6,8 @@ import json
 from collections.abc import Mapping
 from pathlib import Path
 
-from .exceptions import ConfigurationError
-from .paths import CONFIG_DIR, PROJECT_ROOT
+from .foundation import ConfigurationError
+from .foundation import CONFIG_DIR, PROJECT_ROOT
 from .runtime_config_models import (
     ApplicationSettings,
     AshbyEngineSettings,

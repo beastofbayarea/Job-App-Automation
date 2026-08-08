@@ -74,9 +74,9 @@ from ..core.engine_shared import (
     validate_ats_url,
     validate_required_fields,
 )
-from ..core.paths import SRC_DIR
+from ..core.foundation import SRC_DIR
 from ..core.runtime_config import RUNTIME_CONFIG, resolve_runtime_path
-from ..core.screenshots import active_screenshot_directory
+from ..core.foundation import active_screenshot_directory
 
 # ==============================================================================
 # DEFAULT CONFIGURATION

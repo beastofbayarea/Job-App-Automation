@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 from collections.abc import Sequence
 
-from .artifacts import atomic_write_text
+from .foundation import atomic_write_text
 from .observability import initialize_observability
 from .runtime_config import RUNTIME_CONFIG
 

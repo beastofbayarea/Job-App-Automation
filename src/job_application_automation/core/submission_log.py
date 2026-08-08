@@ -15,8 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from collections.abc import Mapping, MutableMapping
 
-from .artifacts import interprocess_file_lock, read_json, write_json
-from .identity import canonical_job_url, normalize_email, _require_string
+from .foundation import interprocess_file_lock, read_json, write_json
+from .foundation import canonical_job_url, normalize_email, _require_string
 
 _SLUG_PATTERN = re.compile(r"[^a-z0-9]+")
 

@@ -25,7 +25,7 @@ from .document_archive import (
     load_vps_archive_config,
     retrieve_archive,
 )
-from .paths import CONFIG_DIR, OUTPUT_DIR
+from .foundation import CONFIG_DIR, OUTPUT_DIR
 
 DEFAULT_PROFILE = CONFIG_DIR / "candidate_profile_config.json"
 DEFAULT_GENERATED_ROOT = OUTPUT_DIR / "application_documents"

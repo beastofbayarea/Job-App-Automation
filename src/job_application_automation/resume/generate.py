@@ -46,8 +46,8 @@ from xml.sax.saxutils import escape as xml_escape
 
 import fitz  # PyMuPDF remains a compatible module-level scorer patch point.
 
-from ..core.paths import OUTPUT_DIR as PROJECT_OUTPUT_DIR
-from ..core.paths import SRC_DIR
+from ..core.foundation import OUTPUT_DIR as PROJECT_OUTPUT_DIR
+from ..core.foundation import SRC_DIR
 from ..core.runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from .ai_client import call_resume_llm, generate_fallback_resume_data, scrape_job
 from .cache import ResumeCache

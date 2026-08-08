@@ -16,8 +16,8 @@ from pathlib import Path
 from typing import Protocol, runtime_checkable
 from urllib.parse import urlparse
 
-from .exceptions import InputContractError
-from .identity import _require_string
+from .foundation import InputContractError
+from .foundation import _require_string
 
 
 ENGINE_RESULT_PREFIX = "ENGINE_RESULT_JSON:"

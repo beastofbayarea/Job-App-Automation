@@ -12,10 +12,10 @@ from pathlib import Path
 from typing import Any
 from collections.abc import Sequence
 
-from .application_candidates import SUPPORTED_PLATFORMS, eligible_application_jobs
-from .artifacts import atomic_write_text, read_json
+from .worker_support import SUPPORTED_PLATFORMS, eligible_application_jobs
+from .foundation import atomic_write_text, read_json
 from .contracts import EngineResult
-from .identity import canonical_job_url
+from .foundation import canonical_job_url
 from .observability import initialize_observability
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from ..search.support import load_confirmed_urls, remove_confirmed_job

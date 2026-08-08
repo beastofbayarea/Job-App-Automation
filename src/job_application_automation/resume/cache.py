@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Protocol
 from collections.abc import Mapping, MutableMapping
 
-from ..core.artifacts import read_json, write_json
+from ..core.foundation import read_json, write_json
 
 
 class ResumeCacheJob(Protocol):

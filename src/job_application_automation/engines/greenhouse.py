@@ -66,7 +66,7 @@ from ..core.engine_shared import (
     validate_nonempty_file,
     validate_required_fields,
 )
-from ..core.paths import OUTPUT_DIR, resolve_project_dir
+from ..core.foundation import OUTPUT_DIR, resolve_project_dir
 from ..core.runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from ..mail.gmail_client import (
     fetch_messages,

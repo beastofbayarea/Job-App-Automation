@@ -12,7 +12,7 @@ from types import MappingProxyType
 from typing import Protocol, runtime_checkable
 from collections.abc import Mapping, Sequence
 
-from .exceptions import InputContractError
+from .foundation import InputContractError
 
 
 def _immutable_environment(value: Mapping[str, str]) -> Mapping[str, str]:

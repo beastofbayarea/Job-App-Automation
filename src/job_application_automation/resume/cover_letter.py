@@ -31,10 +31,10 @@ from typing import Any
 from collections.abc import Callable, Sequence
 
 from ..core.adapters import LLMClient
-from ..core.artifacts import write_json
+from ..core.foundation import write_json
 from ..core.engine_shared import load_json_config
-from ..core.identity import normalize_email
-from ..core.paths import CONFIG_DIR, OUTPUT_DIR
+from ..core.foundation import normalize_email
+from ..core.foundation import CONFIG_DIR, OUTPUT_DIR
 from ..core.runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from .ai_client import scrape_job
 from .career_narrative import CareerNarrative, load_career_narrative

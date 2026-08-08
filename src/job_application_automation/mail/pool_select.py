@@ -15,7 +15,7 @@ from job_application_automation.mail.pool import (
     resolve_email_pool as _resolve_email_pool_impl,
     select_emails,
 )
-from ..core.paths import CONFIG_DIR
+from ..core.foundation import CONFIG_DIR
 from ..core.runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 
 

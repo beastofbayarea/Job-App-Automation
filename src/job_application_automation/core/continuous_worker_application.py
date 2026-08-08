@@ -16,21 +16,21 @@ from typing import Any, Protocol, cast
 
 from ..mail.pool import load_email_pool
 from ..search.support import remove_confirmed_job
-from .application_candidates import application_url
-from .artifacts import atomic_write_text, read_json
+from .worker_support import application_url
+from .foundation import atomic_write_text, read_json
 from .contracts import EngineResult
-from .continuous_worker_candidates import (
+from .worker_support import (
     JobIdentity,
     RESUMABLE_STATUSES,
     load_exact_confirmed_ledger_index,
 )
-from .continuous_worker_models import CommandOutcome, CycleStatus
-from .continuous_worker_runtime import WorkerTelemetry
-from .continuous_worker_state import load_worker_state, save_worker_state, utc_now_iso
-from .identity import canonical_job_url, normalize_email
+from .worker_support import CommandOutcome, CycleStatus
+from .worker_support import WorkerTelemetry
+from .worker_support import load_worker_state, save_worker_state, utc_now_iso
+from .foundation import canonical_job_url, normalize_email
 from .observability import NOOP_TELEMETRY
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
-from .screenshots import (
+from .foundation import (
     APPLICATION_SCREENSHOT_DIR_ENV,
     cleanup_application_screenshot_directory,
     create_application_screenshot_directory,

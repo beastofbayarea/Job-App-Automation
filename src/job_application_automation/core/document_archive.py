@@ -41,9 +41,9 @@ from typing import Protocol
 from collections.abc import Callable, Iterator, Mapping, Sequence
 
 from .adapters import CommandResult, ProcessRunner, ProcessSettings
-from .artifacts import write_json
-from .identity import canonical_job_url, normalize_email, normalize_lookup_text
-from .paths import PROJECT_ROOT
+from .foundation import write_json
+from .foundation import canonical_job_url, normalize_email, normalize_lookup_text
+from .foundation import PROJECT_ROOT
 
 
 ARCHIVE_SCHEMA_VERSION = 1

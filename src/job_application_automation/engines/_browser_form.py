@@ -15,7 +15,7 @@ from urllib.parse import urljoin
 from playwright.sync_api import Page, sync_playwright
 from pypdf import PdfReader
 
-from ..core.ats_urls import validate_ats_job_url
+from ..core.foundation import validate_ats_job_url
 from ..core.engine_shared import (
     answer_variants,
     build_engine_parser,
@@ -44,7 +44,7 @@ from ..core.engine_shared import (
     validate_nonempty_file,
     validate_required_fields,
 )
-from ..core.paths import OUTPUT_DIR
+from ..core.foundation import OUTPUT_DIR
 from .browser_controls import (
     fill_and_blur as _shared_fill_and_blur,
     first_visible_for as _shared_first_visible_for,

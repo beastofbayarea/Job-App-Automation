@@ -58,7 +58,7 @@ from ..core.engine_shared import (
     validate_nonempty_file,
     validate_required_fields,
 )
-from ..core.paths import OUTPUT_DIR, resolve_project_dir
+from ..core.foundation import OUTPUT_DIR, resolve_project_dir
 from .browser_controls import upload_matching_file, upload_preferred_file
 from .form_sections import (
     CallableSectionHandler,

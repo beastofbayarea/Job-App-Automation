@@ -11,9 +11,9 @@ from pathlib import Path
 from collections.abc import Sequence
 from urllib.parse import unquote, urlparse
 
-from .artifacts import read_json, write_json
+from .foundation import read_json, write_json
 from .contracts import EngineResult
-from .paths import CLI_ENTRYPOINT, OUTPUT_DIR, PROJECT_ROOT
+from .foundation import CLI_ENTRYPOINT, OUTPUT_DIR, PROJECT_ROOT
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 
 

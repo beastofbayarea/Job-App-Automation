@@ -7,7 +7,7 @@ from typing import Any
 from collections.abc import Mapping, Sequence
 from urllib.parse import urlparse
 
-from ..core.paths import OUTPUT_DIR
+from ..core.foundation import OUTPUT_DIR
 from ._browser_form import (
     BrowserFormSpec,
     engine_parser,

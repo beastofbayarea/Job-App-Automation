@@ -16,8 +16,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urljoin, urlparse, urlunparse
 
-from ..core.artifacts import interprocess_file_lock, read_json, write_json
-from ..core.identity import canonical_job_url
+from ..core.foundation import interprocess_file_lock, read_json, write_json
+from ..core.foundation import canonical_job_url
 from ..core.runtime_config import RUNTIME_CONFIG, SearchDefaultsSettings, resolve_runtime_path
 
 """Data-only models and stable output schema for job-board search.

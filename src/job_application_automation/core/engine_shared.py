@@ -46,16 +46,16 @@ from urllib.parse import urlparse
 from playwright.sync_api import Browser, Locator, Page, Playwright
 from pypdf import PdfReader
 
-from .ats_urls import (
+from .foundation import (
     ATS_HOST_MARKERS,
     detect_ats_job_url,
     validate_ats_job_url,
     validate_ats_url as validate_ats_url,
 )
 from .contracts import ENGINE_RESULT_PREFIX, EngineResult
-from .identity import normalize_email
-from .paths import DATA_DIR
-from .profile import AutomationProfile
+from .foundation import normalize_email
+from .foundation import DATA_DIR
+from .foundation import AutomationProfile
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from ..engines import browser_controls as _browser_controls
 from ..engines import browser_runtime as _browser_runtime

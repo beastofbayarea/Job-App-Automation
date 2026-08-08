@@ -26,9 +26,9 @@ from urllib.parse import urlparse
 
 from playwright.sync_api import Browser, Page, Playwright
 
-from ..core.exceptions import BrowserAutomationError
+from ..core.foundation import BrowserAutomationError
 from ..core.runtime_config import RUNTIME_CONFIG
-from ..core.screenshots import active_screenshot_directory
+from ..core.foundation import active_screenshot_directory
 
 logger = logging.getLogger("ATSEngineBrowserRuntime")
 

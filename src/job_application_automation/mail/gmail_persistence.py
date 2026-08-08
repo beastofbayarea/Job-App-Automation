@@ -14,7 +14,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from ..core.artifacts import (
+from ..core.foundation import (
     read_json,
     write_csv as write_csv_artifact,
     write_json as write_json_artifact,

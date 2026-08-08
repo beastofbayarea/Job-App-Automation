@@ -44,6 +44,9 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Changed
 
+- Consolidated thirteen foundational and continuous-worker support modules into
+  two cohesive core modules, reducing the core package from 35 Python files to
+  24 while preserving its executable command and orchestration boundaries.
 - Consolidated the search package's models, parsing, discovery, liveness,
   caching, serialization, provider contracts, utilities, and registry from twelve
   modules into two while preserving provider adapters and the CLI facade.

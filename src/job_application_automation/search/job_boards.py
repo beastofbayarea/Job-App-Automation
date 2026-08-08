@@ -69,8 +69,8 @@ from .providers import lever as _provider_lever
 from . import providers as _provider_registry
 from .providers import smartrecruiters as _provider_smartrecruiters
 from .providers import workable as _provider_workable
-from ..core.artifacts import atomic_write_text, read_json, write_json as atomic_write_json
-from ..core.paths import OUTPUT_DIR
+from ..core.foundation import atomic_write_text, read_json, write_json as atomic_write_json
+from ..core.foundation import OUTPUT_DIR
 from .support import (
     AI_DISCOVERY_TERMS,
     ALL_DDGS_BACKENDS,

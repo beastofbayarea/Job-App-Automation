@@ -15,8 +15,8 @@ from typing import Any
 from urllib.parse import parse_qsl, urlsplit
 from collections.abc import Mapping, Sequence
 
-from .artifacts import atomic_write_text, interprocess_file_lock, read_json
-from .ats_urls import detect_ats_job_url
+from .foundation import atomic_write_text, interprocess_file_lock, read_json
+from .foundation import detect_ats_job_url
 from .continuous_worker_application import (
     DEFAULT_BACKLOG,
     DEFAULT_EMAIL_POOL,
@@ -27,25 +27,25 @@ from .continuous_worker_application import (
     SelectedJobApplicationConfig,
     SelectedJobApplicationService,
 )
-from .continuous_worker_candidates import (
+from .worker_support import (
     ExactConfirmedLedgerIndex,
     load_exact_confirmed_ledger_index,
     partition_candidate_state,
 )
-from .continuous_worker_models import SOURCE_ONCE_EXIT_POLICY, CycleStatus
-from .continuous_worker_runtime import WorkerRuntime, run_worker
-from .continuous_worker_sources import (
+from .worker_support import SOURCE_ONCE_EXIT_POLICY, CycleStatus
+from .worker_support import WorkerRuntime, run_worker
+from .worker_support import (
     SourceServices,
     load_source_jobs,
     validate_worker_platform,
 )
-from .continuous_worker_state import (
+from .worker_support import (
     load_worker_state,
     read_worker_state_records,
     reconcile_interrupted_submissions,
     save_worker_state,
 )
-from .identity import canonical_job_url
+from .foundation import canonical_job_url
 from .observability import initialize_observability
 from .orchestrator import load_jobs_from_tracker
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
