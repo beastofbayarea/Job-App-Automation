@@ -1,6 +1,34 @@
 [
   {
     "posting_date": "2026-07-31",
+    "company": "Sumo Logic",
+    "title": "Principal Product Manager",
+    "location": "Noida, Uttar Pradesh, India",
+    "url": "https://job-boards.greenhouse.io/sumologic/jobs/8089130"
+  },
+  {
+    "posting_date": "2026-07-31",
+    "company": "Sumo Logic",
+    "title": "Principal Product Manager",
+    "location": "Bengaluru, Karnataka, India",
+    "url": "https://job-boards.greenhouse.io/sumologic/jobs/8098451"
+  },
+  {
+    "posting_date": "2026-07-31",
+    "company": "Remote",
+    "title": "Product Manager, Billing Platform",
+    "location": "Remote-UK&I",
+    "url": "https://job-boards.greenhouse.io/remotecom/jobs/7822618003"
+  },
+  {
+    "posting_date": "2026-07-31",
+    "company": "OKX",
+    "title": "Senior Product Manager, Multilingual AI and Evals",
+    "location": "Singapore, Singapore",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7822538003"
+  },
+  {
+    "posting_date": "2026-07-31",
     "company": "Eve",
     "title": "Performance Marketing Manager",
     "location": "Remote - United States",
@@ -14,11 +42,53 @@
     "url": "https://job-boards.greenhouse.io/rithum/jobs/8094706"
   },
   {
+    "posting_date": "2026-07-30",
+    "company": "Recorded Future",
+    "title": "Sr.Product Manager - Threat Intelligence Analytics",
+    "location": "London, UK",
+    "url": "https://job-boards.greenhouse.io/recordedfuture/jobs/8652544002"
+  },
+  {
+    "posting_date": "2026-07-30",
+    "company": "OKX",
+    "title": "Growth Product Manager, Listing Campaign",
+    "location": "Singapore, Singapore",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7821265003"
+  },
+  {
+    "posting_date": "2026-07-30",
+    "company": "OKX",
+    "title": "Growth Product Manager, Listing Campaign",
+    "location": "Hong Kong, Hong Kong SAR",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7821266003"
+  },
+  {
+    "posting_date": "2026-07-29",
+    "company": "Appspace",
+    "title": "Senior Technical Product Manager",
+    "location": "Ashford, Kent, United Kingdom Remote",
+    "url": "https://job-boards.greenhouse.io/appspace/jobs/6113183004"
+  },
+  {
     "posting_date": "2026-07-29",
     "company": "AlphaSense",
     "title": "Director, Product Marketing – Premium Content & Data",
     "location": "Remote - United States",
     "url": "https://job-boards.greenhouse.io/alphasense/jobs/8428321002"
+  },
+  {
+    "posting_date": "2026-07-28",
+    "company": "Veeam Software",
+    "title": "Product Marketing Director, Velocity (Remote West Coast)",
+    "location": "Remote, United States",
+    "url": "https://job-boards.greenhouse.io/veeamsoftware/jobs/4934118101"
+  },
+  {
+    "posting_date": "2026-07-28",
+    "company": "Tripledot Studios",
+    "title": "User Acquisition Manager",
+    "location": "London",
+    "url": "https://job-boards.greenhouse.io/tripledotstudios/jobs/4937084101"
   },
   {
     "posting_date": "2026-07-27",
@@ -29,10 +99,10 @@
   },
   {
     "posting_date": "2026-07-24",
-    "company": "Marqeta",
-    "title": "Senior Demand Generation Manager - EU/UK",
-    "location": "London, United Kingdom",
-    "url": "https://job-boards.greenhouse.io/marqeta/jobs/8064542"
+    "company": "Remote",
+    "title": "Senior Product Manager, Fraud and Compliance",
+    "location": "Remote-UK&I",
+    "url": "https://job-boards.greenhouse.io/remotecom/jobs/7814949003"
   },
   {
     "posting_date": "2026-07-24",
@@ -42,11 +112,46 @@
     "url": "https://job-boards.eu.greenhouse.io/prolific/jobs/4937206101"
   },
   {
+    "posting_date": "2026-07-24",
+    "company": "Marqeta",
+    "title": "Senior Demand Generation Manager - EU/UK",
+    "location": "London, United Kingdom",
+    "url": "https://job-boards.greenhouse.io/marqeta/jobs/8064542"
+  },
+  {
+    "posting_date": "2026-07-22",
+    "company": "Remote",
+    "title": "Product Manager, Billing Platform",
+    "location": "Remote-EMEA",
+    "url": "https://job-boards.greenhouse.io/remotecom/jobs/7813025003"
+  },
+  {
     "posting_date": "2026-07-22",
     "company": "OpenTable",
     "title": "Senior Technical Program Manager",
     "location": "San Francisco, California, United States",
     "url": "https://job-boards.greenhouse.io/opentable/jobs/8644106002"
+  },
+  {
+    "posting_date": "2026-07-22",
+    "company": "adyen",
+    "title": "Group Product Manager, Onboarding",
+    "location": "Chicago",
+    "url": "https://job-boards.greenhouse.io/adyen/jobs/8043139"
+  },
+  {
+    "posting_date": "2026-07-21",
+    "company": "Seesaw",
+    "title": "Senior Product Manager",
+    "location": "Remote - USA + Canada",
+    "url": "https://job-boards.greenhouse.io/seesaw/jobs/4697704006"
+  },
+  {
+    "posting_date": "2026-07-21",
+    "company": "Fleetio",
+    "title": "Director, Product Marketing, GTM Strategy",
+    "location": "Remote - USA",
+    "url": "https://job-boards.greenhouse.io/fleetio/jobs/5192196007"
   },
   {
     "posting_date": "2026-07-21",
@@ -56,11 +161,74 @@
     "url": "https://job-boards.greenhouse.io/asgjobs/jobs/8626507002"
   },
   {
+    "posting_date": "2026-07-20",
+    "company": "Tekmetric",
+    "title": "Field Marketing Manager",
+    "location": "Remote",
+    "url": "https://job-boards.greenhouse.io/tekmetric/jobs/6118905004"
+  },
+  {
+    "posting_date": "2026-07-20",
+    "company": "OKX",
+    "title": "Product Manager / Director, Event Contracts",
+    "location": "Singapore, Singapore",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7809310003"
+  },
+  {
+    "posting_date": "2026-07-20",
+    "company": "OKX",
+    "title": "Product Manager / Director, Event Contracts",
+    "location": "Hong Kong, Hong Kong SAR",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7809311003"
+  },
+  {
+    "posting_date": "2026-07-20",
+    "company": "LTS",
+    "title": "Technical Product Manager",
+    "location": "United States - Remote",
+    "url": "https://job-boards.greenhouse.io/lts/jobs/4323088009"
+  },
+  {
+    "posting_date": "2026-07-20",
+    "company": "Learneo",
+    "title": "Manager, Paid Media",
+    "location": "India - Remote",
+    "url": "https://job-boards.greenhouse.io/learneo/jobs/8075244"
+  },
+  {
+    "posting_date": "2026-07-20",
+    "company": "GoCardless",
+    "title": "Senior Product Manager",
+    "location": "London, UK",
+    "url": "https://job-boards.greenhouse.io/gocardless/jobs/8064518"
+  },
+  {
     "posting_date": "2026-07-17",
     "company": "Mitratech",
     "title": "Sr. Product Manager AI",
     "location": "Remote - United States",
     "url": "https://job-boards.greenhouse.io/mitratech/jobs/8070402"
+  },
+  {
+    "posting_date": "2026-07-17",
+    "company": "ezCater",
+    "title": "Product Marketing Manager, Enterprise Marketing",
+    "location": "Boston, MA",
+    "url": "https://job-boards.greenhouse.io/ezcaterinc/jobs/5190412007"
+  },
+  {
+    "posting_date": "2026-07-16",
+    "company": "StraitsX",
+    "title": "Product Manager, Stablecoin Payments API",
+    "location": "Singapore",
+    "url": "https://job-boards.eu.greenhouse.io/straitsx/jobs/4929896101"
+  },
+  {
+    "posting_date": "2026-07-16",
+    "company": "Joblogic",
+    "title": "Product Manager - Field Service Management (SaaS)",
+    "location": "UK",
+    "url": "https://job-boards.eu.greenhouse.io/joblogic/jobs/4929781101"
   },
   {
     "posting_date": "2026-07-16",
@@ -71,10 +239,38 @@
   },
   {
     "posting_date": "2026-07-15",
+    "company": "Referral Board",
+    "title": "Senior Product Manager, Logs - Observability",
+    "location": "Ireland",
+    "url": "https://job-boards.greenhouse.io/referralsuseonly/jobs/8066523"
+  },
+  {
+    "posting_date": "2026-07-15",
     "company": "Grafana Labs",
     "title": "Demand Generation Program Manager | United States | Remote",
     "location": "Remote - United States",
     "url": "https://job-boards.greenhouse.io/grafanalabs/jobs/6115634004"
+  },
+  {
+    "posting_date": "2026-07-14",
+    "company": "Wrike",
+    "title": "Group Product Manager [Klaxoon]",
+    "location": "Netherlands - Remote",
+    "url": "https://job-boards.greenhouse.io/wrike/jobs/4714883005"
+  },
+  {
+    "posting_date": "2026-07-14",
+    "company": "Wrike",
+    "title": "Group Product Manager [Klaxoon]",
+    "location": "Belgium - Remote",
+    "url": "https://job-boards.greenhouse.io/wrike/jobs/4714888005"
+  },
+  {
+    "posting_date": "2026-07-14",
+    "company": "CreateFuture",
+    "title": "Lead Product Manager",
+    "location": "Edinburgh, Leeds, Manchester or London",
+    "url": "https://job-boards.eu.greenhouse.io/xdesign/jobs/4924834101"
   },
   {
     "posting_date": "2026-07-13",
@@ -84,11 +280,32 @@
     "url": "https://job-boards.greenhouse.io/pendo/jobs/8613609002"
   },
   {
-    "posting_date": "2026-07-11",
-    "company": "Evolve",
-    "title": "Senior Product Manager -Growth & Acquisition",
-    "location": "Remote - United States",
-    "url": "https://job-boards.greenhouse.io/evolvevacationrental/jobs/7799256003"
+    "posting_date": "2026-07-13",
+    "company": "OpenSesame",
+    "title": "Senior Product Marketing Manager",
+    "location": "Remote",
+    "url": "https://job-boards.greenhouse.io/opensesame/jobs/8063623"
+  },
+  {
+    "posting_date": "2026-07-13",
+    "company": "OKX",
+    "title": "Senior/Staff Product Manager, User Center",
+    "location": "Singapore, Singapore",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7802627003"
+  },
+  {
+    "posting_date": "2026-07-13",
+    "company": "OKX",
+    "title": "Senior/Staff Product Manager, User Center",
+    "location": "Hong Kong, Hong Kong SAR",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7802628003"
+  },
+  {
+    "posting_date": "2026-07-13",
+    "company": "Dropzone AI",
+    "title": "Marketing Program Specialist",
+    "location": "Remote - US",
+    "url": "https://job-boards.greenhouse.io/dropzoneai/jobs/4314407009"
   },
   {
     "posting_date": "2026-07-11",
@@ -98,11 +315,193 @@
     "url": "https://job-boards.greenhouse.io/parsecautomationcorp/jobs/5326587008"
   },
   {
+    "posting_date": "2026-07-11",
+    "company": "Evolve",
+    "title": "Senior Product Manager -Growth & Acquisition",
+    "location": "Remote - United States",
+    "url": "https://job-boards.greenhouse.io/evolvevacationrental/jobs/7799256003"
+  },
+  {
+    "posting_date": "2026-07-10",
+    "company": "Smartsheet",
+    "title": "Sr. Product Marketing Manager - AI GTM Strategy, EMEA",
+    "location": "London, UK",
+    "url": "https://job-boards.greenhouse.io/smartsheet/jobs/8053758"
+  },
+  {
+    "posting_date": "2026-07-09",
+    "company": "Zscaler",
+    "title": "Principal Field Product Manager",
+    "location": "Singapore, SGP",
+    "url": "https://job-boards.greenhouse.io/zscaler/jobs/5179034007"
+  },
+  {
+    "posting_date": "2026-07-09",
+    "company": "Upwork",
+    "title": "Principal, Technical Product Manager - AI Frontiers",
+    "location": "Palo Alto, California, United States",
+    "url": "https://job-boards.greenhouse.io/upwork/jobs/7800298003"
+  },
+  {
+    "posting_date": "2026-07-09",
+    "company": "Scopely",
+    "title": "Performance Marketing Director",
+    "location": "ES - Barcelona, Spain",
+    "url": "https://job-boards.greenhouse.io/scopely/jobs/5282076008"
+  },
+  {
+    "posting_date": "2026-07-09",
+    "company": "NMI",
+    "title": "Senior Product Manager, Market Expansion – Merchant Central",
+    "location": "Canada, Remote",
+    "url": "https://job-boards.greenhouse.io/nmi/jobs/5317552008"
+  },
+  {
+    "posting_date": "2026-07-09",
+    "company": "Life360",
+    "title": "Staff Technical Program Manager, AI Native",
+    "location": "Remote, USA; Remote, Canada",
+    "url": "https://job-boards.greenhouse.io/life360/jobs/8627517002"
+  },
+  {
+    "posting_date": "2026-07-09",
+    "company": "ConnectWise",
+    "title": "Demand Generation Manager - Cyber",
+    "location": "US-Remote",
+    "url": "https://job-boards.greenhouse.io/connectwise/jobs/4712461005"
+  },
+  {
+    "posting_date": "2026-07-08",
+    "company": "G-P",
+    "title": "Sr Product Marketing Manager",
+    "location": "United States (Remote-First)",
+    "url": "https://job-boards.greenhouse.io/globalizationpartners/jobs/7791586003"
+  },
+  {
+    "posting_date": "2026-07-07",
+    "company": "YipitData",
+    "title": "Technical Product Manager",
+    "location": "US Remote",
+    "url": "https://job-boards.greenhouse.io/yipitdata/jobs/8050061"
+  },
+  {
+    "posting_date": "2026-07-07",
+    "company": "Reddit",
+    "title": "Staff Technical Program Manager",
+    "location": "Remote - United States",
+    "url": "https://job-boards.greenhouse.io/reddit/jobs/8049762"
+  },
+  {
+    "posting_date": "2026-07-07",
+    "company": "Eve",
+    "title": "Senior Product Marketing Manager",
+    "location": "Remote - US",
+    "url": "https://job-boards.greenhouse.io/eve/jobs/4308481009"
+  },
+  {
+    "posting_date": "2026-07-06",
+    "company": "Re-Leased",
+    "title": "Product Manager",
+    "location": "New Zealand",
+    "url": "https://job-boards.greenhouse.io/released/jobs/7796516003"
+  },
+  {
+    "posting_date": "2026-07-06",
+    "company": "Overstory",
+    "title": "Staff Product Manager, Machine Learning",
+    "location": "Remote: United States | Canada | United Kingdom | The Netherlands | Denmark | Estonia | France | Ireland | Portugal | Sweden | Switzerland",
+    "url": "https://job-boards.eu.greenhouse.io/overstory/jobs/4908204101"
+  },
+  {
+    "posting_date": "2026-07-06",
+    "company": "OKX",
+    "title": "Product Manager, R&D Efficiency Platform",
+    "location": "Hong Kong, Hong Kong SAR; Singapore, Singapore",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7795777003"
+  },
+  {
+    "posting_date": "2026-07-03",
+    "company": "Remote",
+    "title": "Senior Product Manager, Reporting & Insights",
+    "location": "Remote-EMEA",
+    "url": "https://job-boards.greenhouse.io/remotecom/jobs/7792448003"
+  },
+  {
     "posting_date": "2026-07-03",
     "company": "B-Stock",
     "title": "Senior Manager, Lifecycle & Buyer Growth Marketing",
     "location": "Boston, Massachusetts or San Mateo, California, United States",
     "url": "https://job-boards.greenhouse.io/bstocksolutions/jobs/6108327004"
+  },
+  {
+    "posting_date": "2026-07-02",
+    "company": "Anthropic",
+    "title": "Partnerships Lead, Southern Europe (AI GTM)",
+    "location": "Paris, France",
+    "url": "https://job-boards.greenhouse.io/anthropic/jobs/5277044008"
+  },
+  {
+    "posting_date": "2026-07-01",
+    "company": "Tebra",
+    "title": "Director, GTM Operations",
+    "location": "United States - Remote",
+    "url": "https://job-boards.greenhouse.io/tebra/jobs/4708633005"
+  },
+  {
+    "posting_date": "2026-07-01",
+    "company": "Remote",
+    "title": "Senior Product Manager, HRIS Integrations",
+    "location": "Remote-EMEA",
+    "url": "https://job-boards.greenhouse.io/remotecom/jobs/7791136003"
+  },
+  {
+    "posting_date": "2026-07-01",
+    "company": "Coast",
+    "title": "Marketing Operations Manager",
+    "location": "New York City, NY",
+    "url": "https://job-boards.greenhouse.io/coast/jobs/6105783004"
+  },
+  {
+    "posting_date": "2026-06-30",
+    "company": "apartmentiq",
+    "title": "Demand Generation Manager",
+    "location": "Remote",
+    "url": "https://job-boards.greenhouse.io/apartmentiq/jobs/8040160"
+  },
+  {
+    "posting_date": "2026-06-29",
+    "company": "Rithum",
+    "title": "Demand Generation Manager - EMEA",
+    "location": "United Kingdom - Remote",
+    "url": "https://job-boards.greenhouse.io/rithumliboard/jobs/8036219"
+  },
+  {
+    "posting_date": "2026-06-29",
+    "company": "Noah Medical",
+    "title": "Head of Growth Marketing",
+    "location": "Remote, United States",
+    "url": "https://job-boards.greenhouse.io/noahmedical/jobs/5285941008"
+  },
+  {
+    "posting_date": "2026-06-29",
+    "company": "GitLab",
+    "title": "Staff Lifecycle Marketing Manager",
+    "location": "Remote, Canada; Remote, US",
+    "url": "https://job-boards.greenhouse.io/gitlab/jobs/8610952002"
+  },
+  {
+    "posting_date": "2026-06-28",
+    "company": "Catapult Sports",
+    "title": "Senior Product Manager",
+    "location": "Melbourne, Australia",
+    "url": "https://job-boards.greenhouse.io/catapultsports/jobs/8029733"
+  },
+  {
+    "posting_date": "2026-06-26",
+    "company": "YipitData",
+    "title": "AI Product Manager",
+    "location": "US Remote",
+    "url": "https://job-boards.greenhouse.io/yipitdata/jobs/8031925"
   },
   {
     "posting_date": "2026-06-26",
@@ -112,11 +511,263 @@
     "url": "https://job-boards.greenhouse.io/emoneyadvisor/jobs/4299708009"
   },
   {
+    "posting_date": "2026-06-25",
+    "company": "Dragos",
+    "title": "Staff Product Manager, Security Configuration Management",
+    "location": "United States",
+    "url": "https://job-boards.greenhouse.io/dragos/jobs/5281206008"
+  },
+  {
+    "posting_date": "2026-06-25",
+    "company": "Dragos",
+    "title": "Senior Product Manager, Integrations & Technology Alliances",
+    "location": "United States",
+    "url": "https://job-boards.greenhouse.io/dragos/jobs/5280986008"
+  },
+  {
+    "posting_date": "2026-06-25",
+    "company": "braze",
+    "title": "Senior Technical Product Manager, Content Platforms (AI Content Operations)",
+    "location": "New York City",
+    "url": "https://boards.greenhouse.io/braze/jobs/8000775?gh_jid=8000775"
+  },
+  {
+    "posting_date": "2026-06-25",
+    "company": "Braze",
+    "title": "Senior Technical Product Manager, Content Platforms",
+    "location": "New York City",
+    "url": "https://job-boards.greenhouse.io/braze/jobs/8027701"
+  },
+  {
     "posting_date": "2026-06-24",
-    "company": "Commvault",
-    "title": "Senior Product Manager - SaaS Applications Protection & Cyber Recovery",
-    "location": "Bangalore or Hyderabad, India",
-    "url": "https://job-boards.greenhouse.io/commvault/jobs/5252738008"
+    "company": "togetherai",
+    "title": "Product Manager, AI Infrastructure",
+    "location": "San Francisco",
+    "url": "https://job-boards.greenhouse.io/togetherai/jobs/5172169007"
+  },
+  {
+    "posting_date": "2026-06-24",
+    "company": "scaleai",
+    "title": "Senior AI Product Manager, Healthcare Agents",
+    "location": "San Francisco, CA; New York, NY",
+    "url": "https://job-boards.greenhouse.io/scaleai/jobs/4709281005"
+  },
+  {
+    "posting_date": "2026-06-24",
+    "company": "NMI",
+    "title": "Senior Product Manager, Market Expansion – Merchant Central",
+    "location": "US, Remote",
+    "url": "https://job-boards.greenhouse.io/nmi/jobs/5265196008"
+  },
+  {
+    "posting_date": "2026-06-24",
+    "company": "cribl",
+    "title": "Staff Technical Program Manager, AI",
+    "location": "Remote - United States",
+    "url": "https://job-boards.greenhouse.io/cribl/jobs/6099643004"
+  },
+  {
+    "posting_date": "2026-06-24",
+    "company": "AlphaSense",
+    "title": "Product Manager",
+    "location": "Remote - Canada",
+    "url": "https://job-boards.greenhouse.io/alphasense/jobs/8593687002"
+  },
+  {
+    "posting_date": "2026-06-23",
+    "company": "YipitData",
+    "title": "AI Product Manager",
+    "location": "US Remote",
+    "url": "https://job-boards.greenhouse.io/yipitdata/jobs/7246074"
+  },
+  {
+    "posting_date": "2026-06-23",
+    "company": "OKX",
+    "title": "Product Manager / Director, Financial Products",
+    "location": "Singapore, Singapore",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7782667003"
+  },
+  {
+    "posting_date": "2026-06-23",
+    "company": "OKX",
+    "title": "Product Manager / Director, Financial Products",
+    "location": "Hong Kong, Hong Kong SAR",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7782668003"
+  },
+  {
+    "posting_date": "2026-06-23",
+    "company": "OKX",
+    "title": "Product Manager / Director, Core Trading",
+    "location": "Singapore, Singapore",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7782665003"
+  },
+  {
+    "posting_date": "2026-06-23",
+    "company": "OKX",
+    "title": "Product Manager / Director, Core Trading",
+    "location": "Hong Kong, Hong Kong SAR",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7782666003"
+  },
+  {
+    "posting_date": "2026-06-23",
+    "company": "OKX",
+    "title": "Junior Product Manager, DevOps and AI",
+    "location": "Hong Kong, Hong Kong SAR; Singapore, Singapore",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7780897003"
+  },
+  {
+    "posting_date": "2026-06-23",
+    "company": "Flexport",
+    "title": "Staff Product Manager",
+    "location": "Hong Kong; Shanghai, China; Shenzhen, China",
+    "url": "https://job-boards.greenhouse.io/flexport/jobs/8022960"
+  },
+  {
+    "posting_date": "2026-06-23",
+    "company": "branch",
+    "title": "Lifecycle Marketing Manager",
+    "location": "Remote, US",
+    "url": "https://job-boards.greenhouse.io/branch/jobs/7781304003"
+  },
+  {
+    "posting_date": "2026-06-23",
+    "company": "Affirm",
+    "title": "Product Marketing Manager",
+    "location": "Remote US",
+    "url": "https://job-boards.greenhouse.io/affirm/jobs/7773695003"
+  },
+  {
+    "posting_date": "2026-06-22",
+    "company": "PerfectServe",
+    "title": "Lifecycle Manager - US Remote",
+    "location": "Remote",
+    "url": "https://job-boards.greenhouse.io/perfectserve/jobs/6097387004"
+  },
+  {
+    "posting_date": "2026-06-18",
+    "company": "planet",
+    "title": "Product Marketing Manager, AI Solutions",
+    "location": "San Francisco, CA; Washington, D.C.",
+    "url": "https://job-boards.greenhouse.io/planetlabs/jobs/7964648"
+  },
+  {
+    "posting_date": "2026-06-18",
+    "company": "AlphaSense India",
+    "title": "Product Manager I",
+    "location": "Delhi",
+    "url": "https://job-boards.greenhouse.io/alphasenseindia/jobs/8598291002"
+  },
+  {
+    "posting_date": "2026-06-18",
+    "company": "AlphaSense",
+    "title": "Product Manager I",
+    "location": "Delhi",
+    "url": "https://job-boards.greenhouse.io/alphasense/jobs/8598289002"
+  },
+  {
+    "posting_date": "2026-06-17",
+    "company": "Tide",
+    "title": "Lead Product Manager - Banking Payments",
+    "location": "Bulgaria",
+    "url": "https://job-boards.greenhouse.io/tide/jobs/7737389003"
+  },
+  {
+    "posting_date": "2026-06-17",
+    "company": "OKX",
+    "title": "Principal/Senior Product Manager, AI & Web3 Wallet",
+    "location": "Singapore, Singapore",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7777028003"
+  },
+  {
+    "posting_date": "2026-06-17",
+    "company": "OKX",
+    "title": "Principal/Senior Product Manager, AI & Web3 Wallet",
+    "location": "Hong Kong, Hong Kong SAR",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7777029003"
+  },
+  {
+    "posting_date": "2026-06-17",
+    "company": "Obsidian Security",
+    "title": "Staff Product Manager, AI Governance & Supply Chain Integration Risk",
+    "location": "US Remote",
+    "url": "https://job-boards.greenhouse.io/obsidiansecurity/jobs/5268845008"
+  },
+  {
+    "posting_date": "2026-06-17",
+    "company": "GoCardless",
+    "title": "Global Performance Marketing Manager",
+    "location": "London, UK",
+    "url": "https://job-boards.greenhouse.io/gocardless/jobs/8010060"
+  },
+  {
+    "posting_date": "2026-06-17",
+    "company": "Armada",
+    "title": "Senior Product Marketing Manager, AI Factory",
+    "location": "United States (Remote)",
+    "url": "https://job-boards.greenhouse.io/armada/jobs/5249659008"
+  },
+  {
+    "posting_date": "2026-06-17",
+    "company": "Addepar",
+    "title": "Performance Marketing Manager - SFOs",
+    "location": "Remote, USA",
+    "url": "https://job-boards.greenhouse.io/addepar1/jobs/8593067002"
+  },
+  {
+    "posting_date": "2026-06-16",
+    "company": "Zencoder",
+    "title": "Senior Manager, Marketing & GTM (AI-First)",
+    "location": "United States, Remote",
+    "url": "https://job-boards.greenhouse.io/zencoder/jobs/5164579007"
+  },
+  {
+    "posting_date": "2026-06-16",
+    "company": "Tanium",
+    "title": "Senior Product Marketing Manager - AI Core Services",
+    "location": "Addison, TX (Hybrid); Bellevue, WA (Hybrid); Durham, NC (Hybrid); Emeryville, CA (Hybrid); Reston, VA (Hybrid)",
+    "url": "https://job-boards.greenhouse.io/tanium/jobs/8008972"
+  },
+  {
+    "posting_date": "2026-06-16",
+    "company": "Robots and Pencils",
+    "title": "Technical Product Manager",
+    "location": "US - Remote",
+    "url": "https://job-boards.greenhouse.io/robotsandpencils/jobs/5265979008"
+  },
+  {
+    "posting_date": "2026-06-16",
+    "company": "Rithum",
+    "title": "Product Manager - Technical",
+    "location": "United States - Remote",
+    "url": "https://job-boards.greenhouse.io/rithum/jobs/8010880"
+  },
+  {
+    "posting_date": "2026-06-15",
+    "company": "Tenable",
+    "title": "Senior Product Marketing Manager - AI Exposure",
+    "location": "US - Headquarters - Maryland - Columbia , MA - Boston - Office",
+    "url": "https://job-boards.greenhouse.io/tenableinc/jobs/5262491008"
+  },
+  {
+    "posting_date": "2026-06-15",
+    "company": "NMI",
+    "title": "Senior Product Manager - A2A & Money Movement",
+    "location": "Remote, US",
+    "url": "https://job-boards.greenhouse.io/nmi/jobs/5262738008"
+  },
+  {
+    "posting_date": "2026-06-15",
+    "company": "affirm",
+    "title": "Group Product Management Manager, Agent Enablement",
+    "location": "Remote US",
+    "url": "https://job-boards.greenhouse.io/affirm/jobs/7770395003"
+  },
+  {
+    "posting_date": "2026-06-13",
+    "company": "cloudflare",
+    "title": "Product Manager, AI Access",
+    "location": "Hybrid",
+    "url": "https://boards.greenhouse.io/cloudflare/jobs/7904142?gh_jid=7904142"
   },
   {
     "posting_date": "2026-06-13",
@@ -124,5 +775,719 @@
     "title": "Sr. Product Manager",
     "location": "Remote - United States",
     "url": "https://job-boards.greenhouse.io/bloomerang/jobs/4705550005"
+  },
+  {
+    "posting_date": "2026-06-12",
+    "company": "Diligent Corporation",
+    "title": "Senior Product Manager",
+    "location": "London, England, United Kingdom",
+    "url": "https://job-boards.greenhouse.io/diligentcorporation/jobs/6017966004"
+  },
+  {
+    "posting_date": "2026-06-12",
+    "company": "Diligent Corporation",
+    "title": "Senior Product Manager",
+    "location": "New York, New York, United States",
+    "url": "https://job-boards.greenhouse.io/diligentcorporation/jobs/6022037004"
+  },
+  {
+    "posting_date": "2026-06-12",
+    "company": "Amplitude",
+    "title": "Web Growth Marketing Manager",
+    "location": "San Francisco, CA",
+    "url": "https://job-boards.greenhouse.io/amplitude/jobs/8590452002"
+  },
+  {
+    "posting_date": "2026-06-10",
+    "company": "OKX",
+    "title": "Product Manager / Director, User Growth",
+    "location": "Singapore, Singapore",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7768053003"
+  },
+  {
+    "posting_date": "2026-06-10",
+    "company": "Mission Lane",
+    "title": "Senior Manager, Marketing Operations",
+    "location": "Remote, United States",
+    "url": "https://job-boards.greenhouse.io/missionlane/jobs/8586519002"
+  },
+  {
+    "posting_date": "2026-06-10",
+    "company": "Galaxy",
+    "title": "Technical Program Manager",
+    "location": "London",
+    "url": "https://job-boards.greenhouse.io/galaxydigitalservices/jobs/6019063004"
+  },
+  {
+    "posting_date": "2026-06-10",
+    "company": "Demand.com",
+    "title": "Marketing Director (Remote)",
+    "location": "United States",
+    "url": "https://job-boards.greenhouse.io/demandcom/jobs/4704671005"
+  },
+  {
+    "posting_date": "2026-06-10",
+    "company": "boulevard",
+    "title": "Senior Manager, Marketing Operations",
+    "location": "Remote - USA",
+    "url": "https://job-boards.greenhouse.io/boulevard/jobs/4688386006"
+  },
+  {
+    "posting_date": "2026-06-09",
+    "company": "Power Digital",
+    "title": "Paid Media Sr. Strategist, Client Experience",
+    "location": "Remote - United States",
+    "url": "https://job-boards.greenhouse.io/powerdigitalmarketing/jobs/5160651007"
+  },
+  {
+    "posting_date": "2026-06-08",
+    "company": "vercel",
+    "title": "Performance Marketing Manager",
+    "location": "Hybrid - San Francisco, New York City, Austin",
+    "url": "https://job-boards.greenhouse.io/vercel/jobs/6011904004"
+  },
+  {
+    "posting_date": "2026-06-04",
+    "company": "MinIO",
+    "title": "Sr. AI Product Manager",
+    "location": "Remote, US ",
+    "url": "https://job-boards.greenhouse.io/minio/jobs/5239488008"
+  },
+  {
+    "posting_date": "2026-06-04",
+    "company": "Life360",
+    "title": "Director of Product, Engagement, AI Native",
+    "location": "Remote, USA; Remote, Canada",
+    "url": "https://job-boards.greenhouse.io/life360/jobs/8579681002"
+  },
+  {
+    "posting_date": "2026-06-04",
+    "company": "Afresh",
+    "title": "Demand Generation Manager",
+    "location": "San Francisco, CA - United States ",
+    "url": "https://job-boards.greenhouse.io/afresh/jobs/6000467004"
+  },
+  {
+    "posting_date": "2026-06-03",
+    "company": "Donorbox",
+    "title": "Product Manager (Trust & Safety)",
+    "location": "Europe - Remote",
+    "url": "https://job-boards.greenhouse.io/donorbox/jobs/4702332005"
+  },
+  {
+    "posting_date": "2026-05-31",
+    "company": "G-P",
+    "title": "Principal Product Manager – Agentic AI Platform",
+    "location": "India (Remote-First)",
+    "url": "https://job-boards.greenhouse.io/globalizationpartners/jobs/7749444003"
+  },
+  {
+    "posting_date": "2026-05-28",
+    "company": "Grafana Labs",
+    "title": "Senior Product Manager, Infrastructure Observability | US | Remote",
+    "location": "United States (Remote)",
+    "url": "https://job-boards.greenhouse.io/grafanalabs/jobs/6008077004"
+  },
+  {
+    "posting_date": "2026-05-28",
+    "company": "Grafana Labs",
+    "title": "Senior Product Manager, Infrastructure Observability | UK | Remote",
+    "location": "United Kingdom (Remote)",
+    "url": "https://job-boards.greenhouse.io/grafanalabs/jobs/6008083004"
+  },
+  {
+    "posting_date": "2026-05-28",
+    "company": "Grafana Labs",
+    "title": "Senior Product Manager, Infrastructure Observability | Sweden | Remote",
+    "location": "Sweden (Remote)",
+    "url": "https://job-boards.greenhouse.io/grafanalabs/jobs/6008084004"
+  },
+  {
+    "posting_date": "2026-05-28",
+    "company": "Grafana Labs",
+    "title": "Senior Product Manager, Infrastructure Observability | Spain | Remote",
+    "location": "Spain (Remote)",
+    "url": "https://job-boards.greenhouse.io/grafanalabs/jobs/6008081004"
+  },
+  {
+    "posting_date": "2026-05-28",
+    "company": "Grafana Labs",
+    "title": "Senior Product Manager, Infrastructure Observability | Ireland | Remote",
+    "location": "Republic of Ireland (Remote)",
+    "url": "https://job-boards.greenhouse.io/grafanalabs/jobs/6008080004"
+  },
+  {
+    "posting_date": "2026-05-28",
+    "company": "Grafana Labs",
+    "title": "Senior Product Manager, Infrastructure Observability | Germany | Remote",
+    "location": "Germany (Remote)",
+    "url": "https://job-boards.greenhouse.io/grafanalabs/jobs/6008082004"
+  },
+  {
+    "posting_date": "2026-05-28",
+    "company": "Grafana Labs",
+    "title": "Senior Product Manager, Infrastructure Observability | Canada | Remote",
+    "location": "Canada (Remote)",
+    "url": "https://job-boards.greenhouse.io/grafanalabs/jobs/6008078004"
+  },
+  {
+    "posting_date": "2026-05-25",
+    "company": "OKX",
+    "title": "Product Manager / Director, Institutional Product",
+    "location": "Singapore, Singapore",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7747640003"
+  },
+  {
+    "posting_date": "2026-05-25",
+    "company": "OKX",
+    "title": "Product Manager / Director, Institutional Product",
+    "location": "Hong Kong, Hong Kong SAR",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7747641003"
+  },
+  {
+    "posting_date": "2026-05-22",
+    "company": "boulevard",
+    "title": "Senior Product Manager, Developer Ecosystem",
+    "location": "Remote - USA",
+    "url": "https://job-boards.greenhouse.io/boulevard/jobs/4683617006"
+  },
+  {
+    "posting_date": "2026-05-21",
+    "company": "OKX",
+    "title": "(Senior) Data Infra Product Manager, On Chain (Algorithm and Search)",
+    "location": "Hong Kong, Hong Kong SAR",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7742382003"
+  },
+  {
+    "posting_date": "2026-05-21",
+    "company": "OKX",
+    "title": "(Senior) Data Infra Product Manager, On Chain (Algorithm and Search)",
+    "location": "Singapore, Singapore",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7742384003"
+  },
+  {
+    "posting_date": "2026-05-21",
+    "company": "Hasbro",
+    "title": "Principal Technical Product Manager, Direct-to-Consumer",
+    "location": "Renton, Washington, United States",
+    "url": "https://job-boards.greenhouse.io/hasbro/jobs/4252706009"
+  },
+  {
+    "posting_date": "2026-05-21",
+    "company": "apollo.io",
+    "title": "Principal Product Builder, Deliverability & Connectivity",
+    "location": "Remote, United States",
+    "url": "https://job-boards.greenhouse.io/apolloio/jobs/6002001004"
+  },
+  {
+    "posting_date": "2026-05-19",
+    "company": "OKX",
+    "title": "Product Manager / Director, Trading Infrastructure",
+    "location": "Singapore, Singapore",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7739030003"
+  },
+  {
+    "posting_date": "2026-05-19",
+    "company": "OKX",
+    "title": "Product Manager / Director, Trading Infrastructure",
+    "location": "Hong Kong, Hong Kong SAR",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7739031003"
+  },
+  {
+    "posting_date": "2026-05-19",
+    "company": "LTK USA",
+    "title": "Senior Product Marketing Manager",
+    "location": "United States",
+    "url": "https://job-boards.greenhouse.io/shopltk/jobs/7733334003"
+  },
+  {
+    "posting_date": "2026-05-19",
+    "company": "Anthropic",
+    "title": "Product Manager, Developer Productivity",
+    "location": "San Francisco, CA | New York City, NY",
+    "url": "https://job-boards.greenhouse.io/anthropic/jobs/5220143008"
+  },
+  {
+    "posting_date": "2026-05-18",
+    "company": "OKX",
+    "title": "Product Manager / Director, Institutional Growth",
+    "location": "Singapore, Singapore",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7738698003"
+  },
+  {
+    "posting_date": "2026-05-18",
+    "company": "OKX",
+    "title": "Product Manager / Director, Institutional Growth",
+    "location": "Hong Kong, Hong Kong SAR",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7738699003"
+  },
+  {
+    "posting_date": "2026-05-14",
+    "company": "DoubleVerify",
+    "title": "Senior Product Manager, Scibids AI",
+    "location": "Paris-France",
+    "url": "https://job-boards.greenhouse.io/doubleverify/jobs/8525334002"
+  },
+  {
+    "posting_date": "2026-05-13",
+    "company": "Bybit",
+    "title": "Spot Product Manager",
+    "location": "Abu Dhabi, UAE",
+    "url": "https://job-boards.eu.greenhouse.io/bybit/jobs/4855987101"
+  },
+  {
+    "posting_date": "2026-05-11",
+    "company": "WIN Home Inspection",
+    "title": "Product Manager",
+    "location": "Greater Delhi Area",
+    "url": "https://job-boards.greenhouse.io/winhomeinspection/jobs/4680488006"
+  },
+  {
+    "posting_date": "2026-05-11",
+    "company": "Decathlon Digital FR",
+    "title": "Product Manager (f/m/d) - Alternance - Logistics Digital Solutions",
+    "location": "Lille - Jardin des Plantes, Nord, France",
+    "url": "https://job-boards.eu.greenhouse.io/decathlontechnology/jobs/4863065101"
+  },
+  {
+    "posting_date": "2026-05-08",
+    "company": "Defense Unicorns",
+    "title": "Product Manager",
+    "location": "United States - Remote",
+    "url": "https://job-boards.greenhouse.io/defenseunicorns/jobs/5132847007"
+  },
+  {
+    "posting_date": "2026-05-06",
+    "company": "figma",
+    "title": "Product Manager, AI Growth",
+    "location": "San Francisco, CA • New York, NY • United States",
+    "url": "https://job-boards.greenhouse.io/figma/jobs/5989185004"
+  },
+  {
+    "posting_date": "2026-05-05",
+    "company": "calendly",
+    "title": "Senior Director, Growth Marketing",
+    "location": "Remote - US",
+    "url": "https://job-boards.greenhouse.io/calendly/jobs/8536015002"
+  },
+  {
+    "posting_date": "2026-04-30",
+    "company": "Remote",
+    "title": "Senior Product Manager",
+    "location": "EMEA",
+    "url": "https://job-boards.greenhouse.io/remotecom/jobs/7720367003"
+  },
+  {
+    "posting_date": "2026-04-29",
+    "company": "temporaltechnologies",
+    "title": "Staff Product Manager, Agent Platform",
+    "location": "San Francisco, California, United States",
+    "url": "https://job-boards.greenhouse.io/temporaltechnologies/jobs/5124710007"
+  },
+  {
+    "posting_date": "2026-04-28",
+    "company": "engine",
+    "title": "Lifecycle Marketing Manager",
+    "location": "Remote - US",
+    "url": "https://job-boards.greenhouse.io/engine/jobs/7714886003"
+  },
+  {
+    "posting_date": "2026-04-27",
+    "company": "Kickstarter",
+    "title": "Senior Product Manager, Growth",
+    "location": "Remote",
+    "url": "https://job-boards.greenhouse.io/kickstarter/jobs/5121890007"
+  },
+  {
+    "posting_date": "2026-04-23",
+    "company": "OKX",
+    "title": "Senior Product Manager, Conversational AI Chatbot & Agent Quality",
+    "location": "Singapore, Singapore",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7710516003"
+  },
+  {
+    "posting_date": "2026-04-20",
+    "company": "Sunrise Group",
+    "title": "Senior AI Product Manager",
+    "location": "Belgium or France",
+    "url": "https://job-boards.greenhouse.io/sunriseunitedstatesinc/jobs/5189217008"
+  },
+  {
+    "posting_date": "2026-04-17",
+    "company": "Automattic",
+    "title": "Product Manager, Growth & Analytics, Beeper",
+    "location": "Remote",
+    "url": "https://job-boards.greenhouse.io/automatticcareers/jobs/7796540"
+  },
+  {
+    "posting_date": "2026-04-16",
+    "company": "Maven Clinic",
+    "title": "Performance Marketing Lead, Paid Acquisition",
+    "location": "San Francisco, CA; Remote, US",
+    "url": "https://job-boards.greenhouse.io/mavenclinic/jobs/8510773002"
+  },
+  {
+    "posting_date": "2026-04-14",
+    "company": "OKX",
+    "title": "Senior Product Manager, DevOps and AI",
+    "location": "Singapore, Singapore",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7699601003"
+  },
+  {
+    "posting_date": "2026-04-14",
+    "company": "Axi",
+    "title": "Product Manager - Payments",
+    "location": "Bengaluru, India",
+    "url": "https://job-boards.greenhouse.io/axicorpfinancialservicesptyltd/jobs/5103298007"
+  },
+  {
+    "posting_date": "2026-04-10",
+    "company": "Scale AI",
+    "title": "Staff Technical Product Manager",
+    "location": "London, UK",
+    "url": "https://job-boards.greenhouse.io/scaleai/jobs/4683446005"
+  },
+  {
+    "posting_date": "2026-04-09",
+    "company": "Anduril Industries",
+    "title": "Sr. Program Manager (UAE)",
+    "location": "Abu Dhabi, United Arab Emirates",
+    "url": "https://job-boards.greenhouse.io/andurilindustries/jobs/5047568007?gh_jid=5047568007"
+  },
+  {
+    "posting_date": "2026-04-08",
+    "company": "hightouch",
+    "title": "Lead Product Manager, Agentic Personalization",
+    "location": "SF, NY, Remote",
+    "url": "https://job-boards.greenhouse.io/hightouch/jobs/5834919004"
+  },
+  {
+    "posting_date": "2026-04-07",
+    "company": "Nozomi Networks",
+    "title": "Senior Marketing Operations Manager",
+    "location": "United States",
+    "url": "https://job-boards.greenhouse.io/nozominetworks/jobs/4681859005"
+  },
+  {
+    "posting_date": "2026-04-06",
+    "company": "Vatn Systems",
+    "title": "Technical Program Manager",
+    "location": "Bristol RI",
+    "url": "https://job-boards.greenhouse.io/vatnsystems/jobs/4207939009"
+  },
+  {
+    "posting_date": "2026-04-06",
+    "company": "OKX",
+    "title": "Senior Product Manager, Risk Intelligence Product",
+    "location": "Singapore, Singapore",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7690776003"
+  },
+  {
+    "posting_date": "2026-03-31",
+    "company": "Red Cell Partners",
+    "title": "Product & UX Program Manager",
+    "location": "Remote; Seattle, WA",
+    "url": "https://job-boards.greenhouse.io/redcellpartners/jobs/5095257007"
+  },
+  {
+    "posting_date": "2026-03-23",
+    "company": "scaleai",
+    "title": "Product Manager, Gen AI",
+    "location": "New York, NY; San Francisco, CA",
+    "url": "https://job-boards.greenhouse.io/scaleai/jobs/4675842005"
+  },
+  {
+    "posting_date": "2026-03-19",
+    "company": "OKX",
+    "title": "Senior/Principal Product Manager, DEX Trading",
+    "location": "Singapore, Singapore",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7671614003"
+  },
+  {
+    "posting_date": "2026-03-19",
+    "company": "OKX",
+    "title": "Senior/Principal Product Manager, DEX Trading",
+    "location": "Hong Kong, Hong Kong SAR",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7671615003"
+  },
+  {
+    "posting_date": "2026-03-19",
+    "company": "OKX",
+    "title": "(Senior) Data Infra Product Manager, On Chain (Web3)",
+    "location": "Singapore, Singapore",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7671639003"
+  },
+  {
+    "posting_date": "2026-03-19",
+    "company": "OKX",
+    "title": "(Senior) Data Infra Product Manager, On Chain (Web3)",
+    "location": "Hong Kong, Hong Kong SAR",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7671640003"
+  },
+  {
+    "posting_date": "2026-03-17",
+    "company": "boostlingo",
+    "title": "Senior Product Manager, AI Products",
+    "location": "United States",
+    "url": "https://job-boards.greenhouse.io/boostlingo/jobs/5156439008"
+  },
+  {
+    "posting_date": "2026-03-13",
+    "company": "Scale AI",
+    "title": "Forward Deployed Product Manager, Enterprise",
+    "location": "New York, NY",
+    "url": "https://job-boards.greenhouse.io/scaleai/jobs/4673051005"
+  },
+  {
+    "posting_date": "2026-03-12",
+    "company": "Hyphen Connect Limited",
+    "title": "Product Manager (AI x Web3 Security)",
+    "location": "Japan",
+    "url": "https://job-boards.greenhouse.io/hyphenconnect/jobs/5078211007"
+  },
+  {
+    "posting_date": "2026-03-12",
+    "company": "Hyphen Connect Limited",
+    "title": "Product Manager (Agentic Payments Network)",
+    "location": "United States ",
+    "url": "https://job-boards.greenhouse.io/hyphenconnect/jobs/5074709007"
+  },
+  {
+    "posting_date": "2026-03-12",
+    "company": "Hyphen Connect Limited",
+    "title": "Product Manager (Agentic Payments Network)",
+    "location": "China",
+    "url": "https://job-boards.greenhouse.io/hyphenconnect/jobs/5078202007"
+  },
+  {
+    "posting_date": "2026-03-10",
+    "company": "Hyphen Connect Limited",
+    "title": "Product Manager (AI x Web3 Security)",
+    "location": "China",
+    "url": "https://job-boards.greenhouse.io/hyphenconnect/jobs/5074657007"
+  },
+  {
+    "posting_date": "2026-02-24",
+    "company": "EnergyHub",
+    "title": "Product Marketing Manager",
+    "location": "Remote - United States",
+    "url": "https://job-boards.greenhouse.io/energyhub/jobs/8420232002"
+  },
+  {
+    "posting_date": "2026-02-12",
+    "company": "IMC",
+    "title": "Technical Product Manager",
+    "location": "Chicago, United States",
+    "url": "https://job-boards.eu.greenhouse.io/imc/jobs/4781389101"
+  },
+  {
+    "posting_date": "2026-02-06",
+    "company": "Shopfully",
+    "title": "Digital Campaign/Performance Marketing Specialist",
+    "location": "Italy",
+    "url": "https://job-boards.greenhouse.io/shopfully/jobs/7513744"
+  },
+  {
+    "posting_date": "2026-02-03",
+    "company": "Orkes",
+    "title": "Demand Generation Manager",
+    "location": "Remote US",
+    "url": "https://job-boards.greenhouse.io/orkes/jobs/5106378008"
+  },
+  {
+    "posting_date": "2026-02-03",
+    "company": "Motive",
+    "title": "Senior Product Manager, Fleet Management",
+    "location": "India - Remote",
+    "url": "https://job-boards.greenhouse.io/gomotive/jobs/8387963002"
+  },
+  {
+    "posting_date": "2026-01-29",
+    "company": "Greenhouse",
+    "title": "Senior Product Marketing Manager",
+    "location": "Anywhere in the United States",
+    "url": "https://job-boards.greenhouse.io/greenhouse/jobs/7411199?gh_jid=7411199"
+  },
+  {
+    "posting_date": "2026-01-19",
+    "company": "Scale AI",
+    "title": "Forward Deployed Product Manager, Enterprise",
+    "location": "London, UK",
+    "url": "https://job-boards.greenhouse.io/scaleai/jobs/4644742005"
+  },
+  {
+    "posting_date": "2026-01-16",
+    "company": "Scale AI",
+    "title": "Product Manager of AI Applications, Global Public Sector",
+    "location": "Riyadh, Saudi Arabia",
+    "url": "https://job-boards.greenhouse.io/scaleai/jobs/4650514005"
+  },
+  {
+    "posting_date": "2026-01-13",
+    "company": "Motive",
+    "title": "Senior / Staff Product Manager, Financial Products",
+    "location": "India - Remote",
+    "url": "https://job-boards.greenhouse.io/gomotive/jobs/8367361002"
+  },
+  {
+    "posting_date": "2025-12-08",
+    "company": "Sporty Group",
+    "title": "EU Product Manager",
+    "location": "Europe - Remote",
+    "url": "https://job-boards.eu.greenhouse.io/sportygroup/jobs/4726304101"
+  },
+  {
+    "posting_date": "2025-11-18",
+    "company": "OKX",
+    "title": "Principal/Senior Product Manager, AI and Agent",
+    "location": "Hong Kong, Hong Kong SAR",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7531920003"
+  },
+  {
+    "posting_date": "2025-11-18",
+    "company": "OKX",
+    "title": "Principal/Senior Product Manager, AI and Agent",
+    "location": "Singapore, Singapore",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/7531921003"
+  },
+  {
+    "posting_date": "2025-11-13",
+    "company": "glean",
+    "title": "Product Manager, Connectors",
+    "location": "Bangalore, India",
+    "url": "https://job-boards.greenhouse.io/gleanwork/jobs/4629292005"
+  },
+  {
+    "posting_date": "2025-11-11",
+    "company": "Scopely",
+    "title": "Principal Technical Product Manager - External Development",
+    "location": "CA - Canada; US - Culver City, United States",
+    "url": "https://job-boards.greenhouse.io/scopely/jobs/4982485008"
+  },
+  {
+    "posting_date": "2025-10-31",
+    "company": "Remote",
+    "title": "Senior Product Manager, Remote Build",
+    "location": "Remote-EMEA",
+    "url": "https://job-boards.greenhouse.io/remotecom/jobs/7514179003"
+  },
+  {
+    "posting_date": "2025-10-31",
+    "company": "Remote",
+    "title": "Senior Product Manager, Remote Build",
+    "location": "Remote-UK&I",
+    "url": "https://job-boards.greenhouse.io/remotecom/jobs/7514183003"
+  },
+  {
+    "posting_date": "2025-10-27",
+    "company": "Moloco",
+    "title": "Group Product Manager - Dynamic Product Ads (그룹 프로덕트 매니저)",
+    "location": "Seoul, Korea",
+    "url": "https://job-boards.greenhouse.io/moloco/jobs/7510109003"
+  },
+  {
+    "posting_date": "2025-10-27",
+    "company": "Moloco",
+    "title": "Group Product Manager - Dynamic Product Ads",
+    "location": "Singapore",
+    "url": "https://job-boards.greenhouse.io/moloco/jobs/7510111003"
+  },
+  {
+    "posting_date": "2025-10-14",
+    "company": "scaleai",
+    "title": "Staff Product Manager, Agentic Platform",
+    "location": "New York, NY; San Francisco, CA; Washington, DC",
+    "url": "https://job-boards.greenhouse.io/scaleai/jobs/4612403005"
+  },
+  {
+    "posting_date": "2025-10-03",
+    "company": "ai71 Careers Site",
+    "title": "Product Manager",
+    "location": "Abu Dhabi, UAE",
+    "url": "https://job-boards.eu.greenhouse.io/ai71jobs/jobs/4685276101"
+  },
+  {
+    "posting_date": "2025-09-23",
+    "company": "scaleai",
+    "title": "Senior AI Product Manager, Finance Agents",
+    "location": "San Francisco, CA; New York, NY",
+    "url": "https://job-boards.greenhouse.io/scaleai/jobs/4611776005"
+  },
+  {
+    "posting_date": "2025-09-16",
+    "company": "Speechmatics",
+    "title": "Technical Product Manager",
+    "location": "London, England, United Kingdom",
+    "url": "https://job-boards.eu.greenhouse.io/speechmatics/jobs/4673941101"
+  },
+  {
+    "posting_date": "2025-09-16",
+    "company": "Remote - Referral Board",
+    "title": "Senior Product Manager, Remote Build",
+    "location": "America | Canada | France",
+    "url": "https://job-boards.greenhouse.io/remotereferralboardinternaluseonly/jobs/7331446003"
+  },
+  {
+    "posting_date": "2025-09-16",
+    "company": "Remote",
+    "title": "Senior Product Manager, Remote Build",
+    "location": "Remote-France",
+    "url": "https://job-boards.greenhouse.io/remotecom/jobs/7331443003"
+  },
+  {
+    "posting_date": "2025-09-03",
+    "company": "Scale AI",
+    "title": "Product Manager of AI Applications, Global Public Sector",
+    "location": "Doha, Qatar ; Dubai, UAE",
+    "url": "https://job-boards.greenhouse.io/scaleai/jobs/4589749005"
+  },
+  {
+    "posting_date": "2025-08-29",
+    "company": "Gensyn",
+    "title": "Technical Product Manager",
+    "location": "Remote",
+    "url": "https://job-boards.eu.greenhouse.io/gensyn/jobs/4660248101"
+  },
+  {
+    "posting_date": "2025-08-28",
+    "company": "calendly",
+    "title": "Staff Product Manager, AI Scheduling",
+    "location": "San Francisco (Hybrid)",
+    "url": "https://job-boards.greenhouse.io/calendly/jobs/8139892002"
+  },
+  {
+    "posting_date": "2025-07-08",
+    "company": "OKX",
+    "title": "Senior Product Manager - Risk Platform",
+    "location": "Singapore, Singapore",
+    "url": "https://job-boards.greenhouse.io/okx/jobs/6642975003"
+  },
+  {
+    "posting_date": "2025-01-30",
+    "company": "Canonical",
+    "title": "Manager, Product Manager",
+    "location": "Home based - EMEA",
+    "url": "https://job-boards.greenhouse.io/canonical/jobs/6458166"
+  },
+  {
+    "posting_date": "2024-08-30",
+    "company": "Ref",
+    "title": "Senior Product Manager",
+    "location": "Remote",
+    "url": "https://job-boards.greenhouse.io/ref/jobs/4116043008"
+  },
+  {
+    "posting_date": "2024-04-18",
+    "company": "Fin",
+    "title": "Senior Product Manager",
+    "location": "London, England",
+    "url": "https://job-boards.greenhouse.io/intercom/jobs/5916272"
+  },
+  {
+    "posting_date": "2024-02-13",
+    "company": "Anteriad",
+    "title": "Paid Media Analyst",
+    "location": "Remote",
+    "url": "https://job-boards.greenhouse.io/anteriad/jobs/5080719004"
   }
 ]
