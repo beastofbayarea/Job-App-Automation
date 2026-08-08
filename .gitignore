@@ -19,6 +19,7 @@ target/
 .env
 .env.local
 *.env.*
+!config/dashboard.env
 
 # Logs and temporary files
 *.log

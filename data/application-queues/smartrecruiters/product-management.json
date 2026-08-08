@@ -1,0 +1,108 @@
+[
+  {
+    "company": "Vitol",
+    "role": "GenAI Product Manager",
+    "job_url": "https://jobs.smartrecruiters.com/Vitol/744000135050387-genai-product-manager",
+    "status": "NOT_ATTEMPTED",
+    "failure_reason": "Imported from smartrecruiters product jobs workbook",
+    "missing_required": "",
+    "updated_at": "2026-08-03T00:05:05.769085+00:00",
+    "location": "London, United Kingdom (On-site)"
+  },
+  {
+    "company": "Scalable Capital",
+    "role": "Product Manager – AI Platform (m/f/x)",
+    "job_url": "https://jobs.smartrecruiters.com/ScalableGmbH/744000140458474-product-manager-ai-platform-m-f-x-",
+    "status": "NOT_ATTEMPTED",
+    "failure_reason": "Imported from smartrecruiters product jobs workbook",
+    "missing_required": "",
+    "updated_at": "2026-08-03T00:05:05.769085+00:00",
+    "location": "Berlin, Germany (Hybrid)"
+  },
+  {
+    "company": "Mirantis",
+    "role": "Technical Product Manager, AI Cloud Networking",
+    "job_url": "https://jobs.smartrecruiters.com/Mirantis/744000139128605-technical-product-manager-ai-cloud-networking",
+    "status": "NOT_ATTEMPTED",
+    "failure_reason": "Imported from smartrecruiters product jobs workbook",
+    "missing_required": "",
+    "updated_at": "2026-08-03T00:05:05.769085+00:00",
+    "location": "Remote – USA"
+  },
+  {
+    "company": "Next Step Systems",
+    "role": "Technical Product Manager of AI Systems (100% Remote)",
+    "job_url": "https://jobs.smartrecruiters.com/NextStepSystems/744000136871729-technical-product-manager-of-artificial-intelligence-ai-systems-work-from-home",
+    "status": "NOT_ATTEMPTED",
+    "failure_reason": "Imported from smartrecruiters product jobs workbook",
+    "missing_required": "",
+    "updated_at": "2026-08-03T00:05:05.769085+00:00",
+    "location": "Remote – USA (San Francisco, CA)"
+  },
+  {
+    "company": "QAD, Inc.",
+    "role": "Senior / AI Product Manager – QAD AI Platform",
+    "job_url": "https://jobs.smartrecruiters.com/QADInc/744000134173939-senior-product-manager",
+    "status": "NOT_ATTEMPTED",
+    "failure_reason": "Imported from smartrecruiters product jobs workbook",
+    "missing_required": "",
+    "updated_at": "2026-08-03T00:05:05.769085+00:00",
+    "location": "Pune, India (On-site)"
+  },
+  {
+    "company": "Flywire",
+    "role": "Senior Product Manager, Salesforce (GTM Platform)",
+    "job_url": "https://jobs.smartrecruiters.com/Flywire1/744000132645099-senior-product-manager-go-to-market",
+    "status": "NOT_ATTEMPTED",
+    "failure_reason": "Imported from smartrecruiters product jobs workbook",
+    "missing_required": "",
+    "updated_at": "2026-08-03T00:05:05.769085+00:00",
+    "location": "Boston, MA, USA (Hybrid)"
+  },
+  {
+    "company": "Ubisoft",
+    "role": "Product Manager – COMPASS",
+    "job_url": "https://jobs.smartrecruiters.com/Ubisoft2/744000139299528-product-manager-compass",
+    "status": "NOT_ATTEMPTED",
+    "failure_reason": "Imported from smartrecruiters product jobs workbook",
+    "missing_required": "",
+    "updated_at": "2026-08-03T00:05:05.769085+00:00",
+    "location": "Office-based (see posting for studio)"
+  },
+  {
+    "company": "Jobs for Humanity",
+    "role": "Product Manager",
+    "job_url": "https://jobs.smartrecruiters.com/JobsForHumanity/744000067914835-product-manager",
+    "status": "CAPTCHA_REQUIRED",
+    "failure_reason": "CAPTCHA challenge blocked application form entry",
+    "updated_at": "2026-08-02T04:45:10.766610+00:00",
+    "source": "vps"
+  },
+  {
+    "company": "NECSWS",
+    "role": "Geospatial Product Manager",
+    "job_url": "https://jobs.smartrecruiters.com/NECSWS/744000139073514-geospatial-product-manager",
+    "status": "CAPTCHA_REQUIRED",
+    "failure_reason": "CAPTCHA challenge blocked application form entry",
+    "updated_at": "2026-08-02T04:18:00.406095+00:00",
+    "source": "vps"
+  },
+  {
+    "company": "SEEK",
+    "role": "Senior Product Manager - SEEK Pass",
+    "job_url": "https://jobs.smartrecruiters.com/SEEK/744000135419350-senior-product-manager-seek-pass",
+    "status": "CAPTCHA_REQUIRED",
+    "failure_reason": "2026-08-02 04:10:35,186 [INFO] ATSOrchestrator: Loaded 1 supported jobs | mode=LIVE | shuffle=False\n2026-08-02 04:10:35,212 [INFO] ATSOrchestrator: [1/1] row=1 ats=smartrecruiters company=SEEK role=Senior Product Manager - SEEK Pass email=sh***********@umich.edu\n2026-08-02 04:11:32,848 [ERROR] ATSOrchestrator: Engine diagnostics:\nENGINE_RESULT_JSON:{\"ats\": \"smartrecruiters\", \"captcha_present\": true, \"confirmed\": false, \"consent_fields\": [], \"custom_questions\": {}, \"filled_fields\": {\"address\": false, \"city\": true, \"country\": false, \"cover_letter\": true, \"email\": true, \"email_confirmation\": true, \"first_name\": true, \"full_name\": false, \"github\": false, \"headline\": false, \"last_name\": true, \"linkedin\": true, \"phone\": true, \"portfolio\": true, \"postcode\": false, \"resume\": true}, \"missing_critical\": [], \"missing_required\": [\"spl-form-element_5\"], \"preexisting_confirmation\": false, \"screenshot\": \"/root/Job-App-Automation/output/.application_screenshots/application-k7iiz5ik/SEEK_prefill.png\", \"status\": \"CAPTCHA_REQUIRED\", \"submitted\": false, \"success\": false, \"test_mode\": false}\n\n\n2026-08-02 04:11:32,880 [INFO] ATSOrchestrator: Application screenshots cleaned: files=1 bytes=169033 directory=/root/Job-App-Automation/output/.application_screenshots/application-k7iiz5ik\n2026-08-02 04:11:32,894 [INFO] ATSOrchestrator: Orchestration complete: processed=1 successful=0 failed=1 results=/root/Job-App-Automation/output/continuous_smartrecruiters_results/application_14856f05ba0ce1551521.json",
+    "updated_at": "2026-08-02T04:11:33.889531+00:00",
+    "source": "vps"
+  },
+  {
+    "company": "SEEK",
+    "role": "Associate AI Product Manager",
+    "job_url": "https://jobs.smartrecruiters.com/SEEK/744000138981099-associate-ai-product-manager",
+    "status": "CAPTCHA_REQUIRED",
+    "failure_reason": "CAPTCHA challenge blocked application form entry",
+    "updated_at": "2026-08-02T04:24:28.514567+00:00",
+    "source": "vps"
+  }
+]

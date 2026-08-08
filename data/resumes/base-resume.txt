@@ -1,0 +1,98 @@
+CANDIDATE
+[NAME] Shivam Singh
+[PREFERRED_NAME] Shiv
+[LOCATION] San Francisco, CA
+[EMAIL] shiv-ai-pm@umich.edu
+[PHONE] +1-650-283-3478
+[LINKEDIN] linkedin.com/in/beastofbayarea
+[BASE_POSITIONING] Principal Product Manager | AI/ML Platforms, Generative AI, Data Products
+
+SOURCE RULES
+- This file is the factual source of truth for resume generation.
+- Preserve companies, dates, locations, and degrees.
+- Treat base titles as source context that may be rewritten to align with the target role.
+- Select and combine the claims most relevant to the target job.
+- Treat source metrics as narrative inputs that may be rounded, normalized, combined, or adjusted when a coherent tailored narrative requires it.
+- Never infer a tool, responsibility, business result, or level that is not stated here.
+- Use ASCII punctuation in generated output.
+
+CORE CAPABILITIES
+AI product strategy; customer discovery; 0-to-1 product development; platform and API products; generative AI; agentic workflows; LLM applications; retrieval-augmented generation; search and recommendation; model evaluation; human-in-the-loop systems; trust and safety; responsible AI; data strategy; ML feedback loops; experimentation; product analytics; growth and lifecycle; enterprise adoption; developer experience; internationalization; monetization; unit economics; partnerships and M&A; go-to-market; cross-functional leadership.
+
+[COMPANY] AWS
+[BASE_TITLE] Principal Product Manager, Technical - Generative AI
+[DATES] July 2024 - Present
+[LOCATION] San Francisco, CA, USA
+[TAGS] consumer AI; agentic workflows; RAG; evaluation; trust and safety; enterprise AI; platform strategy; internationalization; unit economics
+[CLAIM AWS-01] Owned strategy and roadmap for an AI shopping experience, using customer research, behavioral telemetry, and human-factors analysis to shift the product from open-ended conversation toward decision support and purchase completion.
+[CLAIM AWS-02] Improved the RAG pipeline through prompt, retrieval, and product-surface experiments; introduced human review, task-specific evaluations, guardrails, and escalation controls for high-risk responses. [SOURCE_METRICS] 25% adoption; brand favorability 55% to 70%; hallucinations reduced to 2.8%; session depth increased 15%.
+[CLAIM AWS-03] Authored a Working Backwards PR-FAQ and financial sensitivity model to align executives and fund the agentic roadmap. [SOURCE_METRICS] $100M+ GMV sensitivity model; $5M incremental funding.
+[CLAIM AWS-04] Launched Japanese-language support and established reusable localization patterns covering language, tone, tokenization, and culturally appropriate interaction design.
+[CLAIM AWS-05] Led a buy-versus-build evaluation for an agentic AI platform, covering strategic fit, technical diligence, integration sequencing, and the post-close roadmap. [SOURCE_METRICS] $85M evaluation.
+[CLAIM AWS-06] Identified an unscalable compute-cost structure and developed an infrastructure migration plan that improved platform economics while reducing duplicated model and tooling spend. [SOURCE_METRICS] Gross margin increased from 55% to 81%.
+[CLAIM AWS-07] Directed a managed agent platform connecting models to private enterprise data and business systems; prioritized access controls, auditable action traces, retention limits, human approvals, and cost-quality routing for regulated production workflows.
+[CLAIM AWS-08] Led a policy-aware generation layer for AI-created advertising, translating legal, brand, and safety requirements into pre-generation controls and measurable launch criteria.
+
+[COMPANY] Rakuten
+[BASE_TITLE] Product Manager (MBA Intern) - AI Platform & Merchant Solutions
+[DATES] June 2023 - December 2023
+[LOCATION] Tokyo, Japan
+[TAGS] AI platform; merchant products; retrieval; knowledge graph; workflow AI; product judgment; adoption; efficiency; data products
+[CLAIM RAK-01] Built a horizontal AI platform using a "buy intelligence, build context" strategy to combine external foundation models with proprietary workflows and business data. [SOURCE_METRICS] 70+ business units; 50,000+ merchants.
+[CLAIM RAK-02] Implemented PII protection, hybrid vector and keyword retrieval, and a unified knowledge graph supporting search, generation, merchant operations, and internal knowledge access.
+[CLAIM RAK-03] Embedded AI into merchant listing, image, and operational workflows; discontinued an underperforming standalone chatbot after usage analysis and redirected investment toward task completion.
+[CLAIM RAK-04] Improved merchant outcomes and platform adoption through embedded workflows. [SOURCE_METRICS] Conversion increased 15%; listing time reduced from 45 to 12 minutes; 40% adoption within six months.
+[CLAIM RAK-05] Improved inference efficiency through optimization, caching, and workload management. [SOURCE_METRICS] Network energy consumption reduced 25%.
+[CLAIM RAK-06] Identified a cross-device attribution gap and coordinated engineering, analytics, finance, and merchant partners to restore transaction continuity and improve revenue attribution.
+[CLAIM RAK-07] Stress-tested consumer-launch unit economics and redirected the go-to-market plan toward enterprise partnerships and higher-value segments.
+
+[COMPANY] Microsoft
+[BASE_TITLE] Senior Product Manager, Lifecycle & Growth
+[DATES] January 2020 - August 2022
+[LOCATION] Redmond, WA, USA
+[TAGS] developer platform; lifecycle; product-led growth; experimentation; predictive analytics; enterprise GTM; compliance; workflow automation
+[CLAIM MSFT-01] Owned onboarding, activation, retention, expansion, and win-back for a developer and business AI platform using cohort telemetry, funnel analysis, and a continuous experimentation backlog.
+[CLAIM MSFT-02] Improved lifecycle performance through product-led growth loops and time-to-value optimization. [SOURCE_METRICS] Activation conversion increased 262%; NRR increased from 102% to 128%; churn reduced from 14% to 6.5%; win-back increased from 4% to 22%.
+[CLAIM MSFT-03] Used RICE and time-to-value analysis to prioritize onboarding and first-run improvements across engineering, design, data science, and developer relations.
+[CLAIM MSFT-04] Partnered with data science to develop retention and propensity models for targeted interventions and expansion forecasting.
+[CLAIM MSFT-05] Developed go-to-market strategy and reusable deployment patterns for government and regulated-enterprise buyers requiring local data control, security validation, and jurisdiction-specific deployment; reduced implementation time from months to hours.
+[CLAIM MSFT-06] Productized verified identity, automated execution logic, approvals, and event-triggered payments to replace static contracts and manual operations. [SOURCE_METRICS] Contract-to-cash reduced from 14 days to under 48 hours; supported approximately 10x partner volume.
+
+[COMPANY] The D. E. Shaw Group
+[BASE_TITLE] Vice President, Product - Investment Infrastructure
+[DATES] July 2016 - December 2019
+[LOCATION] New York, NY, USA and Hyderabad, India
+[TAGS] document intelligence; active learning; data platform; internal platform; real-time risk; enterprise data products
+[CLAIM DES-01] Led an intelligent document-processing platform replacing manual financial-data entry with semantic extraction, confidence-based human review, and active-learning feedback. [SOURCE_METRICS] 98% confidence threshold for automated processing; earnings ingestion reduced from hours to seconds; approximately 70% lower cost.
+[CLAIM DES-02] Built a unified deal-data repository in a rapid sprint, improving investment-team data availability. [SOURCE_METRICS] Built in 72 hours; consolidation reduced from 48 hours to six hours; contributed to a $25M Series B close one week ahead of competitors.
+[CLAIM DES-03] Managed the platform as an internal product for quantitative, trading, legal, and investment teams, defining service levels, adoption measures, and a backlog tied to deal velocity.
+[CLAIM DES-04] Led a real-time streaming risk platform with a three-month shadow deployment before production influence on capital decisions. [SOURCE_METRICS] Decisions moved to millisecond latency; false alerts reduced nearly 90%; approximately $85M in regulatory capital unlocked.
+[CLAIM DES-05] Built proprietary engagement and client-data infrastructure for institutional investors in regulated Asian markets, connecting behavioral signals to commercial outreach.
+
+[COMPANY] McKinsey & Company
+[BASE_TITLE] Associate, Digital & Product - FinTech
+[DATES] July 2014 - June 2016
+[LOCATION] London, UK
+[TAGS] fintech; 0-to-1; ML credit scoring; growth; model risk; explainable AI; human-AI collaboration; monetization
+[CLAIM MCK-01] Led the launch of a Southeast Asian digital bank using alternative telecommunications data, eKYC, and liveness verification through a regulatory sandbox.
+[CLAIM MCK-02] Defined an ML credit-scoring product and coordinated product, data science, risk, compliance, and distribution partners. [SOURCE_METRICS] 400+ features.
+[CLAIM MCK-03] Scaled the digital bank while managing approval quality, credit risk, and acquisition economics. [SOURCE_METRICS] Zero to 100,000 active users in 90 days; approval increased from 10% to 40%; 2.4% non-performing-loan rate; CAC below $10.
+[CLAIM MCK-04] Owned market sizing, customer discovery, MVP scope, model-risk and fairness review, regulatory alignment, and go-to-market.
+[CLAIM MCK-05] Led a next-best-action product translating predictive churn scores into understandable reasons and recommended actions for wealth advisors; added feedback and rejection mechanisms that preserved advisor judgment and generated training signals.
+[CLAIM MCK-06] Redesigned an institutional digital-asset brokerage model using instant credit, volume pricing, and a compliance-led value proposition after identifying that custody clients transacted on competing platforms.
+
+EDUCATION
+[SCHOOL] University of Michigan, Stephen M. Ross School of Business
+[DEGREE] Master of Business Administration
+[DATES] August 2022 - May 2024
+[DETAILS] Ann Arbor, MI
+
+[SCHOOL] The London School of Economics and Political Science
+[DEGREE] Executive Coursework in Economics, Markets & Public Policy
+[DATES] January 2024 - June 2024
+[DETAILS] London, UK
+
+[SCHOOL] Indian Institute of Technology
+[DEGREE] Bachelor of Technology, Computer Science
+[DATES] July 2010 - May 2014
+[DETAILS]

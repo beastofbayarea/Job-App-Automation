@@ -1,0 +1,173 @@
+[
+  {
+    "company": "Affirm",
+    "role": "Product Marketing Manager",
+    "job_url": "https://job-boards.greenhouse.io/affirm/jobs/7773695003",
+    "status": "REQUIRED_FIELDS_NOT_FILLED",
+    "failure_reason": "Required fields: How did you first learn about Affirm as an employer?",
+    "missing_required": "How did you first learn about Affirm as an employer?",
+    "updated_at": "2026-08-02T07:00:07.601037+00:00"
+  },
+  {
+    "company": "Anthropic",
+    "role": "Partnerships Lead, Southern Europe (AI GTM)",
+    "job_url": "https://job-boards.greenhouse.io/anthropic/jobs/5277044008",
+    "status": "REQUIRED_FIELDS_NOT_FILLED",
+    "failure_reason": "Required fields: Have you ever interviewed at Anthropic before? | AI Policy for Application",
+    "missing_required": "Have you ever interviewed at Anthropic before? | AI Policy for Application",
+    "updated_at": "2026-08-02T06:08:01.968513+00:00"
+  },
+  {
+    "company": "Armada",
+    "role": "Senior Product Marketing Manager, AI Factory",
+    "job_url": "https://job-boards.greenhouse.io/armada/jobs/5249659008",
+    "status": "REQUIRED_FIELDS_NOT_FILLED",
+    "failure_reason": "Required fields: Discipline | Email | First Name | Last Name | School",
+    "missing_required": "Discipline | Email | First Name | Last Name | School",
+    "updated_at": "2026-08-01T01:41:35.089435+00:00"
+  },
+  {
+    "company": "boulevard",
+    "role": "Product Marketing Manager, Salon and Spa",
+    "job_url": "https://job-boards.greenhouse.io/boulevard/jobs/4679050006",
+    "status": "REQUIRED_FIELDS_NOT_FILLED",
+    "failure_reason": "Required fields: What are your total compensation requirements?",
+    "missing_required": "What are your total compensation requirements?",
+    "updated_at": "2026-07-31T07:29:47.987694+00:00"
+  },
+  {
+    "company": "EnergyHub",
+    "role": "Product Marketing Manager",
+    "job_url": "https://job-boards.greenhouse.io/energyhub/jobs/8420232002",
+    "status": "REQUIRED_FIELDS_NOT_FILLED",
+    "failure_reason": "Required fields: Are you currently on a nonimmigrant visa (ex. F-1)? If you are, will you now or in the future require Alarm.com to provide a written submission to your school or a government agency for you to maintain your employment eligibility (ex. CPT/OPT/STEM OPT)?",
+    "missing_required": "Are you currently on a nonimmigrant visa (ex. F-1)? If you are, will you now or in the future require Alarm.com to provide a written submission to your school or a government agency for you to maintain your employment eligibility (ex. CPT/OPT/STEM OPT)?",
+    "updated_at": "2026-08-02T06:48:53.992114+00:00"
+  },
+  {
+    "company": "Eve",
+    "role": "Senior Product Marketing Manager",
+    "job_url": "https://job-boards.greenhouse.io/eve/jobs/4308481009",
+    "status": "REQUIRED_FIELDS_NOT_FILLED",
+    "failure_reason": "Required fields: What is your desired salary?",
+    "missing_required": "What is your desired salary?",
+    "updated_at": "2026-08-02T05:10:09.479548+00:00"
+  },
+  {
+    "company": "ezCater",
+    "role": "Product Marketing Manager, Enterprise Marketing",
+    "job_url": "https://job-boards.greenhouse.io/ezcaterinc/jobs/5190412007",
+    "status": "REQUIRED_FIELDS_NOT_FILLED",
+    "failure_reason": "Required fields: Which state do you currently reside in?",
+    "missing_required": "Which state do you currently reside in?",
+    "updated_at": "2026-08-02T04:12:06.054765+00:00"
+  },
+  {
+    "company": "Fleetio",
+    "role": "Director, Product Marketing, GTM Strategy",
+    "job_url": "https://job-boards.greenhouse.io/fleetio/jobs/5192196007",
+    "status": "REQUIRED_FIELDS_NOT_FILLED",
+    "failure_reason": "Required fields: Have you built or significantly scaled a Product Marketing, Commercialization, or Go-to-Market function within a B2B SaaS company? | Have you partnered directly with Sales and Enablement to build value messaging, sales plays, and commercialization programs? | Have you led cross-functional product launches involving Product, Marketing, Sales, and Customer Success?",
+    "missing_required": "Have you built or significantly scaled a Product Marketing, Commercialization, or Go-to-Market function within a B2B SaaS company? | Have you partnered directly with Sales and Enablement to build value messaging, sales plays, and commercialization programs? | Have you led cross-functional product launches involving Product, Marketing, Sales, and Customer Success?",
+    "updated_at": "2026-08-02T06:06:16.746039+00:00"
+  },
+  {
+    "company": "G-P",
+    "role": "Sr Product Marketing Manager",
+    "job_url": "https://job-boards.greenhouse.io/globalizationpartners/jobs/7791586003",
+    "status": "REQUIRED_FIELDS_NOT_FILLED",
+    "failure_reason": "Required fields: Have you been referred by another G-P employee within the last 12 months?",
+    "missing_required": "Have you been referred by another G-P employee within the last 12 months?",
+    "updated_at": "2026-08-02T07:44:44.438231+00:00"
+  },
+  {
+    "company": "Greenhouse",
+    "role": "Senior Product Marketing Manager",
+    "job_url": "https://job-boards.greenhouse.io/greenhouse/jobs/7411199?gh_jid=7411199",
+    "status": "REQUIRED_FIELDS_NOT_FILLED",
+    "failure_reason": "Required fields: How did you initially hear about this job? | Greenhouse Interview Recording Policy (Fraud Detection) | Greenhouse Interview Recording Policy (Candidate Evaluation and Training)",
+    "missing_required": "How did you initially hear about this job? | Greenhouse Interview Recording Policy (Fraud Detection) | Greenhouse Interview Recording Policy (Candidate Evaluation and Training)",
+    "updated_at": "2026-08-02T05:03:11.123636+00:00"
+  },
+  {
+    "company": "LTK USA",
+    "role": "Senior Product Marketing Manager",
+    "job_url": "https://job-boards.greenhouse.io/shopltk/jobs/7733334003",
+    "status": "REQUIRED_FIELDS_NOT_FILLED",
+    "failure_reason": "Required fields: For hiring purposes, in which state do you currently reside in?",
+    "missing_required": "For hiring purposes, in which state do you currently reside in?",
+    "updated_at": "2026-08-02T07:39:45.894244+00:00"
+  },
+  {
+    "company": "OpenSesame",
+    "role": "Senior Product Marketing Manager",
+    "job_url": "https://job-boards.greenhouse.io/opensesame/jobs/8063623",
+    "status": "REQUIRED_FIELDS_NOT_FILLED",
+    "failure_reason": "Required fields: How many product, feature, or solution launches have you personally led from positioning and launch strategy through market execution and internal enablement? | How many years have you worked in a dedicated Product Marketing role within a B2B SaaS company?",
+    "missing_required": "How many product, feature, or solution launches have you personally led from positioning and launch strategy through market execution and internal enablement? | How many years have you worked in a dedicated Product Marketing role within a B2B SaaS company?",
+    "updated_at": "2026-08-02T06:17:31.516302+00:00"
+  },
+  {
+    "company": "planet",
+    "role": "Product Marketing Manager, AI Solutions",
+    "job_url": "https://job-boards.greenhouse.io/planetlabs/jobs/7964648",
+    "status": "REQUIRED_FIELDS_NOT_FILLED",
+    "failure_reason": "Required fields: Do you reside in or maintain an established permanent residence in any of the following countries: Cuba, Iran, North Korea, Syria, or the following territories of Ukraine (Luhansk, Donetsk, Crimea)? | How did you find this position? | How did you first hear about Planet before applying for this position?",
+    "missing_required": "Do you reside in or maintain an established permanent residence in any of the following countries: Cuba, Iran, North Korea, Syria, or the following territories of Ukraine (Luhansk, Donetsk, Crimea)? | How did you find this position? | How did you first hear about Planet before applying for this position?",
+    "updated_at": "2026-08-01T02:15:13.049090+00:00"
+  },
+  {
+    "company": "Smartsheet",
+    "role": "Sr. Product Marketing Manager - AI GTM Strategy, EMEA",
+    "job_url": "https://job-boards.greenhouse.io/smartsheet/jobs/8053758",
+    "status": "REQUIRED_FIELDS_NOT_FILLED",
+    "failure_reason": "Required fields: In our pursuit of AI-driven advancements, how would you rate your overall familiarity with artificial intelligence (AI) concepts and tools?",
+    "missing_required": "In our pursuit of AI-driven advancements, how would you rate your overall familiarity with artificial intelligence (AI) concepts and tools?",
+    "updated_at": "2026-08-02T06:57:58.801300+00:00"
+  },
+  {
+    "company": "Tanium",
+    "role": "Senior Product Marketing Manager - AI Core Services",
+    "job_url": "https://job-boards.greenhouse.io/tanium/jobs/8008972",
+    "status": "REQUIRED_FIELDS_NOT_FILLED",
+    "failure_reason": "Required fields: Does your work authorization require Tanium to sponsor or renew an employment-based visa now or in the future?",
+    "missing_required": "Does your work authorization require Tanium to sponsor or renew an employment-based visa now or in the future?",
+    "updated_at": "2026-08-02T07:05:41.569342+00:00"
+  },
+  {
+    "company": "Tebra",
+    "role": "Director, GTM Operations",
+    "job_url": "https://job-boards.greenhouse.io/tebra/jobs/4708633005",
+    "status": "REQUIRED_FIELDS_NOT_FILLED",
+    "failure_reason": "Required fields: Country | State",
+    "missing_required": "Country | State",
+    "updated_at": "2026-08-02T07:25:12.055373+00:00"
+  },
+  {
+    "company": "Tenable",
+    "role": "Senior Product Marketing Manager - AI Exposure",
+    "job_url": "https://job-boards.greenhouse.io/tenableinc/jobs/5262491008",
+    "status": "REQUIRED_FIELDS_NOT_FILLED",
+    "failure_reason": "Required fields: Do you have the legal right to work in the country within which you are applying?",
+    "missing_required": "Do you have the legal right to work in the country within which you are applying?",
+    "updated_at": "2026-08-02T07:12:05.637240+00:00"
+  },
+  {
+    "company": "Veeam Software",
+    "role": "Product Marketing Director, Velocity (Remote West Coast)",
+    "job_url": "https://job-boards.greenhouse.io/veeamsoftware/jobs/4934118101",
+    "status": "REQUIRED_FIELDS_NOT_FILLED",
+    "failure_reason": "Required fields: Do you currently own, operate, or provide services to any other business or organization (e.g., consultancy, freelance, board membership, or contractual engagement)?",
+    "missing_required": "Do you currently own, operate, or provide services to any other business or organization (e.g., consultancy, freelance, board membership, or contractual engagement)?",
+    "updated_at": "2026-08-02T07:17:51.748069+00:00"
+  },
+  {
+    "company": "Zencoder",
+    "role": "Senior Manager, Marketing & GTM (AI-First)",
+    "job_url": "https://job-boards.greenhouse.io/zencoder/jobs/5164579007",
+    "status": "REQUIRED_FIELDS_NOT_FILLED",
+    "failure_reason": "Required fields: BY SUBMITTING YOUR APPLICATION YOU CONFIRM YOU’VE READ OUR",
+    "missing_required": "BY SUBMITTING YOUR APPLICATION YOU CONFIRM YOU’VE READ OUR",
+    "updated_at": "2026-08-02T07:42:53.392465+00:00"
+  }
+]

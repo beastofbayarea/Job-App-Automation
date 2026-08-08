@@ -1,0 +1,65 @@
+[
+  {
+    "company": "Anduril Industries",
+    "role": "Sr. Program Manager (UAE)",
+    "job_url": "https://job-boards.greenhouse.io/andurilindustries/jobs/5047568007?gh_jid=5047568007",
+    "status": "REQUIRED_FIELDS_NOT_FILLED",
+    "failure_reason": "Required fields: HISTORY WITH ANDURIL",
+    "missing_required": "HISTORY WITH ANDURIL",
+    "updated_at": "2026-08-02T05:56:04.378878+00:00"
+  },
+  {
+    "company": "cribl",
+    "role": "Staff Technical Program Manager, AI",
+    "job_url": "https://job-boards.greenhouse.io/cribl/jobs/6099643004",
+    "status": "REQUIRED_FIELDS_NOT_FILLED",
+    "failure_reason": "Required fields could not be completed",
+    "missing_required": "",
+    "updated_at": "2026-08-02T04:47:00.349739+00:00"
+  },
+  {
+    "company": "Galaxy",
+    "role": "Technical Program Manager",
+    "job_url": "https://job-boards.greenhouse.io/galaxydigitalservices/jobs/6019063004",
+    "status": "REQUIRED_FIELDS_NOT_FILLED",
+    "failure_reason": "Required fields could not be completed",
+    "missing_required": "",
+    "updated_at": "2026-08-02T05:46:57.932599+00:00"
+  },
+  {
+    "company": "Life360",
+    "role": "Staff Technical Program Manager, AI Native",
+    "job_url": "https://job-boards.greenhouse.io/life360/jobs/8627517002",
+    "status": "REQUIRED_FIELDS_NOT_FILLED",
+    "failure_reason": "Required fields: Are you an existing employee at Life360, Tile, or Jiobit?",
+    "missing_required": "Are you an existing employee at Life360, Tile, or Jiobit?",
+    "updated_at": "2026-08-02T05:04:59.203465+00:00"
+  },
+  {
+    "company": "Red Cell Partners",
+    "role": "Product & UX Program Manager",
+    "job_url": "https://job-boards.greenhouse.io/redcellpartners/jobs/5095257007",
+    "status": "REQUIRED_FIELDS_NOT_FILLED",
+    "failure_reason": "Required fields: Are you a U.S. Citizen?",
+    "missing_required": "Are you a U.S. Citizen?",
+    "updated_at": "2026-08-02T05:41:35.669347+00:00"
+  },
+  {
+    "company": "Reddit",
+    "role": "Staff Technical Program Manager",
+    "job_url": "https://job-boards.greenhouse.io/reddit/jobs/8049762",
+    "status": "REQUIRED_FIELDS_NOT_FILLED",
+    "failure_reason": "Required fields: Are you a veteran/have you served in the military?",
+    "missing_required": "Are you a veteran/have you served in the military?",
+    "updated_at": "2026-08-02T05:32:30.670030+00:00"
+  },
+  {
+    "company": "Vatn Systems",
+    "role": "Technical Program Manager",
+    "job_url": "https://job-boards.greenhouse.io/vatnsystems/jobs/4207939009",
+    "status": "REQUIRED_FIELDS_NOT_FILLED",
+    "failure_reason": "Required fields: Are you a US citizen?",
+    "missing_required": "Are you a US citizen?",
+    "updated_at": "2026-08-02T05:41:33.189615+00:00"
+  }
+]

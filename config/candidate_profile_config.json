@@ -1,0 +1,795 @@
+{
+  "schema_version": 2,
+  "download_root": "output",
+  "candidate_evidence_file": "resumes/base-resume.txt",
+  "navigation_timeout_ms": 30000,
+  "action_timeout_ms": 30000,
+  "skip_application_question_topics": [
+    "internal mobility",
+    "internal candidate",
+    "internal transfer",
+    "high school performance",
+    "mathematics at high school",
+    "native language at high school"
+  ],
+  "candidate": {
+    "identity": {
+    "first_name": "Shivam",
+    "middle_name": "",
+    "last_name": "Singh",
+    "preferred_name": "Shiv",
+    "phonetic_name": "Shih-vum Sing"
+    },
+    "employment": {
+    "current_company": "Amazon Web Services",
+    "current_job_title": "Principal Product Manager, Technical - Generative AI",
+    "currently_employed": "Yes",
+    "start_month": "June",
+    "start_year": "2022",
+    "end_month": "Present",
+    "end_year": "Present"
+    },
+    "contact": {
+    "fallback_email": "shiv-ai-pm@umich.edu",
+    "phone": "6502833478",
+    "portfolio": "https://www.researchgate.net/profile/Shivam-Singh-188",
+    "publications": "https://www.researchgate.net/profile/Shivam-Singh-188",
+    "linkedin": "https://linkedin.com/in/beastofbayarea",
+    "twitter": "https://x.com/BeastofBayArea",
+    "goodreads_book": "https://www.goodreads.com/book/show/60591386-in-crypto-we-trust",
+    "researchgate": "https://www.researchgate.net/profile/Shivam-Singh-188",
+    "sciencedirect": "https://www.sciencedirect.com/science/article/abs/pii/S0959652623023867",
+    "website": "https://goodreads.com/beastofbayarea",
+    "github": "https://github.com/beastofbayarea"
+    },
+    "availability": {
+    "pronouns": "they/them",
+    "lgbtq": "Yes",
+    "birthday": "1995-11-27",
+    "start_date_offset_days": 14,
+    "available_start_date": "",
+    "compensation": "120000"
+    },
+    "address": {
+    "location": "San Francisco, California, United States",
+    "street_address": "447 Sutter Street",
+    "address_2": "ste 506",
+    "city": "San Francisco",
+    "state": "California",
+    "zip_code": "94108",
+    "country": "United States"
+    },
+    "highest_degree": "Master's Degree",
+    "education": [{
+      "school": "University of Michigan",
+      "degree": "MBA",
+      "field_of_study": "Business",
+      "start_month": "August",
+      "start_year": "2022",
+      "end_month": "May",
+      "end_year": "2024",
+      "still_student": false
+    }],
+    "demographics": {
+    "country_of_birth": "India",
+    "nationality": "Indian",
+    "citizenship": "Indian",
+    "languages": [
+      "English",
+      "French",
+      "Hindi"
+    ],
+    "gender": "Man",
+    "race": "South Asian",
+    "age": "30-39",
+    "veteran": "I am not a protected veteran",
+    "transgender": "No",
+    "orientation": "Bisexual",
+    "disability": "Yes",
+    "communities": [
+      "Person with disability",
+      "Neurodiverse"
+    ]
+    },
+    "_legacy_screening_answers": {
+      "what pronouns do you use": "They/them",
+      "phonetic spelling of your name": "Shih-vum Sing",
+      "what is your current age": "30-39",
+      "are you at least 18 years of age": "Yes",
+      "what is your gender identity": "Man",
+      "input gender": "Male",
+      "race": "Asian (Not Hispanic or Latino)",
+      "disability status": "I have a disability, or have had one in the past",
+      "do you identify as transgender": "No",
+      "right to work status": "No sponsorship required",
+      "how do you identify your sexual orientation": "Bisexual",
+      "which ethnicity": "Asian or Asian American",
+      "which of the following communities do you belong to": "Person with disability, Neurodiverse",
+      "veteran status": "I am not a protected veteran",
+      "are you located in the united states": "Yes",
+      "are you currently employed": "Yes",
+      "have you applied": "No",
+      "will you now, or in the future, require visa sponsorhip for employment visa status": "No",
+      "are you open to relocating": "Yes",
+      "experience collaborating directly with sales & marketing": "Yes",
+      "background check consent": "Yes",
+      "are you willing to undergo a background check": "Yes",
+      "highest level of education completed": "Graduate or professional certification",
+      "consent to receiving text messages": "Yes",
+      "consent to receive text messages": "Yes",
+      "it's ok to text me updates on my application": "Yes",
+      "agreement to receive text message": "Yes",
+      "are you able to work from our office": "Yes",
+      "are you able to regularly work from our office": "Yes",
+      "do you have authorization to work for any employer in the us": "Yes",
+      "what is your work authorization": "I am authorized to work in this country for any employer",
+      "are you currently based in the united states": "Yes",
+      "do you reside in the united states of america": "Yes",
+      "will you now, or in the future, require employer sponsorship, or transfer of an employer-sponsored visa": "No",
+      "are you currently based in the u.s. or canada": "Yes",
+      "which state do you currently reside in": "California",
+      "do you reside within ny, nj, ct, md, va, pa, ma, ri or washington, dc": "No",
+      "where in the united states will you be working from": "I am currently living in the San Francisco Bay or New York areas",
+      "i confirm i have read the above": "Yes",
+      "a final step in the hiring process is for you to arrange reference calls with former managers, direct reports (for managerial roles), and others": "I acknowledge this.",
+      "i acknowledge that for remote-based us roles, depending upon where the remote work is performed, income could be subject to nys tax withholdings": "Yes, I acknowledge this.",
+      "what is your german language level": "C1–C2 or native (Advanced)",
+      "tick all options relevant for the role that apply to you regarding the main location of your work contract": "I will be based in the US and do not need visa support",
+      "what would be your preferred main location for your contract": "United States",
+      "how long have you been working remotely": "6 to 10 years",
+      "have you ever worked in a startup / scale-up": "Yes",
+      "how many years of experience in startups/scale-ups do you have": "6 to 10 years",
+      "how many years of experience do you have in a senior leadership role": "6 to 10 years",
+      "how many years of experience do you have managing teams": "6 to 10 years",
+      "have you worked on sdks, developer tools, embedded software, or similar developer-facing products": "Yes",
+      "do you have experience owning the roadmap and backlog for a technical software products": "Yes",
+      "what is your salary expectations": "120000",
+      "if hired, in which country will you be based": "United States",
+      "for the country in which you will be based, do you now, or will you at any time in the future, require visa/work permit sponsorship": "No, I do not require visa sponsorship to work in the United States",
+      "for the country in which you will be based": "No, I do not require visa sponsorship to work in the United States",
+      "if yes, what kind of sponsorship will you require": "N/A (no sponsorship required)",
+      "what type of visa will you require": "Not applicable",
+      "does your current employer have any restrictions on your ability to work": "No",
+      "where are you physically based": "San Francisco, California, United States",
+      "where do you currently reside": "California",
+      "location you intend to work from": "California (CA)",
+      "where do you plan on working from": "San Francisco, California, United States",
+      "tell us about something you've been actively trying to get better at for at least a year": "For more than a year, I have been improving how I translate fast-moving generative AI research into simple, measurable product decisions. This matters to me because useful AI products require both technical depth and clear customer value. I regularly read new research, prototype with emerging models, compare quality, cost, and latency tradeoffs, seek feedback from users and engineers, and document what works so each iteration becomes more reliable.",
+      "do you have experience in hardware product management": "Yes",
+      "where are you currently based": "United States",
+      "our work is in office": "Yes",
+      "working from office": "Yes",
+      "work from office": "Yes",
+      "working in the office": "Yes",
+      "comfortable working from": "Yes",
+      "u.s. work authorization status": "Can work for any employer",
+      "if relocation is required, when would you realistically be able to relocate": "Within 2 weeks",
+      "have you spoken with your current manager about your interest in the position": "Yes",
+      "targeted compensation range (base comp only)": "$120,000–$160,000"
+    }
+  },
+  "policies": {
+  "explicit_answers": {
+    "availability to join us": "2 weeks",
+    "if you answered yes to the reasonable adjustments question": "N/A",
+    "non-disclosure agreement": "I Agree",
+    "phonetic spelling": "Shih-vum Sing",
+    "email me about future job openings": "No",
+    "reasonable adjustments": "No",
+    "have you built": "Yes",
+    "have you partnered": "Yes",
+    "have you led": "Yes",
+    "have you previously worked at samsara": "No",
+    "where have you learned about samsara": "LinkedIn",
+    "notice period": "2 weeks",
+    "where are you currently employed": "Amazon Web Services",
+    "where were you last employed": "Amazon Web Services",
+    "current or most recent employer": "Amazon Web Services",
+    "are you crypto-native": "Yes",
+    "singapore citizen, permanent resident": "Yes",
+    "hong kong citizen, permanent resident": "Yes",
+    "non-compete": "No restrictions",
+    "how did you hear about": "LinkedIn",
+    "how did you learn about": "LinkedIn",
+    "work eligibility status": "Eligible",
+    "status that allows you to work and live": "Eligible",
+    "in what cities are you available to work": "__FIRST_OPTION__",
+    "uk right to work status": "Yes",
+    "right to work in the uk": "Yes",
+    "will you require relocation support": "No",
+    "relocation assistance": "No",
+    "additional countries of which you are a lawful permanent resident": "N/A",
+    "export controls": "No",
+    "what country and time zone are you based in": "USA, ET",
+    "experience with earnings call transcripts": "Yes",
+    "financial content/data products": "Yes",
+    "work for or with a dealer, partner or supplier": "No",
+    "notice at collection for california job applicants": "Acknowledge",
+    "self-identification data to be processed": "Consent",
+    "legally eligible to work": "Yes",
+    "ai policy for interviewers": "Acknowledge",
+    "how have demand generation programs been executed in your previous roles": "Primarily owned and executed in house",
+    "by submitting your application you confirm you've read our": "Acknowledge / Confirm",
+    "by submitting your application you confirm you’ve read our": "Acknowledge / Confirm",
+    "are you a us citizen": "Yes",
+    "ai policy for interviewers": "Acknowledge",
+    "how have demand generation programs been executed in your previous roles": "Primarily owned and executed in house",
+    "by submitting your application you confirm you've read our": "Acknowledge / Confirm",
+    "by submitting your application you confirm you’ve read our": "Acknowledge / Confirm",
+    "are you a us citizen": "Yes",
+    "what is your work authorization": "I am authorized to work in this country for any employer",
+    "do you reside within ny, nj, ct, md, va, pa, ma, ri or washington, dc": "No",
+    "a final step in the hiring process is for you to arrange reference calls with former managers, direct reports (for managerial roles), and others": "I acknowledge this.",
+    "i acknowledge that for remote-based us roles, depending upon where the remote work is performed, income could be subject to nys tax withholdings": "Yes, I acknowledge this.",
+    "upon hire, can you provide verification of your identity and legal right to work": "Yes",
+    "tell us about something you've been actively trying to get better": "For more than a year, I have been improving how I translate fast-moving generative AI research into simple, measurable product decisions. I regularly read new research, prototype with emerging models, compare quality, cost, and latency tradeoffs, seek feedback from users and engineers, and document what works so each iteration becomes more reliable."
+  },
+  "answers": {
+    "visa_sponsorship": "No",
+    "visa_type_not_applicable": "N/A",
+    "permit_status": "Yes",
+    "security_clearance": "No",
+    "government_relationship": "No",
+    "conflict_of_interest": "No",
+    "outside_activities": "No",
+    "hourly_rate": "$50/hour",
+    "numeric_experience_default": "5",
+    "referral_default": "N/A",
+    "consent_default": "Yes",
+    "age_over_18": "Yes",
+    "background_check_consent": "Yes",
+    "sms_consent": "Yes",
+    "requires_accommodation": "No",
+    "can_perform_essential_functions": "Yes",
+    "previous_application": "No",
+    "employee_relationship": "No",
+    "right_to_work_status": "No sponsorship required",
+    "bachelors_degree": "Yes",
+    "salary_expectation": "Negotiable",
+    "application_certification": "Yes",
+    "target_country_work_authorization": "Yes",
+    "target_country_residence": "Yes",
+    "work_authorization_countries": [
+      "Australia",
+      "Belgium",
+      "Brazil",
+      "Canada",
+      "France",
+      "Germany",
+      "India",
+      "Indonesia",
+      "Ireland",
+      "Israel",
+      "Italy",
+      "Japan",
+      "Luxembourg",
+      "Malaysia",
+      "Mexico",
+      "New Zealand",
+      "Poland",
+      "Portugal",
+      "Romania",
+      "Singapore",
+      "South Korea",
+      "Spain",
+      "Sweden",
+      "Switzerland",
+      "Taiwan",
+      "Thailand",
+      "The Netherlands",
+      "United Arab Emirates",
+      "United Kingdom",
+      "United States"
+    ],
+    "target_work_country": "",
+    "based_in_target_country": "Yes",
+    "international_travel": "Yes",
+    "led_product_implementation": "Yes",
+    "regional_experience": "Yes",
+    "management_experience_years": "more than 8 years",
+    "selected_essay_questions": "1, 2",
+    "work_authorization": "Yes",
+    "employment_restrictions": "No",
+    "previous_employment": "No",
+    "are_you_comfortable_with": "Yes",
+    "experience_level_selection": "max_value",
+    "rating_selection": "max_value",
+    "interest_checkbox_selection": "all",
+    "preferred_work_location_regions": [
+      "United States",
+      "Europe",
+      "Asia",
+      "Australia"
+    ],
+    "source_channel": "LinkedIn",
+    "relocation": "Yes",
+    "relocation_support": "No",
+    "additional_permanent_residencies": "N/A",
+    "export_control_eligibility": "No",
+    "work_country_timezone": "USA, ET",
+    "city_availability_selection": "first_option",
+    "financial_content_experience": "Yes",
+    "dealer_partner_supplier_relationship": "No",
+    "employment_start_month": "June",
+    "employment_start_year": "2022",
+    "employment_end_month": "Present",
+    "employment_end_year": "Present",
+    "language_answers": {
+      "Arabic": "Yes",
+      "Bahasa Malaysia": "Yes",
+      "Bengali": "Yes",
+      "Cantonese": "No",
+      "Czech": "Yes",
+      "Dutch": "Yes",
+      "English": "Yes",
+      "French": "Yes",
+      "German": "No",
+      "Greek": "Yes",
+      "Hebrew": "Yes",
+      "Hindi": "Yes",
+      "Hungarian": "Yes",
+      "Indonesian": "Yes",
+      "Italian": "Yes",
+      "Japanese": "Yes",
+      "Korean": "No",
+      "Mandarin Chinese": "Yes",
+      "Norwegian": "Yes",
+      "Other": "Yes",
+      "Persian (Farsi)": "Yes",
+      "Polish": "Yes",
+      "Portuguese": "Yes",
+      "Romanian": "Yes",
+      "Russian": "Yes",
+      "Spanish": "Yes",
+      "Swedish": "Yes",
+      "Thai": "Yes",
+      "Turkish": "Yes",
+      "Ukrainian": "Yes",
+      "Vietnamese": "Yes"
+    },
+    "current_salary": "Prefer not to disclose",
+    "notice_period": "2 weeks",
+    "flexible": "Yes",
+    "language_fluency": "Yes",
+    "current_employee": "No",
+    "privacy_consent": "Acknowledge",
+    "experience_requirement": "Yes",
+    "tool_proficiency": "Yes",
+    "language_proficiency": "C1–C2 or native (Advanced)",
+    "target_office": ""
+  },
+  "eeo": {
+    "gender": "Man",
+    "hispanic_latino": "No",
+    "race": "South Asian",
+    "veteran_status": "I am not a protected veteran",
+    "disability_status": "Yes, I have a disability, or have a history/record of having a disability",
+    "lgbtq_status": "Yes",
+    "transgender_status": "No"
+  },
+  "matchers": {
+    "first_name": [
+      "first name",
+      "given name"
+    ],
+    "middle_name": [
+      "middle name",
+      "middle initial"
+    ],
+    "last_name": [
+      "last name",
+      "preferred last name",
+      "family name",
+      "surname"
+    ],
+    "preferred_name": [
+      "preferred name",
+      "nickname",
+      "alias"
+    ],
+    "legal_name": [
+      "legal name",
+      "full legal name"
+    ],
+    "age_over_18": [
+      "18+ years of age",
+      "18 years of age",
+      "at least 18"
+    ],
+    "sanctions_residency": [
+      "citizen or resident of any of the following countries",
+      "cuba, iran, north korea, syria"
+    ],
+    "api_product_experience": [
+      "experience building api products",
+      "developer tools, or ai-powered products"
+    ],
+    "intended_work_location": [
+      "from where do you intend to work",
+      "where do you intend to work"
+    ],
+    "current_company": [
+      "current company",
+      "current employer",
+      "most recent company",
+      "current (or most recent) company"
+    ],
+    "current_title": [
+      "current title",
+      "current job title"
+    ],
+    "government_entity_details": [
+      "list the u.s. government entity",
+      "government entity you worked for"
+    ],
+    "human_attestation": [
+      "which of the following best describes you"
+    ],
+    "email": [
+      "email",
+      "email address"
+    ],
+    "citizenship": [
+      "citizenship",
+      "citizen of"
+    ],
+    "available_start_date": [
+      "available start date",
+      "when can you start",
+      "start date"
+    ],
+    "phonetic_name": [
+      "phonetic spelling",
+      "how do you pronounce"
+    ],
+    "background_check_consent": [
+      "background check",
+      "criminal history check"
+    ],
+    "sms_consent": [
+      "text message",
+      "sms",
+      "text updates"
+    ],
+    "phone": [
+      "phone",
+      "mobile",
+      "contact number"
+    ],
+    "location": [
+      "location",
+      "city",
+      "cities are you available to work",
+      "where are you based",
+      "physically based",
+      "current location"
+    ],
+    "linkedin": [
+      "linkedin",
+      "linkedin profile",
+      "linkedin url"
+    ],
+    "portfolio": [
+      "portfolio",
+      "website",
+      "personal website",
+      "researchgate"
+    ],
+    "public_username": [
+      "public username"
+    ],
+    "sponsorship": [
+      "sponsorship",
+      "require sponsorship",
+      "sponsor an immigration case",
+      "immigration case",
+      "visa sponsorship",
+      "future sponsorship"
+    ],
+    "requires_accommodation": [
+      "require any accommodation",
+      "require accommodations",
+      "need any accommodation",
+      "need accommodations",
+      "request an accommodation"
+    ],
+    "can_perform_essential_functions": [
+      "perform the essential functions",
+      "perform essential functions",
+      "perform the job duties with or without",
+      "able to perform the job duties"
+    ],
+    "right_to_work_status": [
+      "right to work status"
+    ],
+    "work_auth": [
+      "authorized",
+      "legally authorized",
+      "legal authorization to work",
+      "work in the united states",
+      "work authorization",
+      "currently eligible to work",
+      "eligible to work in your country of residence"
+    ],
+    "target_country_work_auth": [
+      "authorised to work in",
+      "authorized to work in",
+      "eligible to work in"
+    ],
+    "based_in_target_country": [
+      "currently based in",
+      "based in",
+      "currently located in"
+    ],
+    "international_travel": [
+      "willing and able to travel",
+      "domestic and international sites",
+      "international travel"
+    ],
+    "led_product_implementation": [
+      "led the implementation of a technology",
+      "led the implementation of a digital product",
+      "implemented a technology or digital product"
+    ],
+    "regional_experience": [
+      "worked in sub-saharan africa",
+      "managed projects based there"
+    ],
+    "management_experience_years": [
+      "years of product/project management experience",
+      "years of product management experience",
+      "years of project management experience"
+    ],
+    "selected_essay_questions": [
+      "please answer any 2",
+      "question number chosen"
+    ],
+    "comfortable": [
+      "comfortable",
+      "are you comfortable",
+      "open to working in person",
+      "working in person",
+      "onsite",
+      "hybrid",
+      "in-office",
+      "offices 4 days per week",
+      "office days per week",
+      "days a week in our",
+      "days a week in our office",
+      "days a week in the office",
+      "work is in office",
+      "working from office",
+      "work from office",
+      "working in the office",
+      "requires working from one of our offices",
+      "requires working from our office",
+      "come into the office",
+      "commute to our office",
+      "attend the office",
+      "able to work from our office"
+    ],
+    "previous_application": [
+      "have you applied",
+      "previously applied",
+      "applied before",
+      "applied in the past"
+    ],
+    "employee_relationship": [
+      "know anyone or are you related to anyone who works",
+      "referred to this role by a current employee",
+      "referred to this role by a current"
+    ],
+    "relocation": [
+      "relocate",
+      "relocating",
+      "relocation"
+    ],
+    "experience_requirement": [
+      "experience",
+      "collaborat"
+    ],
+    "tool_proficiency": [
+      "proficient",
+      "proficiency",
+      "familiar with",
+      "tools",
+      "technology"
+    ],
+    "language_proficiency": [
+      "language proficiency",
+      "language level",
+      "fluency level"
+    ],
+    "pronouns": [
+      "pronoun"
+    ],
+    "country": [
+      "country in which you are located",
+      "country of residence",
+      "what country are you based in",
+      "currently located? please state the country",
+      "currently located please state the country"
+    ],
+    "country_of_birth": [
+      "country of birth",
+      "birth country"
+    ],
+    "bachelors_degree": [
+      "bachelor's degree",
+      "bachelors degree",
+      "bachelor degree"
+    ],
+    "degree": [
+      "degree",
+      "highest level of education",
+      "education level"
+    ],
+    "employment_restrictions": [
+      "employment agreement",
+      "post-employment restriction",
+      "bound by any agreements",
+      "restrict your ability to work"
+    ],
+    "previous_employment": [
+      "previously worked",
+      "have you previously",
+      "previously employed",
+      "ever been employed",
+      "currently work for",
+      "currently employed by",
+      "history with",
+      "employed, or otherwise engaged",
+      "consulted for"
+    ],
+    "application_certification": [
+      "i certify that the information",
+      "certify that the information",
+      "information i provided in my employment application"
+    ],
+    "interview_ai_policy": [
+      "ai policy for interviewers",
+      "use of ai during the interview"
+    ],
+    "salary_expectation": [
+      "desired base salary",
+      "salary expectation",
+      "salary expectations",
+      "compensation expectation",
+      "compensation expectations",
+      "expected monthly base salary",
+      "expected annual salary",
+      "expected salary",
+      "desired compensation"
+    ],
+    "current_salary": [
+      "current salary",
+      "current monthly salary",
+      "current annual salary",
+      "current monthly base salary",
+      "current compensation"
+    ],
+    "notice_period": [
+      "notice period",
+      "availability to start",
+      "available to start"
+    ],
+    "hyderabad_flexibility": [
+      "flexible working from hyderabad",
+      "work from hyderabad"
+    ],
+    "flexible": [
+      "are you flexible",
+      "would you be flexible"
+    ],
+    "language_fluency": [
+      "fluent in",
+      "speak french fluently",
+      "language fluency"
+    ],
+    "source": [
+      "how did you hear",
+      "where have you learned about",
+      "where did you first hear",
+      "where did you see or hear",
+      "source"
+    ],
+    "current_employee": [
+      "currently an employee",
+      "current employee"
+    ],
+    "target_office": [
+      "which proton office",
+      "which office are you applying"
+    ],
+    "privacy_consent": [
+      "rgpd",
+      "gdpr",
+      "privacy consent",
+      "privacy",
+      "processing of personal data",
+      "personal information retained"
+    ],
+    "zip_code": [
+      "zip code",
+      "postal code"
+    ],
+    "hispanic_latino": [
+      "hispanic",
+      "latino",
+      "identify your ethnicity"
+    ],
+    "gender": [
+      "gender",
+      "identify your sex"
+    ],
+    "race": [
+      "race",
+      "racial",
+      "ethnic"
+    ],
+    "veteran": [
+      "veteran"
+    ],
+    "disability": [
+      "disability"
+    ],
+    "transgender": [
+      "transgender"
+    ],
+    "orientation": [
+      "sexual orientation"
+    ]
+  },
+  "option_variants": {
+    "LinkedIn": [
+      "University Career Fair"
+    ],
+    "Man": [
+      "Male"
+    ],
+    "No": [
+      "No, I have not",
+      "Not Hispanic or Latino",
+      "No proficiency",
+      "None"
+    ],
+    "South Asian": [
+      "South Asian",
+      "Asian (Not Hispanic or Latino)",
+      "Asian"
+    ],
+    "United States": [
+      "United States of America",
+      "USA",
+      "US"
+    ],
+    "Asian or Asian American": [
+      "Asian"
+    ],
+    "Yes, I have a disability, or have a history/record of having a disability": [
+      "Yes, I have a disability, or have had one in the past",
+      "Yes"
+    ],
+    "I am not a protected veteran": [
+      "not a protected veteran",
+      "I am not a veteran",
+      "No"
+    ],
+    "Acknowledge": [
+      "Yes",
+      "Yes, I consent",
+      "I consent",
+      "I agree",
+      "I acknowledge and give my consent",
+      "J'en ai pris connaissance et donne mon consentement"
+    ],
+    "C1–C2 or native (Advanced)": [
+      "C2",
+      "C1",
+      "Native",
+      "Advanced"
+    ]
+  }
+  },
+  "company_overrides": {}
+}

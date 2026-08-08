@@ -1,0 +1,34 @@
+{
+  "vps": {
+    "host": "2.24.28.180",
+    "hostname": "srv1576573.hstgr.cloud",
+    "ssh_user": "root",
+    "ssh_port": 22,
+    "ssh_host_key": "ssh-ed25519 255 SHA256:34gHuL+2VMGpf3LKR2Ru1YcKxt3jYv6zKUPg+ni/mFo",
+    "document_archive_root": "/var/lib/job-application-automation/private-archive",
+    "ssh_password": {
+      "value": "Codex-1785354439049-g3cjzrgzds8-Aa7",
+      "secret": true
+    },
+    "os": "Ubuntu 24.04 LTS",
+    "plan": "KVM 1",
+    "cpu_cores": 1,
+    "memory_gb": 4,
+    "disk_gb": 50,
+    "bandwidth_tb": 4,
+    "datacenter": "United States - Boston 2",
+    "backup_schedule": "Weekly",
+    "plan_expiration_date": "2027-04-10",
+    "auto_renewal": true
+  },
+  "hostinger_account": {
+    "owner_name": "Shivam Singh",
+    "billing_address": "525 14th St S, Arlington, US",
+    "phone": "+1 6502833478",
+    "company": "Cent Capital",
+    "account_currency": "USD",
+    "login_email": "shivamsi@umich.edu",
+    "two_factor_enabled": false,
+    "member_since": "2025-09-07"
+  }
+}
