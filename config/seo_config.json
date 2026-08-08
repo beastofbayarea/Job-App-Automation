@@ -18,7 +18,7 @@
     ]
   },
   "google_submission": {
-    "cloud_config_file": "config/cent_capital_config.json",
+    "cloud_config_file": "data/private/google_cloud_config.json",
     "search_console_property": "sc-domain:skybison.cloud",
     "eligible_urls": [],
     "request_timeout_seconds": 30,

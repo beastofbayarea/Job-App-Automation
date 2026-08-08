@@ -20,7 +20,7 @@ Run commands with either `python src/job_automation.py` from the repository root
 | `google-indexing submit` | Notify Google about an eligible updated/deleted page | Same-domain eligible URL |
 | `google-indexing status` | Read the last received notification metadata | Same-domain URL |
 
-> **Note:** Google indexing commands require configuration in `config/seo_config.json` and `config/cent_capital_config.json`. See [Configuration Guide](configuration.md#google-submission-and-cent-capital-reference-inventory).
+> **Note:** Google indexing commands use `config/seo_config.json` plus a separately supplied private cloud configuration. See the [Configuration Guide](configuration.md).
 | `engine <provider>` | Direct ATS diagnostic | Provider-specific URL and resume |
 
 ## Safety modes

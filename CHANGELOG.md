@@ -40,6 +40,9 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Changed
 
+- Consolidated eleven checkout runtime fragments into one
+  `config/runtime_config.json` and removed redundant configuration examples and
+  legacy reference files, leaving five active files under `config/`.
 - Runtime configuration now loads into frozen, mapping-compatible typed sections,
   including dedicated non-secret observability settings and direct/source worker
   controls with sparse provider overrides. Production consumers use typed fields

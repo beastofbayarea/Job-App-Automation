@@ -103,8 +103,8 @@ See [Operations Runbook](operations-runbook.md) for VPS setup procedures.
 
 Required files (copy from examples):
 ```powershell
-config\candidate_profile_config.json    # From .example.json
-config\candidate_email_pool.json        # From .example.json
+config\candidate_profile_config.json    # Candidate data and policies
+config\candidate_email_pool.json        # Approved email addresses
 ```
 
 Required file (create manually):
@@ -126,7 +126,7 @@ config\vps_config.json               # For VPS document archive
 
 1. Copy the example:
    ```powershell
-   Copy-Item config\candidate_profile_config.example.json config\candidate_profile_config.json
+   Edit `config/candidate_profile_config.json` directly.
    ```
 
 2. Edit the file with your:

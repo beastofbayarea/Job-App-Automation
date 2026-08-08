@@ -17,7 +17,7 @@ python -m playwright --version
 
 # Verify configuration files exist
 Test-Path config/candidate_profile_config.json
-Test-Path config/runtime/application.json
+Test-Path config/runtime_config.json
 Test-Path config/credentials.json
 
 # Check recent orchestration results
@@ -52,8 +52,7 @@ python -c "import sys; print(sys.path)"
 **Resolution:**
 1. Copy example templates:
    ```powershell
-   Copy-Item config\candidate_profile_config.example.json config\candidate_profile_config.json
-   Copy-Item config\candidate_email_pool.example.json config\candidate_email_pool.json
+   Review `config/candidate_profile_config.json` and `config/candidate_email_pool.json`.
    ```
 2. Validate JSON syntax: `python -c "import json; json.load(open('config/candidate_profile_config.json'))"`
 3. Check required fields per [Configuration Guide](configuration.md)
@@ -66,7 +65,7 @@ python -c "import sys; print(sys.path)"
 
 **Resolution:**
 1. Install Chromium: `python -m playwright install chromium`
-2. Check CDP endpoint in `config/runtime/browser.json` is running and reachable
+2. Check the browser CDP endpoint in `config/runtime_config.json` is running and reachable
 3. Retry in `--headed` mode to visually inspect the provider page
 4. Verify no other process is using the same browser profile directory
 
@@ -121,7 +120,7 @@ Test-Path config/token.json
 **Symptoms:** AI model errors, permission denied, quota exceeded.
 
 **Resolution:**
-1. Check service-account file path in `config/runtime/vertex.json`
+1. Check the Vertex service-account path in `config/runtime_config.json`
 2. Verify project ID matches the service account's project
 3. Confirm Vertex AI API is enabled in Google Cloud Console
 4. Check service account has `roles/aiplatform.user` role

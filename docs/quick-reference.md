@@ -22,8 +22,7 @@ python -m pip install .
 
 ```powershell
 # 1. Copy configuration templates
-Copy-Item config\candidate_profile_config.example.json config\candidate_profile_config.json
-Copy-Item config\candidate_email_pool.example.json config\candidate_email_pool.json
+# Review config/candidate_profile_config.json and config/candidate_email_pool.json
 
 # 2. Create base resume
 echo "Your resume content" > data\resumes\base-resume.txt
@@ -407,7 +406,7 @@ Project Root
 │   ├── token.json                    # Gmail OAuth token
 │   ├── vps_config.json               # VPS archive config
 │   ├── seo_config.json               # Google indexing
-│   ├── cent_capital_config.json      # Cloud inventory
+│   ├── runtime_config.json           # Runtime defaults
 │   └── runtime/                      # Operational defaults
 │       ├── application.json
 │       ├── browser.json

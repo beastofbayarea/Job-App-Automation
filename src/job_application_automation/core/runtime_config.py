@@ -1,4 +1,4 @@
-"""Load typed non-secret operational settings from ``config/runtime``."""
+"""Load typed operational settings from one checkout configuration file."""
 
 from __future__ import annotations
 
@@ -106,12 +106,11 @@ def _load_runtime_document(path: Path) -> Mapping[str, object]:
 
 
 def load_runtime_config(path: Path | None = None) -> RuntimeConfig:
-    """Load checkout settings, package defaults, or a legacy monolithic file."""
-    requested_path = RUNTIME_CONFIG_DIR if path is None else Path(path)
+    """Load checkout settings, an explicit path, or packaged defaults."""
+    requested_path = RUNTIME_CONFIG_FILE if path is None else Path(path)
     config_path = requested_path.expanduser().resolve()
-    if path is None and not config_path.is_dir():
-        legacy_path = RUNTIME_CONFIG_FILE.expanduser().resolve()
-        config_path = legacy_path if legacy_path.is_file() else DEFAULT_RUNTIME_CONFIG_DIR
+    if path is None and not config_path.is_file():
+        config_path = DEFAULT_RUNTIME_CONFIG_DIR
     return RuntimeConfig.from_mapping(_load_runtime_document(config_path))
 
 

@@ -2,23 +2,20 @@
 
 This guide covers all configuration options for the Job Application Automation toolkit. For quick setup, see [Quick Reference](quick-reference.md#configuration-quick-reference). For troubleshooting configuration issues, see [Troubleshooting Guide](troubleshooting.md#configuration-file-missing-or-invalid).
 
-Copy the tracked examples before adding personal data. Local candidate data, credentials, OAuth tokens, generated files, and caches are intentionally Git-ignored.
-
-# Configuration
-
-Copy the tracked examples before adding personal data. Local candidate data, credentials, OAuth tokens, generated files, and caches are intentionally Git-ignored.
+The repository keeps five active configuration files. Credentials and OAuth
+tokens should be supplied at the paths selected by runtime configuration or by
+the relevant environment variables.
 
 | Need | Local path | Source |
 | --- | --- | --- |
-| Application answers and browser policy | `config/candidate_profile_config.json` | `config/candidate_profile_config.example.json` |
-| Candidate email addresses | `config/candidate_email_pool.json` | `config/candidate_email_pool.example.json` |
+| Application answers and browser policy | `config/candidate_profile_config.json` | Review before live use |
+| Candidate email addresses | `config/candidate_email_pool.json` | Review before live use |
 | Resume source material | `data/base_resume.txt` | Create from candidate-approved material |
-| Runtime settings | `config/runtime/*.json` | Tracked configuration split by domain |
-| Vertex service account | `config/vertex_service_account.json` | `config/vertex_service_account.example.json` |
+| Runtime settings | `config/runtime_config.json` | Single tracked operational configuration |
+| Vertex service account | Path in `config/runtime_config.json` | Supply outside Git |
 | Gmail OAuth client and token | `config/credentials.json`, `config/token.json` | Google Cloud OAuth desktop-client credentials; token is created during authorization |
-| Private VPS document archive | `config/vps_config.json` | `config/vps_config.example.json` |
-| Google site/indexing settings | `config/seo_config.json` | `config/seo_config.example.json` |
-| Google cloud roles and Cent Capital reference inventory | `config/cent_capital_config.json` | `config/cent_capital_config.example.json` |
+| Private VPS document archive | `config/vps_config.json` | Review before live use |
+| Google site/indexing settings | `config/seo_config.json` | Pass private cloud configuration separately |
 
 ## Candidate profile
 
@@ -35,8 +32,8 @@ answers are used only when the country list is absent.
 
 ## Runtime configuration
 
-`config/runtime/` contains the shared operational defaults. Each domain is kept
-in its own JSON file, while `schema_version.json` versions the complete set:
+`config/runtime_config.json` contains the shared operational defaults. Its
+`schema_version` versions the complete document:
 
 - `application`: tracker, resume source, output artifact locations, email pool,
   application/queue timeouts, bounded VPS document work
@@ -60,45 +57,27 @@ in its own JSON file, while `schema_version.json` versions the complete set:
   provider pacing overrides. Provider overrides are validated after inheritance so
   an incomplete minimum/maximum pair cannot defer an invalid state until runtime.
 
-Every section file must contain exactly one top-level object matching its file
-name. The loader rejects missing or unexpected JSON files so partial deployments
-cannot silently mix old and new defaults. Paths are resolved from the project
-root. Keep secrets in the local files named above; never put them in runtime
-configuration committed to Git.
+The loader validates every section before use. Paths are resolved from the
+project root. Keep secrets outside runtime configuration.
 
 ## Optional operational telemetry
 
 Install the `observability` package extra and set `SENTRY_DSN` only in the
 worker's external environment when centralized worker diagnostics are wanted.
 `SENTRY_ENVIRONMENT` and `SENTRY_RELEASE` are optional bounded labels. These
-secret or deployment-specific values do not belong in `config/runtime/`; on the
+secret or deployment-specific values do not belong in `config/runtime_config.json`; on the
 VPS they belong in the root-readable
 `/etc/job-application-automation/observability.env` file.
 Without `SENTRY_DSN`, the application does not import or initialize the Sentry
 SDK.
 
-## Google submission and Cent Capital reference inventory
-
-`config/cent_capital_config.json` is an ignored reference inventory for settings
-that belong to the separate Cent Capital application and may be useful in later
-work. The `google-indexing` command reads only its Google project,
-`search_console_indexing` service-account role, key reference, Indexing API
-endpoint/scopes, and quota fields. The remaining inventory groups site/contact
-metadata, social links, Contentful profiles, frontend route and sitemap policy,
-RSS/IndexNow settings, deployment notes, and other service credentials.
-
-Raw Google key exports matching `config/cent-capital-*-*.json` and the imported
-frontend snapshot at `config/config.js` are also ignored. Keep their exact paths
-in `reference_sources` and `google.service_accounts` so future work can identify
-the Search Console/Indexing and Gemini accounts without treating either key as
-the Job App Automation Vertex credential. When promoting these settings into the
-owning Cent Capital repository, resolve paths relative to that repository and
-use its environment/secret-loading conventions.
+## Google submission
 
 `config/seo_config.json` owns the settings for this repository's published site:
 
 - `domain` and `gsc.sitemap_url` define the owned HTTPS site and sitemap.
-- `google_submission.cloud_config_file` links to the ignored cloud inventory.
+- `google_submission.cloud_config_file` links to private cloud configuration
+  supplied outside the tracked config set.
 - `google_submission.search_console_property` must be the matching
   `sc-domain:<domain>` property.
 - `google_submission.eligible_urls` contains only owned pages eligible for the
@@ -116,7 +95,7 @@ livestream `BroadcastEvent` pages.
 
 ## Private VPS document archive
 
-Copy `config/vps_config.example.json` to the ignored `config/vps_config.json`. The `documents` workflow reads these fields from its `vps` object:
+The `documents` workflow reads these fields from `config/vps_config.json`:
 
 - `host`, `ssh_user`, and optional `ssh_port`: use a dedicated, unprivileged archive account.
 - `ssh_host_key`: the trusted PuTTY-format fingerprint obtained through an independent channel. Archive operations require it and pass it through `-hostkey`.
@@ -129,9 +108,7 @@ The private key, password, and real config remain ignored by Git. The runtime co
 ## Minimal setup check
 
 ```powershell
-Copy-Item config\candidate_profile_config.example.json config\candidate_profile_config.json
-Copy-Item config\candidate_email_pool.example.json config\candidate_email_pool.json
-# Create data\base_resume.txt from approved resume content.
+# Review the candidate profile and email pool, then check the pool.
 python src/job_automation.py email-pool --count 1
 ```
 

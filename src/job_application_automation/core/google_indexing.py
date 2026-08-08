@@ -21,12 +21,12 @@ from urllib.parse import quote, urlparse
 import requests
 
 from .artifacts import read_json, write_json
-from .paths import CONFIG_DIR, PROJECT_ROOT
+from .paths import PROJECT_ROOT
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 
 
 DEFAULT_SEO_CONFIG = resolve_runtime_path(RUNTIME_CONFIG.application.seo_config_file)
-DEFAULT_CLOUD_CONFIG = CONFIG_DIR / "cent_capital_config.json"
+DEFAULT_CLOUD_CONFIG = PROJECT_ROOT / "data" / "private" / "google_cloud_config.json"
 INDEXING_SCOPE = "https://www.googleapis.com/auth/indexing"
 SEARCH_CONSOLE_SCOPE = "https://www.googleapis.com/auth/webmasters"
 INDEXING_PUBLISH_ENDPOINT = "https://indexing.googleapis.com/v3/urlNotifications:publish"

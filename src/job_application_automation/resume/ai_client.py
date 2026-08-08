@@ -216,7 +216,7 @@ def build_client(settings: VertexSettings = VERTEX_SETTINGS) -> Any:
     if not credentials_path.is_file():
         raise RuntimeError(
             f"Vertex service account file not found: {credentials_path}. "
-            "Copy config/vertex_service_account.example.json to that path and fill in your credentials."
+            "Provide a Google service-account JSON file at that path."
         )
     try:
         from google.oauth2 import service_account

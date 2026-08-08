@@ -66,7 +66,7 @@ All persisted artifacts use an atomic replace, so a completed write is not parti
 
 `google-indexing` reads the published-site property from
 `config/seo_config.json` and the Search Console/Indexing service-account role
-from the ignored `config/cent_capital_config.json`. Before live use, enable the
+from a private cloud configuration outside the tracked config set. Before live use, enable the
 Google Indexing API and Search Console API in the cloud project, then add the
 exact `search_console_indexing.email` identity as a delegated owner of the
 configured Search Console property.

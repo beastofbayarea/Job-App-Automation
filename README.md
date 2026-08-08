@@ -57,8 +57,7 @@ uv sync --locked --no-dev
 uv run playwright install chromium
 
 # Copy configuration templates
-Copy-Item config\candidate_profile_config.example.json config\candidate_profile_config.json
-Copy-Item config\candidate_email_pool.example.json config\candidate_email_pool.json
+# Review the tracked candidate profile and email pool before live use.
 
 # Create your resume source file
 # Edit data\resumes\base-resume.txt with your actual resume content
@@ -201,7 +200,7 @@ python -m pip install ".[structured]"
 python -m pip install ".[observability]"
 ```
 
-> **Note:** Installed commands look for local candidate files and an optional `config/runtime/` directory in the project where they are run. When that directory is absent, they use the package's equivalent split defaults.
+> **Note:** Installed commands look for local candidate files and an optional `config/runtime_config.json` in the project where they are run. When that file is absent, they use packaged defaults.
 
 ---
 
@@ -211,14 +210,14 @@ Tracked examples are safe templates. Copy and personalize them; the resulting fi
 
 | Purpose | Local file | Starting point |
 | --- | --- | --- |
-| Candidate profile and answer policy | `config/candidate_profile_config.json` | `config/candidate_profile_config.example.json` |
-| Candidate email addresses | `config/candidate_email_pool.json` | `config/candidate_email_pool.example.json` |
+| Candidate profile and answer policy | `config/candidate_profile_config.json` | Review before live use. |
+| Candidate email addresses | `config/candidate_email_pool.json` | Review before live use. |
 | Resume source material | `data/resumes/base-resume.txt` | Create from the candidate's resume; this is required for tailored resumes. |
-| Runtime defaults | `config/runtime/*.json` | Already tracked by domain; adjust the relevant section file when needed. |
-| Vertex service account | `config/vertex_service_account.json` | `config/vertex_service_account.example.json` |
+| Runtime defaults | `config/runtime_config.json` | Single tracked operational configuration file. |
+| Vertex service account | Path selected in `config/runtime_config.json` | Supply the credential outside Git. |
 | Gmail desktop OAuth client and token | `config/credentials.json`, `config/token.json` | Download OAuth desktop-client credentials from Google Cloud; the token is created during authorization. |
-| Private VPS archive | `config/vps_config.json` | Copy `config/vps_config.example.json`, then add a trusted host-key fingerprint and dedicated archive authentication. |
-| Google indexing and Cent Capital reference inventory | `config/seo_config.json`, `config/cent_capital_config.json` | Site/property data is tracked in `seo_config.json`; copy `config/cent_capital_config.example.json` for the ignored cloud roles, endpoint/quota settings, and key references used by `google-indexing`. |
+| Private VPS archive | `config/vps_config.json` | Review the host-key fingerprint and archive authentication. |
+| Google indexing | `config/seo_config.json` | Site/property data; pass private cloud credentials separately when using `google-indexing`. |
 
 The default runtime configuration resolves paths from the project root. Its Vertex `project_id` can remain `from-service-account` to read the project ID from the configured service-account file. Alternatively, use Application Default Credentials via `GOOGLE_APPLICATION_CREDENTIALS`.
 
@@ -299,7 +298,7 @@ python src/job_automation.py google-indexing status `
 ```
 
 The service-account identity, key path, project, endpoint, scopes, and quotas
-come from the ignored `config/cent_capital_config.json` and its referenced key
+come from the private cloud configuration supplied to the command and its referenced key
 file. Site ownership, sitemap URL, eligible URL list, timeout, and report path
 come from `config/seo_config.json`. Every command atomically writes
 `output/google_url_submission_report.json` unless `--report` overrides it.
@@ -385,7 +384,7 @@ python src/job_automation.py apply `
   --role "Product Manager" `
   --dry-run
 
-# A tracker-driven run. Default tracker and resume paths come from config/runtime/application.json.
+# A tracker-driven run. Default tracker and resume paths come from config/runtime_config.json.
 python src/job_automation.py apply --limit 1 --dry-run
 ```
 

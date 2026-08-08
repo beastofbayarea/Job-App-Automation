@@ -1,6 +1,0 @@
-{
-  "observability": {
-    "default_environment": "production",
-    "flush_timeout_seconds": 2.0
-  }
-}

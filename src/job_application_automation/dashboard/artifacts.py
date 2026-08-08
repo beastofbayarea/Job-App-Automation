@@ -17,24 +17,8 @@ logger = logging.getLogger("DashboardServer")
 
 _SAFE_CONFIG_NAMES = frozenset(
     {
-        "config.js",
-        "seo_config.example.json",
+        "runtime_config.json",
         "seo_config.json",
-    }
-)
-_SAFE_RUNTIME_CONFIG_NAMES = frozenset(
-    {
-        "application.json",
-        "ashby.json",
-        "browser.json",
-        "continuous_worker.json",
-        "cover_letter.json",
-        "gmail.json",
-        "observability.json",
-        "resume.json",
-        "schema_version.json",
-        "search.json",
-        "vertex.json",
     }
 )
 
@@ -162,16 +146,7 @@ def is_repository_admin_file(context: DashboardContext, path: Path) -> bool:
     if any(marker in lowered_name for marker in context.repository_private_name_markers):
         return False
     if lowered_parts[0] == "config":
-        is_runtime_section = (
-            len(lowered_parts) == 3
-            and lowered_parts[1] == "runtime"
-            and lowered_name in _SAFE_RUNTIME_CONFIG_NAMES
-        )
-        return (
-            is_runtime_section
-            or lowered_name.endswith(".example.json")
-            or lowered_name in _SAFE_CONFIG_NAMES
-        )
+        return len(lowered_parts) == 2 and lowered_name in _SAFE_CONFIG_NAMES
     return True
 
 
