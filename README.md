@@ -36,7 +36,8 @@ for release history.
 - **Application Automation**: Apply to a single URL or an Excel tracker. The orchestrator detects the supported ATS, selects a configured candidate email, generates a tailored resume, and records results and confirmed submissions.
 - **Submission Queue**: Run a deliberately live sequential queue that stops at the first unconfirmed application.
 - **Gmail Integration**: Read, classify, redact, export, draft, or send Gmail messages through local OAuth, and select addresses from the configured candidate-email pool.
-- **VPS Operations**: Run scheduled searches and guarded automatic applications on a VPS, synchronize public-safe results, verify freshness, rotate logs, and prune old generated PDFs.
+- **Status Dashboard**: Serve a minimal, read-only view of confirmed submissions, failures, backlog size, and worker state from local output artifacts.
+- **Continuous Workers**: Run guarded, provider-specific Ashby, Greenhouse, and Lever workers with persistent state, pacing, cooldowns, and exact confirmation-ledger checks.
 - **Google Indexing**: Submit sitemaps and eligible job pages to Google Search Console and the Indexing API.
 
 ---
@@ -55,8 +56,7 @@ uv sync --locked --no-dev
 # Install Playwright Chromium
 uv run playwright install chromium
 
-# Copy configuration templates
-# Review the tracked candidate profile and email pool before live use.
+# Review the five tracked files under config before live use.
 
 # Create your resume source file
 # Edit data\resumes\base-resume.txt with your actual resume content
@@ -164,7 +164,7 @@ python -m pip install -r requirements.txt
 python -m playwright install chromium
 ```
 
-### Reproducducible Installation (uv - Recommended)
+### Reproducible Installation (uv - Recommended)
 
 ```powershell
 # Sync from lockfile (production)
@@ -240,7 +240,11 @@ job-automation <command>
 | `queue` | Run a sequential URL queue | Always requests live submission |
 | `gmail` | Read/export mail or create a draft/send a message | Draft/send only with `--send-to`; confirmation unless `--yes` |
 | `email-pool` | Select configured candidate addresses | Local only |
+| `dashboard` | Serve the read-only local status page | Starts an HTTP server; binds to `127.0.0.1:8765` by default |
 | `google-indexing` | Submit the sitemap or eligible page notifications to Google | Live Google API calls unless `sitemap --dry-run` or `submit --dry-run` is used |
+| `continuous-ashby` | Run the persistent guarded Ashby worker | Can submit jobs from its configured input |
+| `continuous-greenhouse` | Run the persistent guarded Greenhouse worker | Can submit jobs from its configured input |
+| `continuous-lever` | Run the persistent guarded Lever worker | Can submit jobs from its configured input |
 | `engine <provider>` | Internal provider adapter used by `apply` | Orchestrator invocation required |
 
 Compatibility aliases are `orchestrate` for `apply`, `archive` for `documents`, and `email` for `gmail`. Use `python src/job_automation.py <command> --help` for the complete, version-specific option list.
@@ -441,6 +445,36 @@ results, submission logs, and state remain private.
 Application screenshots are temporary and are deleted at the end of every
 successful, failed, timed-out, or quarantined attempt.
 
+### View local status
+
+Launch the embedded, read-only dashboard from the repository root:
+
+```powershell
+python src/job_automation.py dashboard
+```
+
+It reads current artifacts under `output/`, opens `http://127.0.0.1:8765` by
+default, and refreshes every ten seconds. Use `--no-browser` for unattended
+launches, or `--host` and `--port` to change the listener. The dashboard has no
+authentication; do not expose it to an untrusted network.
+
+### Run a continuous provider worker
+
+The Ashby, Greenhouse, and Lever commands select verified-live jobs from their
+configured input, prepare documents, invoke the guarded application workflow,
+persist worker state, and enforce provider-specific pacing and cooldowns.
+`--once` processes at most one job and is the recommended diagnostic mode:
+
+```powershell
+python src/job_automation.py continuous-greenhouse --once
+```
+
+Continuous workers are live application workflows, not dry runs. Review
+`config/runtime_config.json`, the candidate profile, email pool, provider input,
+and document/archive configuration before starting one. A worker attempt is not
+a successful application unless the permanent ledger contains exact
+`SUBMITTED & CONFIRMED` evidence.
+
 ### Outputs and exit status
 
 | Path | Contents |
@@ -487,6 +521,8 @@ job_automation.py
       ├─ documents                  paired generation and private VPS archive
       ├─ search                     discovery, board feeds, JSON-LD, liveness, caching
       ├─ gmail / email-pool         Gmail OAuth, messages, exports, email selection
+      ├─ dashboard                  embedded read-only status page and aggregate API
+      ├─ continuous-*               guarded provider workers and persistent state
       └─ engine <ATS>               guarded provider-specific browser engine
 ```
 
@@ -560,5 +596,4 @@ This project is a private toolkit for authorized job application automation. Use
 
 ---
 
-**Last Updated:** August 2025
-**Version:** 0.1.0 (pre-release)
+**Last Updated:** August 8, 2026 · **Version:** 0.1.0 (pre-release)
