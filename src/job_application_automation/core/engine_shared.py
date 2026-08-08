@@ -794,16 +794,28 @@ def configured_answer(
     return None
 
 
+_SENSITIVE_NARRATIVE_PATTERN = re.compile(
+    r"accommodation|adjustment|disability|demographic|gender|race|racial|ethnic|"
+    r"hispanic|latino|veteran|sexual|transgender|pronoun|medical|health|"
+    r"work\s+authori[sz]|right\s+to\s+work|eligible\s+to\s+work|lawfully\s+work|"
+    r"visa|sponsor|immigration|citizen|citizenship|nationality|permanent\s+resident|"
+    r"residen(?:ce|cy|t)|security\s+clearance|export\s+control|sanction|"
+    r"government\s+(?:official|entity)|conflict\s+of\s+interest|criminal|convict|"
+    r"background\s+check|legal\s+acknowledg|privacy\s+consent|if you answered yes",
+    re.I,
+)
+
+
+def is_sensitive_narrative_question(label: str) -> bool:
+    """Return whether an unanswered narrative requires explicit candidate data."""
+    return bool(_SENSITIVE_NARRATIVE_PATTERN.search(str(label)))
+
+
 def is_essay_question(label: str) -> bool:
-    """Return whether a field is a free-text essay prompt worth generating an answer for."""
-    # Demographic/accommodation fields look like questions but must never get an
-    # LLM-generated essay answer, even if they also contain essay-like wording.
-    if re.search(
-        r"accommodation|adjustment|disability|demographic|gender|race|veteran|"
-        r"sexual|transgender|if you answered yes",
-        label,
-        re.I,
-    ):
+    """Return whether a field is a safe free-text essay prompt for generation."""
+    # Sensitive fields may use essay-like wording, but only an explicit
+    # configured answer may fill them. Never ask an LLM to infer one.
+    if is_sensitive_narrative_question(label):
         return False
     return bool(
         re.search(
@@ -824,6 +836,9 @@ def generate_essay_answer(
     candidate_evidence: str,
 ) -> str:
     """Generate an application-ready essay answer via the LLM, or "" on failure."""
+    if is_sensitive_narrative_question(question):
+        logger.warning("Essay generation skipped for sensitive prompt: %r", question)
+        return ""
     try:
         from ..resume.ai_client import call_essay_llm, strip_markdown_formatting
 
@@ -847,6 +862,56 @@ def generate_essay_answer(
     except Exception as exc:
         logger.warning("Essay generation failed for %r: %s", question, exc)
         return ""
+
+
+def generate_essay_answers(
+    questions: Sequence[str],
+    job_text: str,
+    company: str,
+    role: str,
+    candidate_evidence: str,
+) -> list[str]:
+    """Generate one coordinated concise-MECE package for safe narrative prompts.
+
+    The returned list always matches the input length. Sensitive questions and
+    failed generations remain blank so callers can leave them for review.
+    """
+    normalized = [str(question).strip() for question in questions]
+    answers = [""] * len(normalized)
+    safe_indices = [
+        index
+        for index, question in enumerate(normalized)
+        if question and not is_sensitive_narrative_question(question)
+    ]
+    if not safe_indices:
+        return answers
+    if not candidate_evidence.strip():
+        logger.warning("Essay-set generation skipped because candidate evidence is empty.")
+        return answers
+
+    try:
+        from ..resume.ai_client import call_essay_set_llm, strip_markdown_formatting
+
+        safe_questions = [normalized[index] for index in safe_indices]
+        generated = call_essay_set_llm(
+            safe_questions,
+            job_text,
+            company,
+            role,
+            candidate_evidence=candidate_evidence,
+        )
+        if len(generated) != len(safe_questions):
+            raise ValueError(
+                f"expected {len(safe_questions)} essay answers, received {len(generated)}"
+            )
+        for index, answer in zip(safe_indices, generated, strict=True):
+            cleaned = strip_markdown_formatting(answer).strip()
+            if re.search(r"\bMISSING EVIDENCE\b", cleaned, re.IGNORECASE):
+                continue
+            answers[index] = cleaned
+    except Exception as exc:
+        logger.warning("Coordinated essay-set generation failed: %s", exc)
+    return answers
 
 
 def generate_salary_answer(
@@ -1074,6 +1139,7 @@ def open_chrome_session(
     target_url: str = "",
     headless: bool = False,
     background: bool = False,
+    preserve_page: bool | None = None,
 ) -> BrowserSession:
     """Compatibility facade preserving historic CDP lifecycle patch seams."""
     return _browser_runtime.open_chrome_session(
@@ -1083,6 +1149,7 @@ def open_chrome_session(
         target_url=target_url,
         headless=headless,
         background=background,
+        preserve_page=preserve_page,
         create_background_target=_create_background_target,
         close_background_target=_close_background_target,
         resolve_background_page=_resolve_background_page,
@@ -1123,7 +1190,15 @@ def require_orchestrated_invocation(url: str) -> None:
 
 
 def requested_live_mode(args: argparse.Namespace) -> bool:
+    if os.environ.get("JOB_APP_FORBID_SUBMIT") == "1":
+        return False
     return bool(args.live_submit and not (args.fill_only or args.dry_run))
+
+
+def require_submission_allowed() -> None:
+    """Fail closed at the final mutation boundary for fill-only orchestration."""
+    if os.environ.get("JOB_APP_FORBID_SUBMIT") == "1":
+        raise RuntimeError("submission is forbidden by JOB_APP_FORBID_SUBMIT")
 
 
 def engine_result(

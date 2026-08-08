@@ -43,6 +43,7 @@ from .ashby_sections import (
 from .browser_controls import (
     click_scrolled_control as _click_scrolled_control,
     fill_scrolled_control as _fill_scrolled_control,
+    input_file_matches as _input_file_matches,
     retry_action as _retry_action,
 )
 from .browser_runtime import PlaywrightBrowserSession
@@ -69,6 +70,7 @@ from ..core.engine_shared import (
     open_chrome_session,
     navigate_reusing_tab,
     requested_live_mode,
+    require_submission_allowed,
     resolve_candidate_email,
     safe_filename,
     validate_ats_url,
@@ -1236,38 +1238,53 @@ def _attach_file(
     file_input: Locator,
     path: Path,
     label: str,
+    upload_attempts: dict[str, int] | None = None,
 ) -> bool:
-    """Attach one file and wait for Ashby's widget to confirm the upload."""
-    try:
-        existing_text = field.inner_text() if field.count() else ""
-        if path.name.lower() in existing_text.lower():
-            logger.info("%s attachment already present.", label)
-            return True
-        upload_button = field.get_by_text(re.compile(r"^\s*Upload File\s*$", re.I)).first
-        used_file_chooser = False
-        if upload_button.count() and upload_button.is_visible():
-            try:
-                with page.expect_file_chooser(timeout=5000) as chooser_info:
-                    upload_button.click()
-                chooser_info.value.set_files(str(path))
-                used_file_chooser = True
-            except Exception as chooser_exc:
-                logger.debug("%s file chooser path failed: %s", label, chooser_exc)
-        if not used_file_chooser:
-            file_input.set_input_files(str(path))
+    """Attach one exact file with at most one retry across repeated form passes."""
+    attempts = upload_attempts if upload_attempts is not None else {}
+    key = f"{label.casefold()}:{path.resolve()}"
 
-        for _ in range(20):
-            time.sleep(0.5)
-            field_text = field.inner_text() if field.count() else ""
-            if path.name.lower() in field_text.lower():
-                logger.info("%s uploaded and attached: %s", label, path.name)
-                return True
-        logger.warning(
-            "%s input accepted the file, but Ashby did not render an attachment confirmation.",
-            label,
-        )
-    except Exception as exc:
-        logger.error("%s upload error: %s", label, exc)
+    def field_confirms_filename() -> bool:
+        try:
+            lines = {line.strip().casefold() for line in field.inner_text().splitlines()}
+            return path.name.casefold() in lines
+        except Exception:
+            return False
+
+    if _input_file_matches(file_input, path):
+        return True
+    if attempts.get(key, 0) and field_confirms_filename():
+        return True
+
+    while attempts.get(key, 0) < 2:
+        attempt = attempts.get(key, 0) + 1
+        attempts[key] = attempt
+        try:
+            upload_button = field.get_by_text(re.compile(r"^\s*Upload File\s*$", re.I)).first
+            used_file_chooser = False
+            if upload_button.count() and upload_button.is_visible():
+                try:
+                    with page.expect_file_chooser(timeout=5000) as chooser_info:
+                        upload_button.click()
+                    chooser_info.value.set_files(str(path))
+                    used_file_chooser = True
+                except Exception as chooser_exc:
+                    logger.debug("%s file chooser path failed: %s", label, chooser_exc)
+            if not used_file_chooser:
+                file_input.set_input_files(str(path))
+
+            for _ in range(20):
+                time.sleep(0.5)
+                if _input_file_matches(file_input, path) or field_confirms_filename():
+                    logger.info("%s uploaded and attached: %s", label, path.name)
+                    return True
+            logger.warning(
+                "%s upload attempt %d/2 lacked an exact attachment confirmation.",
+                label,
+                attempt,
+            )
+        except Exception as exc:
+            logger.warning("%s upload attempt %d/2 failed: %s", label, attempt, exc)
     return False
 
 
@@ -1290,6 +1307,7 @@ def fill_personal_and_files(
     email: str,
     resume: Path,
     cover_letter: Path | None = None,
+    upload_attempts: dict[str, int] | None = None,
 ) -> dict[str, bool]:
     """Fill identity fields and attach the prepared resume and cover letter."""
     flags = {
@@ -1334,6 +1352,7 @@ def fill_personal_and_files(
             resume_loc,
             resume,
             "Resume",
+            upload_attempts,
         )
     else:
         # Some Ashby applications intentionally omit a resume field. Absence
@@ -1355,6 +1374,7 @@ def fill_personal_and_files(
                 cover_input,
                 cover_letter,
                 "Cover letter",
+                upload_attempts,
             )
         else:
             flags["cover_letter"] = True
@@ -2371,6 +2391,7 @@ def _run_form_sections(
     email: str,
     resume: Path,
     cover_letter: Path | None = None,
+    upload_attempts: dict[str, int] | None = None,
     *,
     refresh_selected_choices: bool = False,
 ) -> FormSectionReport:
@@ -2379,7 +2400,7 @@ def _run_form_sections(
     def personal_and_files() -> FormSectionOutcome:
         return FormSectionOutcome(
             "personal_and_files",
-            fill_personal_and_files(page, profile, email, resume, cover_letter),
+            fill_personal_and_files(page, profile, email, resume, cover_letter, upload_attempts),
         )
 
     def secondary() -> FormSectionOutcome:
@@ -2424,6 +2445,7 @@ def _fill_current_form(
     email: str,
     resume: Path,
     cover_letter: Path | None = None,
+    upload_attempts: dict[str, int] | None = None,
 ) -> dict[str, bool]:
     """Run every fill helper once against the currently visible Ashby form step."""
     return _run_form_sections(
@@ -2436,6 +2458,7 @@ def _fill_current_form(
         email,
         resume,
         cover_letter,
+        upload_attempts,
     ).fields
 
 
@@ -2449,6 +2472,7 @@ def _repair_dynamic_form(
     email: str,
     resume: Path,
     cover_letter: Path | None = None,
+    upload_attempts: dict[str, int] | None = None,
 ) -> None:
     """Replay Ashby sections after required-field validation rerenders the form."""
     _run_form_sections(
@@ -2461,6 +2485,7 @@ def _repair_dynamic_form(
         email,
         resume,
         cover_letter,
+        upload_attempts,
         refresh_selected_choices=True,
     )
 
@@ -2631,6 +2656,7 @@ def _submit_application(
     repair_dynamic_fields: Callable[[], None] | None = None,
 ) -> str:
     """Submit once the form is complete and return a structured status string."""
+    require_submission_allowed()
     if _shutdown:
         return "ABORTED_SIGNAL_RECEIVED"
 
@@ -2779,6 +2805,9 @@ def run_job(
         raise ValueError("Configuration field 'company_overrides' must be an object.")
     action_timeout_ms = _positive_config_int(resolved_config, "action_timeout_ms")
     navigation_timeout_ms = _positive_config_int(resolved_config, "navigation_timeout_ms")
+    navigation_timeout_ms = int(
+        os.environ.get("JOB_APP_RENDER_TIMEOUT_MS", str(navigation_timeout_ms))
+    )
     network_idle_timeout_ms = _positive_config_int(resolved_config, "network_idle_timeout_ms")
     overrides = company_overrides.get(company, {})
     if not isinstance(overrides, Mapping):
@@ -2842,6 +2871,7 @@ def run_job(
         page = session.page
         page.set_default_timeout(action_timeout_ms)
         critical: dict[str, bool] = {}
+        upload_attempts: dict[str, int] = {}
 
         try:
             if _shutdown:
@@ -2860,7 +2890,11 @@ def run_job(
                     timeout=network_idle_timeout_ms,
                 )
 
-            retry(_nav, label="Navigation")
+            retry(
+                _nav,
+                attempts=1 if os.environ.get("JOB_APP_COORDINATED_RETRY") == "1" else 3,
+                label="Navigation",
+            )
 
             comp_name = company or page.title().split("-")[0].strip() or "Company"
 
@@ -2901,6 +2935,7 @@ def run_job(
                     email,
                     resume,
                     cover_letter,
+                    upload_attempts,
                 )
                 ss(page, ashby_dir, comp_name, f"step{step}")
                 if not can_advance(page):
@@ -2929,6 +2964,7 @@ def run_job(
                                 email,
                                 resume,
                                 cover_letter,
+                                upload_attempts,
                             ),
                         ),
                     ),
@@ -2977,6 +3013,7 @@ def run_job(
                         email,
                         resume,
                         cover_letter,
+                        upload_attempts,
                     ),
                 )
 

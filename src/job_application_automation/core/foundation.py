@@ -103,7 +103,7 @@ def resolve_project_dir(path: str | Path, default: Path = OUTPUT_DIR) -> Path:
 
 import re
 import unicodedata
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, unquote, urlencode, urlsplit, urlunsplit
 
 
 _TRACKING_QUERY_KEYS = {
@@ -117,6 +117,15 @@ _TRACKING_QUERY_KEYS = {
 _PERCENT_ESCAPE = re.compile(r"%[0-9a-fA-F]{2}")
 _DOMAIN_LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
 _LOCAL_PART = re.compile(r"^[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+$")
+_GREENHOUSE_JOB_PATH = re.compile(r"^/[^/]+/jobs/(?P<job_id>[^/]+)/?$", re.IGNORECASE)
+
+
+def _greenhouse_path_job_id(host: str, path: str) -> str:
+    """Return the job ID embedded in a provider-owned Greenhouse job path."""
+    if host != "greenhouse.io" and not host.endswith(".greenhouse.io"):
+        return ""
+    match = _GREENHOUSE_JOB_PATH.fullmatch(path)
+    return unquote(match.group("job_id")) if match is not None else ""
 
 
 def _require_string(value: object, field_name: str, *, allow_empty: bool = False) -> str:
@@ -206,11 +215,17 @@ def canonical_job_url(value: object) -> str:
     path = re.sub(r"/(?:apply|application)/?$", "", path, flags=re.IGNORECASE)
     path = path.rstrip("/") or "/"
     path = _PERCENT_ESCAPE.sub(_uppercase_percent_escape, path)
+    greenhouse_path_job_id = _greenhouse_path_job_id(host, path)
 
     retained_query = []
     for key, item in parse_qsl(parsed.query, keep_blank_values=True):
         lookup_key = key.casefold()
         if lookup_key.startswith("utm_") or lookup_key in _TRACKING_QUERY_KEYS:
+            continue
+        if lookup_key == "gh_jid" and greenhouse_path_job_id and item == greenhouse_path_job_id:
+            # Greenhouse sometimes appends the same ID already encoded by
+            # ``/<board>/jobs/<id>``. Keep mismatched values because they can
+            # identify a different embedded application.
             continue
         retained_query.append((key, item))
     retained_query.sort(key=lambda pair: (pair[0].casefold(), pair[1]))

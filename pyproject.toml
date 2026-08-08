@@ -55,6 +55,7 @@ mypy_path = "src"
 show_error_codes = true
 files = [
     "src/job_application_automation/core/orchestrator.py",
+    "src/job_application_automation/core/local_prefill.py",
     "src/job_application_automation/core/continuous_ats.py",
     "src/job_application_automation/core/continuous_source_ats.py",
     "src/job_application_automation/core/application_pipeline.py",

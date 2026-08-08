@@ -48,9 +48,10 @@ from ..core.engine_shared import (
     fill_labeled as _fill_labeled,
     fill_required_consent as _fill_consent,
     first_visible as _first_visible,
-    generate_essay_answer as _generate_essay,
+    generate_essay_answers,
     generate_salary_answer as _generate_salary,
     is_essay_question as _is_essay_question,
+    is_sensitive_narrative_question,
     is_location_question,
     label_for as _label_for,
     load_json_config,
@@ -62,6 +63,7 @@ from ..core.engine_shared import (
     open_chrome_session,
     navigate_reusing_tab,
     requested_live_mode,
+    require_submission_allowed,
     validate_ats_url,
     validate_nonempty_file,
     validate_required_fields,
@@ -930,6 +932,7 @@ def _fill_custom_questions(
     budget: _FormWorkBudget | None = None,
 ) -> dict[str, bool]:
     results: dict[str, bool] = {}
+    pending_narratives: list[tuple[str, Locator]] = []
     job_text = page.locator("body").inner_text()[:30_000]
     controls = page.locator(CUSTOM_QUESTION_CONTROL_SELECTOR)
     handled_groups: set[str] = set()
@@ -1092,8 +1095,10 @@ def _fill_custom_questions(
                     )
             elif tag == "textarea":
                 answer = desired
-                if not answer:
-                    answer = _generate_essay(label, job_text, company, role, candidate_evidence)
+                if not answer and not is_sensitive_narrative_question(label):
+                    pending_narratives.append((label, control))
+                    results[label] = False
+                    continue
                 if answer:
                     control.fill(answer)
                     success = bool(control.input_value().strip())
@@ -1106,10 +1111,14 @@ def _fill_custom_questions(
                     and re.search(r"\b(?:how many|number of|years? of experience)\b", label, re.I)
                 ):
                     answer = str(rules.get("numeric_experience_default") or "").strip()
-                if not answer and is_required and _is_essay_question(label):
-                    answer = _generate_essay(label, job_text, company, role, candidate_evidence)
-                if not answer and essay_control:
-                    answer = _generate_essay(label, job_text, company, role, candidate_evidence)
+                if (
+                    not answer
+                    and not is_sensitive_narrative_question(label)
+                    and ((is_required and _is_essay_question(label)) or essay_control)
+                ):
+                    pending_narratives.append((label, control))
+                    results[label] = False
+                    continue
                 if answer:
                     control.fill(answer)
                     success = bool(control.input_value().strip())
@@ -1124,6 +1133,22 @@ def _fill_custom_questions(
             results[label] = success
         except Exception as exc:
             logger.debug("Custom question failed at index %d: %s", index, exc)
+    generated_answers = generate_essay_answers(
+        [label for label, _ in pending_narratives],
+        job_text,
+        company,
+        role,
+        candidate_evidence,
+    )
+    for (label, control), answer in zip(pending_narratives, generated_answers, strict=True):
+        if not answer or not _budget_available(budget, "custom-essay-answer"):
+            continue
+        try:
+            control.fill(answer)
+            control.blur()
+            results[label] = bool(control.input_value().strip())
+        except Exception as exc:
+            logger.debug("Greenhouse generated narrative fill failed for %r: %s", label, exc)
     return results
 
 
@@ -2114,7 +2139,11 @@ def run(
     candidate_evidence = _load_personalized_resume_evidence(resume, config)
     email = resolve_candidate_email(profile, email_override)
 
-    timeout = int(config.get("navigation_timeout_ms", 30_000))
+    timeout = int(
+        os.environ.get(
+            "JOB_APP_RENDER_TIMEOUT_MS", str(config.get("navigation_timeout_ms", 30_000))
+        )
+    )
     screenshot_dir = resolve_project_dir(
         config.get("download_root", OUTPUT_DIR),
         OUTPUT_DIR,
@@ -2175,6 +2204,7 @@ def run(
                     ) or _first_visible(page.locator('button[type="submit"], input[type="submit"]'))
                     if submit is not None:
                         try:
+                            require_submission_allowed()
                             submit.click()
                         except Exception:
                             pass
@@ -2506,6 +2536,7 @@ def run(
                     "screenshot": disabled_screenshot,
                 }
             verification_message_baseline = _current_greenhouse_verification_message_ids(company)
+            require_submission_allowed()
             submit.click()
             try:
                 page.wait_for_load_state("networkidle", timeout=timeout)
@@ -2543,6 +2574,7 @@ def run(
                             challenge_submit = submit
                         if challenge_submit is not None:
                             try:
+                                require_submission_allowed()
                                 challenge_submit.click()
                             except Exception:
                                 pass

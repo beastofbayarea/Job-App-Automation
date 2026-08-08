@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import re
 import time
 from dataclasses import dataclass
@@ -27,8 +28,9 @@ from ..core.engine_shared import (
     fill_first,
     fill_required_consent,
     first_visible,
-    generate_essay_answer,
+    generate_essay_answers,
     is_essay_question,
+    is_sensitive_narrative_question,
     is_location_question,
     load_personalized_resume_evidence,
     load_json_config,
@@ -39,6 +41,7 @@ from ..core.engine_shared import (
     orchestrated_config_path,
     page_has_captcha,
     requested_live_mode,
+    require_submission_allowed,
     require_orchestrated_invocation,
     resolve_candidate_email,
     validate_nonempty_file,
@@ -1007,6 +1010,7 @@ def _fill_custom_questions(
     form_text = page.locator("body").inner_text()
     job_text = f"{job_context}\n{form_text}"[:30_000]
     results: dict[str, bool] = {}
+    pending_narratives: list[tuple[str, Any]] = []
     handled_groups: set[str] = set()
     standard_names = {
         "firstname",
@@ -1101,7 +1105,11 @@ def _fill_custom_questions(
             desired = _salary_answer(label, desired, profile)
             if not desired and re.search(r"\brefer(?:red|ral)\b", label, re.I):
                 desired = "N/A"
-            if not desired and _is_professional_binary_question(label):
+            if (
+                not desired
+                and not is_sensitive_narrative_question(label)
+                and _is_professional_binary_question(label)
+            ):
                 desired = str(rules.get("experience_requirement") or "")
             if (
                 narrative_control
@@ -1120,14 +1128,22 @@ def _fill_custom_questions(
                     option_labels,
                     job_context,
                 )
-            if not desired and (narrative_control or is_essay_question(label)):
-                desired = generate_essay_answer(
-                    label,
-                    job_text,
-                    company,
-                    role,
-                    candidate_evidence,
+            should_generate_narrative = bool(
+                not desired
+                and not is_sensitive_narrative_question(label)
+                and not combobox_control
+                and effective_type not in {"radio", "checkbox"}
+                and (
+                    narrative_control
+                    or (
+                        tag == "input" and control_type in {"", "text"} and is_essay_question(label)
+                    )
                 )
+            )
+            if should_generate_narrative:
+                pending_narratives.append((label, control))
+                results[label] = False
+                continue
             desired = _answer_for_binary_options(desired, option_labels) or desired
 
             preferred = (
@@ -1181,6 +1197,21 @@ def _fill_custom_questions(
             results[label] = success
         except Exception as exc:
             logger.debug("Custom question failed at index %d: %s", index, exc)
+    generated_answers = generate_essay_answers(
+        [label for label, _ in pending_narratives],
+        job_text,
+        company,
+        role,
+        candidate_evidence,
+    )
+    for (label, control), answer in zip(pending_narratives, generated_answers, strict=True):
+        if not answer:
+            continue
+        try:
+            control.fill(answer)
+            results[label] = bool(control.input_value().strip())
+        except Exception as exc:
+            logger.debug("Generated narrative fill failed for %r: %s", label, exc)
     return results
 
 
@@ -1578,6 +1609,7 @@ def run_browser_form_engine(
     timeout: int = 30000,
 ) -> dict[str, Any]:
     """Fill one configured provider form and submit only after all safety gates pass."""
+    timeout = int(os.environ.get("JOB_APP_RENDER_TIMEOUT_MS", timeout))
     if not validate_ats_job_url(url, spec.ats):
         raise ValueError(f"URL is not a job-specific {spec.display_name} URL: {url}")
     resume = validate_nonempty_file(resume, "resume")
@@ -1919,6 +1951,7 @@ def run_browser_form_engine(
             submitted = True
             click_error = ""
             try:
+                require_submission_allowed()
                 submit_button.click()
             except Exception as exc:
                 click_error = f"{type(exc).__name__}: {exc}"[:300]

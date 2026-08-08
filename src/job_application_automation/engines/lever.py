@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import re
 from datetime import date
 from dataclasses import dataclass
@@ -43,8 +44,9 @@ from ..core.engine_shared import (
     fill_first,
     fill_required_consent,
     first_visible,
-    generate_essay_answer as _generate_essay,
+    generate_essay_answers,
     is_essay_question,
+    is_sensitive_narrative_question,
     is_location_question,
     load_json_config,
     load_personalized_resume_evidence,
@@ -54,6 +56,7 @@ from ..core.engine_shared import (
     open_chrome_session,
     navigate_reusing_tab,
     requested_live_mode,
+    require_submission_allowed,
     validate_ats_url,
     validate_nonempty_file,
     validate_required_fields,
@@ -341,6 +344,7 @@ def _fill_custom_questions(
     candidate_evidence: str,
 ) -> dict[str, bool]:
     results: dict[str, bool] = {}
+    pending_narratives: list[tuple[str, Locator]] = []
     handled: set[str] = set()
     # Fields already covered by _fill_standard_fields/fill_required_consent,
     # or hidden Lever plumbing (accountId, origin, referer, etc.) that must
@@ -419,12 +423,6 @@ def _fill_custom_questions(
             if not desired and re.fullmatch(r"(?:today'?s\s+)?date:?", normalized_label):
                 desired = date.today().isoformat()
             if (
-                not desired
-                and "visa" in normalized_label
-                and re.search(r"\b(?:hold|require|specify)\b", normalized_label)
-            ):
-                desired = "Employer-sponsored work authorization"
-            if (
                 narrative_control
                 and desired
                 and len(str(desired).split()) <= 3
@@ -465,14 +463,36 @@ def _fill_custom_questions(
                     )
             elif tag == "textarea" or control_type in {"text", "", "date"}:
                 answer = desired
-                if not answer and (narrative_control or is_essay_question(label)):
-                    answer = _generate_essay(label, job_text, company, role, candidate_evidence)
+                if (
+                    not answer
+                    and control_type != "date"
+                    and not is_sensitive_narrative_question(label)
+                    and (narrative_control or is_essay_question(label))
+                ):
+                    pending_narratives.append((label, control))
+                    results[label] = False
+                    continue
                 if answer:
                     control.fill(answer)
                     success = bool(control.input_value().strip())
             results[label] = success
         except Exception as exc:
             logger.debug("Lever custom question failed at %d: %s", index, exc)
+    generated_answers = generate_essay_answers(
+        [label for label, _ in pending_narratives],
+        job_text,
+        company,
+        role,
+        candidate_evidence,
+    )
+    for (label, control), answer in zip(pending_narratives, generated_answers, strict=True):
+        if not answer:
+            continue
+        try:
+            control.fill(answer)
+            results[label] = bool(control.input_value().strip())
+        except Exception as exc:
+            logger.debug("Lever generated narrative fill failed for %r: %s", label, exc)
     return results
 
 
@@ -657,7 +677,11 @@ def run(
     profile = dict(config["candidate"])
     email = resolve_candidate_email(profile, email_override)
 
-    timeout = int(config.get("navigation_timeout_ms", 30_000))
+    timeout = int(
+        os.environ.get(
+            "JOB_APP_RENDER_TIMEOUT_MS", str(config.get("navigation_timeout_ms", 30_000))
+        )
+    )
     screenshot_dir = resolve_project_dir(
         config.get("download_root", OUTPUT_DIR),
         OUTPUT_DIR,
@@ -730,6 +754,7 @@ def run(
                 )
                 if submit is None:
                     raise RuntimeError("submit button was not found")
+                require_submission_allowed()
                 submit.click()
                 try:
                     page.wait_for_load_state("networkidle", timeout=timeout)

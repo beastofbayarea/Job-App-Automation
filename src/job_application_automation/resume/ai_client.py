@@ -376,22 +376,27 @@ def scrape_job(url: str) -> dict[str, Any]:
             target_url=url,
             headless=True,
             background=ats == "smartrecruiters",
+            preserve_page=False,
         )
         page = session.page
         try:
             body_text = ""
             context_ready = False
             last_navigation_error: Exception | None = None
-            for attempt in range(1, 4):
+            context_attempts = 1 if os.environ.get("JOB_APP_COORDINATED_RETRY") == "1" else 3
+            context_timeout_ms = int(
+                os.environ.get("JOB_APP_RENDER_TIMEOUT_MS", str(JOB_NAVIGATION_TIMEOUT_MS))
+            )
+            for attempt in range(1, context_attempts + 1):
                 try:
                     page.goto(
                         url,
                         wait_until="domcontentloaded",
-                        timeout=JOB_NAVIGATION_TIMEOUT_MS,
+                        timeout=context_timeout_ms,
                     )
                     page.wait_for_function(
                         "() => (document.body?.innerText || '').trim().length >= 200",
-                        timeout=min(JOB_NAVIGATION_TIMEOUT_MS, 15_000),
+                        timeout=min(context_timeout_ms, 15_000),
                     )
                     body_text = str(
                         page.evaluate("() => document.body?.innerText || ''") or ""
@@ -413,11 +418,11 @@ def scrape_job(url: str) -> dict[str, Any]:
                         attempt,
                         exc,
                     )
-                if attempt < 3:
+                if attempt < context_attempts:
                     page.wait_for_timeout(750 * attempt)
             if not context_ready:
                 raise RuntimeError(
-                    f"ATS job page did not provide usable context after 3 attempts: "
+                    f"ATS job page did not provide usable context after {context_attempts} attempts: "
                     f"{last_navigation_error or 'empty response'}"
                 )
 
@@ -487,6 +492,7 @@ ANSWER STRUCTURE (adapt, do not label in the output)
 
 STYLE
 - Active voice, first person, confident, no hedging.
+- Keep the answer concise: normally 60-120 words in one coherent paragraph, unless the form asks for a shorter limit.
 - Concrete nouns over abstractions. Name systems, teams, metrics.
 - No em dashes, no emojis, no exclamation marks.
 - Vary sentence length. At least one sentence under 8 words.
@@ -654,23 +660,28 @@ def call_essay_set_llm(
     candidate_evidence: str = "",
 ) -> list[str]:
     """Generate one concise, mutually exclusive essay package for an application."""
-    normalized_questions = [str(question).strip() for question in questions if str(question).strip()]
+    normalized_questions = [
+        str(question).strip() for question in questions if str(question).strip()
+    ]
     if not normalized_questions:
         return []
 
     indexed_questions = "\n".join(
         f"{index}. {question}" for index, question in enumerate(normalized_questions)
     )
-    system_prompt = build_essay_system_prompt() + """
+    system_prompt = (
+        build_essay_system_prompt()
+        + """
 
 MULTI-ANSWER MECE RULE
 You are answering every essay prompt in the same application as one coordinated package.
-Keep each answer concise. Make the answers mutually exclusive and collectively exhaustive:
+Keep each answer to 60-120 words in one coherent paragraph unless its prompt asks for a shorter limit. Make the answers mutually exclusive and collectively exhaustive:
 - assign a distinct theme and distinct proof point to each prompt;
 - do not repeat the same metric, company example, motivation, or closing claim across answers;
 - answer each prompt directly while ensuring the full set covers motivation, qualifications, and role impact without overlap.
 Return only a JSON object with an `answers` array in the same order as the questions. Each item must contain `question_index` and `answer`.
 """
+    )
     user_prompt = f"""
 TARGET COMPANY: {company}
 TARGET ROLE: {role}

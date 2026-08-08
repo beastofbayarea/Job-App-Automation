@@ -25,6 +25,8 @@ target/
 *.tmp
 *.swp
 output/pre-submit/
+output/*
+!output/.gitkeep
 
 # Editors
 .vscode/

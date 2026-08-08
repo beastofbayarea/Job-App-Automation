@@ -18,6 +18,7 @@ CommandMain = Callable[[Sequence[str] | None], int]
 COMMAND_MODULES = {
     "apply": "job_application_automation.core.orchestrator",
     "queue": "job_application_automation.core.queue_runner",
+    "prefill-queue": "job_application_automation.core.local_prefill",
     "resume": "job_application_automation.resume.generate",
     "cover-letter": "job_application_automation.resume.cover_letter",
     "documents": "job_application_automation.core.document_cli",
@@ -51,6 +52,7 @@ def _print_usage(stream: TextIO) -> None:
         "Public commands:\n"
         "  apply       Run the ATS-aware application workflow\n"
         "  queue       Run a sequential application queue\n"
+        "  prefill-queue  Fill one JSON ATS queue locally without submitting\n"
         "  resume      Generate a personalised resume\n"
         "  cover-letter  Generate a one-page personalised cover letter\n"
         "  documents   Generate, store, or retrieve a private CV/cover-letter pair\n"

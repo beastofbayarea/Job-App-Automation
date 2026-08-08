@@ -2,9 +2,9 @@
 
 /goal
 
-Process every job URL in this file for the specific ATS platform:
+Process every job URL in each file of this folder data\application-queues.
 
-Run locally (not VPS or cloud) with up to 3 parallel sub-agents, one job/tab each. Leave completed tabs open and continue until the queue is exhausted.
+Run locally (not VPS or cloud) with a parallel sub-agent for each ATS platform, one job/tab each. Leave completed tabs open and continue until the queue is exhausted.
 
 Reuse one Chrome debug session, open tabs in the background, skip submitted roles, and never click Submit.
 

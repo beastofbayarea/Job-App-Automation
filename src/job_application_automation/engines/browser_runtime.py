@@ -26,7 +26,7 @@ from urllib.parse import urlparse
 
 from playwright.sync_api import Browser, Page, Playwright
 
-from ..core.foundation import BrowserAutomationError
+from ..core.foundation import BrowserAutomationError, canonical_job_url
 from ..core.runtime_config import RUNTIME_CONFIG
 from ..core.foundation import active_screenshot_directory
 
@@ -165,9 +165,12 @@ def page_has_captcha(page: Page) -> bool:
 
 
 def _normalized_navigation_url(value: str) -> str:
-    parsed = urlparse(value)
-    path = parsed.path.rstrip("/") or "/"
-    return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}{path}"
+    try:
+        return canonical_job_url(value)
+    except (TypeError, ValueError):
+        parsed = urlparse(value)
+        path = parsed.path.rstrip("/") or "/"
+        return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}{path}?{parsed.query}".rstrip("?")
 
 
 def navigate_reusing_tab(
@@ -184,9 +187,12 @@ def navigate_reusing_tab(
     if current == target:
         if captcha_checker(page):
             raise RuntimeError("CAPTCHA_REQUIRED: existing tab was left open")
+        if os.environ.get("JOB_APP_RELOAD_TAB") == "1":
+            page.reload(wait_until=wait_until, timeout=timeout)
         return
     last_error: Exception | None = None
-    for attempt in range(2):
+    attempts = 1 if os.environ.get("JOB_APP_COORDINATED_RETRY") == "1" else 2
+    for attempt in range(attempts):
         try:
             page.goto(url, wait_until=wait_until, timeout=timeout)
             return
@@ -208,7 +214,7 @@ def navigate_reusing_tab(
                     return
             except Exception:
                 pass
-            if attempt == 0:
+            if attempt + 1 < attempts:
                 page.wait_for_timeout(750)
     if last_error is not None:
         raise last_error
@@ -263,6 +269,129 @@ def _raw_browser_cdp_command(
         ) from exc
 
 
+def _cdp_target_info(
+    endpoint: str,
+    target_id: str,
+    *,
+    urlopen: Callable[..., Any] | None = None,
+) -> Mapping[str, Any]:
+    """Return one exact page target from Chrome's read-only target index."""
+    expected_id = str(target_id).strip()
+    if not expected_id:
+        raise BrowserAutomationError("Chrome target ID must not be empty")
+    active_urlopen = urlopen or urllib.request.urlopen
+    try:
+        with active_urlopen(  # noqa: S310 - caller owns the configured CDP endpoint.
+            f"{endpoint.rstrip('/')}/json/list",
+            timeout=5,
+        ) as response:
+            payload = json.load(response)
+    except BrowserAutomationError:
+        raise
+    except Exception as exc:
+        raise BrowserAutomationError(
+            f"Chrome CDP target lookup failed for {expected_id}: {exc}"
+        ) from exc
+    if not isinstance(payload, list):
+        raise BrowserAutomationError("Chrome CDP target index was not a JSON array")
+
+    matches = [
+        item
+        for item in payload
+        if isinstance(item, Mapping) and str(item.get("id", "")) == expected_id
+    ]
+    if len(matches) != 1:
+        raise BrowserAutomationError(f"Chrome target is unavailable: {expected_id}")
+    info = matches[0]
+    if str(info.get("type", "")) != "page":
+        raise BrowserAutomationError(f"Chrome target is not a page: {expected_id}")
+    web_socket_url = str(info.get("webSocketDebuggerUrl", "")).strip()
+    if not web_socket_url:
+        raise BrowserAutomationError(f"Chrome page target has no debugger WebSocket: {expected_id}")
+    socket_target_id = urlparse(web_socket_url).path.rstrip("/").rsplit("/", 1)[-1]
+    if socket_target_id != expected_id:
+        raise BrowserAutomationError(
+            f"Chrome target WebSocket did not match requested target: {expected_id}"
+        )
+    return info
+
+
+def validate_background_tab(
+    endpoint: str,
+    target_id: str,
+    *,
+    expected_marker: str = "",
+) -> Mapping[str, Any]:
+    """Validate an exact page target and, when supplied, its creation marker."""
+    info = _cdp_target_info(endpoint, target_id)
+    if expected_marker and str(info.get("url", "")) != expected_marker:
+        raise BrowserAutomationError(
+            f"Chrome target marker did not match requested target: {target_id}"
+        )
+    return info
+
+
+def _raw_target_cdp_command(
+    web_socket_url: str,
+    method: str,
+    params: Mapping[str, Any],
+    *,
+    connect_socket: Callable[..., Any] | None = None,
+) -> Mapping[str, Any]:
+    """Send one command directly to a page target without activating it."""
+    try:
+        if connect_socket is None:
+            from websockets.sync.client import connect
+
+            connect_socket = connect
+        request_id = 1
+        with connect_socket(web_socket_url, open_timeout=5, close_timeout=2) as socket:
+            socket.send(
+                json.dumps(
+                    {
+                        "id": request_id,
+                        "method": method,
+                        "params": dict(params),
+                    }
+                )
+            )
+            while True:
+                message = json.loads(socket.recv(timeout=5))
+                if message.get("id") != request_id:
+                    continue
+                if message.get("error"):
+                    raise BrowserAutomationError(
+                        f"Chrome target CDP command failed: {message['error']}"
+                    )
+                result = message.get("result", {})
+                return result if isinstance(result, Mapping) else {}
+    except BrowserAutomationError:
+        raise
+    except Exception as exc:
+        raise BrowserAutomationError(
+            f"Chrome target CDP transport failed while executing {method}: {exc}"
+        ) from exc
+
+
+def reload_background_tab(
+    endpoint: str,
+    target_id: str,
+    *,
+    expected_marker: str = "",
+) -> Mapping[str, Any]:
+    """Reload one exact background page through CDP without activating its tab."""
+    info = validate_background_tab(
+        endpoint,
+        target_id,
+        expected_marker=expected_marker,
+    )
+    return _raw_target_cdp_command(
+        str(info["webSocketDebuggerUrl"]),
+        "Page.reload",
+        {"ignoreCache": False},
+    )
+
+
 def _create_background_target(
     endpoint: str,
     *,
@@ -302,6 +431,93 @@ def _resolve_background_page(browser: Browser, marker: str) -> Page:
     raise BrowserAutomationError(
         "Chrome created a background target but Playwright could not resolve it"
     )
+
+
+def _page_target_id(context: Any, page: Page) -> str:
+    session = None
+    try:
+        session = context.new_cdp_session(page)
+        result = session.send("Target.getTargetInfo")
+        info = result.get("targetInfo", {}) if isinstance(result, Mapping) else {}
+        return str(info.get("targetId", ""))
+    except Exception:
+        return ""
+    finally:
+        if session is not None:
+            try:
+                session.detach()
+            except Exception:
+                pass
+
+
+def _resolve_target_page(
+    browser: Browser,
+    target_id: str,
+    *,
+    target_marker: str = "",
+    target_url: str = "",
+) -> Page:
+    """Resolve an exact target, using unique job metadata only as a fast path."""
+    expected_id = str(target_id).strip()
+    marker = str(target_marker).strip()
+    normalized_url = _normalized_navigation_url(target_url) if target_url else ""
+    for _ in range(30):
+        pages: list[tuple[Any, Page]] = []
+        for context in browser.contexts:
+            for page in context.pages:
+                try:
+                    if not page.is_closed():
+                        pages.append((context, page))
+                except Exception:
+                    continue
+        candidate_groups: list[list[tuple[Any, Page]]] = []
+        if marker:
+            candidate_groups.append(
+                [(context, page) for context, page in pages if page.url == marker]
+            )
+        if normalized_url:
+            url_candidates: list[tuple[Any, Page]] = []
+            for context, page in pages:
+                try:
+                    if _normalized_navigation_url(page.url) == normalized_url:
+                        url_candidates.append((context, page))
+                except (TypeError, ValueError):
+                    continue
+            candidate_groups.append(url_candidates)
+
+        fast_path_retry = False
+        for candidates in candidate_groups:
+            if len(candidates) != 1:
+                continue
+            context, page = candidates[0]
+            resolved_id = _page_target_id(context, page)
+            if not resolved_id:
+                fast_path_retry = True
+                break
+            if resolved_id != expected_id:
+                raise BrowserAutomationError(
+                    f"Chrome target metadata did not match requested target: {expected_id}"
+                )
+            return page
+        if fast_path_retry:
+            time.sleep(0.1)
+            continue
+
+        for context, page in pages:
+            if _page_target_id(context, page) == expected_id:
+                return page
+        time.sleep(0.1)
+    raise BrowserAutomationError(f"Chrome target is unavailable: {expected_id}")
+
+
+def create_background_tab(endpoint: str) -> tuple[str, str]:
+    """Create one inactive Chrome target and return its marker URL and stable ID."""
+    return _create_background_target(endpoint)
+
+
+def close_background_tab(endpoint: str, target_id: str) -> None:
+    """Close only the exact Chrome target owned by one failed helper attempt."""
+    _close_background_target(endpoint, target_id)
 
 
 def _reusable_page(
@@ -563,6 +779,22 @@ def close_browser_session(
             logger.debug("Could not clean the owned Chrome profile", exc_info=True)
 
 
+def _connect_over_cdp(playwright: Playwright, endpoint: str) -> Browser:
+    """Attach to Chrome with an optional bounded timeout override."""
+    raw_timeout = os.environ.get("JOB_APP_CDP_ATTACH_TIMEOUT_MS", "").strip()
+    if not raw_timeout:
+        return playwright.chromium.connect_over_cdp(endpoint)
+    try:
+        timeout_ms = int(raw_timeout)
+    except ValueError as exc:
+        raise BrowserAutomationError(
+            "JOB_APP_CDP_ATTACH_TIMEOUT_MS must be a positive integer"
+        ) from exc
+    if timeout_ms <= 0:
+        raise BrowserAutomationError("JOB_APP_CDP_ATTACH_TIMEOUT_MS must be a positive integer")
+    return playwright.chromium.connect_over_cdp(endpoint, timeout=timeout_ms)
+
+
 def open_chrome_session(
     playwright: Playwright,
     *,
@@ -571,6 +803,7 @@ def open_chrome_session(
     target_url: str = "",
     headless: bool = False,
     background: bool = False,
+    preserve_page: bool | None = None,
     create_background_target: Callable[[str], tuple[str, str]] = _create_background_target,
     close_background_target: Callable[[str, str], None] = _close_background_target,
     resolve_background_page: Callable[[Browser, str], Page] = _resolve_background_page,
@@ -588,28 +821,58 @@ def open_chrome_session(
 ) -> PlaywrightBrowserSession:
     """Open a reusable, background, or isolated Playwright browser session."""
     endpoint = cdp_url or RUNTIME_CONFIG.browser.cdp_endpoint
+    background = background or os.environ.get("JOB_APP_BACKGROUND_TABS") == "1"
+    require_shared_cdp = os.environ.get("JOB_APP_REQUIRE_SHARED_CDP") == "1"
+    requested_target_id = os.environ.get("JOB_APP_TARGET_ID", "").strip()
+    keep_page = (
+        os.environ.get("JOB_APP_KEEP_TABS_OPEN") == "1" if preserve_page is None else preserve_page
+    )
+    if requested_target_id:
+        try:
+            browser = _connect_over_cdp(playwright, endpoint)
+            return PlaywrightBrowserSession(
+                browser,
+                _resolve_target_page(
+                    browser,
+                    requested_target_id,
+                    target_marker=os.environ.get("JOB_APP_TARGET_MARKER", ""),
+                    target_url=os.environ.get("JOB_APP_TARGET_URL", ""),
+                ),
+                False,
+                False,
+            )
+        except Exception as exc:
+            if require_shared_cdp:
+                raise BrowserAutomationError(
+                    f"Required Chrome target {requested_target_id} is unavailable on {endpoint}"
+                ) from exc
+            logger.info("Requested Chrome target %s is unavailable: %s", requested_target_id, exc)
     if background:
         target_id = ""
         try:
             marker, target_id = create_background_target(endpoint)
-            browser = playwright.chromium.connect_over_cdp(endpoint)
+            browser = _connect_over_cdp(playwright, endpoint)
             return PlaywrightBrowserSession(
                 browser,
                 resolve_background_page(browser, marker),
                 False,
-                True,
+                not keep_page,
             )
         except Exception as exc:
             if target_id:
                 close_background_target(endpoint, target_id)
             logger.info("Existing background Chrome session unavailable on %s: %s", endpoint, exc)
+            if require_shared_cdp:
+                raise BrowserAutomationError(
+                    f"Required shared Chrome CDP session is unavailable on {endpoint}"
+                ) from exc
         owned_chrome = start_hidden_chrome(endpoint, profile_name)
         if owned_chrome is not None:
             owned_process, owned_profile, owned_endpoint = owned_chrome
             target_id = ""
             try:
                 marker, target_id = create_background_target(owned_endpoint)
-                browser = playwright.chromium.connect_over_cdp(owned_endpoint)
+                browser = _connect_over_cdp(playwright, owned_endpoint)
                 return PlaywrightBrowserSession(
                     browser=browser,
                     page=resolve_background_page(browser, marker),
@@ -638,6 +901,15 @@ def open_chrome_session(
                     owned_endpoint,
                     exc,
                 )
+    elif require_shared_cdp:
+        try:
+            browser = _connect_over_cdp(playwright, endpoint)
+            page = reusable_page(browser, target_url) if target_url else None
+            return PlaywrightBrowserSession(browser, page or new_page(browser), False)
+        except Exception as exc:
+            raise BrowserAutomationError(
+                f"Required shared Chrome CDP session is unavailable on {endpoint}"
+            ) from exc
     if headless:
         browser = playwright.chromium.launch(headless=True)
         return PlaywrightBrowserSession(browser, new_page(browser), True)
@@ -645,7 +917,7 @@ def open_chrome_session(
     force_fresh = os.environ.get("JOB_APP_FRESH_BROWSER") == "1"
     if not force_fresh:
         try:
-            browser = playwright.chromium.connect_over_cdp(endpoint)
+            browser = _connect_over_cdp(playwright, endpoint)
             page = reusable_page(browser, target_url) if target_url else None
             return PlaywrightBrowserSession(browser, page or new_page(browser), False)
         except Exception as exc:
@@ -674,7 +946,7 @@ def open_chrome_session(
         for _ in range(15):
             time.sleep(0.4)
             try:
-                browser = playwright.chromium.connect_over_cdp(endpoint)
+                browser = _connect_over_cdp(playwright, endpoint)
                 page = reusable_page(browser, target_url) if target_url else None
                 return PlaywrightBrowserSession(browser, page or new_page(browser), False)
             except Exception:

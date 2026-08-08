@@ -238,6 +238,7 @@ job-automation <command>
 | `documents retrieve` | Download and verify an archived PDF pair | Always contacts the configured VPS |
 | `apply` | Run one URL or tracker-driven ATS workflow | Submission only with `--live-submit` |
 | `queue` | Run a sequential URL queue | Always requests live submission |
+| `prefill-queue` | Fill a provider JSON queue locally | Background tabs; never submits; resumable |
 | `gmail` | Read/export mail or create a draft/send a message | Draft/send only with `--send-to`; confirmation unless `--yes` |
 | `email-pool` | Select configured candidate addresses | Local only |
 | `dashboard` | Serve the read-only local status page | Starts an HTTP server; binds to `127.0.0.1:8765` by default |
@@ -401,6 +402,28 @@ python src/job_automation.py queue --queue .\jobs.txt
 
 Use `--start-index` to resume and `--timeout` to set each application-engine timeout. Progress is stored in `output/job_url_queue_progress.json`.
 
+### Prefill a JSON queue locally
+
+Use `prefill-queue` for a provider-specific JSON array when every application
+must stop before submission. Run one process per ATS queue; each process uses
+the configured Chrome debugging endpoint, creates one background tab per job,
+generates a personalized resume and cover letter with one randomly selected
+configured email, fills the form, and leaves the completed tab open.
+
+```powershell
+python src/job_automation.py prefill-queue `
+  --queue data/application-queues/ashby-job-search-2026-08-04.json `
+  --ats ashby
+```
+
+The command fails closed if the shared loopback Chrome CDP session is absent.
+It disables live submission at the engine boundary, skips exact URLs found in
+the confirmed submission ledger or its quarantine sidecar, and stores
+resumable per-platform state under `output/local-prefill/`. A render hang gets
+one reload in the same tab, followed by one retry in a replacement background
+tab; only the stale tab owned by that job is closed. Generated state, logs, and
+documents under `output/` are private and ignored by Git.
+
 ### Gmail and email pool
 
 ```powershell
@@ -486,6 +509,7 @@ a successful application unless the permanent ledger contains exact
 | `output/orchestration_results.json` | Latest application workflow records |
 | `output/submission_log.json` | Confirmed, non-test submissions only |
 | `output/job_url_queue_progress.json` | Latest queue attempt and resume index |
+| `output/local-prefill/<ats>/state.json` | Resumable local fill-only queue checkpoint |
 | `output/application_documents/<id>/` | Locally generated archive-ready PDF pair and audit |
 | `output/retrieved_documents/<id>/` | Verified PDFs and manifest retrieved from the VPS |
 

@@ -7,6 +7,7 @@ of navigation, custom widgets, question semantics, and submission decisions.
 
 from __future__ import annotations
 
+import hashlib
 import random
 import re
 import time
@@ -145,16 +146,59 @@ def upload_first(
     selectors: Sequence[str],
     path: Path,
 ) -> bool:
-    """Upload a file to the first usable control in selector order."""
+    """Upload and verify a file on the first usable control in selector order."""
     for selector in selectors:
         controls = page.locator(selector)
         for index in range(controls.count()):
             control = controls.nth(index)
-            try:
-                control.set_input_files(str(path))
-                return True
-            except Exception:
-                continue
+            # Selector order expresses provider preference. Once a concrete
+            # control is selected, keep the one retry on that same logical
+            # attachment instead of multiplying retries across stale inputs.
+            return upload_file_verified(control, path)
+    return False
+
+
+def input_file_matches(control: Locator, path: Path) -> bool:
+    """Return whether one selected browser file exactly matches the local file."""
+    expected_name = path.name.casefold()
+    expected_size = path.stat().st_size
+    expected_sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
+    try:
+        selected = control.evaluate(
+            """async input => {
+                const files = Array.from(input.files || []);
+                if (files.length !== 1 || !globalThis.crypto?.subtle) return null;
+                const file = files[0];
+                const bytes = new Uint8Array(await file.arrayBuffer());
+                const digest = await crypto.subtle.digest('SHA-256', bytes);
+                const sha256 = Array.from(new Uint8Array(digest), byte =>
+                    byte.toString(16).padStart(2, '0')
+                ).join('');
+                return {name: String(file.name || ''), size: file.size, sha256};
+            }"""
+        )
+        if isinstance(selected, dict):
+            return (
+                str(selected.get("name", "")).casefold() == expected_name
+                and selected.get("size") == expected_size
+                and str(selected.get("sha256", "")).casefold() == expected_sha256
+            )
+    except Exception:
+        return False
+    return False
+
+
+def upload_file_verified(control: Locator, path: Path, *, attempts: int = 2) -> bool:
+    """Attach a file, verify its exact filename, and retry once by default."""
+    if attempts < 1:
+        raise ValueError("attempts must be at least 1")
+    for _ in range(attempts):
+        try:
+            control.set_input_files(str(path))
+        except Exception:
+            continue
+        if input_file_matches(control, path):
+            return True
     return False
 
 
@@ -165,17 +209,13 @@ def upload_preferred_file(
     preferred_selector: str,
     fallback_selector: str,
 ) -> bool:
-    """Upload through a preferred first control, falling back only when absent."""
+    """Upload and verify through a preferred control, falling back only when absent."""
     target = page.locator(preferred_selector).first
     if not target.count():
         target = page.locator(fallback_selector).first
     if not target.count():
         return False
-    try:
-        target.set_input_files(str(path))
-        return True
-    except Exception:
-        return False
+    return upload_file_verified(target, path)
 
 
 def upload_matching_file(
@@ -188,14 +228,12 @@ def upload_matching_file(
 ) -> bool | None:
     """Upload to a semantically matching file control.
 
-    ``None`` means the form exposes no matching field. ``False`` means a field
-    matched but every upload attempt failed, preserving the adapters' existing
-    optional-document contract. ``fallback_to_single`` uploads to a sole file
-    input after semantic matching, including a retry after a matched input
-    failed, for providers with that established resume behavior.
+    ``None`` means the form exposes no matching field. ``False`` means the
+    selected field exhausted its initial upload plus one retry.
+    ``fallback_to_single`` handles providers whose sole file input lacks a
+    useful semantic label.
     """
     inputs = page.locator('input[type="file"]')
-    matched = False
     normalized_terms = tuple(term.casefold().strip() for term in required_terms if term.strip())
     for index in range(inputs.count()):
         target = inputs.nth(index)
@@ -203,18 +241,15 @@ def upload_matching_file(
             context = context_resolver(target).casefold().replace("_", " ").replace("-", " ")
             if not all(term in context for term in normalized_terms):
                 continue
-            matched = True
-            target.set_input_files(str(path))
-            return True
+            return upload_file_verified(target, path)
         except Exception:
             continue
     if fallback_to_single and inputs.count() == 1:
         try:
-            inputs.first.set_input_files(str(path))
-            return True
+            return upload_file_verified(inputs.first, path)
         except Exception:
             return False
-    return False if matched else None
+    return None
 
 
 def retry_action(
