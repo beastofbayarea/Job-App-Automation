@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Protocol, cast
 
 from ..mail.pool import load_email_pool
-from ..search.backlog import remove_confirmed_job
+from ..search.support import remove_confirmed_job
 from .application_candidates import application_url
 from .artifacts import atomic_write_text, read_json
 from .contracts import EngineResult

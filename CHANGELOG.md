@@ -44,6 +44,9 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Changed
 
+- Consolidated the search package's models, parsing, discovery, liveness,
+  caching, serialization, provider contracts, utilities, and registry from twelve
+  modules into two while preserving provider adapters and the CLI facade.
 - Added the missing browser headless preference from the external environment
   inventory to the candidate automation profile.
 - Consolidated eleven checkout runtime fragments into one

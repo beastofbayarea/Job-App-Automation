@@ -8,11 +8,11 @@ from urllib.parse import quote
 
 import requests
 
-from ..config import PROVIDER_API_URLS
-from ..models import Board, Job, SearchCandidate
-from ..terms import clean_whitespace
-from .common import days_old, iso_or_blank, mapping_items, parse_datetime, prettify_slug, strip_html
-from .contracts import FetchContext, FetchServices, LivenessServices, ProviderUrl
+from ..support import PROVIDER_API_URLS
+from ..support import Board, Job, SearchCandidate
+from ..support import clean_whitespace
+from . import days_old, iso_or_blank, mapping_items, parse_datetime, prettify_slug, strip_html
+from . import FetchContext, FetchServices, LivenessServices, ProviderUrl
 
 
 LEVER_HOSTS = frozenset({"jobs.lever.co", "jobs.eu.lever.co"})

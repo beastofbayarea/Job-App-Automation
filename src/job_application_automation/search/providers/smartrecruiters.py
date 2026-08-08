@@ -8,10 +8,10 @@ from urllib.parse import quote
 
 import requests
 
-from ..config import PROVIDER_API_URLS
-from ..models import Board, Job
-from ..terms import clean_whitespace, matching_terms
-from .common import (
+from ..support import PROVIDER_API_URLS
+from ..support import Board, Job
+from ..support import clean_whitespace, matching_terms
+from . import (
     days_old,
     iso_or_blank,
     mapping_items,
@@ -20,7 +20,7 @@ from .common import (
     prettify_slug,
     strip_html,
 )
-from .contracts import FetchContext, FetchServices, LivenessServices, ProviderUrl
+from . import FetchContext, FetchServices, LivenessServices, ProviderUrl
 
 
 SMARTRECRUITERS_HOSTS = frozenset(

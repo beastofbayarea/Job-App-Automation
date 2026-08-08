@@ -9,10 +9,10 @@ from urllib.parse import quote
 
 import requests
 
-from ..config import PROVIDER_API_URLS, WORKABLE_SHORT_LINK_BOARD
-from ..models import Board, Job
-from ..terms import clean_whitespace
-from .common import (
+from ..support import PROVIDER_API_URLS, WORKABLE_SHORT_LINK_BOARD
+from ..support import Board, Job
+from ..support import clean_whitespace
+from . import (
     days_old,
     iso_or_blank,
     mapping_items,
@@ -20,7 +20,7 @@ from .common import (
     prettify_slug,
     strip_html,
 )
-from .contracts import FetchContext, FetchServices, LivenessServices, ProviderUrl
+from . import FetchContext, FetchServices, LivenessServices, ProviderUrl
 
 
 def matches_url(url: ProviderUrl) -> bool:

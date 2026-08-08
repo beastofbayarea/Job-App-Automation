@@ -50,7 +50,7 @@ from .observability import initialize_observability
 from .orchestrator import load_jobs_from_tracker
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
 from ..resume.ai_client import scrape_job
-from ..search.config import DEAD_ROLE_MARKERS
+from ..search.support import DEAD_ROLE_MARKERS
 
 
 UTC = timezone.utc

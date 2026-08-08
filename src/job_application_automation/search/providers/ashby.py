@@ -9,11 +9,11 @@ from urllib.parse import quote
 
 import requests
 
-from ..config import PROVIDER_API_URLS
-from ..models import Board, Job
-from ..terms import clean_whitespace
-from .common import days_old, iso_or_blank, mapping_items, parse_datetime, prettify_slug, strip_html
-from .contracts import FetchContext, FetchServices, LivenessServices, ProviderUrl
+from ..support import PROVIDER_API_URLS
+from ..support import Board, Job
+from ..support import clean_whitespace
+from . import days_old, iso_or_blank, mapping_items, parse_datetime, prettify_slug, strip_html
+from . import FetchContext, FetchServices, LivenessServices, ProviderUrl
 
 
 def matches_url(url: ProviderUrl) -> bool:

@@ -53,25 +53,25 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from . import cache as _search_cache
-from . import backlog as _search_backlog
-from . import discovery as _search_discovery
-from . import jsonld as _search_jsonld
-from . import liveness as _search_liveness
-from . import models as _search_models
-from . import serialization as _search_serialization
-from . import terms as _search_terms
+from . import support as _search_cache
+from . import support as _search_backlog
+from . import support as _search_discovery
+from . import support as _search_jsonld
+from . import support as _search_liveness
+from . import support as _search_models
+from . import support as _search_serialization
+from . import support as _search_terms
 from .providers import ashby as _provider_ashby
-from .providers import common as _provider_common
-from .providers import contracts as _provider_contracts
+from . import providers as _provider_common
+from . import providers as _provider_contracts
 from .providers import greenhouse as _provider_greenhouse
 from .providers import lever as _provider_lever
-from .providers import registry as _provider_registry
+from . import providers as _provider_registry
 from .providers import smartrecruiters as _provider_smartrecruiters
 from .providers import workable as _provider_workable
 from ..core.artifacts import atomic_write_text, read_json, write_json as atomic_write_json
 from ..core.paths import OUTPUT_DIR
-from .config import (
+from .support import (
     AI_DISCOVERY_TERMS,
     ALL_DDGS_BACKENDS,
     ATS_SEARCH_HOSTS,

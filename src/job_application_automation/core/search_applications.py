@@ -18,7 +18,7 @@ from .contracts import EngineResult
 from .identity import canonical_job_url
 from .observability import initialize_observability
 from .runtime_config import RUNTIME_CONFIG, resolve_runtime_path
-from ..search.backlog import load_confirmed_urls, remove_confirmed_job
+from ..search.support import load_confirmed_urls, remove_confirmed_job
 
 
 UTC = timezone.utc
