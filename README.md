@@ -133,9 +133,7 @@ job-flow-ai/
 │   ├── templates/                     # Search and generation prompt templates
 │   └── workbooks/                     # Private provider tracker workbooks
 ├── output/                            # Generated artifacts
-├── scripts/                           # VPS deployment & maintenance
 ├── docs/                              # Documentation
-├── tests/                             # Test suite
 ├── pyproject.toml                     # Package metadata
 └── README.md                          # This file
 ```
@@ -433,84 +431,6 @@ Provider adapters are intentionally orchestrator-only. For an authorized diagnos
 python src/job_automation.py apply --url "<authorized-url>" --fill-only --headed
 ```
 
-### VPS maintenance scripts
-
-These are operational helpers rather than `job-automation` subcommands:
-
-```powershell
-# Privately download the confirmed-submission list and latest failure report.
-pwsh scripts\pull_vps_application_reports.ps1
-
-# Inspect every supervised ATS worker without starting a run.
-pwsh scripts\check_vps_parallel_ats.ps1
-
-# Preview old top-level generated resume/cover-letter PDFs; deletion is explicit.
-pwsh scripts\prune_old_outputs.ps1 -Days 14
-pwsh scripts\prune_old_outputs.ps1 -Days 14 -Delete
-```
-
-Install any or all supervised one-job ATS workers:
-
-```powershell
-pwsh scripts\install_vps_continuous_ashby.ps1
-pwsh scripts\install_vps_continuous_greenhouse.ps1
-pwsh scripts\install_vps_continuous_lever.ps1
-pwsh scripts\install_vps_continuous_smartrecruiters.ps1
-pwsh scripts\install_vps_continuous_workable.ps1
-```
-
-Audit all persistent and scheduled VPS workloads without changing remote state:
-
-```powershell
-pwsh scripts\audit_vps_runtime.ps1
-```
-
-Repair the public, unauthenticated dashboard as a loopback service behind Nginx:
-
-```powershell
-pwsh scripts\install_vps_dashboard.ps1
-```
-
-Add bounded swap headroom for the parallel browser workers:
-
-```powershell
-pwsh scripts\install_vps_memory_guard.ps1
-```
-
-The installers deploy the ignored candidate email pool, remove the older daily
-cron entry, and enable one independent `job-app-<ats>.service` per provider.
-Installing one worker does not stop or restart another. Ashby, Greenhouse,
-Lever, SmartRecruiters, and Workable therefore run independently, and a future
-installed ATS engine can use the same supervisor:
-
-For the coordinated two-source Greenhouse topology, use
-`scripts/install_vps_greenhouse_excel_parallel.ps1`. It installs the search-backed
-and tracker-backed Greenhouse workers with shared claims, verifies both services,
-and then disables the competing Ashby worker. This topology is intentionally an
-alternative to running every provider worker simultaneously.
-
-For the three-workbook Greenhouse fleet, use
-`scripts/install_vps_greenhouse_excel_fleet.ps1`. It installs independent
-`all`, `marketing`, and `product-management` Excel workers, keeps the
-search-backed Greenhouse worker running, and coordinates all four through the
-same provider job-ID claims. The fleet installer disables the superseded
-single-Excel, SmartRecruiters, and Workable workers.
-
-```powershell
-pwsh scripts\install_vps_continuous_ats.ps1 -AtsPlatform providername
-```
-
-Each worker uses its own job list, state, documents, and results while
-cross-process locking protects the shared confirmation ledger.
-Each cycle randomly selects one fresh, verified-live role for that ATS,
-chooses one configured candidate email, generates a matching personalized
-resume and cover letter, passes both files through the guarded orchestrator,
-and accepts only exact
-`SUBMITTED & CONFIRMED` ledger evidence. It then waits a random 120-300 seconds
-before the next cycle. Systemd restarts the worker after crashes and boots.
-Ambiguous, CAPTCHA-gated, or interrupted submission attempts are quarantined
-for review and are never retried automatically.
-
 The application pipeline can submit eligible
 verified-live jobs whose document pair is already archived, including
 Greenhouse, Lever, Ashby, SmartRecruiters, and Workable results. Document
@@ -524,11 +444,6 @@ failure details are written privately to
 results, submission logs, and state remain private.
 Application screenshots are temporary and are deleted at the end of every
 successful, failed, timed-out, or quarantined attempt.
-
-Use `scripts/pull_vps_application_reports.ps1` whenever the private confirmed
-submission list and latest failure report are needed locally. It downloads both
-files through pinned SSH into `output/vps_reports/`, validates both JSON files,
-and leaves existing local reports untouched unless `-Overwrite` is explicit.
 
 ### Outputs and exit status
 
@@ -594,31 +509,6 @@ job_automation.py
 
 ---
 
-## Testing
-
-### Run Test Suite
-
-```powershell
-# Standard pytest run
-python -m pytest
-
-# With coverage
-python -m pytest --cov=src --cov-report=term-missing
-
-# Using uv (recommended)
-uv run pytest
-```
-
-### Test Boundaries
-
-- ✅ **Mocked**: Browser, ATS, Gmail, and LLM boundaries
-- ❌ **No live**: Job boards, candidate accounts, or remote AI services
-- ❌ **Never commit**: Credentials, tokens, personal data, or unredacted screenshots
-
-Tests run with sockets disabled to ensure isolation.
-
----
-
 ## Troubleshooting
 
 Common issues and solutions:
@@ -649,7 +539,6 @@ uv run playwright install chromium
 uv run ruff format --check .
 uv run ruff check .
 uv run mypy
-uv run pytest
 uv run compileall -q src
 uv run pip check
 ```
@@ -668,7 +557,7 @@ uv run pip check
 When submitting PRs, include:
 - User-visible behavior changes
 - Safety impact assessment
-- Tests run and results
+- Validation performed
 - Documentation updates (especially for CLI, config, or ATS support changes)
 
 📖 Read the full [Contributing Guide](CONTRIBUTING.md) for detailed standards.

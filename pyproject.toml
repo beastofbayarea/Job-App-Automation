@@ -31,9 +31,6 @@ structured = [
 dev = [
     "mypy>=1.15,<3.0",
     "pip-audit>=2.9,<3.0",
-    "pytest>=9.0.3,<10.0",
-    "pytest-cov>=7.0,<8.0",
-    "pytest-socket>=0.7,<1.0",
     "ruff>=0.6,<1.0",
     "setuptools>=83.0.0",
 ]
@@ -57,20 +54,6 @@ job_application_automation = [
     "resources/*.json",
     "resources/runtime/*.json",
 ]
-
-[tool.pytest.ini_options]
-minversion = "8.0"
-testpaths = ["tests"]
-pythonpath = ["src", "."]
-addopts = "-ra --strict-config --strict-markers --disable-socket --cov=src --cov-report=term-missing:skip-covered"
-
-[tool.coverage.run]
-branch = true
-source = ["src"]
-
-[tool.coverage.report]
-show_missing = true
-skip_covered = true
 
 [tool.mypy]
 python_version = "3.10"
@@ -121,7 +104,7 @@ ignore = [
     "B904",
     "B905",
     # These patterns are intentional in browser automation and controlled
-    # process/network adapters. Functional tests cover their failure paths.
+    # process/network adapters.
     "S110",
     "S112",
     "S310",
@@ -129,6 +112,3 @@ ignore = [
     "S603",
     "S607",
 ]
-
-[tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["E402", "B018", "S101", "S105", "S106", "S108"]

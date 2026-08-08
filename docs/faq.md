@@ -76,7 +76,6 @@ Benefits:
 **Use pip** (alternative):
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 python -m playwright install chromium
 ```
@@ -473,66 +472,6 @@ This prevents duplicate applications.
    ```
 
 4. Add `--execute` to perform actual upload
-
-### How do I install continuous ATS workers on VPS?
-
-```powershell
-# Install individual workers
-pwsh scripts\install_vps_continuous_ashby.ps1
-pwsh scripts\install_vps_continuous_greenhouse.ps1
-pwsh scripts\install_vps_continuous_lever.ps1
-pwsh scripts\install_vps_continuous_smartrecruiters.ps1
-pwsh scripts\install_vps_continuous_workable.ps1
-
-# Or install a specific provider
-pwsh scripts\install_vps_continuous_ats.ps1 -AtsPlatform greenhouse
-```
-
-Each worker:
-- Runs as a systemd service
-- Starts automatically on boot
-- Processes one job at a time
-- Waits 120-300 seconds between cycles
-- Stops on CAPTCHA or other blocking issues
-
-### How do I check VPS worker status?
-
-```powershell
-pwsh scripts\check_vps_parallel_ats.ps1 -LogLines 120
-```
-
-This shows:
-- Service states
-- Process information
-- Repository commit
-- Worker state timestamps
-- Recent logs
-
-### How do I pull reports from VPS?
-
-```powershell
-pwsh scripts\pull_vps_application_reports.ps1
-```
-
-Downloads:
-- `submission_log.json` - Confirmed submissions
-- `vps_application_failures.json` - Failure reports
-
-Use `-Overwrite` to replace existing local files.
-
-### How do I audit VPS runtime?
-
-```powershell
-pwsh scripts\audit_vps_runtime.ps1
-```
-
-This provides a comprehensive inventory of:
-- Running and enabled services
-- Cron entries and timers
-- Long-lived processes
-- Listening sockets
-- Resource usage
-- Log files
 
 ## Gmail Integration
 

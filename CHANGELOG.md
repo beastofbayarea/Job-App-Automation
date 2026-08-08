@@ -4,6 +4,12 @@ All notable user-facing changes are documented here. This project currently uses
 
 ## [Unreleased]
 
+### Removed
+
+- The development-only test suite and test dependencies.
+- Repository maintenance, deployment, retry, and workbook scripts, along with
+  the now-unused Node.js manifest and lockfile.
+
 ### Added
 
 - Opt-in, fail-open Sentry telemetry for unattended application, source,

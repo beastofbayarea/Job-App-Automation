@@ -35,14 +35,8 @@ The prompt instructions formerly embedded beside the job tables are preserved
 verbatim in the private, Git-ignored `data/job_search_prompts.txt` archive and
 grouped by their original workbook and worksheet.
 
-Run `npm install` once and then `npm run workbooks:clean` to normalize headers,
-remove unused ranges and confirmed-closed listings, preserve valid HTTPS links,
-and reapply the standard table format. The command validates every generated
-workbook before replacing a source file and moves recoverable originals to
-`output/workbook-backups/<timestamp>/`. Run `npm run workbooks:check` for a
-clean-checkout-safe validation of canonical workbooks that are present locally. Run
-`node scripts/cleanup_job_url_workbooks.mjs --check` when every private canonical
-workbook is required for read-only structural validation.
+Keep private workbooks outside Git. Validate their required columns and HTTPS
+job URLs before using them as application inputs.
 
 ## Queue file
 

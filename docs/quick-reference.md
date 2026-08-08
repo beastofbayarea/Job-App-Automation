@@ -11,7 +11,6 @@ uv run playwright install chromium
 
 # Alternative (pip)
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 python -m playwright install chromium
 
@@ -318,37 +317,24 @@ uv run python src/job_automation.py google-indexing status \
   --url "https://skybison.cloud/jobs/example"
 ```
 
-### 10. VPS Operations
+## 10. VPS Operations
 
 ```powershell
 # Check worker status
-pwsh scripts\check_vps_parallel_ats.ps1 -LogLines 120
 
 # Audit VPS runtime
-pwsh scripts\audit_vps_runtime.ps1
 
 # Pull reports from VPS
-pwsh scripts\pull_vps_application_reports.ps1
-pwsh scripts\pull_vps_application_reports.ps1 -Overwrite
 
 # Install continuous workers
-pwsh scripts\install_vps_continuous_ashby.ps1
-pwsh scripts\install_vps_continuous_greenhouse.ps1
-pwsh scripts\install_vps_continuous_lever.ps1
-pwsh scripts\install_vps_continuous_smartrecruiters.ps1
-pwsh scripts\install_vps_continuous_workable.ps1
 
 # Install dashboard
-pwsh scripts\install_vps_dashboard.ps1
 
 # Install memory guard
-pwsh scripts\install_vps_memory_guard.ps1
 
 # Prune old outputs (dry run)
-pwsh scripts\prune_old_outputs.ps1
 
 # Prune old outputs (delete)
-pwsh scripts\prune_old_outputs.ps1 -Days 14 -Delete
 ```
 
 ##  Configuration Quick Reference

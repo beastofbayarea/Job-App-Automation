@@ -25,7 +25,6 @@ Get-Content output/orchestration_results.json | Select-Object -Last 20
 Get-Content output/submission_log.json | Select-Object -Last 10
 
 # VPS health check
-pwsh scripts\check_vps_parallel_ats.ps1 -LogLines 50
 ```
 
 ## Import and Environment Issues
@@ -36,7 +35,6 @@ pwsh scripts\check_vps_parallel_ats.ps1 -LogLines 50
 
 **Resolution:**
 1. Run commands from the repository root
-2. Activate the virtual environment: `.\.venv\Scripts\Activate.ps1` (Windows) or `source .venv/bin/activate` (Linux/Mac)
 3. For installed command: `python -m pip install .`
 4. For source-tree use: `python src/job_automation.py --help`
 
@@ -247,62 +245,6 @@ Get-Content output/ai_jobs.csv | Measure-Object -Line
 Get-Content output/job_search_coverage.json | ConvertFrom-Json | Select-Object -ExpandProperty backlog
 Get-Content output/job_backlog.json | ConvertFrom-Json | Measure-Object
 ```
-
-## VPS Operations Issues
-
-### VPS ATS workers are active but making no progress
-
-**Symptoms:** Worker services are running but their state and result timestamps do not advance.
-
-**Resolution:**
-1. Run status check: `pwsh scripts\check_vps_parallel_ats.ps1 -LogLines 120`
-2. Compare:
-   - Service state (`systemctl status job-app-*`)
-   - Process list (Xvfb, Chromium, Python workers)
-   - Repository commit (`git rev-parse HEAD`)
-   - Worker state and result modification times
-   - Recent service journals
-
-**Common cause:** The VPS checkout or installed unit may point to older code or stale runtime configuration.
-
-**Action:** Deploy the current `main` commit and verify the installed unit before retrying.
-
-**Diagnostic script output interpretation:**
-- `job-app-<ats> active (running)` ✓
-- `Main PID: <pid>` - note for process inspection
-- Artifact timestamps within expected window ✓
-
-### Status helper times out
-
-**Symptoms:** `check_vps_parallel_ats.ps1` exits without showing remote state.
-
-**Resolution:**
-1. Verify VPS provider status (running, not stopped/suspended)
-2. Test SSH connectivity from provider console
-3. Try alternative network path that can receive SSH banner
-4. The helper exits after its configured timeout instead of leaving a hidden `plink` process
-
-**Diagnostic:**
-```powershell
-# Test basic connectivity
-Test-NetConnection <vps-ip> -Port 22
-
-# From provider console, check SSH daemon
-sudo systemctl status ssh
-
-# Check firewall rules
-sudo ufw status
-```
-
-### VPS services not starting on boot
-
-**Symptoms:** Services inactive after reboot, manual start required.
-
-**Resolution:**
-1. Check service enablement: `systemctl is-enabled job-app-<ats>.service`
-2. Enable if needed: `sudo systemctl enable job-app-<ats>.service`
-3. Review journal for startup failures: `journalctl -u job-app-<ats>.service -n 50`
-4. Verify dependencies (network, filesystem mounts) are available at boot time
 
 ## Archive and Document Issues
 

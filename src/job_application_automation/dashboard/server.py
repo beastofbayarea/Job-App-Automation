@@ -89,7 +89,6 @@ _REPOSITORY_EXCLUDED_DIRECTORIES = {
     ".agents",
     ".git",
     ".mypy_cache",
-    ".pytest_cache",
     ".ruff_cache",
     ".sync-worktree",
     ".venv",

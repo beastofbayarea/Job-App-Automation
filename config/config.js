@@ -49,7 +49,6 @@ module.exports = {
   // ============================
   // 3. Routing & SEO Rules
   // ============================
-  // Used by: scripts/generate-sitemap.js
   routes: {
     // Routes that should be ignored by sitemaps/crawlers
     excluded: ['verify-email', 'forgot-password', 'reset-password', '*', '404', 'admin'],
@@ -98,7 +97,6 @@ module.exports = {
   // ============================
   // 4. Google Cloud Platform (GCP) Configuration
   // ============================
-  // Used by: scripts/submit-google-indexing.js
   // Project: Cent Capital
   gcp: {
     projectId: 'cent-capital-472820',

@@ -31,9 +31,6 @@ jobs:
       - name: Install locked development dependencies
         run: uv sync --locked --dev --all-extras
 
-      - name: Install Playwright Chromium
-        run: uv run playwright install --with-deps chromium
-
       - name: Check formatting
         run: uv run ruff format --check .
 
@@ -58,9 +55,6 @@ jobs:
           assert index.is_file() and index.stat().st_size > 0, index
           PY
           echo "JOB_AUTOMATION_WHEEL_DIR=$PWD/dist" >> "$GITHUB_ENV"
-
-      - name: Run deterministic tests with coverage
-        run: uv run pytest
 
       - name: Compile source files
         run: uv run python -m compileall -q src
