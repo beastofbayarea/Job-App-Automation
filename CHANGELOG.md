@@ -6,6 +6,8 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Removed
 
+- The redundant `data/assets/` directory and the separate documentation tree;
+  the root README is now the single canonical guide.
 - The development-only test suite and test dependencies.
 - Repository maintenance, deployment, retry, and workbook scripts, along with
   the now-unused Node.js manifest and lockfile.

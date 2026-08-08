@@ -6,7 +6,8 @@
 
 **Job Application Automation** is a local, safety-first Python engine for discovering public vacancies across 5 major ATS platforms (Greenhouse, Lever, Ashby, SmartRecruiters, Workable), generating AI-tailored PDF resumes & cover letters via Vertex AI, privately archiving documents on a VPS, and automating submissions with Playwright stealth browser automation. Includes Gmail OAuth integration and multi-candidate email rotation.
 
-**Quick Links:** [Documentation](docs/README.md) | [FAQ](docs/faq.md) | [Quick Reference](docs/quick-reference.md) | [Configuration Guide](docs/configuration.md) | [CLI Reference](docs/cli-reference.md) | [Operations Runbook](docs/operations-runbook.md) | [Contributing](CONTRIBUTING.md) | [Changelog](CHANGELOG.md)
+This README is the canonical documentation. See the [changelog](CHANGELOG.md)
+for release history.
 
 ---
 
@@ -19,10 +20,8 @@
 - [Setup](#setup)
 - [Configuration](#configuration)
 - [Commands](#commands)
-- [VPS Operations](#vps-operations)
 - [Safety & Privacy](#safety--privacy)
 - [Architecture](#architecture)
-- [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 
@@ -123,16 +122,14 @@ job-flow-ai/
 │       ├── mail/                      # Gmail integration
 │       └── dashboard/                 # HTTP dashboard server
 ├── config/                            # Configuration files
-│   ├── runtime/                       # Runtime settings by domain
-│   └── *.example.json                 # Configuration templates
+│   ├── runtime_config.json            # Operational defaults
+│   └── candidate_profile_config.json  # Candidate data and policies
 ├── data/                              # Private local inputs and queues
 │   ├── application-queues/            # Provider-specific retry/review JSON
-│   ├── assets/                        # Local branding and image assets
 │   ├── resumes/                       # Role-based PDF and text resumes
 │   ├── templates/                     # Search and generation prompt templates
 │   └── workbooks/                     # Private provider tracker workbooks
 ├── output/                            # Generated artifacts
-├── docs/                              # Documentation
 ├── pyproject.toml                     # Package metadata
 └── README.md                          # This file
 ```
@@ -370,7 +367,7 @@ python src/job_automation.py documents retrieve `
   --email "candidate@example.com"
 ```
 
-Archives use opaque IDs, immutable manifests, pinned SSH host keys, private VPS permissions, and SHA-256 verification. They are stored outside the repository and never enter public generated output. See the [operations runbook](docs/operations-runbook.md) for one-time VPS setup.
+Archives use opaque IDs, immutable manifests, pinned SSH host keys, private VPS permissions, and SHA-256 verification. They are stored outside the repository and never enter public generated output.
 
 ### Apply to jobs
 
@@ -504,8 +501,6 @@ job_automation.py
 | `mail/` | Gmail OAuth integration |
 | `dashboard/` | HTTP dashboard server (read-only, unauthenticated) |
 
-📖 See the detailed [Architecture Guide](docs/architecture.md) for component boundaries and extension points.
-
 ---
 
 ## Troubleshooting
@@ -515,13 +510,11 @@ Common issues and solutions:
 | Issue | Solution |
 |-------|----------|
 | Playwright browser errors | Run `playwright install chromium` |
-| Missing config files | Copy `.example.json` templates from `config/` |
+| Missing config files | Restore or review the five tracked files under `config/` |
 | OAuth authentication failures | Re-authorize using Gmail flow; check `credentials.json` |
 | VPS connection refused | Verify SSH host key fingerprint in `vps_config.json` |
 | Application timeouts | Increase `--timeout` flag or check network stability |
 | Resume generation fails | Ensure `data/resumes/base-resume.txt` exists with valid content |
-
-📖 See the comprehensive [Troubleshooting Guide](docs/troubleshooting.md) for detailed diagnostics.
 
 ---
 
@@ -557,39 +550,7 @@ When submitting PRs, include:
 - User-visible behavior changes
 - Safety impact assessment
 - Validation performed
-- Documentation updates (especially for CLI, config, or ATS support changes)
-
-📖 Read the full [Contributing Guide](CONTRIBUTING.md) for detailed standards.
-
----
-
-##  Documentation
-
-The complete documentation is available in the [`docs/`](docs/) directory:
-
-###  Getting Started
-- **[Documentation Guide](docs/README.md)** - Complete documentation index and navigation
-- **[FAQ](docs/faq.md)** - Frequently asked questions and answers
-- **[Quick Reference](docs/quick-reference.md)** - Cheat sheet with common commands
-
-###  User Guides
-- **[Configuration Guide](docs/configuration.md)** - All configuration options explained
-- **[CLI Reference](docs/cli-reference.md)** - Complete command-line documentation
-- **[Operations Runbook](docs/operations-runbook.md)** - Safe operating procedures
-- **[Data Formats](docs/data-formats.md)** - Input/output file specifications
-
-###  Advanced Topics
-- **[ATS Support](docs/ats-support.md)** - Supported providers and capabilities
-- **[Architecture](docs/architecture.md)** - System design and extension points
-- **[Security & Privacy](docs/security-and-privacy.md)** - Data protection guidelines
-
-###  Troubleshooting
-- **[Troubleshooting Guide](docs/troubleshooting.md)** - Common issues and solutions
-
-###  For Developers
-- **[Contributing Guide](CONTRIBUTING.md)** - Development setup and contribution guidelines
-- **[Changelog](CHANGELOG.md)** - Version history and recent changes
-
+- README updates when CLI, configuration, or provider behavior changes
 
 ---
 
