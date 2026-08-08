@@ -20,7 +20,7 @@ import signal
 import sys
 import time
 from collections import OrderedDict
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, TypeVar
@@ -546,6 +546,31 @@ def generate_essay_safely(question: str, jd_text: str, company: str, role: str) 
     except Exception as exc:
         logger.warning("Essay generation failed; leaving the field for review: %s", exc)
         return ""
+
+
+def generate_essay_set_safely(
+    questions: Sequence[str], jd_text: str, company: str, role: str
+) -> list[str]:
+    """Generate a coordinated MECE answer set, falling back to per-question generation."""
+    if not questions:
+        return []
+    try:
+        from ..resume.ai_client import call_essay_set_llm
+
+        evidence_path = resolve_runtime_path(RUNTIME_CONFIG.application.resume_source_file)
+        candidate_evidence = (
+            evidence_path.read_text(encoding="utf-8") if evidence_path.is_file() else ""
+        )
+        return call_essay_set_llm(
+            questions,
+            jd_text,
+            company,
+            role,
+            candidate_evidence=candidate_evidence,
+        )
+    except Exception as exc:
+        logger.warning("MECE essay-set generation failed; using individual answers: %s", exc)
+        return [generate_essay_safely(question, jd_text, company, role) for question in questions]
 
 
 # ==============================================================================
@@ -1717,6 +1742,66 @@ def fill_secondary(
     essay_controls = page.locator(
         'textarea:visible, input[placeholder*="type here" i]:visible'
     ).all()
+    generated_essay_answers: dict[int, str] = {}
+    pending_essay_questions: list[tuple[int, str]] = []
+    for idx, ta in enumerate(essay_controls, 1):
+        try:
+            if ta.input_value().strip():
+                continue
+            lbl = ta.evaluate("""el => {
+                const l = el.labels?.[0]?.innerText || '';
+                const p = (
+                    el.closest('.ashby-application-form-field-entry, fieldset, [role="group"]')
+                    || el.closest('div[class*="Container"], div[class*="field"], div[class*="Form"]')
+                    || el.parentElement
+                    || el
+                ).innerText || '';
+                return (l + ' ' + p).toLowerCase();
+            }""")
+            if any(term in lbl for term in ("hear", "source", "referral")):
+                continue
+            configured = (
+                _configured_answer(profile, lbl)
+                or (profile.get("_cover_letter_text") if "cover letter" in lbl else None)
+                or (
+                    essay_dict.get("why")
+                    if any(word in lbl for word in ("why", "interest", "mission", "fit", "inspire"))
+                    else None
+                )
+                or (
+                    essay_dict.get("product")
+                    if any(
+                        word in lbl
+                        for word in (
+                            "product",
+                            "build",
+                            "excellence",
+                            "signal",
+                            "achievement",
+                            "project",
+                            "experience",
+                        )
+                    )
+                    else None
+                )
+                or essay_dict.get(f"essay_{idx}")
+                or essay_dict.get("default")
+                or default_essay
+            )
+            if not configured:
+                pending_essay_questions.append((idx, lbl))
+        except Exception as exc:
+            logger.debug("Essay field %d discovery failed: %s", idx, exc)
+
+    if pending_essay_questions:
+        generated = generate_essay_set_safely(
+            [question for _, question in pending_essay_questions], jd_text, company, role
+        )
+        generated_essay_answers.update(
+            (idx, answer)
+            for (idx, _), answer in zip(pending_essay_questions, generated, strict=False)
+        )
+
     for idx, ta in enumerate(essay_controls, 1):
         try:
             # Ashby commonly gives both identity inputs and long-answer inputs
@@ -1767,7 +1852,7 @@ def fill_secondary(
                     or essay_dict.get(f"essay_{idx}")
                     or essay_dict.get("default")
                     or default_essay
-                    or generate_essay_safely(lbl, jd_text, company, role)
+                    or generated_essay_answers.get(idx, "")
                 )
                 if val:
                     logger.info("Filling essay response for field %d.", idx)

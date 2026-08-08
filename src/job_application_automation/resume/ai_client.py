@@ -646,6 +646,73 @@ ESSAY PROMPT QUESTION:
         )
 
 
+def call_essay_set_llm(
+    questions: Sequence[str],
+    jd_text: str = "",
+    company: str = "",
+    role: str = "",
+    candidate_evidence: str = "",
+) -> list[str]:
+    """Generate one concise, mutually exclusive essay package for an application."""
+    normalized_questions = [str(question).strip() for question in questions if str(question).strip()]
+    if not normalized_questions:
+        return []
+
+    indexed_questions = "\n".join(
+        f"{index}. {question}" for index, question in enumerate(normalized_questions)
+    )
+    system_prompt = build_essay_system_prompt() + """
+
+MULTI-ANSWER MECE RULE
+You are answering every essay prompt in the same application as one coordinated package.
+Keep each answer concise. Make the answers mutually exclusive and collectively exhaustive:
+- assign a distinct theme and distinct proof point to each prompt;
+- do not repeat the same metric, company example, motivation, or closing claim across answers;
+- answer each prompt directly while ensuring the full set covers motivation, qualifications, and role impact without overlap.
+Return only a JSON object with an `answers` array in the same order as the questions. Each item must contain `question_index` and `answer`.
+"""
+    user_prompt = f"""
+TARGET COMPANY: {company}
+TARGET ROLE: {role}
+
+JOB DESCRIPTION CONTEXT:
+{jd_text}
+
+<candidate_evidence>
+{candidate_evidence}
+</candidate_evidence>
+
+APPLICATION ESSAY QUESTIONS:
+{indexed_questions}
+"""
+
+    with _ai_lock:
+        raw_content = ask_gemini(
+            user_prompt,
+            system=system_prompt,
+            temperature=0.35,
+            json_mode=True,
+        )
+    try:
+        payload = json.loads(_strip_json_fence(raw_content))
+        raw_answers = payload.get("answers", []) if isinstance(payload, dict) else []
+        indexed_answers: dict[int, str] = {}
+        for item in raw_answers:
+            if not isinstance(item, Mapping):
+                continue
+            index = item.get("question_index")
+            answer = strip_markdown_formatting(item.get("answer", ""))
+            if isinstance(index, int) and 0 <= index < len(normalized_questions) and answer:
+                indexed_answers[index] = answer
+        if len(indexed_answers) != len(normalized_questions):
+            raise ValueError(
+                f"expected {len(normalized_questions)} answers, received {len(indexed_answers)}"
+            )
+        return [indexed_answers[index] for index in range(len(normalized_questions))]
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        raise RuntimeError(f"Gemini returned an invalid MECE essay set: {exc}") from exc
+
+
 # ==============================================================================
 # 5. CONSTRAINED JSON SCHEMA DECODING (PYDANTIC / INSTRUCTOR ALTERNATE)
 # ==============================================================================
