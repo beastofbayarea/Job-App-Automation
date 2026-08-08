@@ -1,5 +1,6 @@
 {
   "schema_version": 2,
+  "headless": false,
   "download_root": "output",
   "candidate_evidence_file": "resumes/base-resume.txt",
   "navigation_timeout_ms": 30000,

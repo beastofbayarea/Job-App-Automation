@@ -21,6 +21,10 @@ the relevant environment variables.
 
 `candidate_profile_config.json` provides identity data, approved answers, browser settings, email-pool location, and answer matchers. Treat every value as candidate-approved source data. Do not invent answers for questions that are not covered by the profile; review the application instead.
 
+The top-level `headless` flag controls whether application browsers are visible.
+It is synchronized with the non-secret `APPLICATION_ENGINE_BROWSER_HEADLESS`
+setting from the external environment inventory.
+
 The `candidate` object supplies personal fields and education history. `policies.answers` holds reusable answers; `policies.eeo` and the demographic fields should remain accurate or use the candidate's preferred disclosure option. `headless_overrides` permits a provider-specific browser choice, while `navigation_timeout_ms`, `action_timeout_ms`, and `attempts` control browser resilience.
 
 List every country where the candidate may legally work in

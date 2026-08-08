@@ -40,6 +40,8 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Changed
 
+- Added the missing browser headless preference from the external environment
+  inventory to the candidate automation profile.
 - Consolidated eleven checkout runtime fragments into one
   `config/runtime_config.json` and removed redundant configuration examples and
   legacy reference files, leaving five active files under `config/`.
