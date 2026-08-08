@@ -61,7 +61,7 @@ job_application_automation = [
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 addopts = "-ra --strict-config --strict-markers --disable-socket --cov=src --cov-report=term-missing:skip-covered"
 
 [tool.coverage.run]
