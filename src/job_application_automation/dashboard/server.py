@@ -1,448 +1,216 @@
-"""HTTP adapter and bootstrap for the public VPS Output Monitor Dashboard.
-
-This server is unauthenticated by design: every route it serves is public and
-read-only. Anything reachable here should be treated as published to the open
-internet, so do not add routes that expose secrets or perform actions.
-"""
+"""Minimal public, read-only status dashboard for automation workers."""
 
 from __future__ import annotations
 
 import argparse
-import logging
+import importlib
+import json
 import os
 import sys
+import time
 import webbrowser
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from collections.abc import Mapping, Sequence
+from datetime import datetime, timezone
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from collections.abc import Sequence
+from urllib.parse import urlparse
 
-from . import artifacts, downloads, metrics, operations
-from .models import DashboardContext, DashboardPaths, DashboardRequest, HttpResponse
-from .routes import (
-    ApiRouteMatch,
-    DashboardApplication,
-    DashboardRouteServices,
-    StaticPassthrough,
-    StaticRouteMatch,
-    match_get_request,
-)
-
-logger = logging.getLogger("DashboardServer")
-
-STATIC_DIR = Path(__file__).parent / "static"
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 OUTPUT_DIR = PROJECT_ROOT / "output"
-CONFIG_DIR = PROJECT_ROOT / "config"
-PRIVATE_ARCHIVE_DIR = Path(
-    os.environ.get(
-        "JOB_APP_PRIVATE_ARCHIVE_DIR",
-        "/var/lib/job-application-automation/private-archive",
-    )
-)
-WORKER_PROVIDERS = ("ashby", "greenhouse", "lever")
-_ADMIN_LOG_FILES = {
-    "nginx-access": Path("/var/log/nginx/access.log"),
-    "nginx-error": Path("/var/log/nginx/error.log"),
-    "system": Path("/var/log/syslog"),
-}
-_PUBLIC_JOB_FIELDS = {
-    "platform",
-    "company",
-    "title",
-    "posted_at",
-    "days_old",
-    "location",
-    "workplace_type",
-    "employment_type",
-    "department",
-    "team",
-    "salary",
-    "job_url",
-    "apply_url",
-    "board_token",
-    "date_source",
-    "match_reason",
-    "platform_job_id",
-    "live_status",
-    "live_checked_at",
-    "live_check_source",
-    "live_check_http_status",
-    "live_check_final_url",
-    "live_check_reason",
-    "board_region",
-    "provider_id_trusted",
-    "source_identity",
-    "url_is_record_specific",
-    "unique_id",
-    "first_seen_at",
-    "last_seen_at",
-}
-_PUBLIC_RAW_FILES = {
-    "ai_jobs.csv",
-    "ats_boards_cache.json",
-    "job_backlog.json",
-    "job_search_coverage.json",
-    "vps_infra_status.json",
-}
-_REPOSITORY_EXCLUDED_DIRECTORIES = {
-    ".agents",
-    ".git",
-    ".mypy_cache",
-    ".ruff_cache",
-    ".sync-worktree",
-    ".venv",
-    "__pycache__",
-    "node_modules",
-    "output",
-}
-_REPOSITORY_PRIVATE_NAME_MARKERS = {
-    "candidate_email_pool",
-    "candidate_profile",
-    "credential",
-    "dashboard.env",
-    "password",
-    "private",
-    "secret",
-    "service_account",
-    "token",
-    "vps_config.json",
-}
-_PUBLIC_VPS_FIELDS = {
-    "hostname",
-    "os",
-    "plan",
-    "cpu_cores",
-    "memory_gb",
-    "disk_gb",
-    "bandwidth_tb",
-    "datacenter",
-    "backup_schedule",
-    "plan_expiration_date",
-    "auto_renewal",
-}
-
-
-def _dashboard_context() -> DashboardContext:
-    """Build context from patchable compatibility globals for each request."""
-
-    return DashboardContext(
-        paths=DashboardPaths(
-            static_dir=STATIC_DIR,
-            project_root=PROJECT_ROOT,
-            output_dir=OUTPUT_DIR,
-            config_dir=CONFIG_DIR,
-            private_archive_dir=PRIVATE_ARCHIVE_DIR,
-            admin_log_files=dict(_ADMIN_LOG_FILES),
-        ),
-        worker_providers=tuple(WORKER_PROVIDERS),
-        public_raw_files=frozenset(_PUBLIC_RAW_FILES),
-        public_job_fields=frozenset(_PUBLIC_JOB_FIELDS),
-        public_vps_fields=frozenset(_PUBLIC_VPS_FIELDS),
-        repository_excluded_directories=frozenset(_REPOSITORY_EXCLUDED_DIRECTORIES),
-        repository_private_name_markers=frozenset(_REPOSITORY_PRIVATE_NAME_MARKERS),
-    )
-
-
-# Compatibility wrappers keep historical import and unittest.patch seams while
-# all implementation lives in focused, context-injected service modules.
-def get_output_file_path(filename: str) -> Path:
-    """Resolve a synced VPS report or output-root artifact path."""
-
-    return artifacts.get_output_file_path(_dashboard_context(), filename)
-
-
-def load_json_file(filename: str, default: Any = None) -> Any:
-    """Load a dashboard JSON artifact with the established tolerant fallback."""
-
-    return artifacts.load_json_file(_dashboard_context(), filename, default)
-
-
-def load_csv_jobs() -> list[dict[str, str]]:
-    """Load public job-search CSV records."""
-
-    return artifacts.load_csv_jobs(_dashboard_context())
-
-
-def load_vps_config() -> dict[str, Any]:
-    """Load only public operational VPS metadata."""
-
-    return artifacts.load_vps_config(_dashboard_context())
-
-
-def _file_metadata(path: Path, *, scope: str, relative_path: str) -> dict[str, Any]:
-    return artifacts.file_metadata(path, scope=scope, relative_path=relative_path)
-
-
-def _iter_regular_files(root: Path) -> list[Path]:
-    return artifacts.iter_regular_files(root)
-
-
-def _is_repository_admin_file(path: Path) -> bool:
-    return artifacts.is_repository_admin_file(_dashboard_context(), path)
-
-
-def _iter_repository_files() -> list[Path]:
-    return artifacts.iter_repository_files(_dashboard_context())
-
-
-def build_file_inventory(*, include_private: bool = False) -> dict[str, Any]:
-    """Inventory public or admin-visible files without returning contents."""
-
-    return artifacts.build_file_inventory(_dashboard_context(), include_private=include_private)
-
-
-def _backlog_jobs(payload: Any) -> list[dict[str, Any]]:
-    return artifacts.backlog_jobs(payload)
-
-
-def public_backlog_jobs() -> list[dict[str, Any]]:
-    """Load backlog records with only explicitly public fields."""
-
-    return artifacts.public_backlog_jobs(_dashboard_context(), load_json_file)
-
-
-def public_submission_records(payload: Any) -> dict[str, dict[str, Any]]:
-    return artifacts.public_submission_records(payload)
-
-
-def public_generation_records(payload: Any) -> list[dict[str, Any]]:
-    return artifacts.public_generation_records(payload)
-
-
-def public_archive_records(payload: Any) -> dict[str, dict[str, Any]]:
-    return metrics.public_archive_records(payload)
-
-
-def summarize_backlog(payload: Any) -> dict[str, Any]:
-    return artifacts.summarize_backlog(payload)
-
-
-def summarize_worker_state(provider: str, payload: Any) -> dict[str, Any]:
-    return operations.summarize_worker_state(_dashboard_context(), provider, payload)
-
-
-def build_worker_summaries() -> list[dict[str, Any]]:
-    return operations.build_worker_summaries(_dashboard_context(), load_json_file)
-
-
-def _read_proc_status(path: Path) -> dict[str, str]:
-    return operations.read_proc_status(path)
-
-
-def build_process_inventory() -> dict[str, Any]:
-    return operations.build_process_inventory()
-
-
-def build_host_status() -> dict[str, Any]:
-    return operations.build_host_status(_dashboard_context())
-
-
-def _tail_text_file(path: Path, lines: int = 250) -> str:
-    return operations.tail_text_file(path, lines)
-
-
-def build_log_overview(*, include_admin_logs: bool = False) -> dict[str, Any]:
-    return operations.build_log_overview(
-        _dashboard_context(), include_admin_logs=include_admin_logs
-    )
-
-
-def build_operations_overview(*, include_private: bool = False) -> dict[str, Any]:
-    """Compose the public or admin operations snapshot."""
-
-    sources = operations.OperationsSources(
-        load_json_file=load_json_file,
-        build_worker_summaries=build_worker_summaries,
-        build_host_status=build_host_status,
-        build_file_inventory=build_file_inventory,
-        build_process_inventory=build_process_inventory,
-        build_log_overview=build_log_overview,
-    )
-    return operations.build_operations_overview(sources, include_private=include_private)
-
-
-def archive_entries(archives: Any) -> dict[str, Any]:
-    return metrics.archive_entries(archives)
-
-
-def summarize_archive_status(entries: dict[str, Any]) -> dict[str, int]:
-    return metrics.summarize_archive_status(entries)
-
-
-def summarize_submissions(submissions: Any) -> dict[str, Any]:
-    return metrics.summarize_submissions(submissions)
-
-
-def summarize_coverage(coverage: Any) -> dict[str, Any]:
-    return metrics.summarize_coverage(coverage)
-
-
-def build_kpi_metrics() -> dict[str, Any]:
-    """Compose dashboard KPI metrics from patchable artifact readers."""
-
-    sources = metrics.MetricSources(
-        load_json_file=load_json_file,
-        load_csv_jobs=load_csv_jobs,
-        load_vps_config=load_vps_config,
-        build_worker_summaries=build_worker_summaries,
-    )
-    return metrics.build_kpi_metrics(sources)
-
-
-def _admin_download_response(request: DashboardRequest) -> HttpResponse:
-    resolution = downloads.resolve_admin_download(
-        _dashboard_context(),
-        request,
-        is_repository_file_displayable=_is_repository_admin_file,
-    )
-    return downloads.render_download(resolution)
-
-
-def _public_download_response(request: DashboardRequest) -> HttpResponse:
-    resolution = downloads.resolve_public_download(_dashboard_context(), request)
-    return downloads.render_download(resolution)
-
-
-def _dashboard_application() -> DashboardApplication:
-    """Inject compatibility wrappers into the transport-neutral route layer."""
-
-    return DashboardApplication(
-        DashboardRouteServices(
-            admin_overview=lambda: build_operations_overview(include_private=True),
-            admin_file=_admin_download_response,
-            operations=build_operations_overview,
-            metrics=build_kpi_metrics,
-            system_vps=load_vps_config,
-            section1_jobs=load_csv_jobs,
-            section1_backlog=public_backlog_jobs,
-            section1_coverage=lambda: load_json_file("job_search_coverage.json"),
-            section1_cache=lambda: load_json_file("ats_boards_cache.json"),
-            section2_generation=lambda: public_generation_records(
-                load_json_file("vps_generation_jobs.json")
+STARTED_AT = time.monotonic()
+INDEXNOW_KEY = "b10fccb4cc5444ffa939921ba44ad5e0"
+PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Job Flow Status</title><style>
+:root{color-scheme:dark;--bg:#0b1020;--card:#151d33;--muted:#93a4c3;--good:#4ade80;--bad:#fb7185}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#eef2ff;font:15px system-ui,sans-serif}main{width:min(960px,92vw);margin:8vh auto}header{display:flex;justify-content:space-between;align-items:center;gap:1rem}h1{margin:0;font-size:clamp(1.6rem,5vw,2.5rem)}#live{color:var(--good)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1rem;margin:2rem 0}.card{background:var(--card);border:1px solid #263451;border-radius:14px;padding:1.2rem}.value{font-size:2rem;font-weight:700;margin-top:.4rem}.muted{color:var(--muted)}table{width:100%;border-collapse:collapse;background:var(--card);border-radius:14px;overflow:hidden}th,td{padding:.9rem;text-align:left;border-bottom:1px solid #263451}th{color:var(--muted)}footer{margin-top:1.4rem;color:var(--muted)}@media(max-width:560px){main{margin:4vh auto}th:nth-child(3),td:nth-child(3){display:none}}
+</style></head><body><main><header><div><h1>Job Flow</h1><div class="muted">Automation status</div></div><div id="live">● Connecting</div></header><section class="grid"><div class="card"><div class="muted">Confirmed</div><div class="value" id="confirmed">—</div></div><div class="card"><div class="muted">Failed</div><div class="value" id="failed">—</div></div><div class="card"><div class="muted">Backlog</div><div class="value" id="backlog">—</div></div><div class="card"><div class="muted">Workers</div><div class="value" id="workerCount">—</div></div></section><h2>Workers</h2><table><thead><tr><th>Worker</th><th>Status</th><th>Updated</th></tr></thead><tbody id="workers"><tr><td colspan="3" class="muted">Loading…</td></tr></tbody></table><footer id="updated">Waiting for status…</footer></main><script>
+const el=id=>document.getElementById(id),esc=v=>String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));async function refresh(){try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error(r.status);const d=await r.json();el('confirmed').textContent=d.submissions.confirmed;el('failed').textContent=d.submissions.failed;el('backlog').textContent=d.backlog;el('workerCount').textContent=d.workers.length;el('workers').innerHTML=d.workers.length?d.workers.map(w=>`<tr><td>${esc(w.name)}</td><td>${esc(w.status)}</td><td>${esc(w.updated_at)}</td></tr>`).join(''):'<tr><td colspan="3" class="muted">No worker state found</td></tr>';el('updated').textContent=`Updated ${d.updated_at} · dashboard uptime ${d.uptime_seconds}s`;el('live').textContent='● Live'}catch(e){el('live').textContent='● Unavailable';el('live').style.color='var(--bad)'}}refresh();setInterval(refresh,10000);
+</script></body></html>"""
+
+
+def _sentry() -> Any | None:
+    try:
+        return importlib.import_module("sentry_sdk")
+    except ImportError:
+        return None
+
+
+def _capture_exception(exc: Exception) -> None:
+    client = _sentry()
+    if client is not None:
+        client.capture_exception(exc)
+
+
+def _read_json(path: Path, default: object) -> object:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return default
+
+
+def _records(payload: object) -> list[Mapping[str, Any]]:
+    if isinstance(payload, list):
+        values = payload
+    elif isinstance(payload, Mapping):
+        values = next(
+            (
+                payload[key]
+                for key in ("records", "submissions", "jobs", "items")
+                if isinstance(payload.get(key), list)
             ),
-            section2_archives=lambda: public_archive_records(
-                load_json_file("vps_document_archive_state.json", default={})
-            ),
-            section3_submissions=lambda: public_submission_records(
-                load_json_file("submission_log.json", default={})
-            ),
-            section3_failures=lambda: load_json_file("vps_application_failures.json"),
-            section3_state=lambda: load_json_file("vps_application_state.json"),
-            public_file=lambda request: downloads.public_text_file_response(
-                _dashboard_context(), request
-            ),
-            public_download=_public_download_response,
+            [],
         )
-    )
+    else:
+        values = []
+    return [value for value in values if isinstance(value, Mapping)]
 
 
-class DashboardRequestHandler(SimpleHTTPRequestHandler):
-    """Thin HTTP adapter for the typed dashboard application."""
+def _submission_counts() -> dict[str, int]:
+    rows = _records(_read_json(OUTPUT_DIR / "submission_log.json", []))
+    confirmed = failed = 0
+    for row in rows:
+        status = str(row.get("status") or row.get("outcome") or "").casefold()
+        if (
+            row.get("submitted") is True and row.get("confirmed") is True
+        ) or "submitted & confirmed" in status:
+            confirmed += 1
+        elif any(marker in status for marker in ("fail", "error", "blocked", "manual_review")):
+            failed += 1
+    return {"total": len(rows), "confirmed": confirmed, "failed": failed}
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
 
-    def end_headers(self) -> None:
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("X-Frame-Options", "DENY")
-        self.send_header("Referrer-Policy", "no-referrer")
-        self.send_header("Cache-Control", "no-store")
-        super().end_headers()
+def _worker_summaries() -> list[dict[str, str]]:
+    workers: list[dict[str, str]] = []
+    for path in sorted(OUTPUT_DIR.glob("vps_*_state.json")):
+        payload = _read_json(path, {})
+        if isinstance(payload, Mapping):
+            workers.append(
+                {
+                    "name": path.stem.removeprefix("vps_").removesuffix("_state").replace("_", " "),
+                    "status": str(
+                        payload.get("status")
+                        or payload.get("last_status")
+                        or payload.get("phase")
+                        or "unknown"
+                    ),
+                    "updated_at": str(
+                        payload.get("updated_at")
+                        or payload.get("last_cycle_at")
+                        or payload.get("last_updated_at")
+                        or "—"
+                    ),
+                }
+            )
+    return workers
 
-    def do_OPTIONS(self) -> None:
-        self.send_response(204)
-        self.end_headers()
 
-    def do_GET(self) -> None:
-        request = DashboardRequest.parse(self.path)
-        match = match_get_request(request)
-        if isinstance(match, StaticRouteMatch):
-            self.path = match.target
-            super().do_GET()
-            return
-        if isinstance(match, StaticPassthrough):
-            super().do_GET()
-            return
-        self._handle_api_get()
+def build_status() -> dict[str, object]:
+    """Return aggregate health without publishing job or candidate PII."""
+    return {
+        "healthy": True,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "uptime_seconds": round(time.monotonic() - STARTED_AT),
+        "submissions": _submission_counts(),
+        "backlog": len(_records(_read_json(OUTPUT_DIR / "job_backlog.json", []))),
+        "workers": _worker_summaries(),
+    }
 
-    def do_POST(self) -> None:
-        # This public dashboard never exposes write or command-executing routes.
-        self._send_json({"error": "Endpoint not found"}, status=404)
 
-    def _send_response(self, response: HttpResponse) -> None:
-        self.send_response(response.status)
-        for name, value in response.headers:
+class DashboardRequestHandler(BaseHTTPRequestHandler):
+    server_version = "JobFlowDashboard/1"
+
+    def _send(self, status: int, body: bytes, content_type: str) -> None:
+        self.send_response(status)
+        for name, value in (
+            ("Content-Type", content_type),
+            ("Content-Length", str(len(body))),
+            ("Cache-Control", "no-store"),
+            ("X-Content-Type-Options", "nosniff"),
+            ("X-Frame-Options", "DENY"),
+            ("Referrer-Policy", "no-referrer"),
+            (
+                "Content-Security-Policy",
+                "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'",
+            ),
+        ):
             self.send_header(name, value)
         self.end_headers()
-        self.wfile.write(response.body)
+        self.wfile.write(body)
 
-    def _send_json(self, data: Any, status: int = 200) -> None:
-        """Compatibility seam for callers that emit JSON directly."""
+    def _json(self, payload: object, status: int = 200) -> None:
+        self._send(
+            status,
+            json.dumps(payload, separators=(",", ":")).encode(),
+            "application/json; charset=utf-8",
+        )
 
-        self._send_response(HttpResponse.json(data, status=status))
+    def do_GET(self) -> None:
+        path = urlparse(self.path).path
+        try:
+            if path in {"/", "/index.html"}:
+                self._send(200, PAGE.encode(), "text/html; charset=utf-8")
+            elif path == "/api/status":
+                self._json(build_status())
+            elif path == "/healthz":
+                self._json({"healthy": True})
+            elif path == "/robots.txt":
+                self._send(
+                    200,
+                    b"User-agent: *\nAllow: /\nSitemap: https://skybison.cloud/sitemap.xml\n",
+                    "text/plain; charset=utf-8",
+                )
+            elif path == "/sitemap.xml":
+                self._send(
+                    200,
+                    b'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://skybison.cloud/</loc></url></urlset>',
+                    "application/xml; charset=utf-8",
+                )
+            elif path == f"/{INDEXNOW_KEY}.txt":
+                self._send(200, INDEXNOW_KEY.encode(), "text/plain; charset=utf-8")
+            else:
+                self._json({"error": "Not found"}, 404)
+        except Exception as exc:
+            _capture_exception(exc)
+            self._json({"error": "Status unavailable"}, 500)
 
-    def _handle_admin_file_download(self) -> None:
-        """Compatibility seam for the historical admin file handler."""
+    def do_POST(self) -> None:
+        self._json({"error": "Read-only dashboard"}, 405)
 
-        request = DashboardRequest.parse(self.path)
-        self._send_response(_admin_download_response(request))
-
-    def _handle_file_download(self) -> None:
-        """Compatibility seam for the historical public download handler."""
-
-        request = DashboardRequest.parse(self.path)
-        self._send_response(_public_download_response(request))
-
-    def _handle_api_get(self) -> None:
-        request = DashboardRequest.parse(self.path)
-        match = match_get_request(request)
-        if not isinstance(match, ApiRouteMatch):
-            self._send_json({"error": "Unknown API route"}, status=404)
-            return
-        self._send_response(_dashboard_application().dispatch(request, match))
+    def log_message(self, format: str, *args: object) -> None:
+        return
 
 
-class ReuseAddrHTTPServer(HTTPServer):
+class ReuseAddrHTTPServer(ThreadingHTTPServer):
     allow_reuse_address = True
 
 
 def run_dashboard_server(
     host: str = "127.0.0.1", port: int = 8000, open_browser: bool = True
 ) -> None:
-    server_address = (host, port)
-    httpd = ReuseAddrHTTPServer(server_address, DashboardRequestHandler)
+    client = _sentry()
+    if client is not None:
+        client.init(
+            dsn=os.environ.get("SENTRY_DSN"), send_default_pii=False, traces_sample_rate=0.0
+        )
+    httpd = ReuseAddrHTTPServer((host, port), DashboardRequestHandler)
     url = f"http://{host}:{port}/"
-    print("\n=======================================================")
-    print(f"VPS Output Monitor Dashboard running at: {url}")
-    print("Press Ctrl+C to stop the server.")
-    print("=======================================================\n")
-
+    print(f"Job Flow dashboard running at {url}")
     if open_browser:
-        try:
-            webbrowser.open(url)
-        except Exception:
-            pass
-
+        webbrowser.open(url)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
-        print("\nStopping dashboard server.")
+        pass
+    finally:
         httpd.server_close()
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Launch VPS Output Monitor Dashboard")
-    parser.add_argument(
-        "--host", default="127.0.0.1", help="Host address to bind (default: 127.0.0.1)"
-    )
-    parser.add_argument("--port", type=int, default=8000, help="Port to listen on (default: 8000)")
-    parser.add_argument(
-        "--no-browser", action="store_true", help="Do not auto-open browser on startup"
-    )
-
+    parser = argparse.ArgumentParser(description="Launch the minimal Job Flow status dashboard")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--no-browser", action="store_true")
     args = parser.parse_args(argv)
-    run_dashboard_server(host=args.host, port=args.port, open_browser=not args.no_browser)
+    run_dashboard_server(args.host, args.port, not args.no_browser)
     return 0
 
 

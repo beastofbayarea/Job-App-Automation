@@ -48,11 +48,6 @@ where = ["src"]
 [tool.setuptools]
 py-modules = ["job_automation"]
 
-[tool.setuptools.package-data]
-job_application_automation = [
-    "dashboard/static/*",
-]
-
 [tool.mypy]
 python_version = "3.10"
 strict = true

@@ -44,6 +44,9 @@ All notable user-facing changes are documented here. This project currently uses
 
 ### Changed
 
+- Replaced the multi-page dashboard and its separate static assets with one
+  embedded, responsive status page and a single aggregate polling endpoint,
+  reducing the dashboard package to two source files.
 - Consolidated thirteen foundational and continuous-worker support modules into
   two cohesive core modules, reducing the core package from 35 Python files to
   24 while preserving its executable command and orchestration boundaries.
