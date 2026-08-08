@@ -1,4 +1,3 @@
-```
 # Dependencies
 node_modules/
 __pycache__/
@@ -25,6 +24,7 @@ target/
 *.log
 *.tmp
 *.swp
+output/pre-submit/
 
 # Editors
 .vscode/
@@ -62,4 +62,3 @@ htmlcov/
 *.tar.bz2
 *.tar.xz
 *.tar.zst
-```
